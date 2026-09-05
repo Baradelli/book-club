@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    // O GATE PRIMÁRIO da regra 1 da Tarefa 12: `packages/shared` é dependência
+    // do `@clube/backend`, que roda em Node. Sem `DOM` na `lib`, `window`,
+    // `document`, `localStorage`, `location` e `matchMedia` deixam de existir
+    // para o compilador — e a classe inteira vira erro de COMPILAÇÃO, inclusive
+    // o que a varredura por regex de `src/__tests__/no-browser-globals.test.ts`
+    // não enumera. Herdar o `lib` da base (que tem `DOM`) fazia esse arquivo
+    // tipar limpo e o compilador não ser gate nenhum.
+    "lib": ["ES2022"]
+  },
+  "include": ["src"]
+}

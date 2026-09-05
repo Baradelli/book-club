@@ -1,0 +1,34 @@
+{
+  "name": "clube-do-livro",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "dev:backend": "pnpm --filter @clube/backend dev",
+    "dev:app": "pnpm --filter @clube/app dev",
+    "test": "pnpm -r test",
+    "test:integration": "pnpm -r test:integration",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "prisma:migrate": "pnpm --filter @clube/backend prisma migrate dev",
+    "prisma:studio": "pnpm --filter @clube/backend prisma studio",
+    "prisma:seed": "pnpm --filter @clube/backend prisma db seed"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-simple-import-sort": "^12.1.1",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^2.1.8"
+  }
+}

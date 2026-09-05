@@ -1,0 +1,14 @@
+{
+  // O tsconfig.json principal precisa de rootDir "src" para o outDir "dist"
+  // sair plano. Este config só CHECA (noEmit), então pode abrir o rootDir para
+  // a raiz do pacote e alcançar prisma/seed.ts — que de outro modo não é visto
+  // por nenhum gate estático.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": ["src", "prisma"]
+}

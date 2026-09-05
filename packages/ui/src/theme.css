@@ -1,0 +1,198 @@
+/*
+  @clube/ui — os tokens de tema (--clube-*). A paleta completa da Tarefa 13.
+
+  ============================================================================
+  COMO O TEMA É DECIDIDO — e por que agora é UM valor por token
+  ============================================================================
+
+  A Tarefa 12 escrevia cada cor escura DUAS vezes: um bloco
+  `@media (prefers-color-scheme: dark)` (a preferência do SISTEMA) e um bloco
+  `:root[data-theme='dark']` (a escolha EXPLÍCITA, que vence o sistema). Com 3
+  tokens isso era chato; com a paleta inteira é dessincronia garantida, e a
+  sincronia estava afirmada num comentário — exatamente o que o
+  `docs/CONVENCOES-CODIGO.md` §7.1 condena.
+
+  Aqui a duplicação deixou de existir. `light-dark(claro, escuro)` escolhe pelo
+  `color-scheme` COMPUTADO, então:
+
+  1. `:root { color-scheme: light dark; }` — sem escolha nenhuma, o navegador
+     resolve o `color-scheme` pela preferência do sistema, e todo token segue.
+     É a primeira visita respeitada sem uma linha de JavaScript.
+  2. `:root[data-theme='light']` e `:root[data-theme='dark']` — a escolha
+     explícita, escrita por um script inline no `index.html` antes da primeira
+     pintura. Ela agora troca UMA declaração (`color-scheme`) e a paleta inteira
+     acompanha, em qualquer direção: "Claro" vence um sistema escuro e "Escuro"
+     vence um sistema claro pelo MESMO mecanismo.
+
+  O `@custom-variant dark` do `packages/app/src/styles.css` continua
+  necessário, e não é redundância: ele é para os utilitários `dark:*` do
+  Tailwind, que não passam por `light-dark()` nenhum — são media query e
+  seletor de atributo. Quem apagá-lo desliga só os `dark:*`.
+
+  ⚠️ ARMADILHA DO `light-dark()`: ele resolve no ponto de USO, não no de
+  declaração. Um componente que declare `color-scheme` próprio (um cartão com
+  `color-scheme: light` para forçar um `input date` claro, por exemplo) inverte
+  TODOS os tokens `--clube-*` lidos dentro dele — inclusive os herdados. Regra
+  do projeto: `color-scheme` se declara SÓ nos três seletores abaixo. Se algum
+  dia um componente precisar do seu, ele tem de reatribuir os tokens que usa.
+
+  ⚠️ E o `@theme` do app tem de continuar `@theme inline`: com `@theme` puro o
+  Tailwind copia o valor do token na compilação, e a cor congela no que o
+  `light-dark()` valia naquele instante.
+
+  Compatibilidade: `light-dark()` é Baseline 2024 (Chrome 123+, Safari 17.5+,
+  Firefox 120+) — decisão aprovada pelo dono para este PWA. Num WebView antigo
+  o valor é inválido e a cor cai para o herdado, não para um fallback bonito.
+
+  ============================================================================
+  MEDIDO EM NAVEGADOR DE VERDADE (Chrome 141 headless, Tarefa 13)
+  ============================================================================
+
+  Provar por leitura não prova nada: uma página servida com este CSS, lendo
+  `getComputedStyle` do elemento que usa os tokens, deu as QUATRO combinações
+  de sistema × escolha, lendo o `--clube-bg` (o valor claro e o escuro são os
+  declarados abaixo — a tabela não os repete, para não envelhecer):
+
+  | sistema | data-theme  | color-scheme computado | --clube-bg resolvido |
+  |---------|-------------|------------------------|----------------------|
+  | claro   | (ausente)   | light dark             | o claro              |
+  | claro   | dark        | dark                   | o ESCURO             |
+  | escuro  | (ausente)   | light dark             | o escuro             |
+  | escuro  | light       | light                  | o CLARO              |
+
+  As duas linhas em MAIÚSCULA são as que importam: a escolha explícita vence o
+  sistema nas duas direções, com uma declaração de `color-scheme` só.
+
+  A armadilha também foi medida, e ela é real: numa página com o sistema
+  escuro, um elemento com `color-scheme: light` próprio resolveu
+  `--clube-bg` para o valor CLARO dentro de si, enquanto o resto da página
+  continuava escuro. Daí a regra dos três seletores.
+*/
+
+:root {
+  /* `light dark`: aceita os dois, e deixa o SISTEMA decidir. */
+  color-scheme: light dark;
+
+  /* --- Superfície ------------------------------------------------------- */
+  /* O fundo da página. Espelhado no `background_color` do manifest. */
+  --clube-bg: light-dark(#f5f2ec, #171614);
+  /* Cartão, item de lista, campo de formulário. */
+  --clube-surface: light-dark(#fdfcfa, #201e1b);
+  /* O que flutua ACIMA do resto: o sheet e o seu painel. */
+  --clube-surface-raised: light-dark(#ffffff, #2a2724);
+  --clube-border: light-dark(#e3ded6, #35322c);
+  /* Borda que precisa ser vista: campo com foco, divisor de seção. */
+  --clube-border-strong: light-dark(#c9c2b6, #4d4841);
+
+  /* --- Texto ------------------------------------------------------------ */
+  --clube-fg: light-dark(#1c1a17, #f2efe9);
+  /* Metadado: "há 2 dias", o subtítulo do item de lista. */
+  --clube-fg-muted: light-dark(#6b6459, #a8a19a);
+  /* Placeholder e dica de campo. Mesmo "subtle" passa 4.5:1 nos dois temas —
+     placeholder ilegível é o jeito mais rápido de perder quem lê à noite. */
+  --clube-fg-subtle: light-dark(#726b5f, #948d84);
+
+  /* --- Ação ------------------------------------------------------------- */
+  /* UMA cor de ação. O app não tem hierarquia de botão colorido: o que separa
+     primário de secundário é preenchimento × fantasma, não matiz. */
+  --clube-accent: light-dark(#2c6a56, #6fbfa4);
+  --clube-accent-fg: light-dark(#ffffff, #12241d);
+  --clube-accent-hover: light-dark(#235445, #8ad0b8);
+  /*
+    O VÉU do controle ATIVO — o fundo do botão pressionado da barra do editor
+    (`docs/EDITOR.md` §4.4, Tarefa 14). Ele nasceu aqui porque não havia
+    substituto: `--clube-accent-hover` é a cor CHEIA de hover, e usá-la para
+    "negrito está ligado" pintaria o botão como se ele fosse a ação primária da
+    tela — num editor com 15 botões ligados ao mesmo tempo, isso vira uma barra
+    inteira de blocos verdes.
+
+    É `color-mix()` sobre o PRÓPRIO `--clube-accent`, e não um hex novo, porque
+    duplicar a cor de ação em outro lugar é a dessincronia que o cabeçalho deste
+    arquivo acabou de eliminar (§7.1): trocar o verde do clube passaria a exigir
+    editar dois tokens, e quem esquecesse o segundo teria um estado ativo de
+    outra cor.
+
+    O `light-dark()` continua sendo o de fora (e é a regra 3 quem o cobra): o
+    véu precisa de MAIS opacidade no escuro para se separar do fundo, e o
+    `var(--clube-accent)` de dentro resolve na mesma direção do tema em vigor.
+  */
+  --clube-accent-soft: light-dark(
+    color-mix(in srgb, var(--clube-accent) 14%, transparent),
+    color-mix(in srgb, var(--clube-accent) 26%, transparent)
+  );
+
+  /* --- Estado ----------------------------------------------------------- */
+  /* ⚠️ PRINCÍPIO ANTI-CULPA (`docs/plano-clube-do-livro.md` §1): vermelho é
+     erro de formulário e ação destrutiva, e NADA MAIS. Não existe vermelho de
+     "você não escreveu ontem", badge de pendência ou contador de dívida. */
+  --clube-danger: light-dark(#b3261e, #f2938c);
+  --clube-danger-fg: light-dark(#ffffff, #2a1211);
+  /* O "salvo" do autosave (Tarefa 18). Confirmação, nunca gamificação. */
+  --clube-success: light-dark(#2f6b3a, #7cc98a);
+
+  /* --- Foco ------------------------------------------------------------- */
+  /* Decisão G: foco visível SEMPRE, inclusive no mobile. */
+  --clube-ring: light-dark(#1f6f5c, #8ad0b8);
+
+  /* --- Avatar ----------------------------------------------------------- */
+  /*
+    A paleta do `PersonAvatar` mora aqui, e não em TypeScript, por duas razões:
+    `CLAUDE.md` proíbe CSS inline nas telas (cor sorteada em `style=` estaria
+    fora da regra), e o teste de contraste da regra 32 precisa dos DOIS valores
+    de cada slot para conferir claro e escuro — que é o que `light-dark()` põe
+    na mesma linha.
+
+    Um `fg` só para os seis slots, claro nos dois temas; cada `bg` é escolhido
+    escuro o suficiente para passar 4.5:1 contra ele. É isso que impede o
+    gerador de sortear amarelo com texto branco (regra 32).
+
+    Incentivo por presença, não por comparação: a cor diz QUEM escreveu. Ela
+    não ordena, não ranqueia e não significa nada além de identidade.
+  */
+  --clube-avatar-fg: light-dark(#ffffff, #f6f3ee);
+  --clube-avatar-1: light-dark(#8a4b2a, #7a4325);
+  --clube-avatar-2: light-dark(#2c6a56, #265d4b);
+  --clube-avatar-3: light-dark(#2b5b8a, #26507a);
+  --clube-avatar-4: light-dark(#6d4a8a, #5f4079);
+  --clube-avatar-5: light-dark(#8a2f4b, #7a2942);
+  --clube-avatar-6: light-dark(#5f6b23, #545e1f);
+
+  /* --- Raio ------------------------------------------------------------- */
+  /* Sem `light-dark()` de propósito: raio não é cor e não muda com o tema.
+     O teste da regra 3 conhece esta exceção pelo nome. */
+  --clube-radius: 0.625rem;
+  --clube-radius-lg: 1.25rem;
+
+  /* --- Sombra ----------------------------------------------------------- */
+  /* A sombra MUDA com o tema (no escuro precisa ser mais funda para separar o
+     painel do fundo), então o `light-dark()` entra na cor dentro do valor —
+     é uma função de cor, e é numa posição de cor que ela é válida.
+     Negativa no Y: o sheet sobe de baixo, e a sombra tem de subir com ele. */
+  --clube-shadow-sheet: 0 -10px 30px
+    light-dark(rgb(28 26 23 / 0.16), rgb(0 0 0 / 0.55));
+  /*
+    A sombra do POPUP (bubble menu da seleção, menu `/`, lista de menções —
+    Tarefa 14). Ela existe porque a do sheet NÃO serve: aquela sobe (`-10px`),
+    porque o sheet entra por baixo da tela, e um popup que flutua sobre a
+    palavra selecionada com sombra para cima parece colado no texto de cima.
+
+    Mesma difusão e mesmas cores da do sheet, Y invertido. A direção da
+    `--clube-shadow-sheet` é decisão registrada do dono e não se toca.
+  */
+  --clube-shadow-popover: 0 10px 30px
+    light-dark(rgb(28 26 23 / 0.16), rgb(0 0 0 / 0.55));
+}
+
+/*
+  A escolha EXPLÍCITA. Uma declaração cada, e a paleta inteira acompanha.
+
+  O atributo é `data-theme`, o mesmo que `packages/app/src/theme.ts` escreve —
+  o pino cruzado está em `packages/app/src/__tests__/theme-css.test.ts`.
+*/
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}

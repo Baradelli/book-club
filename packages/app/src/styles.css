@@ -1,0 +1,188 @@
+@import 'tailwindcss';
+/* Os tokens do projeto (--clube-*), claro e escuro. Vivem em `@clube/ui`
+   porque é lá que a paleta completa mora (Tarefa 13). */
+@import '@clube/ui/theme.css';
+/*
+  O CSS do ProseMirror (Tarefa 14). A ORDEM importa e não é gosto: o preflight
+  do Tailwind (o `@import 'tailwindcss'` acima) zera `list-style`, recuo de
+  citação e estilo de `code`/`pre`, e o `editor.css` existe justamente para
+  readicioná-los DENTRO do editor. Importado antes, o preflight ganharia e a
+  lista do editor voltaria a ser um parágrafo com recuo.
+*/
+@import '@clube/ui/editor.css';
+
+/*
+  ⚠️ SEM ESTA LINHA, TODO COMPONENTE DE `@clube/ui` RENDERIZA CRU.
+
+  A detecção automática de fontes do Tailwind v4 ignora `node_modules`, e num
+  workspace pnpm o `@clube/ui` chega aqui como SYMLINK dentro de
+  `node_modules/@clube/ui`. Consequência medida na Tarefa 13: com uma classe de
+  margem de valor arbitrário plantada em `packages/ui/src`, o
+  `dist/assets/*.css` do build NÃO continha o seletor dela; com este `@source`,
+  continha, com a margem certa. Sem CSS emitido o componente aparece sem
+  estilo, e o sintoma parece bug de CSS, não de configuração.
+
+  (A sonda não é citada aqui pelo nome: o Tailwind varre este arquivo também, e
+  nome de classe escrito em COMENTÁRIO gera CSS — medido.)
+
+  O caminho é relativo a ESTE arquivo: `packages/app/src` → `packages/ui/src`.
+  O acusador automático é `src/__tests__/ui-source-scan.test.ts`, que compila o
+  app de verdade e procura no CSS emitido cada classe usada em `packages/ui`.
+*/
+@source '../../ui/src';
+
+/*
+  ⚠️ E ARQUIVO DE TESTE NÃO É FONTE DE CLASSE.
+
+  O Tailwind extrai nome de classe de QUALQUER arquivo que ele varre —
+  inclusive de arquivo de teste, e inclusive de COMENTÁRIO dentro dele. Medido
+  na rodada de correção da Tarefa 13: a lista `SINGLE_WORD_UTILITIES` do
+  `src/__tests__/ui-source-scan.test.ts` (dado de teste: `antialiased`,
+  `capitalize`, `isolate`, `table`, …) emitia 1256 bytes de CSS que nenhuma
+  tela usa — 7% do `dist/assets/*.css` —, e um `min-h-10` citado em comentário
+  para explicar por que ele NÃO serve gerava `.min-h-10` de verdade.
+
+  Nada em `__tests__/` embarca no PWA, então nada em `__tests__/` deve pintar.
+  O acusador é o teste `ships no class that only a test mentions` em
+  `src/__tests__/ui-source-scan.test.ts`.
+*/
+@source not '**/__tests__';
+@source not '../../ui/src/**/__tests__';
+
+/*
+  Tailwind v4 SEM `tailwind.config.js` (proibido pelo `CLAUDE.md`): o tema é
+  declarado aqui, em CSS.
+
+  `@theme inline` e não `@theme`: `inline` faz o utilitário apontar para a
+  variável (`var(--clube-bg)`) em vez de copiar o valor no momento da
+  compilação. É o que permite o mesmo `bg-surface` mudar de cor quando o
+  `color-scheme` troca o que o `light-dark()` do token resolve — com `@theme`
+  puro a cor ficaria congelada no valor claro.
+
+  REGRA 2: cada `--clube-*` declarado no `theme.css` tem exatamente um
+  utilitário aqui, e nenhum utilitário aqui aponta para token inexistente.
+  Token sem utilitário não serve para nada, e utilitário sem token pinta
+  transparente em silêncio. `src/__tests__/theme-tokens.test.ts` amarra os dois
+  arquivos nas duas direções.
+*/
+@theme inline {
+  /*
+    ⚠️ A PALETA PADRÃO DO TAILWIND MORRE AQUI, e isso é uma GUARDA, não estética.
+
+    MEDIDO na revisão da Tarefa 17: `@theme inline` **acrescenta** tokens, não
+    substitui os que o `@import 'tailwindcss'` trouxe — então `--color-red-600`
+    e a família inteira continuavam vivas. Consequência: um
+    `className="text-red-600"` compilava, pintava vermelho de verdade na tela,
+    e passava em TODAS as guardas do projeto ao mesmo tempo:
+
+    - a varredura anti-culpa de DOM (que procura `text-[#`, `bg-[#` e
+      `-danger`) — 0 acusadores;
+    - a varredura do arquivo-fonte — 0 acusadores;
+    - `lint`, `typecheck` e `prettier` — limpos.
+
+    Ou seja: o princípio anti-culpa do `docs/plano-clube-do-livro.md` §1
+    ("vermelho é erro de formulário e ação destrutiva, NADA MAIS") era
+    contornável escrevendo a cor do jeito mais natural do mundo. Alargar o
+    regex pegaria `red`, e deixaria `rose`, `orange`, `amber` e as próximas.
+
+    Com `--color-*: initial`, `text-red-600` deixa de existir: ele não compila,
+    não emite CSS, e cai no `ships no class without emitted CSS` do
+    `src/__tests__/ui-source-scan.test.ts`. A guarda passa a ser estrutural —
+    a cor errada não é detectada, ela é IMPOSSÍVEL.
+
+    O preço é declarar o que a gente de fato usa. Hoje é um: o `bg-black/50` do
+    fundo do `Sheet` (`packages/ui/src/components/sheet.tsx`) — varredura
+    completa de `packages/{app,ui}/src` achou essa única ocorrência de cor
+    padrão. Se uma tela nova precisar de outra, ela entra aqui, com nome do
+    projeto, e a conversa sobre "por que essa cor?" acontece no code review em
+    vez de acontecer nunca.
+  */
+  --color-*: initial;
+  --color-black: #000;
+
+  /* Superfície */
+  --color-canvas: var(--clube-bg);
+  --color-surface: var(--clube-surface);
+  --color-surface-raised: var(--clube-surface-raised);
+  --color-line: var(--clube-border);
+  --color-line-strong: var(--clube-border-strong);
+
+  /* Texto */
+  --color-content: var(--clube-fg);
+  --color-muted: var(--clube-fg-muted);
+  --color-subtle: var(--clube-fg-subtle);
+
+  /* Ação */
+  --color-accent: var(--clube-accent);
+  --color-accent-fg: var(--clube-accent-fg);
+  --color-accent-hover: var(--clube-accent-hover);
+  /* O véu do botão ATIVO da barra do editor (Tarefa 14, `docs/EDITOR.md` §4.4). */
+  --color-accent-soft: var(--clube-accent-soft);
+
+  /* Estado */
+  --color-danger: var(--clube-danger);
+  --color-danger-fg: var(--clube-danger-fg);
+  --color-success: var(--clube-success);
+
+  /* Foco. `focus` e não `ring`, senão o utilitário viraria `ring-ring`. */
+  --color-focus: var(--clube-ring);
+
+  /* Avatar (regra 32: o contraste do par é testado, não confiado) */
+  --color-avatar-fg: var(--clube-avatar-fg);
+  --color-avatar-1: var(--clube-avatar-1);
+  --color-avatar-2: var(--clube-avatar-2);
+  --color-avatar-3: var(--clube-avatar-3);
+  --color-avatar-4: var(--clube-avatar-4);
+  --color-avatar-5: var(--clube-avatar-5);
+  --color-avatar-6: var(--clube-avatar-6);
+
+  /*
+    Raio e sombra. Nomes PRÓPRIOS (`control`, `sheet`) e não `sm`/`lg`: o
+    Tailwind já define `--radius-lg` e `--shadow-lg`, e reaproveitar o nome
+    reescreveria `rounded-lg`/`shadow-lg` para todo o app sem ninguém pedir.
+  */
+  --radius-control: var(--clube-radius);
+  --radius-sheet: var(--clube-radius-lg);
+  --shadow-sheet: var(--clube-shadow-sheet);
+  /* A sombra que desce, para o que flutua SOBRE a seleção (Tarefa 14). */
+  --shadow-popover: var(--clube-shadow-popover);
+}
+
+/*
+  O `dark:` do Tailwind tem de OBEDECER o `data-theme`, e por padrão ele não
+  obedece: sem esta declaração, `dark:bg-x` compila só para
+  `@media (prefers-color-scheme: dark)` — medido. O resultado é um app
+  esquizofrênico: com sistema escuro e "Claro" escolhido, os tokens
+  (`--clube-*`) ficam claros e todo `dark:*` continua escuro; com sistema claro
+  e "Escuro" escolhido, os tokens escurecem e nenhum `dark:*` acende.
+
+  Ele NÃO é mais uma cópia da paleta — o `theme.css` deixou de duplicar valor
+  quando passou a usar `light-dark()`. O que a cascata abaixo repete é só a
+  DECISÃO de qual tema está em vigor, traduzida para seletor: o `@media`
+  guardado por `:not([data-theme='light'])` (a preferência do sistema, que a
+  escolha "Claro" vence) e depois o `[data-theme='dark']` (a escolha explícita,
+  que vence o sistema) — as mesmas três situações que lá são
+  `color-scheme: light dark` + os dois `[data-theme]`.
+
+  Nada de token aqui: se um `dark:*` precisar de cor, ele usa um utilitário de
+  token, e o token já sabe o tema sozinho.
+*/
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    &:where(
+      :root:not([data-theme='light']),
+      :root:not([data-theme='light']) *
+    ) {
+      @slot;
+    }
+  }
+  &:where(:root[data-theme='dark'], :root[data-theme='dark'] *) {
+    @slot;
+  }
+}
+
+/* Sem CSS inline nas telas (`CLAUDE.md`); o mínimo global fica aqui. */
+body {
+  background-color: var(--clube-bg);
+  color: var(--clube-fg);
+}

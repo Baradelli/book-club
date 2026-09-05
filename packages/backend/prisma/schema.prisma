@@ -1,0 +1,216 @@
+// Schema dos Blocos A (Tarefa 03), B (Tarefa 07) e C (Tarefa 11). Os modelos
+// vêm do esqueleto de referência em docs/plano-clube-do-livro.md §6, recortando
+// as relações que apontam para modelos que ainda não existem (Highlight,
+// ReadingLog, ActivityEvent, NoteLink, Attachment, PushSubscription,
+// NotificationDelivery) — cada um nasce na sua tarefa, com a sua migration.
+//
+// Onde este arquivo divergir do §6, a divergência está registrada num ADR:
+// `ReadingPlanItem.order` tem @@index e não @@unique (ADR 0007), e
+// `Note.updatedAt` nasce sem @updatedAt (ADR 0008).
+//
+// Os ids têm @default(cuid()) apenas como rede de segurança: quem gera o id é
+// o UseCase, com randomUUID().
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum GeneralStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+// Bloco C (Tarefa 11). Enum Prisma, e não `String` validado por `z.enum`: o
+// par PLAN/FREE é fechado (`CLAUDE.md` lista só `ActivityEvent.type`,
+// `NotificationDelivery.kind`, `PushSubscription.platform` e `Highlight.color`
+// como os que ainda evoluem).
+enum NoteKind {
+  PLAN
+  FREE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String?
+  isSuperAdmin Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  memberships  Membership[]
+  settings     Settings?
+  invitesMade  Invite[]     @relation("InviteCreator")
+  invitesUsed  Invite[]     @relation("InviteUser")
+  booksCreated Book[]       @relation("BookCreator")
+  notes        Note[]
+}
+
+model Club {
+  id         String        @id @default(cuid())
+  name       String
+  timezone   String        @default("America/Sao_Paulo")
+  status     GeneralStatus @default(ACTIVE)
+  archivedAt DateTime?
+  createdAt  DateTime      @default(now())
+
+  memberships Membership[]
+  invites     Invite[]
+  books       Book[]
+  notes       Note[]
+}
+
+model Membership {
+  id       String        @id @default(cuid())
+  userId   String
+  clubId   String
+  role     MemberRole    @default(MEMBER)
+  status   GeneralStatus @default(ACTIVE)
+  joinedAt DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  club Club @relation(fields: [clubId], references: [id])
+
+  @@unique([userId, clubId])
+  @@index([clubId, status])
+}
+
+model Invite {
+  id          String     @id @default(cuid())
+  clubId      String
+  code        String     @unique
+  role        MemberRole @default(MEMBER)
+  createdById String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  usedById    String?
+  createdAt   DateTime   @default(now())
+
+  club      Club  @relation(fields: [clubId], references: [id])
+  createdBy User  @relation("InviteCreator", fields: [createdById], references: [id])
+  usedBy    User? @relation("InviteUser", fields: [usedById], references: [id])
+}
+
+// Bloco B (Tarefa 07). A relação `highlights` do §6 do plano continua
+// recortada: Highlight é MVP 2. `notes` entrou na Tarefa 11.
+model Book {
+  id          String        @id @default(cuid())
+  clubId      String
+  title       String
+  author      String?
+  month       String // "YYYY-MM" — o mês do clube
+  coverUrl    String?
+  totalPages  Int?
+  createdById String
+  status      GeneralStatus @default(ACTIVE)
+  archivedAt  DateTime?
+  createdAt   DateTime      @default(now())
+
+  club      Club              @relation(fields: [clubId], references: [id])
+  createdBy User              @relation("BookCreator", fields: [createdById], references: [id])
+  planItems ReadingPlanItem[]
+  notes     Note[]
+
+  @@index([clubId, status])
+}
+
+model ReadingPlanItem {
+  id        String   @id @default(cuid())
+  bookId    String
+  order     Int
+  // `@db.Date` — dia de CALENDÁRIO, não instante. O domínio guarda a
+  // CalendarDay como "YYYY-MM-DD" (string) e a conversão vive só no
+  // repositório (calendar-day-mapper.ts), sempre em UTC.
+  date      DateTime @db.Date
+  title     String // o tema pré-definido: "Cap. 3 — A promessa"
+  reference String? // texto livre: "p. 45-62"
+  createdAt DateTime @default(now())
+
+  book  Book   @relation(fields: [bookId], references: [id])
+  notes Note[]
+
+  // A chave natural do dia de leitura e do diff do replacePlanItems.
+  @@unique([bookId, date])
+  // ADR 0007: era @@unique. Índice único no Postgres não é deferível, e a
+  // renumeração legítima de um plano (inserir um dia na frente) colidiria.
+  // A unicidade de `order` é invariante de domínio: normalizePlanDrafts a
+  // deriva da posição no array.
+  @@index([bookId, order])
+  @@index([bookId, date])
+}
+
+// Bloco C (Tarefa 11). `NoteLink` e `Attachment` do §6 do plano ficam
+// recortados: nascem nas suas tarefas.
+model Note {
+  id         String        @id @default(cuid())
+  clubId     String
+  bookId     String
+  userId     String // o AUTOR. Sempre o ator; nunca vem do input.
+  kind       NoteKind
+  // NULLABLE, e é isso que faz a anotação avulsa ser ilimitada: índice único
+  // no Postgres não compara NULL com NULL, então N linhas com
+  // (planItemId = NULL, userId = X) convivem. → Tarefa 08.
+  planItemId String?
+  title      String
+  reference  String?
+  // ProseMirror JSON, gravado como veio do editor. HTML nunca é persistido.
+  // → ADR 0001.
+  doc        Json
+  // DERIVADO do `doc` pelo `docToText`, no backend. Nunca entra no input da
+  // API. O `@default("")` é rede de segurança, como os `@default(cuid())`:
+  // quem escreve o valor é o UseCase. → ADR 0001.
+  plainText  String        @default("")
+  status     GeneralStatus @default(ACTIVE)
+  archivedAt DateTime?
+  createdAt  DateTime      @default(now())
+  // SEM `@updatedAt` de propósito: o dono deste instante é o domínio, como o
+  // de `createdAt`, `archivedAt`, `joinedAt` e `usedAt`. `@updatedAt` não é
+  // fallback, é OVERRIDE — bombearia a coluna em todo UPDATE, ignorando o que
+  // o UseCase mandou, e o fake teria de emular o bombeamento. → ADR 0008.
+  updatedAt  DateTime
+
+  club     Club             @relation(fields: [clubId], references: [id])
+  book     Book             @relation(fields: [bookId], references: [id])
+  user     User             @relation(fields: [userId], references: [id])
+  // `onDelete: Restrict` EXPLÍCITO, e não herdado: para relação OPCIONAL o
+  // default do Prisma é `SetNull`, não `Restrict`. Sem esta declaração,
+  // remover um dia do plano não falharia — zeraria o `planItemId` da nota e
+  // deixaria uma linha com `kind = 'PLAN'` e `planItemId = null`, um estado
+  // que nenhum UseCase produz, que o `listNotes({planItemId})` nunca mais
+  // devolve e que ninguém percebe. Corrupção silenciosa.
+  //
+  // A guarda de domínio do `replacePlanItems` fica na frente disto (é ela que
+  // dá a mensagem decente); este `Restrict` é a rede embaixo dela.
+  planItem ReadingPlanItem? @relation(fields: [planItemId], references: [id], onDelete: Restrict)
+
+  // A anotação do dia é UMA por pessoa por dia de leitura — e é o índice que
+  // o upsert do `upsertPlanNote` usa como alvo, para dois autosaves
+  // sobrepostos não virarem P2002.
+  @@unique([planItemId, userId])
+  // "as minhas anotações neste livro" — o filtro de navegação do ADR 0002.
+  @@index([bookId, userId])
+  // O acervo do clube, do mais recente para o mais antigo.
+  @@index([clubId, createdAt])
+}
+
+model Settings {
+  id                  String  @id @default(cuid())
+  userId              String  @unique
+  timezone            String  @default("America/Sao_Paulo")
+  locale              String  @default("pt")
+  reminderTime        String  @default("21:00") // HH:mm, validado por regex no Zod
+  reminderEnabled     Boolean @default(true)
+  notifyGroupActivity Boolean @default(true)
+
+  user User @relation(fields: [userId], references: [id])
+}

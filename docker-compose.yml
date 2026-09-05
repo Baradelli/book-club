@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16
+    container_name: clube_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: clube
+      POSTGRES_PASSWORD: clube
+      POSTGRES_DB: clube
+    # Porta do host 5436: 5432-5435 já estão ocupadas nesta máquina.
+    # Ver docs/CONVENCOES-CODIGO.md.
+    ports: ['5436:5432']
+    volumes: [clube_pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U clube -d clube']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  clube_pgdata:

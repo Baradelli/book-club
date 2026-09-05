@@ -1,0 +1,19 @@
+// @clube/shared — schemas Zod, tipos e helpers compartilhados.
+// Back e front importam daqui: um schema valida, infere tipo e gera o OpenAPI.
+
+export * from './auth';
+// `CalendarDay`/`isCalendarDay`/`isClubMonth` moraram no domínio do backend até
+// a Tarefa 07. Mudaram de casa porque o Zod da borda e a tela de cadastro
+// precisam da MESMA validação de "YYYY-MM-DD"/"YYYY-MM" que o domínio usa, e
+// duplicar validação entre back e front é proibido (CLAUDE.md).
+export * from './book';
+export * from './calendar-day';
+export * from './club';
+export * from './error';
+export * from './invite';
+// "Que dia é hoje" no fuso de quem olha a tela, com `Intl` e sem Luxon
+// (`CLAUDE.md`). Nasceu na Tarefa 16 — o `CLAUDE.md` prometia este arquivo
+// desde a 12.
+export * from './local-day';
+export * from './note';
+export * from './reading-plan-dates';

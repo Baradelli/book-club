@@ -1,0 +1,443 @@
+/*
+  @clube/ui — todo o CSS do editor (Tarefa 14, `docs/EDITOR.md`).
+
+  ============================================================================
+  POR QUE ESTE ARQUIVO EXISTE
+  ============================================================================
+
+  O preflight do Tailwind v4 zera o que um editor de texto precisa ter: ele
+  remove `list-style` de `ul`/`ol`, tira a margem de parágrafo e de título,
+  desliga o recuo de citação e deixa `code`/`pre` com a fonte do corpo. Isso
+  está certo para uma interface — e errado dentro de uma anotação, onde uma
+  lista tem de PARECER uma lista.
+
+  Então tudo aqui é escopado em `.ProseMirror` (o elemento que o ProseMirror
+  torna editável) e nas quatro classes próprias do editor. Fora daí, este
+  arquivo não pinta nada.
+
+  A ORDEM DE IMPORT importa: em `packages/app/src/styles.css` ele vem DEPOIS do
+  `@import 'tailwindcss'`, senão o preflight ganha e a lista volta a ser
+  parágrafo.
+
+  ============================================================================
+  DUAS REGRAS DO PROJETO QUE ESTE ARQUIVO OBEDECE
+  ============================================================================
+
+  1. NENHUM VALOR DE COR POR TEMA. A Tarefa 13 não tem classe `dark`: os tokens
+     usam `light-dark()` resolvido pelo `color-scheme`, então aqui só se escreve
+     `var(--clube-*)` e o token já sabe o tema sozinho. Um bloco de cor escura
+     escrito à mão aqui seria uma segunda paleta a sair de sincronia.
+
+  2. `color-scheme` NÃO SE DECLARA AQUI. Ele resolve o `light-dark()` no ponto
+     de USO: declará-lo neste arquivo inverteria TODOS os tokens dentro do
+     editor (medido na Tarefa 13). Os três lugares legítimos são o `:root` e os
+     dois `[data-theme]` do `theme.css` — e há teste contando.
+*/
+
+/* ==========================================================================
+   A superfície de escrita
+   ========================================================================== */
+
+.ProseMirror {
+  /*
+    `60dvh` e não `60vh` (decisão C da Tarefa 14): no celular o `vh` é a altura
+    da janela SEM o teclado e sem a barra do navegador, então com o teclado
+    aberto o editor fica mais alto que a área visível. O resto do app já usa
+    `dvh` pelo mesmo motivo.
+
+    E as `7rem` de padding embaixo são o espaço do TECLADO: sem elas a última
+    linha digitada nasce debaixo dele, e quem escreve não vê o que escreveu.
+  */
+  min-height: 60dvh;
+  padding: 1.5rem 1.5rem 7rem;
+  color: var(--clube-fg);
+  /* Leitura longa: 1.7 é o entrelinha que uma anotação de meia hora pede. */
+  line-height: 1.7;
+  overflow-wrap: break-word;
+}
+
+/* O placeholder que a extensão `Placeholder` pendura no primeiro parágrafo. */
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--clube-fg-subtle);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/*
+  O RESPIRO ENTRE BLOCOS — e ele vale DENTRO dos containers também.
+
+  ⚠️ MEDIDO NA RODADA DE CORREÇÃO: `.ProseMirror > * + *` sozinho é filho
+  DIRETO, então o 2º parágrafo dentro de um aviso, de uma citação, de um bloco
+  alternável ou de uma célula de tabela nascia com `margin-top: 0` — um aviso de
+  dois parágrafos virava um bloco de texto sem respiro. E a checklist §14 do
+  `docs/EDITOR.md` não pega isso: um aviso de UM parágrafo parece certo.
+
+  Os containers são os que a estrutura do editor produz DE VERDADE, e a lista
+  foi medida no DOM, não deduzida do nome do nó: o `Details` do TipTap NÃO
+  renderiza `<details>` — é `div[data-type='details']`, e os parágrafos ficam
+  dentro de `div[data-type='detailsContent']`. Um seletor `details > * + *`
+  seria regra morta (§7.1: garantia afirmada e não medida).
+
+  ⚠️ E O `li > p` LOGO ABAIXO CONTINUA VALENDO, de propósito: dentro de um item
+  de lista o parágrafo é o invólucro do próprio item, e margem ali abre um
+  buraco entre os marcadores. `.ProseMirror li > p` tem especificidade maior que
+  `.ProseMirror > * + *` e vem depois — nenhum dos seletores acrescentados aqui
+  alcança `li > *`.
+*/
+.ProseMirror > * + *,
+.ProseMirror blockquote > * + *,
+.ProseMirror div[data-type='callout'] > * + *,
+.ProseMirror div[data-type='detailsContent'] > * + *,
+.ProseMirror td > * + *,
+.ProseMirror th > * + * {
+  margin-top: 0.75em;
+}
+
+/* ==========================================================================
+   Blocos de texto — o que o preflight apagou
+   ========================================================================== */
+
+/*
+  Só H1 e H2 existem no editor (`StarterKit.configure({ heading: { levels:
+  [1, 2] } })`): num app de leitura, três níveis de título viram indecisão.
+  H3 não tem regra aqui porque não tem como nascer.
+*/
+.ProseMirror h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.ProseMirror h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-left: 1.5rem;
+}
+
+.ProseMirror ul {
+  list-style: disc;
+}
+
+.ProseMirror ol {
+  list-style: decimal;
+}
+
+.ProseMirror li > p {
+  margin: 0;
+}
+
+.ProseMirror blockquote {
+  border-left: 3px solid var(--clube-border-strong);
+  padding-left: 1rem;
+  color: var(--clube-fg-muted);
+  font-style: italic;
+}
+
+.ProseMirror code {
+  background-color: var(--clube-surface-raised);
+  border: 1px solid var(--clube-border);
+  border-radius: 0.3rem;
+  padding: 0.1em 0.3em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.ProseMirror pre {
+  background-color: var(--clube-surface-raised);
+  border: 1px solid var(--clube-border);
+  border-radius: var(--clube-radius);
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+
+/* Dentro do bloco de código a borda e o fundo do `code` inline atrapalham. */
+.ProseMirror pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+.ProseMirror hr {
+  border: none;
+  border-top: 1px solid var(--clube-border);
+  margin: 1.5rem 0;
+}
+
+.ProseMirror a {
+  color: var(--clube-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/*
+  O grifo. A paleta vem em `rgba` com alpha de propósito (`docs/EDITOR.md` §6):
+  cor sólida esconderia o texto no tema escuro. `color: inherit` porque o
+  navegador pinta `mark` de preto por padrão, e no tema escuro isso apaga a
+  palavra grifada.
+*/
+.ProseMirror mark {
+  background-color: rgba(250, 204, 21, 0.4);
+  color: inherit;
+  border-radius: 0.2rem;
+  padding: 0.05em 0.1em;
+}
+
+/*
+  A imagem só entra no documento DEPOIS de o upload resolver (ADR 0001), então
+  aqui nunca há `blob:` nem `data:` para estilizar — é sempre a URL final.
+*/
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--clube-radius);
+  display: block;
+}
+
+.ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid var(--clube-accent);
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   Tarefas, tabela e o bloco alternável
+   ========================================================================== */
+
+/*
+  A lista de tarefas perde o marcador (o checkbox É o marcador) e alinha a
+  caixa com a PRIMEIRA linha do item — sem o `margin-top` a caixa fica no meio
+  de um item de três linhas.
+*/
+.ProseMirror ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.ProseMirror ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.ProseMirror ul[data-type='taskList'] li > label {
+  flex-shrink: 0;
+  margin-top: 0.35em;
+  user-select: none;
+}
+
+.ProseMirror ul[data-type='taskList'] li > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ProseMirror table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  overflow: hidden;
+}
+
+.ProseMirror th,
+.ProseMirror td {
+  border: 1px solid var(--clube-border);
+  padding: 0.5rem 0.65rem;
+  vertical-align: top;
+  text-align: left;
+  /*
+    ⚠️ ESTE `relative` NÃO É ENFEITE — é o bloco de contenção do
+    `.selectedCell::after` logo abaixo, e sem ele o véu da célula selecionada
+    TINGE O EDITOR INTEIRO.
+
+    Medido: o `::after` é `position: absolute; inset: 0`, e nada mais sob
+    `.ProseMirror` é posicionado — então o ancestral posicionado mais próximo
+    acabava sendo o container do editor (que é `relative`, por causa da pílula
+    de upload). Selecionar uma célula pintava a anotação toda de
+    `--clube-accent-soft`.
+
+    É o que o `tables.css` do `prosemirror-tables` faz e o `editor.css`
+    esqueceu.
+  */
+  position: relative;
+}
+
+.ProseMirror th {
+  background-color: var(--clube-surface-raised);
+  font-weight: 600;
+}
+
+.ProseMirror .selectedCell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: var(--clube-accent-soft);
+  pointer-events: none;
+}
+
+/*
+  O BLOCO ALTERNÁVEL, e ⚠️ ATENÇÃO AO SELETOR: o `Details` do TipTap NÃO
+  renderiza um `<details>` nativo. MEDIDO no DOM que o editor produz:
+
+    <div data-type="details">
+      <button type="button"></button>
+      <div>
+        <summary>resumo</summary>
+        <div data-type="detailsContent">…</div>
+      </div>
+    </div>
+
+  As regras desta seção eram escritas contra `details` e `details > summary`, e
+  eram REGRA MORTA — nenhum seletor casava, então o bloco alternável não tinha
+  borda, nem fundo, nem padding, e o marcador nativo continuava lá onde o
+  navegador o pintasse. É a mesma classe de defeito do §7.1 das convenções:
+  garantia afirmada em arquivo e não medida.
+
+  O `>` saiu de `summary` de propósito: ele não é filho direto do bloco, e sim
+  do `div` intermediário que o node view cria.
+*/
+.ProseMirror div[data-type='details'] {
+  border: 1px solid var(--clube-border);
+  border-radius: var(--clube-radius);
+  padding: 0.65rem 0.9rem;
+  background-color: var(--clube-surface);
+}
+
+.ProseMirror div[data-type='details'] summary {
+  list-style: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ProseMirror div[data-type='details'] summary::marker,
+.ProseMirror div[data-type='details'] summary::-webkit-details-marker {
+  display: none;
+}
+
+.ProseMirror div[data-type='details'] > button {
+  background: none;
+  border: none;
+  color: var(--clube-fg-muted);
+  cursor: pointer;
+  padding: 0 0.35rem 0 0;
+}
+
+/*
+  O nó "Aviso" (`callout.ts`) — um bloco de destaque, não um bloco de erro: a
+  cor é a de ação, nunca `--clube-danger`. O princípio anti-culpa do
+  `docs/plano-clube-do-livro.md` §1 vale aqui: vermelho é erro de formulário e
+  ação destrutiva, e nada mais.
+*/
+.ProseMirror div[data-type='callout'] {
+  border-left: 3px solid var(--clube-accent);
+  background-color: var(--clube-accent-soft);
+  border-radius: var(--clube-radius);
+  padding: 0.75rem 1rem;
+}
+
+.ProseMirror div[data-type='callout'] > *:first-child {
+  margin-top: 0;
+}
+
+/* A menção `@` e o wikilink `[[`: os dois marcam o HTML com esta classe. */
+.note-link {
+  color: var(--clube-accent);
+  background-color: var(--clube-accent-soft);
+  border-radius: 0.3rem;
+  padding: 0.05em 0.25em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   As superfícies de UI do editor
+   ========================================================================== */
+
+/*
+  A barra fixa (§4.1). O `sticky top-0` e o `z` vêm de utilitário do Tailwind no
+  componente; aqui ficam as três coisas que utilitário não expressa: o fundo
+  translúcido, o desfoque e a borda de baixo.
+
+  O fundo é `color-mix()` sobre `--clube-bg` porque a barra flutua sobre o
+  texto: opaca ela pareceria outro elemento, e transparente as letras passariam
+  por baixo dos ícones.
+*/
+.clube-editor-bar {
+  background-color: color-mix(in srgb, var(--clube-bg) 80%, transparent);
+  border-bottom: 1px solid var(--clube-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* A barra rola de lado quando não cabe, e a barra de rolagem não aparece. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+  O que FLUTUA: o bubble menu da seleção, o menu `/` e a lista de menções.
+
+  A sombra é a `--clube-shadow-popover`, que desce. A do sheet sobe (`-10px`,
+  porque o sheet entra por baixo da tela) e num popup sobre a palavra
+  selecionada ela pareceria colada no texto de cima.
+*/
+.clube-editor-popover {
+  background-color: var(--clube-surface-raised);
+  border: 1px solid var(--clube-border);
+  border-radius: var(--clube-radius);
+  box-shadow: var(--clube-shadow-popover);
+}
+
+/*
+  A AMOSTRA DE GRIFO — a única exceção autorizada ao "sem CSS inline".
+
+  A cor vem de uma constante de módulo em TypeScript, então ela não pode virar
+  classe estática (o Tailwind só compila o que existe literalmente no
+  código-fonte). O escape é a variável CSS: o componente escreve
+  `style={{ '--swatch': cor }}` e esta regra a consome. É o padrão do projeto
+  para valor que só o runtime conhece.
+*/
+.clube-editor-swatch {
+  background-color: var(--swatch);
+  border: 2px solid var(--clube-border-strong);
+}
+
+/*
+  A amostra ATIVA ganha contorno de texto. O seletor é o do PAI porque quem
+  carrega o estado é o botão (`aria-pressed`), e a bolinha é um `<span>`
+  decorativo dentro dele: o alvo de toque tem de ter 36px, e a amostra, 20px.
+*/
+[aria-pressed='true'] > .clube-editor-swatch {
+  border-color: var(--clube-fg);
+}
+
+/*
+  A pílula de estado do upload (§8.4). O wrapper dela fica SEMPRE montado e é o
+  último filho do editor — a razão está em `RichEditor.tsx`, e ela é de
+  montagem, não de estilo.
+*/
+.clube-editor-pill {
+  background-color: var(--clube-surface-raised);
+  border: 1px solid var(--clube-border);
+  border-radius: 999px;
+  box-shadow: var(--clube-shadow-popover);
+  color: var(--clube-fg-muted);
+}
+
+.clube-editor-pill[data-state='error'] {
+  color: var(--clube-danger);
+  border-color: var(--clube-danger);
+}

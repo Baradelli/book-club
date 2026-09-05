@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#1c1a17" />
+    <title>Clube do Livro</title>
+    <!--
+      TEMA ANTES DA PRIMEIRA PINTURA (decisão F da Tarefa 12).
+
+      Aplicar o tema num `useEffect` do React pisca branco antes de virar
+      escuro — o defeito que ninguém registra como bug e que incomoda toda
+      abertura. Este script é inline e SÍNCRONO de propósito: nem `defer` nem
+      `async`, e antes do módulo do app.
+
+      Só a escolha EXPLÍCITA precisa de JavaScript. "Do sistema" é o padrão e
+      quem responde por ele é o `@media (prefers-color-scheme: dark)` do
+      `@clube/ui/theme.css`, sem uma linha de script.
+
+      A chave 'clube.theme' é a mesma de `src/theme.ts` — há teste.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('clube.theme');
+          if (stored === 'light' || stored === 'dark') {
+            document.documentElement.setAttribute('data-theme', stored);
+          }
+        } catch (error) {
+          /* Armazenamento bloqueado: fica o tema do sistema. */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,9 @@
+node_modules
+dist
+coverage
+pnpm-lock.yaml
+packages/backend/prisma/migrations
+
+# Documentacao e prosa: quebra de linha e do dono, nao do Prettier.
+*.md
+docs/**
