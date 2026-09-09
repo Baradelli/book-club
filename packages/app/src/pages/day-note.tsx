@@ -22,6 +22,7 @@ import { useAuth } from '../auth/auth-context';
 import { useActiveClub } from '../club/active-club';
 import { useOfflineNotes } from '../offline/offline-notes';
 import type { WriteResult } from '../offline/queue';
+import { Notice, Screen } from './chrome';
 import { messageFor, resolveApiError } from './form-errors';
 
 /**
@@ -219,16 +220,6 @@ function isGone(error: unknown): boolean {
  */
 function ignoreChange(): void {
   // No-op deliberado (ADR 0002: o grupo lê, não interfere).
-}
-
-/** O estado vazio e o de erro têm a MESMA forma; só o conteúdo muda. */
-function Notice({ action, title }: { title: string; action?: ReactNode }) {
-  return (
-    <div className="flex flex-col items-start gap-3 rounded-control border border-line bg-surface p-4">
-      <p className="font-medium text-content">{title}</p>
-      {action}
-    </div>
-  );
 }
 
 export function DayNotePage() {
@@ -679,18 +670,20 @@ export function DayNotePage() {
     );
   }
 
+  /*
+    REGRA 1: o TEMA DO DIA é o título da tela — é o que o admin cadastrou no
+    plano, e é ele que dá assunto à anotação. O `h1` (e a coluna) vêm do
+    `Screen` de `./chrome`, que garante que ele existe SEMPRE: é ele que faz
+    "carregando", "este dia não faz parte do plano" e o erro serem ESTADOS de
+    uma tela, não telas brancas.
+  */
   return (
-    <section className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-6">
-      {/*
-        REGRA 1: o TEMA DO DIA é o título da tela — é o que o admin cadastrou
-        no plano, e é ele que dá assunto à anotação. Sempre existe um `h1`, e é
-        ele que faz "carregando", "este dia não faz parte do plano" e o erro
-        serem ESTADOS de uma tela, não telas brancas.
-      */}
-      <h1 className="text-2xl font-semibold">
-        {state.status === 'ready' ? state.item.title : t('pages.dayNote.title')}
-      </h1>
+    <Screen
+      title={
+        state.status === 'ready' ? state.item.title : t('pages.dayNote.title')
+      }
+    >
       {body()}
-    </section>
+    </Screen>
   );
 }

@@ -975,13 +975,157 @@ Sem grifos em tela própria (MVP 2), sem marcar "li", sem feed e sem notificaç�
       _**Gates:** 391 · 175 · 1266 · 424 unitários e **359** de integração; `typecheck`, `lint`,
       `prettier --check .` e o build limpos. Nenhuma migration além da desta fatia, nenhum SQL
       escrito à mão, `packages/ui` e `packages/app` **intocados**._
-- [ ] **25** — Tela de grifos do livro: lista por cor, criar/editar com o editor no
-      comentário. → _a detalhar_
+- [x] **25** — Tela de grifos do livro: lista por cor, criar/editar com o editor no
+      comentário. → `tasks/25-tela-de-grifos.md`
+      _**O DONO VÊ UM GRIFO NA TELA.** Entregue: `/books/:bookId/highlights` (a coleção com
+      filtro por cor, feito no cliente), o formulário de criar/editar com o editor `lazy` no
+      comentário, arquivar com confirmação, a aba "Grifos" do `book.tsx` deixando de ser
+      desabilitada, e mais duas coisas que a fatia pagou de dívida. **391 shared + 182 ui**
+      (era 175) **+ 1266 backend** (intocado) **+ 536 app** (era 424, +112)._
+      _**⚠️ DOIS BLOQUEADORES, os dois no ADR 0002, os dois com ZERO acusadores — e os dois por
+      CHAMADOR AUSENTE, não por instrumento fraco.** (1) Uma **frase de privacidade** plantada
+      em cinco estados renderizados passava em **508 testes**, porque `expectNoPrivacyTalk()`
+      era uma **segunda chamada** que cinco testes não faziam — e o diagnóstico estava escrito
+      no docblock do próprio executor ("guarda que depende de memória não é guarda"), aplicado
+      num helper e esquecido no outro. Consertado movendo a chamada para **dentro** do
+      `expectNoGuilt()`. (2) Um **cadeado DESENHADO** (o ícone `Lock` do `lucide-react` **e** um
+      `<svg>` cru) em toda linha do acervo dava **0 acusadores** — e a lacuna estava
+      **declarada** no docblock do `adr-0002-dom.ts`, que dizia que um cadeado desenhado "**
+      passaria** por esta função" e delegava para uma varredura que lê **só `packages/ui`**. A
+      dívida foi assumida quando as telas do app não mostravam autoria por linha; agora mostram.
+      Consertado com um `adr-0002-iconography.test.ts` **no `app`**, espelho do de `ui/`, com a
+      `PRIVACY_TERMS` **importada** e não copiada._
+      _**⚠️ E O TERCEIRO DEFEITO, que o executor achou sozinho e que os plantes do revisor
+      escaparam POR SORTE — é a lição mais profunda da fatia:** `document.body.textContent`
+      **cola nós irmãos sem separador**. Com um `<span>Somente voce ve este grifo.</span>` ao
+      lado de um rótulo, o texto falado sai `"cor da canetasomente voce ve este grifo."` — e o
+      `\b` do matcher de privacidade (que existe por medição, senão `block`/`unlock` acusam)
+      **não casa entre fronteiras de nó**. Os dois plantes do revisor escaparam disso porque
+      caíram depois de um espaço **dentro** do mesmo nó. Zero acusadores. Consertado na
+      **superfície, não na âncora**: o `readableText()` mantém o `body.textContent` (é ele que
+      faz um `toContain` de frase quebrada em vários nós funcionar) **e** acrescenta o texto de
+      cada elemento numa linha própria — a união só acrescenta casamentos. **Verificado por
+      mutação do orquestrador: 21 acusadores só na suíte do formulário** (era 0). É a irmã do
+      §7.6.1 — "`document.body.textContent` só vê nós de texto" agora tem uma segunda metade:
+      **e os cola.**_
+      _**A DECISÃO H SE PAGOU EM BYTES, e isso foi medido por remoção e rebuild.** O `Notice`
+      tinha **duas variantes divergentes** (três cópias byte-idênticas + duas com `description`)
+      e o `Screen` duas que diferiam só na largura; esta fatia criaria a 6ª e a 4ª. Unificadas
+      em `pages/chrome.tsx` **antes** de qualquer tela nova (unidade 1). Atribuição do bundle:
+      as duas telas + rotas **+13.311 B**, o catálogo de i18n novo **+3.784 B**, e o cromo
+      unificado **−1.383 B** — a única parcela **negativa** da fatia, e a conta fecha nos
+      +15.712 B. Apagar o `<p>{title}</p>` do `Notice` compartilhado dá **8 suítes / 36
+      acusadores**._
+      _**A assimetria que o revisor pegou, e o executor aceitou com a medição:** o `ScreenWidth`
+      foi construído com o argumento "as duas larguras que existem hoje", e a prop de
+      espaçamento foi chamada de "abstração especulativa para um chamador" — o **mesmo critério
+      dando duas respostas**. E a consequência era medível: a guarda que confere ausência de
+      `function Screen(` deixava a home **passar trivialmente**, porque ela nunca declarou uma —
+      a 5ª cópia era **invisível** para a guarda que existe para pegar isso. Com o `spacing`, a
+      home e o **login** migraram (o login era byte-idêntico ao `accept-invite`: a 6ª e a 7ª
+      cópia), e a guarda nova é estrutural: **nenhuma tela de `pages/` declara `<h1` própria**,
+      com duas exceções **declaradas e conferidas por teste** (`accept-invite`, cujo `h1` vive
+      num grupo com a descrição, e `not-found`, com três divergências de layout)._
+      _**Prosa descrevendo código inexistente, dentro do commit que cita a lição nº 3:** o
+      `book.tsx` dizia que as classes moravam em `highlights.tsx` como `CHIP_LINK_CLASS` "para
+      não serem uma segunda cópia" — e `grep` devolvia **uma** ocorrência: a própria frase.
+      Havia sim uma segunda cópia, byte-idêntica entre as duas telas novas. Extraída
+      (`TEXT_LINK_CLASS` no `chrome.tsx`), e a aba fica de fora **com o `diff` colado**: ela é
+      um chip (alvo de 44px, pílula com borda e fundo) e o link é sublinhado com cor de ação —
+      não têm classe em comum além do `FOCUS_RING`._
+      _**⚠️ A guarda nova de cor pegou o docblock do próprio executor, minutos depois de
+      nascer.** O Tailwind extrai nome de classe **de comentário** (medido na Tarefa 13), e ele
+      havia copiado a anedota de lá para um docblock de **produção**, citando `bg-[#facc15]` e
+      `min-h-10` — as duas menções **compilaram regras de verdade** no CSS que o navegador
+      baixa, onde a varredura de DOM nunca olha. A guarda antiga pinava a sonda nominal
+      (`.min-h-10{`); a nova é geral (**nenhuma classe de cor arbitrária no CSS emitido**) e
+      acusou a família inteira sem conhecer o valor. CSS 22.520 → **22.470 B**._
+      _**O desvio do executor que estava CERTO e a minha spec estava errada:** a decisão B da
+      spec pedia `/highlights/:highlightId`, e **não é implementável** — a Tarefa 24 tem quatro
+      rotas e **nenhum** `GET /highlights/:highlightId`; a única leitura é por **clube**, e o
+      `clubId` vem do livro. Sem o livro no endereço, a tela adivinharia o clube pelo seletor do
+      cabeçalho e o link de um grifo de outro clube daria 404 para um grifo que existe. Ficou
+      `/books/:bookId/highlights/:highlightId` — o **precedente exato** do `FREE_NOTE_PATH` da
+      Tarefa 19. Confirmado por leitura das quatro rotas pelo revisor._
+      _**E a regra 6 do executor é estritamente melhor que a que eu escrevi**, medida nos dois
+      sentidos: eu pedi o gate em `commentDoc === null`; ele gateia pela **prévia vazia**. O meu
+      dá 1 acusador, o dele dá o mesmo **mais** o do documento que existe e não diz nada — e a
+      premissa dele é verdadeira: o `normalizeHighlightComment` devolve `commentText: ''`
+      sempre que o doc é `null`, então a resposta que o meu gate precisaria para ser testável
+      **não existe** (§7.1: fixture infiel). O meu tinha uma metade sem acusador possível._
+      _**Outros dois desvios medidos:** a varredura de cor da tela virou **"exatamente 1 linha
+      vermelha"** em vez de "zero", porque esta tela tem **um** vermelho legítimo (a falha de
+      arquivar, uma ação destrutiva que não deu certo) — não é frouxidão: plantar um **segundo**
+      vermelho acusa, inclusive em hex arbitrário, e o `not.toMatch` que eu esperava seria a
+      asserção **falsa**. E a `page` também é recusada **acima do int32** na tela, importando o
+      `HIGHLIGHT_PAGE_MAX` de `shared` (uma dona só): a Tarefa 24 mediu que fora do int32 o
+      Prisma **lança**, e um 500 é pior que um 400 para quem digitou._
+      _**Complexidade, com o comando colado no docblock** (a fatia carregava **três** números
+      diferentes para o mesmo arquivo — 491, 483 e 426 —, e é assim que um número viaja sem
+      ninguém medir): `highlights.tsx` **380** · `highlight-form.tsx` **423** ·
+      `highlight-fields.tsx` **189** · `highlight-colors.tsx` **34** · `chrome.tsx` **58** ·
+      `book.tsx` **426 → 400** · `home.tsx` 300 → **278**. A divisão foi feita **antes**: num
+      arquivo só o formulário daria **618** linhas, acima do `free-note.tsx` (**565**), que
+      continua sendo o maior arquivo do app — e esta fatia **não o tocou**._
+      _**Dívidas registradas:** (a) a edição acha o grifo por `.find()` sobre o acervo, que tem
+      `take: 500` — um grifo além do 500º renderiza "não foi possível abrir" para um grifo que
+      existe e é seu. É o preço correto de não haver rota por id, e leva anos para acontecer
+      (~1,4 KiB/grifo, medido na 23); **é a razão pela qual a 28/29 precisa da rota por id ou de
+      paginação real**. (b) `packages/ui` continua sem `FilterChip` com `renderLink`/`disabled`,
+      sem `TextArea` e sem `FieldGroup` (o `Field` amarra **um** controle, não um grupo de
+      botões), então a aba-link e o `<textarea>` têm classes à mão. (c) O `ListItem` não serve à
+      lista de grifos (a linha tem ações próprias e o `end` proíbe conteúdo interativo) — é o
+      próximo lugar onde um `ListItem` com slot de ações seria útil, na **28**._
+      _**⚠️ O TETO DO BUNDLE, e a conta que decide as fatias seguintes.** Entrada **416.643 B**
+      (era 401.148), **0 marcas** de TipTap, editor em chunk próprio que o `index.html` não
+      referencia, teto de **450.000 não relaxado** — folga de **33.357 B**. A projeção medida
+      pelo revisor, a partir do custo unitário desta fatia (~6,7 kB de código + ~1,9 kB de
+      catálogo por tela): 27 ≈ 5,1 kB · 28 ≈ 8,4 kB · 29 ≈ 6,1 kB ⇒ **~19,6 kB**. **Cabem, e a
+      folga acaba ali.** E a saída correta está **medida, não opinada**: removendo o `en` de
+      `resources` e reconstruindo, a entrada cai para **407.876 B** — o catálogo `en` sozinho
+      são **8.984 B**, 27% da folga inteira, baixados por **toda** sessão, inclusive a tela de
+      login. Carregar o locale não-padrão por `import()` + `addResourceBundle` devolve ~9 kB
+      **e mata o crescimento futuro pela raiz** (metade de cada chave nova é `en` que quase
+      ninguém lê). É fatia própria, fora do MVP 2, e virou **pergunta do dono** no
+      `ACEITE-MVP.md`. Chunk lazy por rota é a **segunda** opção. **Elevar o teto não é opção.**_
+      _**Gates:** 391 · 182 · 1266 · **536**; `typecheck`, `lint`, `prettier --check .` e o
+      build limpos. `packages/backend` e `prisma/` **intocados** (`git diff` vazio); os **359**
+      de integração **não** rodados (fatia de front)._
 
 ### Bloco F — Filtro geral e busca
 
-- [ ] **26** — `listNotes` completo: `kind` (pré-definida × avulsa), `planItemId`/capítulo,
-      texto. → _a detalhar_
+- [x] **26** — `listNotes` completo: `kind` (pré-definida × avulsa), `planItemId`/capítulo,
+      texto. → **JÁ ENTREGUE pelas Tarefas 10 e 11.** Nenhuma linha de código foi escrita
+      nesta fatia, e isso é a entrega.
+      _**Medido antes de despachar qualquer executor**, porque a regra do prompt do MVP 2 é
+      medir o que se vai afirmar. O escopo desta linha está **inteiro** no código desde o Bloco
+      C, nas quatro camadas:_
+      _• **port** — `NoteFilter` tem `clubId` · `bookId` · `authorId` · `kind` · `planItemId` ·
+      `text` · `status` (`usecases/ports/note-repository.ts`);_
+      _• **UseCase** — `ListNotesInput` tem os mesmos, menos o `status` (que o `listNotes` fixa
+      em `ACTIVE` no repositório, decisão C da Tarefa 10);_
+      _• **borda** — `listNotesQuerySchema` expõe `bookId`, `authorId`, `kind`, `planItemId` e
+      `text` (`packages/shared/src/note.ts`);_
+      _• **rota** — `GET /clubs/:clubId/notes` declara aquele `querystring`
+      (`note-routes.ts:294`)._
+      _E a **integração já exercita cada um**: `?bookId`, `?bookId&authorId`, `?kind=PLAN`,
+      `?kind=FREE`, `?planItemId`, `?text=PODER` (case-insensitive), `?text=coração` **e**
+      `?text=coracao` devolvendo vazio (a **sensibilidade a acento** que o ADR do `unaccent`
+      deixa para a Tarefa 29), a combinação dos quatro juntos, e `?kind=DIA` → **400**.
+      `note-routes.integration.test.ts:975-1056`._
+      _**Por que a linha existia:** ela foi escrita no planejamento do MVP 2, antes de a Tarefa
+      10 nascer — e a 10 entregou o filtro completo de uma vez, porque `listNotes` "é o que
+      alimenta o filtro geral" e fatiá-lo em dois teria criado um `NoteFilter` que crescia
+      depois de ter chamador. A linha 10 registra isso na época; esta linha só confirma que
+      nada ficou._
+      _**O que a linha NÃO cobria e continua sendo de outra fatia:** a **interface** desses
+      filtros. A Tarefa 19 entregou `Tudo · Minhas · De outras pessoas` (filtro no cliente,
+      sem `kind` na tela); o filtro por **pessoa com nome** é a **26a** + a **27**; `kind` e
+      capítulo na tela são a **28**; e o campo de **busca** é a **29**. Nenhuma delas precisa de
+      backend novo para os filtros de nota._
+      _**Nenhum gate foi rodado para esta linha** — não houve mudança. As contagens do momento
+      em que ela foi conferida são as da Tarefa 25: 391 · 182 · 1266 · 536, e 359 de
+      integração._
 - [ ] **26a** — `GET /clubs/:clubId/members` (id, nome, papel, status), com o corte de tenant
       de sempre. **Fatia INSERIDA pelo orquestrador do MVP 2**, antes da 27. → _a detalhar_
       _**Por que ela existe:** a 27 pede filtro **por pessoa**, e ele **não é implementável**

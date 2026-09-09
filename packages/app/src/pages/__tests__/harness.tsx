@@ -390,6 +390,30 @@ export function readableText(): string {
   const parts: string[] = [document.body.textContent ?? ''];
 
   for (const element of Array.from(document.querySelectorAll('*'))) {
+    /*
+      ⚠️ **O TEXTO DE CADA ELEMENTO, SEPARADO — e é um DEFEITO MEDIDO da
+      varredura, achado na rodada de correção da Tarefa 25.**
+
+      `document.body.textContent` **cola** os nós irmãos sem separador algum:
+      um `<span>Cor da caneta</span><span>Somente você vê este grifo.</span>`
+      vira `"Cor da canetaSomente você vê este grifo."`. Aí a varredura do ADR
+      0002, que é ANCORADA à esquerda por `\b` (`adr-0002-dom.ts`, e a âncora
+      existe por medição: sem ela um `includes` cru acusa `block`/`unlock`), não
+      encontra `somente voc` — porque entre o `a` de "caneta" e o `S` de
+      "Somente" **não há fronteira de palavra**.
+
+      MEDIDO: `"Somente voce ve este grifo."` plantado ao lado do rótulo da
+      paleta dava **0 acusadores em 508 testes**, e a frase é exatamente o que
+      o leitor de tela fala.
+
+      O conserto é a SUPERFÍCIE, não a âncora: o `body.textContent` continua na
+      lista (é ele que faz um `toContain` de frase quebrada em vários nós ainda
+      funcionar), e cada elemento entra também com o SEU texto, numa linha
+      própria. A união é estritamente mais forte — só acrescenta casamentos.
+    */
+    const own = element.textContent;
+    if (own !== null && own !== '') parts.push(own);
+
     for (const attribute of TEXT_BEARING_ATTRIBUTES) {
       const value = element.getAttribute(attribute);
       if (value !== null) parts.push(value);

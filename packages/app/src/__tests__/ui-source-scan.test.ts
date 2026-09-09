@@ -451,6 +451,50 @@ describe('the app CSS sees packages/ui (rule 1)', () => {
     expect(compiledCss).not.toContain('137px');
   });
 
+  it('⚠️ ships no ARBITRARY COLOUR class at all — literal or merely mentioned', () => {
+    /*
+      ⚠️ **A GENERALIZAÇÃO DAS DUAS SONDAS NOMINAIS ACIMA** — pedida pela
+      auditoria da Tarefa 25, e medida antes de entrar.
+
+      As duas guardas vizinhas pinam sondas por NOME (`137px`, `min-h-10`):
+      cada uma pega uma volta específica e nenhuma é geral. Esta é sobre uma
+      PROPRIEDADE do CSS emitido, e por isso pega as duas formas de a cor
+      arbitrária entrar — porque no Tailwind as duas viram CSS:
+
+      1. a classe escrita num componente (`className="bg-[#b3261e]"`);
+      2. a classe **citada num comentário** dele. Medido nesta rodada: o
+         docblock de `pages/highlight-colors.tsx` mencionava um
+         `bg-[<hex>]` literal só para dizer que ele seria acusado, e a menção
+         compilava **41 bytes** de `.bg-\[\#facc15\]{background-color:#facc15}`
+         no CSS de produção — onde a varredura de DOM de
+         `pages/__tests__/anti-guilt-dom.ts` **nunca olha**, porque nenhum
+         elemento usa a classe.
+
+      Por que a família toda, e não só o vermelho: o `--color-*: initial` do
+      `styles.css` mata a paleta padrão do Tailwind exatamente para que a cor
+      fora do sistema não compile (o docblock dele conta a medição). A cor
+      arbitrária é o último caminho que sobrou, e o `anti-guilt-dom.ts` já
+      proíbe `text-[#`/`bg-[#` no DOM pelo mesmo motivo — esta é a mesma regra,
+      um degrau antes, sobre o artefato que o navegador recebe.
+
+      A cor dinâmica legítima (a amostra de grifo) NÃO cai aqui: ela é
+      `[background-color:var(--swatch)]`, com o valor numa variável CSS — que é
+      o padrão do projeto justamente por isso.
+    */
+    const arbitrary = [
+      ...compiledCss.matchAll(/\.[a-z-]*-\\\[\\#[0-9a-fA-F]{3,8}\\\]/gu),
+    ].map((match) => match[0]);
+
+    expect(arbitrary).toEqual([]);
+    // O lado positivo do par: o regex CASA de verdade. Sem isto, um padrão
+    // quebrado devolveria `[]` para sempre e a guarda seria asserção vazia.
+    expect(
+      /\.[a-z-]*-\\\[\\#[0-9a-fA-F]{3,8}\\\]/u.test(
+        '.bg-\\[\\#facc15\\]{background-color:#facc15}',
+      ),
+    ).toBe(true);
+  });
+
   it('ships no class that only a test mentions', () => {
     /*
       ⚠️ O PAR DOS `@source not` DO `styles.css`, e a medição que os motivou.

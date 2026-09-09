@@ -20,11 +20,12 @@ import {
 } from '@clube/ui';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { useAuth } from '../auth/auth-context';
 import { useActiveClub } from '../club/active-club';
 import { listItemRouterLink } from '../router-link';
+import { Notice, Screen } from './chrome';
 import { dayNotePath } from './day-note';
 import {
   messageFor,
@@ -33,7 +34,7 @@ import {
   type StatusMessages,
 } from './form-errors';
 import { freeNoteNewPath, freeNotePath } from './free-note';
-import { bookEditPath, isClubAdmin } from './paths';
+import { bookEditPath, highlightsPath, isClubAdmin } from './paths';
 
 /**
  * A TELA DO LIVRO — o mês inteiro, dia por dia.
@@ -268,27 +269,6 @@ function noteTarget(note: NoteResponse, bookId: string): string {
     : freeNotePath(bookId, note.id);
 }
 
-/** O estado vazio e o de erro têm a MESMA forma; só o conteúdo muda. */
-function Notice({
-  action,
-  description,
-  title,
-}: {
-  title: string;
-  description?: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col items-start gap-3 rounded-control border border-line bg-surface p-4">
-      <p className="font-medium text-content">{title}</p>
-      {description !== undefined ? (
-        <p className="text-sm text-muted">{description}</p>
-      ) : null}
-      {action}
-    </div>
-  );
-}
-
 /**
  * A aba ativa não navega para lugar nenhum: ela É onde a pessoa está. Um
  * `onPress` que não faz nada é honesto — o `FilterChip` exige o campo porque no
@@ -297,6 +277,18 @@ function Notice({
 function stayHere(): void {
   // No-op deliberado.
 }
+
+/**
+ * A aba de Grifos: as MESMAS classes do `FilterChip` não pressionado, escritas
+ * à mão porque o `FilterChipProps` da Tarefa 13 não aceita `renderLink` e
+ * `packages/ui` não é alterado nesta fatia (a lacuna está no relatório — é a
+ * mesma da versão desabilitada, que viveu aqui da Tarefa 17 à 25).
+ */
+const HIGHLIGHTS_TAB_CLASS = cx(
+  'inline-flex min-h-11 shrink-0 items-center rounded-full border border-line bg-surface px-4',
+  'text-sm font-medium text-muted transition-colors hover:border-line-strong hover:text-content',
+  FOCUS_RING,
+);
 
 export function BookPage() {
   const { t, i18n } = useTranslation();
@@ -592,16 +584,36 @@ export function BookPage() {
         ) : null}
 
         {/*
-          REGRA 12 e DECISÃO F: a aba de Grifos EXISTE e está desabilitada, com
-          o motivo escrito ao lado. Uma aba que não existe esconde o plano do
-          produto; uma que existe e não faz nada frustra. Desabilitada e dizendo
-          "chega no MVP 2" é honesto.
+          ⚠️ **REGRA 11 DA TAREFA 25: A ABA DE GRIFOS DEIXOU DE SER
+          DESABILITADA E PASSOU A NAVEGAR.**
 
-          `<button disabled aria-disabled>` cru e não um `FilterChip`: o
-          `FilterChipProps` da Tarefa 13 não tem `disabled`, e `packages/ui` não
-          é alterado nesta fatia (a lacuna está no relatório). Os dois atributos
-          juntos de propósito: o `disabled` tira do foco e do clique, o
-          `aria-disabled` é o que alguns leitores de tela anunciam.
+          Ela nasceu na Tarefa 17 como `<button disabled aria-disabled>` com um
+          "chega no MVP 2" ao lado — honesto enquanto a tela não existia. Agora
+          existe, e a frase do MVP 2 saiu do catálogo junto com o `disabled`:
+          uma explicação que deixou de ser verdade é pior que nenhuma.
+
+          ⚠️ **E É O `Link` DO ROTEADOR, NUNCA ÂNCORA CRUA.** `<a href>` é
+          navegação de DOCUMENTO: num PWA ela recarrega o shell inteiro e perde
+          o estado em memória (a sessão, o clube ativo, o rascunho do editor) —
+          a lição medida da Tarefa 16. O `Link` renderiza um `<a href>` de
+          verdade (Ctrl+clique e "abrir em nova aba" continuam) **e** intercepta
+          o clique normal.
+
+          As classes são escritas à mão, e não por um `FilterChip`, pelo mesmo
+          motivo que a versão desabilitada era: o `FilterChipProps` da Tarefa 13
+          não aceita `renderLink` nem `disabled`, e `packages/ui` não é alterado
+          nesta fatia (a lacuna continua no relatório).
+
+          ⚠️ **E ELAS SÃO LOCAIS — o `HIGHLIGHTS_TAB_CLASS`, no topo deste
+          arquivo.** A primeira versão desta prosa dizia que elas "moram em
+          `highlights.tsx` (`CHIP_LINK_CLASS`)", e a auditoria mediu: um
+          `grep -rn "CHIP_LINK_CLASS"` devolvia UMA ocorrência — a própria
+          frase. A constante nunca existiu.
+
+          Elas ficam locais porque a aba é um CHIP e o link de texto das telas
+          de grifo (`TEXT_LINK_CLASS`, em `./chrome`) é um LINK: as duas não têm
+          classe em comum além do `FOCUS_RING`. O `diff` das duas está medido no
+          docblock do `TEXT_LINK_CLASS`.
         */}
         <div className="flex flex-wrap items-center gap-2">
           <FilterChip
@@ -609,20 +621,9 @@ export function BookPage() {
             onPress={stayHere}
             pressed
           />
-          <button
-            aria-disabled="true"
-            className={cx(
-              'inline-flex min-h-11 shrink-0 items-center rounded-full border border-line bg-surface px-4 text-sm font-medium text-subtle',
-              FOCUS_RING,
-            )}
-            disabled
-            type="button"
-          >
+          <Link className={HIGHLIGHTS_TAB_CLASS} to={highlightsPath(book.id)}>
             {t('pages.book.tabs.highlights')}
-          </button>
-          <span className="text-xs text-muted">
-            {t('pages.book.tabs.highlightsSoon')}
-          </span>
+          </Link>
         </div>
 
         {/*
@@ -732,20 +733,19 @@ export function BookPage() {
     );
   }
 
+  /*
+    O título do livro É o título da tela quando ele chegou; antes disso, o nome
+    da tela. O `h1` vem do `Screen` de `./chrome`, e é ele que faz
+    "carregando", "não foi possível abrir" e "sem plano" serem estados de uma
+    tela — não telas brancas (regra 9).
+  */
   return (
-    <section className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-6">
-      {/*
-        O título do livro É o título da tela quando ele chegou; antes disso, o
-        nome da tela. Sempre existe um `h1`, e é ele que faz "carregando",
-        "não foi possível abrir" e "sem plano" serem estados de uma tela — não
-        telas brancas (regra 9).
-      */}
-      <h1 className="text-2xl font-semibold">
-        {state.status === 'ready'
-          ? state.data.book.title
-          : t('pages.book.title')}
-      </h1>
+    <Screen
+      title={
+        state.status === 'ready' ? state.data.book.title : t('pages.book.title')
+      }
+    >
       {body()}
-    </section>
+    </Screen>
   );
 }

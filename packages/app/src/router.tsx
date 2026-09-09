@@ -16,10 +16,19 @@ import {
   FREE_NOTE_PATH,
   FreeNotePage,
 } from './pages/free-note';
+import { HighlightFormPage } from './pages/highlight-form';
+import { HighlightsPage } from './pages/highlights';
 import { HomePage } from './pages/home';
 import { LoginPage } from './pages/login';
 import { NotFoundPage } from './pages/not-found';
-import { BOOK_EDIT_PATH, BOOK_NEW_PATH, BOOK_PATH } from './pages/paths';
+import {
+  BOOK_EDIT_PATH,
+  BOOK_NEW_PATH,
+  BOOK_PATH,
+  HIGHLIGHT_NEW_PATH,
+  HIGHLIGHT_PATH,
+  HIGHLIGHTS_PATH,
+} from './pages/paths';
 
 /**
  * URL por página (`CLAUDE.md`). As telas de verdade chegam nas Tarefas 15–21;
@@ -97,6 +106,26 @@ export function AppRoutes() {
         */}
         <Route path={BOOK_NEW_PATH} element={<BookFormPage />} />
         <Route path={BOOK_EDIT_PATH} element={<BookFormPage />} />
+        {/*
+          OS GRIFOS DO LIVRO (Tarefa 25) — a coleção e as duas rotas do MESMO
+          formulário (decisões A e B).
+
+          As três dividem o prefixo `/books/:bookId/highlights`, e não há
+          ambiguidade: o react-router prefere a rota MAIS ESPECÍFICA,
+          independente da ordem de declaração, e `new` é segmento ESTÁTICO —
+          os ids são `randomUUID()`, então "new" nunca é um `highlightId` de
+          verdade. É o mesmo desenho das duas rotas da anotação avulsa.
+
+          ⚠️ **O ENDEREÇO DA EDIÇÃO CARREGA O LIVRO**, e a spec pedia
+          `/highlights/:highlightId`: a Tarefa 24 mediu que **não existe**
+          `GET /highlights/:highlightId`, e o `clubId` do corte de tenant vem
+          do LIVRO. → o docblock de `HIGHLIGHTS_PATH` em `pages/paths.ts`.
+
+          Protegidas pelo `RequireAuth` como todo conteúdo de clube.
+        */}
+        <Route path={HIGHLIGHTS_PATH} element={<HighlightsPage />} />
+        <Route path={HIGHLIGHT_NEW_PATH} element={<HighlightFormPage />} />
+        <Route path={HIGHLIGHT_PATH} element={<HighlightFormPage />} />
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />

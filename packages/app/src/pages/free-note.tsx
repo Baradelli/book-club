@@ -21,6 +21,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/auth-context';
 import { useActiveClub } from '../club/active-club';
 import { bookPath } from './book';
+import { Notice, Screen } from './chrome';
 import { messageFor, resolveApiError } from './form-errors';
 import { TEXT_INPUT_CLASS } from './form-styles';
 
@@ -180,27 +181,6 @@ function ignoreChange(): void {
 
 function isEmptyPatch(patch: NotePatch): boolean {
   return Object.keys(patch).length === 0;
-}
-
-/** O estado vazio e o de erro têm a MESMA forma; só o conteúdo muda. */
-function Notice({ action, title }: { title: string; action?: ReactNode }) {
-  return (
-    <div className="flex flex-col items-start gap-3 rounded-control border border-line bg-surface p-4">
-      <p className="font-medium text-content">{title}</p>
-      {action}
-    </div>
-  );
-}
-
-/** Sempre existe um `h1`: é ele que faz de "carregando" um ESTADO, não uma
-    tela branca. */
-function Screen({ children, title }: { title: string; children: ReactNode }) {
-  return (
-    <section className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-6">
-      <h1 className="text-2xl font-semibold">{title}</h1>
-      {children}
-    </section>
-  );
 }
 
 /**

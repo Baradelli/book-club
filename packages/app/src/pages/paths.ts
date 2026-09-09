@@ -47,6 +47,46 @@ export function bookEditPath(bookId: string): string {
 }
 
 /**
+ * OS GRIFOS DO LIVRO (Tarefa 25) — a coleção e o formulário.
+ *
+ * ⚠️ **OS TRÊS ENDEREÇOS CARREGAM O LIVRO, E A SPEC PEDIA `/highlights/:id`
+ * PARA A EDIÇÃO.** É a MESMA medição que o `FREE_NOTE_PATH` registrou na Tarefa
+ * 19, e a Tarefa 24 a confirmou por escrito: **não existe
+ * `GET /highlights/:highlightId`** ("Nenhuma tela pede um grifo por id", o
+ * escopo enxuto da 24). A única leitura de grifo da API é
+ * `GET /clubs/:clubId/highlights`, e o `clubId` **não está** no endereço de um
+ * grifo — ele vem do LIVRO (`book.clubId`). Com `/highlights/:highlightId`
+ * sozinho, a tela teria de adivinhar o clube pelo seletor do cabeçalho, e o
+ * link de um grifo de OUTRO clube responderia 404 para um grifo que existe.
+ *
+ * `new` é segmento ESTÁTICO e ganha do `:highlightId` no ranking do
+ * react-router, independente da ordem em que as rotas são declaradas — os ids
+ * são `randomUUID()`, então "new" nunca é um `highlightId` de verdade.
+ *
+ * Eles moram AQUI, e não na tela da coleção, pelo motivo do docblock deste
+ * arquivo: a coleção linka para o formulário e o formulário volta para a
+ * coleção. Com as constantes num módulo sem dependência, as duas telas não
+ * importam uma da outra e o ciclo que a auditoria da Tarefa 20 mediu não
+ * existe.
+ */
+export const HIGHLIGHTS_PATH = '/books/:bookId/highlights';
+export const HIGHLIGHT_NEW_PATH = '/books/:bookId/highlights/new';
+export const HIGHLIGHT_PATH = '/books/:bookId/highlights/:highlightId';
+
+/** `encodeURIComponent` pelo mesmo motivo dos de cima: id com `/`. */
+export function highlightsPath(bookId: string): string {
+  return `/books/${encodeURIComponent(bookId)}/highlights`;
+}
+
+export function highlightNewPath(bookId: string): string {
+  return `/books/${encodeURIComponent(bookId)}/highlights/new`;
+}
+
+export function highlightPath(bookId: string, highlightId: string): string {
+  return `/books/${encodeURIComponent(bookId)}/highlights/${encodeURIComponent(highlightId)}`;
+}
+
+/**
  * REGRA 1 (Tarefa 20) — QUEM ADMINISTRA **AQUELE** CLUBE.
  *
  * O papel vem do `/me`, **por clube**, e é por isso que esta função recebe o

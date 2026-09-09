@@ -311,6 +311,15 @@ function bookResponder(setup: BookSetup): Responder {
       // ⚠️ ANTES do `/clubs/`: o acervo mora em `/clubs/:clubId/notes`, e o
       // fragmento da estante casaria a listagem de anotações primeiro.
       ['/notes', setup.notes ?? { status: 200, body: [] }],
+      /*
+        A COLEÇÃO DE GRIFOS (Tarefa 25): a aba "Grifos" deixou de ser
+        desabilitada e NAVEGA, então um teste desta suíte chega à tela de
+        grifos — que pede `GET /clubs/:clubId/highlights`. Sem esta linha o
+        fragmento `/clubs/` responderia a ESTANTE para a coleção, o
+        `highlightsResponseSchema` recusaria o corpo (§6.8) e a tela mostraria
+        um erro: falso negativo perfeito para a asserção de navegação.
+      */
+      ['/highlights', { status: 200, body: [] }],
       ['/clubs/', setup.shelf ?? booksReply([aBook({ id: BOOK_ID })])],
       [
         '/books/',
@@ -840,8 +849,15 @@ describe('tapping a day goes to the note of that day (rule 8)', () => {
   });
 });
 
-describe('the tabs: notes now, highlights in MVP 2 (rule 12)', () => {
-  it('has the notes tab active and the highlights tab disabled, with the reason legible', async () => {
+describe('⚠️ THE HIGHLIGHTS TAB NAVIGATES NOW (rule 11 of task 25)', () => {
+  /*
+    ⚠️ **ESTE BLOCO SUBSTITUIU O ANTERIOR, E A TROCA É O PONTO.** Da Tarefa 17
+    à 24 a aba de Grifos era um `<button disabled aria-disabled>` com um "chega
+    no MVP 2" ao lado, e havia um teste provando isso. A tela existe desde a
+    Tarefa 25: a asserção antiga deixou de descrever a verdade, então ela foi
+    TROCADA pela que descreve a verdade nova — não apagada nem afrouxada.
+  */
+  it('has the notes tab active and the highlights tab as a real link', async () => {
     await renderBook();
 
     await waitFor(() => {
@@ -855,24 +871,51 @@ describe('the tabs: notes now, highlights in MVP 2 (rule 12)', () => {
     // não um controle de formulário (regra 25 da Tarefa 13).
     expect(notes.getAttribute('aria-pressed')).toBe('true');
 
-    // Sem `hidden: true`: um botão DESABILITADO continua na árvore de
-    // acessibilidade (é `disabled`, não `aria-hidden`), e é isso que faz a aba
-    // ser visível como plano do produto em vez de desaparecer.
-    const highlights = screen.getByRole('button', {
+    const highlights = screen.getByRole('link', {
       name: pt.pages.book.tabs.highlights,
     });
-    /*
-      DECISÃO F: a aba EXISTE e está desabilitada, com o motivo escrito. Uma aba
-      que não existe esconde o plano do produto; uma que existe e não faz nada
-      frustra. Os dois atributos juntos: o `disabled` tira do foco e do clique, o
-      `aria-disabled` é o que alguns leitores de tela anunciam.
-    */
-    expect(highlights.hasAttribute('disabled')).toBe(true);
-    expect(highlights.getAttribute('aria-disabled')).toBe('true');
-    expect(highlights.getAttribute('aria-pressed')).toBeNull();
-    // E o motivo é LEGÍVEL — não um `title` que só o mouse revela.
+    // Nem `disabled`, nem `aria-disabled`, nem a frase do MVP 2 — que saiu do
+    // catálogo junto com o botão.
+    expect(highlights.hasAttribute('disabled')).toBe(false);
+    expect(highlights.getAttribute('aria-disabled')).toBeNull();
+    expect(highlights.getAttribute('href')).toBe(
+      `/books/${BOOK_ID}/highlights`,
+    );
     expect(
-      screen.queryByText(pt.pages.book.tabs.highlightsSoon),
+      screen.queryByRole('button', { name: pt.pages.book.tabs.highlights }),
+    ).toBeNull();
+    expectNoGuilt();
+  });
+
+  it('⚠️ navigates by the ROUTER, not by a raw anchor that reloads the PWA', async () => {
+    /*
+      ⚠️ A LIÇÃO MEDIDA DA TAREFA 16. `<a href>` cru é navegação de DOCUMENTO:
+      num PWA ela recarrega o shell inteiro e perde o estado em memória (a
+      sessão, o clube ativo, o rascunho do editor). O `Link` do react-router
+      renderiza um `<a href>` de verdade — Ctrl+clique e "abrir em nova aba"
+      continuam — E intercepta o clique normal.
+
+      Em jsdom o endereço só muda se o roteador interceptou: uma âncora crua
+      não navega. É por isso que a asserção é sobre o `location`, e não sobre o
+      `href` (que o teste acima já pina).
+    */
+    await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    await press(
+      screen.getByRole('link', { name: pt.pages.book.tabs.highlights }),
+    );
+
+    expect(locationText()).toBe(`/books/${BOOK_ID}/highlights`);
+    // E chegou na tela de grifos de verdade, não numa página não encontrada.
+    expect(
+      screen.queryByRole('heading', {
+        level: 1,
+        name: pt.pages.highlights.title,
+      }),
     ).not.toBeNull();
     expectNoGuilt();
   });
@@ -1468,8 +1511,10 @@ describe('the source of the book screen (rules 5, 15, 16)', () => {
     expect(en.pages.book.plan.empty.title).not.toBe(
       pt.pages.book.plan.empty.title,
     );
-    expect(en.pages.book.tabs.highlightsSoon).not.toBe(
-      pt.pages.book.tabs.highlightsSoon,
+    // A chave `tabs.highlightsSoon` morreu na Tarefa 25 (a aba deixou de ser
+    // desabilitada), e o par que sobra é o rótulo da aba.
+    expect(en.pages.book.tabs.highlights).not.toBe(
+      pt.pages.book.tabs.highlights,
     );
 
     // As chaves da Tarefa 19, no mesmo par: existir nas duas e estar

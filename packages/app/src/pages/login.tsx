@@ -12,6 +12,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../auth/auth-context';
 import { destinationFrom } from '../auth/require-auth';
+import { Screen } from './chrome';
 import {
   fieldMessage,
   type FormMessage,
@@ -104,10 +105,14 @@ export function LoginPage() {
     fieldMessage(t, field, invalid, FIELD_KEYS, apiMessage);
   const formLevel = formMessage(t, apiMessage);
 
+  /*
+    ⚠️ O CROMO VEM DO `./chrome` desde a rodada de correção da Tarefa 25: esta
+    `<section>` era **byte-idêntica** à do `accept-invite.tsx`, e as duas
+    juntas eram a 6ª e a 7ª cópia do mesmo `<section>` + `h1`. `width="entry"`
+    é a coluna estreita das telas de entrada (formulário curto, nenhuma lista).
+  */
   return (
-    <section className="mx-auto flex w-full max-w-md flex-col gap-6 p-6">
-      <h1 className="text-2xl font-semibold">{t('pages.login.title')}</h1>
-
+    <Screen spacing="airy" title={t('pages.login.title')} width="entry">
       {/*
         `noValidate`: sem ele o navegador barra o envio com a bolha nativa dele
         ("Please fill out this field") — texto que não passa pelo nosso
@@ -168,6 +173,6 @@ export function LoginPage() {
           {t('pages.login.submit')}
         </Button>
       </form>
-    </section>
+    </Screen>
   );
 }

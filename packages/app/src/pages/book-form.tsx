@@ -16,6 +16,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import { useAuth } from '../auth/auth-context';
 import { type ActiveClubValue, useActiveClub } from '../club/active-club';
+import { Notice, Screen } from './chrome';
 import { messageFor, resolveApiError } from './form-errors';
 import { FORM_ERROR_CLASS, TEXT_INPUT_CLASS } from './form-styles';
 import { bookPath, isClubAdmin } from './paths';
@@ -40,32 +41,15 @@ import {
  * complexidade morde. Aqui a divisão é feita ANTES.
  */
 
-/** O estado vazio e o de erro têm a MESMA forma; só o conteúdo muda. */
-function Notice({ action, title }: { title: string; action?: ReactNode }) {
-  return (
-    <div className="flex flex-col items-start gap-3 rounded-control border border-line bg-surface p-4">
-      <p className="font-medium text-content">{title}</p>
-      {action}
-    </div>
-  );
-}
-
 /**
- * Sempre existe um `h1`: é ele que faz de "carregando" e da recusa ESTADOS
- * desta tela, e não telas brancas.
+ * ⚠️ **O `Notice` E O `Screen` VÊM DE `./chrome`** desde a Tarefa 25 — eram
+ * cópias locais, e a do `Notice` era uma de cinco (decisão H da 25).
  *
- * ⚠️ **`max-w-4xl` e não `max-w-2xl`** (decisão F): é a única tela de
- * administração do MVP 1, e a linha do plano tem três campos. No celular ela
- * empilha; no desktop ela cabe inteira numa linha.
+ * ⚠️ **E ESTA TELA PASSA `width="wide"` NOS QUATRO `Screen`** (`max-w-4xl`, a
+ * decisão F desta fatia): é a única tela de administração do MVP 1, e a linha
+ * do plano tem três campos. No celular ela empilha; no desktop ela cabe inteira
+ * numa linha. As outras telas ficam na coluna estreita, que é o padrão.
  */
-function Screen({ children, title }: { title: string; children: ReactNode }) {
-  return (
-    <section className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-6">
-      <h1 className="text-2xl font-semibold">{title}</h1>
-      {children}
-    </section>
-  );
-}
 
 /** Identidade estável para o modo criar — o plano nasce vazio. */
 const NO_PLAN: readonly PlanItemResponse[] = [];
@@ -130,7 +114,11 @@ function NewBook({ clubId }: { clubId: string }) {
 
   const waiting = meNotice(t, club);
   if (waiting !== null) {
-    return <Screen title={t('pages.bookForm.newTitle')}>{waiting}</Screen>;
+    return (
+      <Screen title={t('pages.bookForm.newTitle')} width="wide">
+        {waiting}
+      </Screen>
+    );
   }
 
   // REGRA 2: a rota também recusa. Sem isso, "a entrada não aparece" seria só
@@ -138,14 +126,14 @@ function NewBook({ clubId }: { clubId: string }) {
   // formulário para qualquer membro.
   if (!isClubAdmin(club.clubs, clubId)) {
     return (
-      <Screen title={t('pages.bookForm.newTitle')}>
+      <Screen title={t('pages.bookForm.newTitle')} width="wide">
         <Notice title={t('pages.bookForm.notAdmin')} />
       </Screen>
     );
   }
 
   return (
-    <Screen title={t('pages.bookForm.newTitle')}>
+    <Screen title={t('pages.bookForm.newTitle')} width="wide">
       <BookForm book={null} clubId={clubId} planItems={NO_PLAN} />
     </Screen>
   );
@@ -221,7 +209,11 @@ function EditBook({ bookId }: { bookId: string }) {
     );
   }
 
-  return <Screen title={t('pages.bookForm.editTitle')}>{body()}</Screen>;
+  return (
+    <Screen title={t('pages.bookForm.editTitle')} width="wide">
+      {body()}
+    </Screen>
+  );
 }
 
 /**

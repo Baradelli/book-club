@@ -16,6 +16,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/auth-context';
 import { useActiveClub } from '../club/active-club';
 import { listItemRouterLink } from '../router-link';
+import { Notice, Screen } from './chrome';
 import { dayNotePath } from './day-note';
 import {
   messageFor,
@@ -173,27 +174,6 @@ function formatClubMonth(month: string, locale: string): string {
   }).format(new Date(`${month}-01T00:00:00.000Z`));
 }
 
-/** O estado vazio e o de erro têm a MESMA forma; só o conteúdo muda. */
-function Notice({
-  title,
-  description,
-  action,
-}: {
-  title: string;
-  description?: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col items-start gap-3 rounded-control border border-line bg-surface p-4">
-      <p className="font-medium text-content">{title}</p>
-      {description !== undefined ? (
-        <p className="text-sm text-muted">{description}</p>
-      ) : null}
-      {action}
-    </div>
-  );
-}
-
 export function HomePage() {
   const { t, i18n } = useTranslation();
   const { api } = useAuth();
@@ -312,10 +292,6 @@ export function HomePage() {
 
   const todayItem = plan.items.find((item) => item.date === today);
   const todayBook = plan.book;
-
-  const heading = (
-    <h1 className="text-2xl font-semibold">{t('pages.home.title')}</h1>
-  );
 
   /**
    * REGRA 1 (Tarefa 20) — A ENTRADA DO CADASTRO, **só para OWNER/ADMIN**.
@@ -506,10 +482,20 @@ export function HomePage() {
     );
   }
 
+  /*
+    ⚠️ A HOME USA O `Screen` DE `./chrome` desde a rodada de correção da Tarefa
+    25, com `spacing="airy"` — as duas listas têm `h2` próprio e pedem mais ar.
+
+    A versão anterior mantinha a `<section>` + `h1` locais, com o argumento de
+    que uma prop de espaçamento para um chamador seria especulação. O que
+    derrubou o argumento foi medível: a varredura da regra 2 confere ausência de
+    `function Screen(`, e esta tela passava trivialmente — a 5ª cópia do cromo
+    era INVISÍVEL para a guarda que existe para pegá-la. Agora o `h1` é do
+    `Screen`, e a guarda é sobre o `<h1`, não sobre o nome de uma função.
+  */
   return (
-    <section className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6">
-      {heading}
+    <Screen spacing="airy" title={t('pages.home.title')}>
       {body()}
-    </section>
+    </Screen>
   );
 }

@@ -180,9 +180,14 @@ export const pt = {
       bookUnavailable: 'Não foi possível abrir este livro agora.',
       tabs: {
         notes: 'Anotações',
+        /*
+          ⚠️ A ABA DEIXOU DE SER DESABILITADA na Tarefa 25, e a chave
+          `highlightsSoon` ("Os grifos chegam no MVP 2") morreu com ela: a
+          frase deixou de ser verdade no instante em que a tela passou a
+          existir, e uma explicação que mente é pior que nenhuma. Agora a aba
+          é um LINK para a coleção do livro.
+        */
         highlights: 'Grifos',
-        /* DECISÃO F: a aba desabilitada diz POR QUÊ. */
-        highlightsSoon: 'Os grifos chegam no MVP 2.',
       },
       plan: {
         /* Nomeia a lista para o leitor de tela ("lista, 30 itens"). */
@@ -513,6 +518,122 @@ export const pt = {
           'Esta anotação não está mais disponível para você. Seu texto continua na tela.',
         retry: 'Salvar de novo',
       },
+    },
+    /*
+      A COLEÇÃO DE GRIFOS DO LIVRO (Tarefa 25) — a primeira vez que o dono vê
+      um grifo na tela.
+
+      ⚠️ **O FILTRO POR COR É NAVEGAÇÃO, NÃO PERMISSÃO**
+      (`docs/adr/0002-visibilidade-total-no-clube.md`). Nenhuma frase daqui
+      pode sugerir que exista grifo que o clube não vê: nada de "só você",
+      "privado", "visível para". As seis opções olham o MESMO acervo.
+
+      ⚠️ **E A COR NUNCA É O ÚNICO PORTADOR DE INFORMAÇÃO** (regra 4): cada
+      cor tem NOME, e é o nome que o leitor de tela fala. Os nomes ficam em
+      `colors`, e o mapa hex → chave vive em `pages/highlight-colors.tsx` com
+      o tipo da paleta de `@clube/shared` — uma cor nova na paleta reprova no
+      `tsc` em vez de aparecer sem nome.
+    */
+    highlights: {
+      /** O nome da TELA. O título do livro entra como contexto, abaixo. */
+      title: 'Grifos',
+      loading: 'Carregando os grifos…',
+      retry: 'Tentar de novo',
+      /* Livro de outro clube, livro arquivado, ou id inexistente: para quem
+         não é membro os três são a mesma resposta (`CLAUDE.md`: 404). */
+      bookUnavailable: 'Não foi possível abrir este livro agora.',
+      unavailable: 'Não foi possível carregar os grifos agora.',
+      /* REGRA 19: registrar é um BOTÃO. Abrir uma tela não grava nada. */
+      new: 'Novo grifo',
+      /* Nomeia a lista para o leitor de tela ("lista, 12 itens"). */
+      label: 'Grifos deste livro',
+      filters: {
+        /* Nomeia o grupo de chips para quem navega por leitor de tela. */
+        label: 'Como olhar o acervo',
+        /* O estado "todas" da regra 7 — o acervo inteiro, sem recorte. */
+        all: 'Todas as cores',
+      },
+      colors: {
+        yellow: 'Amarelo',
+        green: 'Verde',
+        orange: 'Laranja',
+        blue: 'Azul',
+        pink: 'Rosa',
+      },
+      item: {
+        /* REGRA 5: só aparece quando o grifo TEM página. */
+        page: 'Página {{number}}',
+        author: {
+          /* REGRA 4: autoria é "você × outra pessoa", e o `me` separa os dois. */
+          you: 'Você',
+          other: 'Alguém do clube',
+        },
+        /* REGRA 9: as duas ações existem SÓ no grifo de quem está olhando. */
+        edit: 'Corrigir este grifo',
+        archive: 'Arquivar este grifo',
+      },
+      empty: {
+        /* REGRA 8: acervo vazio NÃO cobra. A frase fala do que dá para fazer. */
+        title: 'Nenhum grifo por aqui ainda.',
+        description: 'Toque em "Novo grifo" para registrar o primeiro.',
+        /* O recorte do filtro sem nada dentro: é navegação, não ausência —
+           "registre o primeiro" seria mentira embaixo de um filtro. */
+        filtered: 'Nada por aqui com esta cor.',
+      },
+      archive: {
+        /* REGRA 10: arquivar pede confirmação, e cancelar não chama a API. */
+        title: 'Arquivar este grifo?',
+        description: 'Ele sai da lista do clube. O trecho não é apagado.',
+        confirm: 'Arquivar',
+        cancel: 'Cancelar',
+        close: 'Fechar',
+        failed: 'Não foi possível arquivar agora.',
+      },
+    },
+    /*
+      O FORMULÁRIO DO GRIFO (Tarefa 25) — registrar e corrigir.
+
+      ⚠️ **A RECUSA FALA DE AUTORIA, NUNCA DE VISIBILIDADE.** O grifo de outra
+      pessoa aparece INTEIRO na coleção (ADR 0002: dentro do clube não existe
+      conteúdo privado); o que não existe é corrigir o que o outro escreveu.
+    */
+    highlightForm: {
+      newTitle: 'Novo grifo',
+      editTitle: 'Corrigir o grifo',
+      loading: 'Carregando…',
+      retry: 'Tentar de novo',
+      /* REGRA 20: o editor chega num chunk próprio, e o chunk tem de chegar. */
+      editorLoading: 'Abrindo o editor…',
+      bookUnavailable: 'Não foi possível abrir este livro agora.',
+      highlightUnavailable: 'Não foi possível abrir este grifo agora.',
+      /* Autoria, não privacidade: o trecho está na coleção, para todo mundo. */
+      notYours: 'Só quem escreveu corrige o próprio grifo.',
+      backToList: 'Ver os grifos do livro',
+      fields: {
+        quote: 'Trecho grifado',
+        quoteHint: 'Copie o trecho como ele está no livro.',
+        /* REGRA 12: trecho em branco marca o campo, e nada é enviado. */
+        quoteRequired: 'Escreva o trecho que você grifou.',
+        color: 'Cor da caneta',
+        /* Nomeia o grupo dos cinco chips de cor. */
+        colorGroup: 'Escolha a cor da caneta',
+        /* REGRA 13: a cor é obrigatória, e vem da paleta fixa de 5. */
+        colorRequired: 'Escolha a cor da caneta.',
+        page: 'Página',
+        pageHint: 'Pode ficar em branco.',
+        /* REGRA 14: inteiro a partir de 1, recusado ANTES de enviar — quem
+           escreve não deve descobrir isso por um 400. */
+        pageInvalid: 'A página precisa ser um número inteiro, de 1 em diante.',
+        reference: 'Referência',
+        referenceHint: 'Capítulo ou seção. Pode ficar em branco.',
+        comment: 'Seu comentário',
+        commentHint:
+          'O que você pensou sobre esse trecho. Pode ficar em branco.',
+      },
+      /* REGRA 19: registrar é um BOTÃO, nunca autosave. */
+      create: 'Registrar grifo',
+      save: 'Salvar',
+      failed: 'Não foi possível salvar agora. O que você escreveu está aqui.',
     },
     notFound: {
       title: 'Página não encontrada',

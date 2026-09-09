@@ -1,7 +1,7 @@
 import { GUILT_TERMS } from '@clube/shared/anti-culpa';
 import { expect } from 'vitest';
 
-import { expectNoPrivacyTalk } from './adr-0002-dom';
+import { expectNoPrivacyTalk, expectNoPrivacyTalkIn } from './adr-0002-dom';
 import { readableText, withoutDiacritics } from './harness';
 
 /**
@@ -89,6 +89,20 @@ export function styleSurface(): string {
 /**
  * A varredura sobre a tela RENDERIZADA — texto, atributos que carregam texto
  * (o `readableText()` do harness), classes e `style`.
+ *
+ * ⚠️ **E A VARREDURA DO ADR 0002 MORA DENTRO DELA, desde a rodada de correção
+ * da Tarefa 25.** Ela era uma segunda chamada, e a auditoria mediu o preço: nos
+ * cinco estados que chamavam só esta função — o `/me` morto das duas telas de
+ * grifo, a rede caída da coleção, a paleta do formulário e o "tentar de novo"
+ * dele — uma frase de privacidade plantada no `Notice` dava **0 acusadores em
+ * 508 testes**.
+ *
+ * O diagnóstico já estava escrito no docblock do
+ * `expectNoGuiltBesidesFormError` logo abaixo, que a embute **exatamente por
+ * este motivo**, e a lição não tinha sido aplicada aqui: guarda que depende de
+ * alguém lembrar de chamá-la não é guarda (§7.9). Agora as duas famílias de
+ * estado — a normal e a com erro de formulário — passam pela mesma checagem,
+ * por construção.
  */
 export function expectNoGuilt(): void {
   const spoken = withoutDiacritics(readableText());
@@ -98,11 +112,16 @@ export function expectNoGuilt(): void {
 
   expect(readableText()).not.toMatch(COUNTER_SHAPE);
   expect(styleSurface()).not.toMatch(DANGER_STYLE);
+  expectNoPrivacyTalk();
 }
 
 /**
  * A mesma varredura sobre uma STRING de HTML — para o único estado que se
  * observa fora do DOM: o primeiro frame, via `renderToString` (§7.10).
+ *
+ * Ela também embute o ADR 0002, pela mesma razão da função acima: o primeiro
+ * frame é um estado como qualquer outro, e é justamente aquele em que ninguém
+ * lembra de acrescentar uma segunda chamada.
  */
 export function expectNoGuiltInHtml(html: string): void {
   const spoken = withoutDiacritics(html);
@@ -112,6 +131,7 @@ export function expectNoGuiltInHtml(html: string): void {
 
   expect(html).not.toMatch(COUNTER_SHAPE);
   expect(html).not.toMatch(DANGER_STYLE);
+  expectNoPrivacyTalkIn(html);
 }
 
 /**
