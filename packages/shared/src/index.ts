@@ -10,6 +10,10 @@ export * from './book';
 export * from './calendar-day';
 export * from './club';
 export * from './error';
+// Os schemas de borda do grifo (MVP 2, Tarefa 24). Arquivo próprio e não
+// dentro do `note.ts`, que já tem ~150 linhas de schema — espelha a separação
+// que o backend fez entre `note-routes.ts` e `highlight-routes.ts`.
+export * from './highlight';
 // A paleta fixa de 5 cores do `Highlight` (MVP 2, Tarefa 22). Mora aqui pelo
 // mesmo motivo do `calendar-day`: o domínio do backend, o `z.enum` da borda
 // (Tarefa 24) e a tela de grifos (Tarefa 25) precisam da MESMA lista.

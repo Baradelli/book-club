@@ -49,17 +49,37 @@ export interface HighlightFilter {
    * (`docs/CONVENCOES-CODIGO.md` §7.1).
    *
    * ⚠️ **A INTEGRALIDADE é responsabilidade da BORDA, e o tipo daqui não a
-   * expressa.** `number` em TypeScript é ponto flutuante, e a coluna vai ser
-   * `Int?` (Tarefa 24). Divergência fake × Prisma, medida e registrada:
-   * `find({ clubId, page: 45.5 })` devolve **lista vazia** no fake, e no Prisma
-   * um `45.5` (ou qualquer valor fora de int32) num campo `Int` **lança** — ou
-   * seja, `?page=45.5` viraria **500** onde a suíte unitária inteira diz "lista
-   * vazia". Nenhum teste unitário pode acusar isso, porque o fake não tem
-   * coluna tipada.
+   * expressa.** `number` em TypeScript é ponto flutuante, e a coluna é `Int?`
+   * (Tarefa 24). São DUAS divergências fake × Prisma, e elas não se parecem —
+   * **as duas medidas na rodada de correção da Tarefa 24**, contra o Postgres
+   * do projeto:
    *
-   * Quem fecha é o `z.coerce.number().int().min(1).max(2147483647)` do schema de
-   * query da Tarefa 24 — não um `Number.isInteger` aqui, que criaria **dois
-   * donos** da mesma regra (o mesmo argumento da decisão D sobre a `color`).
+   * - **Fração: o Prisma TRUNCA.** `find({ clubId, page: 45.5 })` devolve
+   *   **lista vazia** no fake e, no Prisma, chega ao SQL com o parâmetro **`45`**
+   *   e devolve **o grifo da página 45** — resultado byte-idêntico ao de
+   *   `find({ clubId, page: 45 })`, provado com uma linha de `page = 45` no
+   *   banco. Ou seja: **vazio (fake) × os grifos de OUTRA página (Postgres)**.
+   *   É resultado errado em silêncio, a direção restritiva do §7.1 — a que fica
+   *   verde.
+   * - **Fora do int32: o Prisma LANÇA.** `page: 2147483648` dá
+   *   `ConversionError` (*"Unable to fit integer value '2147483648' into an
+   *   INT4"*), e aí sim `?page=2147483648` viraria **500** onde a suíte unitária
+   *   diz "lista vazia".
+   *
+   * ⚠️ **A versão anterior deste parágrafo dizia que a fração LANÇA, e era
+   * falsa** — a afirmação nasceu numa pergunta da auditoria da Tarefa 23, virou
+   * docblock aqui e foi copiada para a spec e para a borda da 24 antes de
+   * alguém medi-la. Nenhum teste unitário pode acusar nenhuma das duas (o fake
+   * não tem coluna tipada), e é justamente por isso que a frase sobreviveu:
+   * afirmação sobre o banco escrita em comentário e não medida é a mesma classe
+   * do §7.1.
+   *
+   * Quem fecha as duas pontas é o `z.coerce.number().int().min(1).max(2147483647)`
+   * do schema de query — o `.int()` para a fração, o `.max()` para o int32 —, e
+   * não um `Number.isInteger` aqui, que criaria **dois donos** da mesma regra (o
+   * mesmo argumento da decisão D sobre a `color`). ⚠️ Quem for escrever a busca
+   * de grifo (Tarefa 29) e reusar este filtro: a guarda da borda é obrigatória,
+   * e o motivo é o truncamento — **não** um erro que o banco levantaria.
    */
   page?: number;
   /** Ausente = os dois status. */

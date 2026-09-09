@@ -17,6 +17,7 @@ import {
 
 import { bookRoutes } from '../routes/book-routes';
 import { clubRoutes } from '../routes/club-routes';
+import { highlightRoutes } from '../routes/highlight-routes';
 import { inviteRoutes } from '../routes/invite-routes';
 import { meRoutes } from '../routes/me-routes';
 import { noteRoutes } from '../routes/note-routes';
@@ -306,6 +307,11 @@ export async function buildServer(
     await api.register(inviteRoutes, { prisma });
     await api.register(bookRoutes, { prisma });
     await api.register(noteRoutes, { prisma });
+    // DENTRO do escopo autenticado: as quatro rotas de grifo nasceriam
+    // PÚBLICAS se o registro fosse para fora dele, e nada mais no projeto
+    // notaria — quem acusa é o bloco `authentication` do
+    // `highlight-routes.integration.test.ts`.
+    await api.register(highlightRoutes, { prisma });
   });
 
   return app;

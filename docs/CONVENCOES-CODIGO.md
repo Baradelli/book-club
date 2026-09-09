@@ -138,6 +138,24 @@ de ator ou de tenant** (`userId`, `actorUserId`, `clubId` quando vem da rota) �
 Zod que é a primeira barreira, e a ordem do spread é a segunda. Romper as duas ao mesmo
 tempo dá escalação de privilégio; foi medido.
 
+⚠️ **E "romper o strip" NÃO é "tirar o `.strict()`"** — a confusão apareceu em três comentários
+da Tarefa 24 e foi desfeita por medição do Zod:
+
+```
+z.object({ a: z.string() }).parse({ a: '1', actorUserId: 'x' })   →  { a: '1' }       // STRIP
+  .strict()      → success: false                                                    // 400
+  .passthrough() → { a: '1', actorUserId: 'x' }                                      // PASSA
+```
+
+`req.body` é a **saída** do parse, então o strip do `z.object` já acontece **sem** `.strict()`:
+a chave nem chega ao handler, e a ordem do spread não tem o que sobrescrever. Romper o strip é
+**declarar o campo** no schema ou usar `.passthrough()`. O valor do `.strict()` é outro, e é
+real: transforma o contrabando em **400 explícito** em vez de strip silencioso, o que diz ao
+cliente que ele está enganado sobre quem manda naquele campo (§6.1 da mesma família: o silêncio
+é o que faz o cliente achar que funcionou). A ordem certa do spread continua obrigatória — ela
+é grátis e é a barreira que passa a valer no dia em que alguém puser `.passthrough()` num
+corpo.
+
 ### 6.4 Autenticação: comparar sempre, mesmo sem usuário
 
 `authenticateUser` compara o hash **sempre** — contra um `DUMMY_HASH` bcrypt real de custo 10
@@ -257,6 +275,23 @@ chamador é especulação — o segundo chega com a busca de grifo da Tarefa 29.
 copiar quando uma fidelidade aparecer no terceiro fake (o MVP 3 traz `ReadingLog` e
 `ActivityEvent`): **extrair, não cobrir duas vezes** — o irmão do §7.1.1, onde a saída foi
 estreitar o tipo em vez de testar a divergência.
+
+**6ª aparição (Tarefa 24), e a única em que a divergência não é "aceita × recusada" mas
+"vazio × resultado ERRADO":** o `HighlightFilter.page` é `number` de TypeScript (ponto
+flutuante) e a coluna é `Int?`. O fake compara `45.5 === 45` e devolve **vazio**; o Prisma
+**trunca** a fração — medido no log de query: `page: 45.5` chega ao SQL como `45` — e devolve
+**os grifos da página 45**. Só valor fora do int32 lança (`ConversionError`). Não há erro em
+nenhum dos dois lados, então **nada acusa**: é a direção restritiva do §7.1 sem nem o
+consolo de uma exceção. Quem fecha é a **borda**
+(`z.coerce.number().int().min(1).max(2147483647)`), não o port — um `Number.isInteger` no port
+criaria dois donos da mesma regra. ⚠️ **E o registro da lição sobre a lição:** a frase original
+deste caso, escrita na auditoria da Tarefa 23 pelo orquestrador, dizia que o Prisma "lança".
+Ela foi copiada de boa-fé para **três** arquivos e para a linha 23 do `BACKLOG` antes de
+alguém medir. **Afirmação sobre o comportamento do banco é a mais fácil de escrever e a mais
+difícil de conferir** — se ela não vier com a medição colada (o log de query, a saída do
+`psql`), ela é suposição com cara de fato. Das cinco afirmações sobre o Postgres que a
+auditoria da 24 conferiu, três sobreviveram e **duas caíram**, e as duas que caíram eram
+justamente as que diziam "medido".
 
 As duas do meio são do mesmo par de linhas de código, e a quarta **foi entregue sem teste**:
 o comentário afirmava a fidelidade, e a assimetria (o método vizinho tinha o teste análogo

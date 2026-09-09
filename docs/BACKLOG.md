@@ -843,11 +843,17 @@ Sem grifos em tela própria (MVP 2), sem marcar "li", sem feed e sem notificaç�
       borda, e duas validações são dois donos) · **sem `text`** aqui, porque a busca é a 29 e é
       ela a chamadora._
       _**⚠️ Cinco entradas OBRIGATÓRIAS na spec da Tarefa 24, achadas pela auditoria:**
-      (1) **`page` é `Int?` e o filtro é `number` JS** — `page: 45.5` devolve `[]` no fake e
-      **lança** no Prisma (idem fora de int32), então `?page=45.5` seria **500** onde 1266
-      testes dizem "lista vazia": a borda precisa de
-      `z.coerce.number().int().min(1).max(2147483647)`, e **não** um `Number.isInteger` no port
-      (dois donos da regra). (2) **`orderBy: [{ createdAt: 'desc' }, { id: 'asc' }]` colado no
+      (1) **`page` é `Int?` e o filtro é `number` JS.** ⚠️ **CORRIGIDO na Tarefa 24 — a frase
+      original desta linha estava factualmente errada, e o erro era do orquestrador.** Eu
+      escrevi que `page: 45.5` "lança no Prisma"; **medido** na 24, por sonda somente-leitura
+      do orquestrador **e** do revisor: o Prisma **TRUNCA** a fração (`page: 45.5` chega ao SQL
+      como `45`, visto no log de query) e **devolve os grifos da página 45**. Só valor fora do
+      int32 lança (`ConversionError`). Então a divergência fake × Prisma não é "vazio × erro",
+      é **"vazio × resultado de outra página"** — a 6ª aparição do §7.1, na direção que esconde
+      melhor, porque não há erro nenhum. A conclusão prática não muda e a borda fecha as duas
+      pontas com `z.coerce.number().int().min(1).max(2147483647)`, e **não** com um
+      `Number.isInteger` no port (dois donos da regra). O que muda é o motivo, e quem for
+      escrever a Tarefa 29 precisa do motivo certo. (2) **`orderBy: [{ createdAt: 'desc' }, { id: 'asc' }]` colado no
       `take`** — `take` sem ordem total corta um conjunto que o Postgres devolve em qualquer
       ordem, e o `sort` do UseCase **não substitui** o `orderBy`: ele ordena o que chegou, e o
       que chegou é decidido pelo corte do banco. (3) A válvula **não é decidível no unitário**
@@ -867,7 +873,108 @@ Sem grifos em tela própria (MVP 2), sem marcar "li", sem feed e sem notificaç�
       limpos. Chunk de entrada **400.129 B** com **0 marcas** de TipTap. `prisma/`,
       `repositories/`, `routes/`, `http/`, `ui/` e `app/` **intocados** (provado por `git
       status` e mtime — o mais novo de `prisma/` é de 2026-09-03); integração **não rodada**._
-- [ ] **24** — Repo Prisma + rotas `/highlights` + teste de tenant. → _a detalhar_
+- [x] **24** — Repo Prisma + rotas `/highlights` + teste de tenant.
+      → `tasks/24-prisma-rotas-grifo.md`
+      _**O GRIFO EXISTE.** Entregue: `model Highlight` + a migration `20260909205340_highlight`
+      gerada pelo Prisma, o `PrismaHighlightRepository`, os schemas Zod em `shared`, as 4 rotas
+      em arquivo próprio, e a fiação. **391 shared** (era 320) **+ 175 ui + 1266 backend + 424
+      app**; **integração 359** (era 262: +34 do contrato, +63 das rotas). Chunk de entrada
+      **401.148 B** (era 400.129) — o +1.019 B foi atribuído por mutação do barril de `shared`
+      e é 100% dos schemas novos, com **0 marcas** de TipTap e o teto de 450.000 intacto._
+      _**⚠️ A ARMADILHA QUE O TIPO PEGOU E NENHUM TESTE PEGARIA: `Json?` + `null` no Prisma não
+      é `null`.** Numa coluna `Json?` o tipo de entrada é `DbNull | JsonNull | InputJsonValue`
+      e `null` literal é **erro de compilação** — foi o `tsc` que mordeu primeiro, no fixture do
+      próprio executor. Grava-se `Prisma.DbNull`. E o que faz esse acerto ser **testável** é uma
+      sonda SQL: trocar `DbNull` por `JsonNull` deixa `expect(x).toBeNull()` **passar** (o
+      Prisma devolve `null` em JS para JSON `null` também), e o **único** acusador no projeto é
+      o `SELECT "commentDoc" IS NULL, "commentDoc"::text` do teste de contrato — typecheck 0,
+      unitário 0. Medido no banco: `'null'::jsonb IS NULL` é **false** e `::text` dá `'null'`.
+      Hoje não morde (a tabela nasceu vazia e nenhuma consulta filtra por presença de
+      comentário); morde na **primeira** feature que perguntar "tem comentário?" — um chip "só
+      os comentados" com `not: Prisma.DbNull` **incluiria** as linhas gravadas como `JsonNull`,
+      e as duas populações não se pegam juntas sem `AnyNull`. Não simplifique a sonda para um
+      `toBeNull()`._
+      _**⚠️ A frase errada era MINHA, e viajou por QUATRO arquivos antes de alguém medir.** Eu
+      escrevi, numa pergunta de auditoria da Tarefa 23, que `page: 45.5` "faz o Prisma lançar".
+      **Falso.** Medido por sonda somente-leitura do revisor, do executor **e** do orquestrador:
+      o Prisma **TRUNCA** (`45.5` chega ao SQL como `45`, visto no log de query) e **devolve os
+      grifos da página 45** — provado com uma linha real no banco, as duas consultas devolvendo
+      o mesmo grifo. Só fora do int32 lança (`ConversionError`). A divergência fake × Postgres
+      não é "vazio × erro", é **"vazio × resultado de OUTRA página"** — a 6ª aparição do §7.1,
+      na direção que esconde melhor porque não há erro nenhum. Corrigida nos 4 lugares (o
+      executor achou a 4ª cópia que eu não listei) e registrada no §7.1, **com a lição sobre a
+      lição**: afirmação sobre o comportamento do banco é a mais fácil de escrever e a mais
+      difícil de conferir — das 5 que a auditoria conferiu, 3 sobreviveram e **2 caíram, e as 2
+      que caíram eram as que diziam "medido"**._
+      _**A segunda prosa falsa, e ela é sobre segurança:** três comentários diziam que "tirar o
+      `.strict()` + inverter o spread" dá escalação de privilégio. Medido no Zod: **sem
+      `.strict()` o `z.object` já faz STRIP**, então a chave nem chega ao handler e o spread
+      invertido não tem o que sobrescrever — a escalação exige `.passthrough()` (ou declarar o
+      campo). O valor real do `.strict()` é **400 explícito em vez de strip silencioso**.
+      **Gerou a ressalva medida no §6.3** do `CONVENCOES-CODIGO`, porque a frase de lá
+      ("romper as duas") estava certa e foi **parafraseada errado** — "romper o strip" não é
+      "tirar o `.strict()`"._
+      _**O furo dentro do bloco que se declarava imune a ele:** o Fastify responde **404 para
+      rota inexistente**, então 6 testes de 404 ficavam verdes **sem uma linha de rota escrita**
+      (medição do executor, corrigida por ele mesmo: era **6 de 62**, não "6 de 49" — ele havia
+      somado ignorando 13 `skipped`). É a forma nova do §7.4, e ela sobreviveu **dentro** do
+      docblock que afirmava estar protegido: a frase dizia que o pino do PATCH e do DELETE era o
+      `createHighlight()`, que exercita o **POST**. Precondição posta nos **seis** testes (a
+      mesma rota atende o ator legítimo). **Verificado por mutação do orquestrador: apagar o
+      bloco `app.patch` dá 11 acusadores** — e os três testes de 404 que antes ficariam verdes
+      estão entre eles. Apagar o `app.delete` dá 8._
+      _**As guardas de tenant da FIAÇÃO: os três mutantes são mortos pelo COMPILADOR.**
+      `actorUserId` do corpo com fallback → 2× TS2339; `clubId` da query em vez dos params →
+      TS2339. E a ordem do spread invertida é **equivalente por construção** (o body parseado
+      não tem as chaves), o que é informação e não lacuna — a ordem certa fica porque é grátis e
+      passa a valer se alguém puser `.passthrough()`. ⚠️ **E o enquadramento que vale para
+      quem vier depois: NENHUM teste unitário carrega `highlight-routes.ts`,
+      `prisma-highlight-repository.ts` nem `http/server.ts`** (provado por `grep` e por 5
+      mutantes com 1266/1266 verde). Nesta fatia "unitário verde" **não é sinal**; os
+      instrumentos são o `tsc`, o catálogo do Postgres, uma sonda de boot **sem banco** (o
+      revisor descobriu que `buildServer()` + `ready()` não conecta) e a integração._
+      _**O catálogo confere com o schema, conferido por consulta independente:** **zero** índice
+      único além da PK (grifo é ilimitado — um `@@unique` viraria 409 ao grifar o mesmo trecho
+      com outra cor); os três índices declarados (`bookId,color` · `bookId,userId` ·
+      `clubId,createdAt`) com colunas e ordem certas; `updatedAt` **NOT NULL sem DEFAULT** (ADR
+      0008 — o §6 do plano dizia `@updatedAt` e **está desatualizado**); `commentDoc` é
+      **`jsonb`** nullable; `page` é `integer` nullable; as três FKs **`RESTRICT` no delete**,
+      **lidas** do `migrate diff --from-empty` (offline) e não supostas — é a lição da Tarefa 11,
+      onde o default de relação **opcional** era `SetNull`._
+      _**Decisões:** `take: 500` **igual ao da nota** — os ~1,4 KiB/grifo da Tarefa 23
+      permitiriam ~1.200, e **não** subi: um número só entre os repositórios é uma coisa a menos
+      para raciocinar · rotas espelhando as de nota, com o `bookId` **na rota** (no corpo, o
+      corte de tenant sairia de um campo que o cliente manda) · `DELETE` devolve **200 com a
+      linha** · **`.max(2147483647)` também no CORPO**, contra a spec e com razão: sem ele um
+      `POST` com `page: 2147483648` responde **500** (medido — `ConversionError`), e é a mesma
+      coluna · arquivo de rota próprio (`note-routes.ts` já tem 353 linhas; somar 4 lá passaria
+      de 500)._
+      _**⚠️ Para a Tarefa 25, medido:** `?color=#facc15` **não funciona** numa URL — `#` é
+      delimitador de fragmento, e a cor precisa ir `%23facc15`. A armadilha **já está desarmada
+      pelo caminho sancionado**: o `buildUrl` do `ApiClient` usa `URLSearchParams`, que escapa
+      sozinho (`new URLSearchParams({color:'#facc15'}).toString()` → `color=%23facc15`). A tela
+      só cai nela se concatenar query string à mão. O aviso está no docblock do `highlightColor`
+      em `shared/highlight.ts`, que é o arquivo que a 25 importa._
+      _**Dívida registrada:** `FIND_ROW_LIMIT = 500` e ~30 linhas de docblock quase idênticas em
+      `prisma-note-repository.ts` e `prisma-highlight-repository.ts`. Diferente do `matches` que
+      a Tarefa 23 extraiu — aquele é **regra do Postgres**, este é **política do projeto** —,
+      então fica. **Para o MVP 3:** quando o terceiro `find` precisar da válvula (`ReadingLog`/
+      `ActivityEvent`), extraia constante + docblock como o `sql-equality.ts` foi extraído._
+      _**Complexidade:** `highlight-routes.ts` **174** linhas de código para 4 rotas (43,5 por
+      rota) contra **243** para 6 do `note-routes.ts` (40,5) — densidade igual;
+      `prisma-highlight-repository.ts` **109** contra 142 do da nota. Nenhuma abstração sem
+      chamador. Os tipos exportados sem consumidor (`CreateHighlightBody` etc.) têm precedente
+      exato (`ListNotesQuery` também tem zero)._
+      _**Uma quebra de protocolo declarada:** o **revisor** rodou a integração uma vez, por
+      acidente (`npx vitest run` sem `--project unit` roda os dois projetos do
+      `vitest.workspace.ts` — vale saber). Conferiu o banco depois, e o executor e o
+      orquestrador conferiram de novo no fim: **`Highlight` 0 linhas no total**, zero `t24-*` em
+      todas as tabelas, super-admin do seed intacto. A limpeza aguentou **três** execuções — é
+      prova a mais de que ela funciona, e o formato é o do `invite-routes` (§6.6: a limpeza
+      **consulta o banco**, não uma lista alimentada pelas respostas esperadas)._
+      _**Gates:** 391 · 175 · 1266 · 424 unitários e **359** de integração; `typecheck`, `lint`,
+      `prettier --check .` e o build limpos. Nenhuma migration além da desta fatia, nenhum SQL
+      escrito à mão, `packages/ui` e `packages/app` **intocados**._
 - [ ] **25** — Tela de grifos do livro: lista por cor, criar/editar com o editor no
       comentário. → _a detalhar_
 

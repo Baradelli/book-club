@@ -1,12 +1,13 @@
-// Schema dos Blocos A (Tarefa 03), B (Tarefa 07) e C (Tarefa 11). Os modelos
-// vêm do esqueleto de referência em docs/plano-clube-do-livro.md §6, recortando
-// as relações que apontam para modelos que ainda não existem (Highlight,
-// ReadingLog, ActivityEvent, NoteLink, Attachment, PushSubscription,
-// NotificationDelivery) — cada um nasce na sua tarefa, com a sua migration.
+// Schema dos Blocos A (Tarefa 03), B (Tarefa 07), C (Tarefa 11) e E
+// (Tarefa 24). Os modelos vêm do esqueleto de referência em
+// docs/plano-clube-do-livro.md §6, recortando as relações que apontam para
+// modelos que ainda não existem (ReadingLog, ActivityEvent, NoteLink,
+// Attachment, PushSubscription, NotificationDelivery) — cada um nasce na sua
+// tarefa, com a sua migration.
 //
 // Onde este arquivo divergir do §6, a divergência está registrada num ADR:
 // `ReadingPlanItem.order` tem @@index e não @@unique (ADR 0007), e
-// `Note.updatedAt` nasce sem @updatedAt (ADR 0008).
+// `Note.updatedAt`/`Highlight.updatedAt` nascem sem @updatedAt (ADR 0008).
 //
 // Os ids têm @default(cuid()) apenas como rede de segurança: quem gera o id é
 // o UseCase, com randomUUID().
@@ -54,6 +55,7 @@ model User {
   invitesUsed  Invite[]     @relation("InviteUser")
   booksCreated Book[]       @relation("BookCreator")
   notes        Note[]
+  highlights   Highlight[]
 }
 
 model Club {
@@ -68,6 +70,7 @@ model Club {
   invites     Invite[]
   books       Book[]
   notes       Note[]
+  highlights  Highlight[]
 }
 
 model Membership {
@@ -101,8 +104,8 @@ model Invite {
   usedBy    User? @relation("InviteUser", fields: [usedById], references: [id])
 }
 
-// Bloco B (Tarefa 07). A relação `highlights` do §6 do plano continua
-// recortada: Highlight é MVP 2. `notes` entrou na Tarefa 11.
+// Bloco B (Tarefa 07). `notes` entrou na Tarefa 11 e `highlights` na 24 — o §6
+// do plano está inteiro aqui agora.
 model Book {
   id          String        @id @default(cuid())
   clubId      String
@@ -116,10 +119,11 @@ model Book {
   archivedAt  DateTime?
   createdAt   DateTime      @default(now())
 
-  club      Club              @relation(fields: [clubId], references: [id])
-  createdBy User              @relation("BookCreator", fields: [createdById], references: [id])
-  planItems ReadingPlanItem[]
-  notes     Note[]
+  club       Club              @relation(fields: [clubId], references: [id])
+  createdBy  User              @relation("BookCreator", fields: [createdById], references: [id])
+  planItems  ReadingPlanItem[]
+  notes      Note[]
+  highlights Highlight[]
 
   @@index([clubId, status])
 }
@@ -200,6 +204,86 @@ model Note {
   // "as minhas anotações neste livro" — o filtro de navegação do ADR 0002.
   @@index([bookId, userId])
   // O acervo do clube, do mais recente para o mais antigo.
+  @@index([clubId, createdAt])
+}
+
+// Bloco E (Tarefa 24) — o grifo que a pessoa fez no livro DE PAPEL. Entidade
+// própria, com tabela, rotas e tela próprias, e **sem** vínculo com `Note` nem
+// com `ReadingPlanItem`: registrar um grifo num dia em que não se escreveu nada
+// é o caso real que decidiu isto. → ADR 0004. Um `noteId?` é aditivo se um dia
+// surgir.
+model Highlight {
+  id     String @id @default(cuid())
+  clubId String
+  bookId String
+  userId String // o AUTOR. Sempre o ator; nunca vem do input.
+  quote  String // o trecho grifado, digitado à mão (ADR 0004: sem OCR)
+  // `String` e não enum Prisma, e é decisão do `CLAUDE.md`: ele lista
+  // `Highlight.color` entre os quatro campos "String validados por
+  // z.enum/regex (ainda evoluem)" — o futuro registrado é paleta configurável
+  // por clube, e um enum Prisma exigiria migration por cor. O portão é o
+  // `z.enum(HIGHLIGHT_COLORS)` da borda mais o `assertHighlightColor` do
+  // domínio, e o valor gravado é o hex minúsculo de 6 dígitos: UMA grafia por
+  // cor, porque o `=` de texto do Postgres é byte-sensível.
+  color  String
+  // NULLABLE, e é caso legítimo: dá para grifar sem anotar a página. É a única
+  // coluna filtrável nula, e no Postgres `WHERE "page" = 45` contra `NULL` é
+  // FALSO — então o filtro por página não traz o grifo sem página. O fake
+  // reproduz isso e tem teste (§7.1), e o contrato o prova contra o banco.
+  //
+  // `Int` (int32), e é o teto que o `.max(2147483647)` do schema Zod defende:
+  // um valor fora dele faz o Prisma LANÇAR, e a rota responderia 500.
+  page   Int?
+
+  reference   String? // texto livre — capítulo, assunto, o que a pessoa quiser
+  // ProseMirror JSON, como veio do editor. HTML nunca é persistido. → ADR 0001,
+  // que nomeia `Highlight.commentDoc`/`commentText` na própria decisão.
+  //
+  // ⚠️ NULLABLE (decisão C da Tarefa 22): dá para registrar o grifo sem
+  // comentário. E `Json?` no Prisma NÃO aceita `null` literal na escrita — o
+  // tipo de entrada é `DbNull | JsonNull | InputJsonValue` —, então o
+  // repositório usa `Prisma.DbNull` para "não há comentário", com teste de
+  // contrato provando que volta como `null` do domínio (e não a string
+  // `"null"`, nem um sentinela).
+  commentDoc  Json?
+  // DERIVADO do `commentDoc` pelo `docToText`, no backend. Nunca entra no input
+  // da API. O `@default("")` é rede de segurança, como os `@default(cuid())`:
+  // quem escreve o valor é o UseCase. → ADR 0001.
+  commentText String        @default("")
+  status      GeneralStatus @default(ACTIVE)
+  archivedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  // SEM `@updatedAt`, exatamente como o `Note`: o dono deste instante é o
+  // domínio. `@updatedAt` não é fallback, é OVERRIDE — bombearia a coluna em
+  // todo UPDATE, ignorando o que o UseCase mandou, e o fake teria de emular o
+  // bombeamento. → ADR 0008, que EMENDA o `docs/plano-clube-do-livro.md` §6
+  // (ele declara `updatedAt DateTime @updatedAt` no `Highlight` e está
+  // desatualizado).
+  updatedAt   DateTime
+
+  // As três relações são OBRIGATÓRIAS, e o `onDelete` foi LIDO do SQL que o
+  // Prisma gera (`prisma migrate diff --from-empty --to-schema-datamodel
+  // prisma/schema.prisma --script`), não suposto: as três saem
+  // `ON DELETE RESTRICT ON UPDATE CASCADE`. É o default do Prisma para relação
+  // obrigatória — ao contrário do default para relação OPCIONAL, que é
+  // `SetNull` (foi essa suposição errada que a Tarefa 06 fez e a 11 corrigiu no
+  // `Note.planItem`). Restrict é o que queremos: apagar um livro, um clube ou
+  // uma pessoa que tem grifo tem de FALHAR, não zerar coluna nenhuma — o acervo
+  // do clube continua íntegro, com autoria (ADR 0002).
+  club Club @relation(fields: [clubId], references: [id])
+  book Book @relation(fields: [bookId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  // NENHUM `@@unique`: o grifo é ILIMITADO. Grifar o mesmo trecho outra vez
+  // numa releitura, com outra cor, é o caso de uso — um `@@unique` o
+  // transformaria em 409.
+  //
+  // "os meus grifos neste livro" — o filtro de navegação do ADR 0002/0004.
+  @@index([bookId, userId])
+  // "os grifos amarelos deste livro" — o filtro por cor do ADR 0004.
+  @@index([bookId, color])
+  // O acervo do clube, do mais recente para o mais antigo: é a ordem em que o
+  // `listHighlights` o pede, e o mesmo índice que o `Note` tem.
   @@index([clubId, createdAt])
 }
 

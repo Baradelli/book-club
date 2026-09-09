@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import { PrismaBookRepository } from '../repositories/prisma-book-repository';
 import { PrismaClubRepository } from '../repositories/prisma-club-repository';
+import { PrismaHighlightRepository } from '../repositories/prisma-highlight-repository';
 import { PrismaInviteRepository } from '../repositories/prisma-invite-repository';
 import { PrismaMembershipRepository } from '../repositories/prisma-membership-repository';
 import { PrismaNoteRepository } from '../repositories/prisma-note-repository';
@@ -18,6 +19,7 @@ export interface Repositories {
   books: PrismaBookRepository;
   planItems: PrismaReadingPlanItemRepository;
   notes: PrismaNoteRepository;
+  highlights: PrismaHighlightRepository;
 }
 
 /**
@@ -35,5 +37,6 @@ export function buildRepositories(prisma: PrismaClient): Repositories {
     books: new PrismaBookRepository(prisma),
     planItems: new PrismaReadingPlanItemRepository(prisma),
     notes: new PrismaNoteRepository(prisma),
+    highlights: new PrismaHighlightRepository(prisma),
   };
 }

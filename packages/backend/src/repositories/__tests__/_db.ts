@@ -45,6 +45,7 @@ export interface Fixtures {
   settingsIds?: string[];
   inviteIds?: string[];
   membershipIds?: string[];
+  highlightIds?: string[];
   noteIds?: string[];
   planItemIds?: string[];
   bookIds?: string[];
@@ -61,6 +62,7 @@ export async function removeFixtures(fixtures: Fixtures): Promise<void> {
     settingsIds = [],
     inviteIds = [],
     membershipIds = [],
+    highlightIds = [],
     noteIds = [],
     planItemIds = [],
     bookIds = [],
@@ -78,6 +80,16 @@ export async function removeFixtures(fixtures: Fixtures): Promise<void> {
     await prisma.membership.deleteMany({
       where: { id: { in: membershipIds } },
     });
+  }
+  // O grifo antes do livro, do clube e do usuário: as TRÊS relações do
+  // `Highlight` são obrigatórias e saem `ON DELETE RESTRICT` (lido do
+  // `prisma migrate diff` na Tarefa 24 — é o default do Prisma para relação
+  // obrigatória, ao contrário do `SetNull` das opcionais). Sem isto a limpeza
+  // estoura na FK, e um teste que falhe no meio vaza fixture no banco de
+  // desenvolvimento do dono. Não tem ordem obrigatória em relação à nota: não
+  // há FK entre as duas tabelas.
+  if (highlightIds.length > 0) {
+    await prisma.highlight.deleteMany({ where: { id: { in: highlightIds } } });
   }
   // A nota antes do plano: `Note.planItemId` é ON DELETE RESTRICT (declarado
   // EXPLICITAMENTE no schema — para relação opcional o default do Prisma seria
