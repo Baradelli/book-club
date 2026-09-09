@@ -790,7 +790,83 @@ Sem grifos em tela própria (MVP 2), sem marcar "li", sem feed e sem notificaç�
       grafo de módulos — a paleta é totalmente tree-shaken, `grep -c facc15` no chunk dá 0).
       `prisma/`, `repositories/`, `routes/`, `ui/` e `app/` **intocados**; integração **não
       rodada** (escreve no banco do dono), e não havia como o número mudar._
-- [ ] **23** — UseCase `listHighlights(filter)` — por livro, autor, cor, página. → _a detalhar_
+- [x] **23** — UseCase `listHighlights(filter)` — por livro, autor, cor, página.
+      → `tasks/23-usecase-listar-grifos.md`
+      _Entregue: `HighlightFilter` + `find` no port e no fake, e o `listHighlights`.
+      **320 shared + 175 ui + 1266 backend + 424 app** (+53 no backend: 35 do UseCase, 18 do
+      `find` do fake). Nenhuma classe de erro nova; `src/http/` e `src/domain/` intocados; o
+      diff do port é **puramente aditivo** (zero linha removida)._
+      _**A fidelidade da coluna nula nasceu com acusador nas DUAS direções — a primeira vez no
+      projeto.** `page` é a única coluna filtrável anulável do grifo, e no Postgres
+      `WHERE "page" = 45` contra `NULL` é falso. Medido: a direção permissiva (o fake casa
+      nulo) dá **2** acusadores, a **restritiva** dá **35**, e o descarte cego de nulos dá
+      **3**. O que torna a restritiva acusável é o teste do **outro lado da moeda** ("sem
+      filtro de página, o grifo sem página aparece") — sem ele, um fake que descartasse toda
+      linha nula passaria na regra por acidente. É a 4ª aparição do §7.1, e a única que
+      não precisou de rodada de correção._
+      _**O §7.2 aconteceu de novo, e o executor o pegou sozinho:** na primeira redação, o teste
+      `orders by createdAt and not by updatedAt` **não acusava** o mutante "sem `sort`" — a
+      ordem de inserção fazia a enumeração invertida do fake **coincidir** com a ordem
+      esperada. Nome certo, prova nenhuma. Fixture trocado: **3 → 4** acusadores, e o revisor
+      reconstituiu a redação original para confirmar. A ordem inteira tem acusador: sem `sort`
+      **4** · por `updatedAt` **3** · desempate por `id` **1** · comparador invertido **3** ·
+      fake deixando de enumerar invertido **4**._
+      _**O `matches` duplicado virou UM arquivo, contra a decisão do executor — e ele aceitou
+      com o argumento medido.** Ele havia mantido a cópia de propósito ("dois fakes
+      independentes"); o revisor mediu que os corpos eram **byte-idênticos** e desmontou o
+      motivo: o que estava duplicado é a codificação de uma regra do **Postgres**, que a
+      produção compartilha de fato (os dois repos Prisma delegam ao mesmo banco). Extraído para
+      `_fakes/sql-equality.ts` com o §7.1 no docblock. **Verificado por mutação do
+      orquestrador: 3 acusadores no lado do grifo + 33 no da nota, 36 na união, sem queda de
+      nenhum lado.** O `matchesText` **não** se mudou — um chamador só, e o segundo chega com a
+      busca da Tarefa 29. **Gerou o registro do desfecho no §7.1** ("extrair, não cobrir duas
+      vezes"), irmão do §7.1.1. Motivo de fazer agora: o MVP 3 traz `ReadingLog` e
+      `ActivityEvent`, a 3ª e a 4ª cópia, e o `unaccent` da 29 é a próxima fidelidade que
+      entraria num fake só com os dois verdes._
+      _**⚠️ O CUSTO DE HEAP, medido por dois harnesses independentes — e a reconciliação com a
+      Tarefa 10.** **~1,4 KiB por grifo**, linear e estável em N = 10k/20k/50k (o executor
+      1,38; o revisor 1,15 com fixture próprio). O equivalente aos ~70 MB que a Tarefa 10
+      apontou como quebra chega em **~50 mil grifos por clube**, 5× o limiar de 10 mil notas;
+      o clube de casal em 3 anos (~11 mil grifos) fica em ~15 MiB. **E o ~6,8 KiB por nota que
+      a Tarefa 10 registrou NÃO estava errado:** o revisor varreu o tamanho da nota e
+      `8 × 250 = 2.000` caracteres dá **6,55 KiB/linha**, `8 × 300` dá **7,30** — o 6,8 é uma
+      nota do dia de ~2.000 caracteres, e os ~3,4 KiB medidos agora são uma de ~1.000. Não era
+      divergência, era outro fixture, e **para válvula vale o número conservador**. O que **não**
+      se sustenta é a **razão** grifo/nota (2,43× num fixture, 3,30× no outro): ela é escolha de
+      fixture, não propriedade do modelo — então o teto da Tarefa 24 **não sai dela**._
+      _**Decisões registradas:** ordem `createdAt` desc com desempate por `id`, a mesma do
+      `listNotes` (ordenar por **página** é a ordem de leitura do livro e talvez seja o que a
+      tela queira, mas `page` é anulável e os nulos precisariam de posição arbitrária; a tela da
+      25 reordena o que recebeu **sem** mudar o contrato — fica como pergunta do dono) · `page`
+      é **igualdade exata**, faixa é aditiva · `color` chega **tipado** e o UseCase **não**
+      revalida (o precedente do `kind?: NoteKind`: quem valida enum de query é o `z.enum` da
+      borda, e duas validações são dois donos) · **sem `text`** aqui, porque a busca é a 29 e é
+      ela a chamadora._
+      _**⚠️ Cinco entradas OBRIGATÓRIAS na spec da Tarefa 24, achadas pela auditoria:**
+      (1) **`page` é `Int?` e o filtro é `number` JS** — `page: 45.5` devolve `[]` no fake e
+      **lança** no Prisma (idem fora de int32), então `?page=45.5` seria **500** onde 1266
+      testes dizem "lista vazia": a borda precisa de
+      `z.coerce.number().int().min(1).max(2147483647)`, e **não** um `Number.isInteger` no port
+      (dois donos da regra). (2) **`orderBy: [{ createdAt: 'desc' }, { id: 'asc' }]` colado no
+      `take`** — `take` sem ordem total corta um conjunto que o Postgres devolve em qualquer
+      ordem, e o `sort` do UseCase **não substitui** o `orderBy`: ele ordena o que chegou, e o
+      que chegou é decidido pelo corte do banco. (3) A válvula **não é decidível no unitário**
+      (o fake não tem teto de linhas): prova no **teste de contrato**, e o docblock do `find` já
+      aponta para lá (§7.10). (4) `authorId` → coluna **`userId`** no `where`. (5) `color` casa
+      **byte a byte** nos dois lados (o `=` de texto do Postgres com collation determinística) —
+      é o desejado, e a borda **não** deve normalizar caixa._
+      _**Dívida registrada:** a segunda cópia defensiva do getter `findFilters` tem **0**
+      acusadores (mutá-la para devolver a referência não acusa). Fica: é código de teste, o
+      `readonly` congela o array, e o `NoteRepositoryFake` tem a mesma cópia dupla — remover só
+      de um criaria divergência gratuita._
+      _**Complexidade:** `list-highlights.ts` tem **39** linhas de código contra 44 do
+      `list-notes.ts`; o teste tem **461** contra 382, e o excedente é propriedade provada (a
+      nulidade nas duas direções, o lado positivo do contador, os dois `findFilters`), não
+      repetição. Nenhuma abstração sem chamador._
+      _**Gates:** 320 · 175 · 1266 · 424; `typecheck`, `lint`, `prettier --check .` e o build
+      limpos. Chunk de entrada **400.129 B** com **0 marcas** de TipTap. `prisma/`,
+      `repositories/`, `routes/`, `http/`, `ui/` e `app/` **intocados** (provado por `git
+      status` e mtime — o mais novo de `prisma/` é de 2026-09-03); integração **não rodada**._
 - [ ] **24** — Repo Prisma + rotas `/highlights` + teste de tenant. → _a detalhar_
 - [ ] **25** — Tela de grifos do livro: lista por cor, criar/editar com o editor no
       comentário. → _a detalhar_

@@ -1,13 +1,16 @@
 import type { Highlight } from '../../domain/highlight';
 import type {
+  HighlightFilter,
   HighlightPatch,
   HighlightRepository,
 } from '../ports/highlight-repository';
+import { matches } from './sql-equality';
 
 export class HighlightRepositoryFake implements HighlightRepository {
   private store = new Map<string, Highlight>();
   private saveCallCount = 0;
   private updateCallCount = 0;
+  private findFiltersSeen: HighlightFilter[] = [];
 
   /**
    * ⚠️ **NENHUM ÍNDICE ÚNICO É EMULADO AQUI, e é decisão medida** — a direção
@@ -91,6 +94,30 @@ export class HighlightRepositoryFake implements HighlightRepository {
   }
 
   /**
+   * O acervo filtrado. Cada filtro entra em **AND** com o `clubId`, que é o
+   * corte de tenant e nunca é opcional.
+   *
+   * Enumera pela MESMA armadilha do `saved` (`inReverseInsertionOrder`): o port
+   * não promete ordem, e é o `listHighlights` que ordena.
+   */
+  async find(filter: HighlightFilter): Promise<Highlight[]> {
+    this.findFiltersSeen.push({ ...filter });
+
+    return this.inReverseInsertionOrder()
+      .filter(
+        (highlight) =>
+          highlight.clubId === filter.clubId &&
+          matches(filter.bookId, highlight.bookId) &&
+          matches(filter.authorId, highlight.userId) &&
+          matches(filter.color, highlight.color) &&
+          matches(filter.page, highlight.page) &&
+          // `status` ausente no filtro = os dois status, como no `NoteFilter`.
+          matches(filter.status, highlight.status),
+      )
+      .map((highlight) => this.clone(highlight));
+  }
+
+  /**
    * O acervo, para os testes olharem.
    *
    * ⚠️ **ARMADILHA DELIBERADA — não "conserte" esta ordem.** Enumera na ordem
@@ -101,15 +128,16 @@ export class HighlightRepositoryFake implements HighlightRepository {
    * `VACUUM`), então "invertida" é tão fiel quanto qualquer outra — e é a única
    * que **falha** quando alguém confia na ordem do repositório. → §7.2.
    *
-   * A armadilha nasce nesta fatia mesmo **sem `find` ainda**: quando o `find`
-   * chegar (Tarefa 23), ele usa o MESMO `inReverseInsertionOrder`, e o
-   * `listHighlights` já vai encontrar a armadilha pronta em vez de ganhar uma
-   * ordem "natural" de que alguém poderia depender no meio do caminho.
+   * A armadilha nasceu na Tarefa 22, ainda sem `find`, e o `find` da Tarefa 23
+   * usa o MESMO `inReverseInsertionOrder`: o `listHighlights` encontrou a
+   * armadilha pronta em vez de ganhar uma ordem "natural" de que alguém poderia
+   * depender no meio do caminho.
    *
    * O corolário, que é a parte fácil de esquecer: um teste cujo assunto **não
    * é** a ordem não deve depender dela — ordene antes de comparar, ou use
-   * `arrayContaining` + `toHaveLength`. A ordem tem teste dedicado
-   * (`enumerates in reverse insertion order`); é lá que ela é assunto.
+   * `arrayContaining` + `toHaveLength`. A ordem tem testes dedicados
+   * (`enumerates in reverse insertion order`, um por método de coleção); é lá
+   * que ela é assunto.
    */
   get saved(): Highlight[] {
     return this.inReverseInsertionOrder().map((highlight) =>
@@ -143,6 +171,33 @@ export class HighlightRepositoryFake implements HighlightRepository {
    */
   get updateCalls(): number {
     return this.updateCallCount;
+  }
+
+  /**
+   * Quantas vezes `find` foi chamado.
+   *
+   * Existe para o teste do `listHighlights` afirmar que **o corte de tenant vem
+   * ANTES da consulta**: um ator sem membership ativo não pode gerar nem uma
+   * leitura, senão a rota vira oráculo de existência (e conta de banco) para
+   * quem não é do clube. Sem contador, "recusou depois de consultar" e "recusou
+   * antes" dão o mesmo erro. Mesmo padrão do `compareCalls` do
+   * `PasswordHasherFake` (§6.4).
+   */
+  get findCalls(): number {
+    return this.findFiltersSeen.length;
+  }
+
+  /**
+   * O filtro de cada chamada de `find`, na ordem em que veio — **cópias**, para
+   * um chamador que reuse o objeto do filtro não reescrever o histórico.
+   *
+   * Existe porque o resultado não distingue "mandou um filtro só, completo" de
+   * "mandou vários" nem revela o `status: 'ACTIVE'` que o UseCase acrescenta: um
+   * `listHighlights` que carregasse tudo e filtrasse em memória devolveria
+   * exatamente o mesmo array em todo cenário sem grifo arquivado (§7.3).
+   */
+  get findFilters(): readonly HighlightFilter[] {
+    return this.findFiltersSeen.map((filter) => ({ ...filter }));
   }
 
   private inReverseInsertionOrder(): Highlight[] {

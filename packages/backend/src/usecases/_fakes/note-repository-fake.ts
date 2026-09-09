@@ -4,6 +4,7 @@ import type {
   NotePatch,
   NoteRepository,
 } from '../ports/note-repository';
+import { matches } from './sql-equality';
 
 export class NoteRepositoryFake implements NoteRepository {
   private store = new Map<string, Note>();
@@ -331,17 +332,6 @@ export class NoteRepositoryFake implements NoteRepository {
       archivedAt: note.archivedAt === null ? null : new Date(note.archivedAt),
     };
   }
-}
-
-/**
- * Um campo do filtro: ausente é "não filtra"; presente compara por igualdade.
- *
- * Fidelidade ao SQL: contra uma coluna nula, `WHERE col = 'x'` é falso — e é o
- * que a comparação estrita dá aqui quando o filtro pede `planItemId` de uma
- * nota avulsa.
- */
-function matches<T>(filterValue: T | undefined, stored: T | null): boolean {
-  return filterValue === undefined || filterValue === stored;
 }
 
 /**

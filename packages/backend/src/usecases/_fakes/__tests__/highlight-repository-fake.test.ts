@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import type { Highlight } from '../../../domain/highlight';
 import { aDoc, aHighlight, required } from '../../../test-support/builders';
 import type { HighlightPatch } from '../../ports/highlight-repository';
 import { HighlightRepositoryFake } from '../highlight-repository-fake';
@@ -12,6 +13,10 @@ const CLUB_ID = 'club-1';
 const OTHER_CLUB_ID = 'club-2';
 const BOOK_ID = 'book-1';
 const OTHER_BOOK_ID = 'book-2';
+const YELLOW = '#facc15';
+const GREEN = '#22c55e';
+const PAGE = 45;
+const OTHER_PAGE = 46;
 
 async function caught(promise: Promise<unknown>): Promise<Error> {
   try {
@@ -26,9 +31,9 @@ async function caught(promise: Promise<unknown>): Promise<Error> {
 /**
  * Regra 21 — o fake do grifo tem suíte própria, como os dez fakes anteriores.
  *
- * O port tem SÓ `save` · `byId` · `update` (decisão F): `find` é a Tarefa 23 e
- * `delete` não existe (hard delete não está no escopo). Método de port sem
- * chamador é especulação.
+ * O port tem `save` · `byId` · `update` (Tarefa 22) e o `find` (Tarefa 23, que
+ * chegou junto do `listHighlights` que o usa). `delete` não existe — hard delete
+ * não está no escopo. Método de port sem chamador é especulação.
  */
 describe('HighlightRepositoryFake', () => {
   let highlights: HighlightRepositoryFake;
@@ -498,7 +503,324 @@ describe('HighlightRepositoryFake', () => {
   });
 
   /**
-   * Regra 21 — **A ARMADILHA DELIBERADA, herdada mesmo sem `find` ainda.**
+   * Tarefa 23 — o `find` do acervo de grifos do clube.
+   *
+   * O `clubId` é obrigatório porque é o corte de tenant, e todo filtro entra em
+   * **AND** com ele. O port **não promete ordem**: quem ordena é o
+   * `listHighlights`, porque ordem é regra de produto, não de persistência.
+   */
+  describe('find', () => {
+    // Fixture como FACTORY, nunca `const` de describe (§7.7): um objeto
+    // compartilhado entre testes é estado escondido, e o `commentDoc` é uma
+    // árvore mutável por dentro.
+    function aClubHighlight(overrides: Partial<Highlight> = {}): Highlight {
+      return aHighlight({
+        clubId: CLUB_ID,
+        bookId: BOOK_ID,
+        userId: AUTHOR_ID,
+        color: YELLOW,
+        page: PAGE,
+        ...overrides,
+      });
+    }
+
+    function anArchivedClubHighlight(
+      overrides: Partial<Highlight> = {},
+    ): Highlight {
+      return aClubHighlight({
+        status: 'ARCHIVED',
+        archivedAt: new Date(ARCHIVED_ISO),
+        ...overrides,
+      });
+    }
+
+    function ids(found: readonly Highlight[]): string[] {
+      return found.map((highlight) => highlight.id);
+    }
+
+    /**
+     * O `clubId` é **sempre** AND.
+     *
+     * O grifo gêmeo do outro clube casa TODOS os outros filtros de propósito: é
+     * o que faz este teste falhar se o corte de tenant deixar de ser aplicado
+     * (ou se algum filtro passar a substituí-lo em vez de somar-se a ele).
+     */
+    it('never returns a highlight of another club, even when every other filter matches', async () => {
+      await highlights.save(
+        aClubHighlight({ id: 'theirs', clubId: OTHER_CLUB_ID }),
+      );
+      await highlights.save(aClubHighlight({ id: 'mine' }));
+
+      const found = await highlights.find({
+        clubId: CLUB_ID,
+        bookId: BOOK_ID,
+        authorId: AUTHOR_ID,
+        color: YELLOW,
+        page: PAGE,
+      });
+
+      expect(ids(found)).toEqual(['mine']);
+    });
+
+    it('filters by bookId', async () => {
+      await highlights.save(
+        aClubHighlight({ id: 'other-book', bookId: OTHER_BOOK_ID }),
+      );
+      await highlights.save(aClubHighlight({ id: 'this-book' }));
+
+      const found = await highlights.find({ clubId: CLUB_ID, bookId: BOOK_ID });
+
+      expect(ids(found)).toEqual(['this-book']);
+    });
+
+    // O `authorId` do filtro é o `userId` do grifo: o AUTOR. É o "de \<pessoa\>"
+    // do filtro de navegação — nunca uma permissão (ADR 0002).
+    it('filters by authorId', async () => {
+      await highlights.save(
+        aClubHighlight({ id: 'theirs', userId: OTHER_AUTHOR_ID }),
+      );
+      await highlights.save(aClubHighlight({ id: 'mine' }));
+
+      const found = await highlights.find({
+        clubId: CLUB_ID,
+        authorId: AUTHOR_ID,
+      });
+
+      expect(ids(found)).toEqual(['mine']);
+    });
+
+    // Nos dois sentidos, senão um `find` que ignorasse a `color` passaria na
+    // metade dos casos.
+    it.each([
+      [YELLOW, 'amarelo'],
+      [GREEN, 'verde'],
+    ] as const)('filters by the exact colour %s', async (color, expected) => {
+      await highlights.save(aClubHighlight({ id: 'amarelo', color: YELLOW }));
+      await highlights.save(aClubHighlight({ id: 'verde', color: GREEN }));
+
+      const found = await highlights.find({ clubId: CLUB_ID, color });
+
+      expect(ids(found)).toEqual([expected]);
+    });
+
+    // Igualdade exata, não faixa (decisão C): a faixa é aditiva e ninguém pediu.
+    it('filters by the exact page', async () => {
+      await highlights.save(
+        aClubHighlight({ id: 'pagina-46', page: OTHER_PAGE }),
+      );
+      await highlights.save(aClubHighlight({ id: 'pagina-45', page: PAGE }));
+
+      const found = await highlights.find({ clubId: CLUB_ID, page: PAGE });
+
+      expect(ids(found)).toEqual(['pagina-45']);
+    });
+
+    /**
+     * ⚠️ **`page` CONTRA COLUNA NULA** — a 4ª aparição da classe do §7.1, e a
+     * metade em que um fake "cuidadoso" erraria.
+     *
+     * No Postgres `WHERE "page" = 45` contra uma coluna nula é **falso** —
+     * `NULL` não é igual a nada, nem a `45` —, então o grifo **sem página** fica
+     * fora de todo filtro por página. `page` é o único campo filtrável que pode
+     * ser nulo, e um fake que tratasse "coluna nula" como "casa qualquer filtro"
+     * seria infiel na direção PERMISSIVA: o teste passaria verde e a tela da
+     * página 45 mostraria o grifo que não é dela.
+     *
+     * **Fidelidade afirmada em comentário e não em teste é fidelidade que o
+     * próximo refactor apaga** — é por isso que este teste existe.
+     */
+    it('never matches a highlight with no page when the filter asks for one, just like WHERE "page" = 45', async () => {
+      await highlights.save(aClubHighlight({ id: 'sem-pagina', page: null }));
+      await highlights.save(aClubHighlight({ id: 'com-pagina', page: PAGE }));
+
+      const found = await highlights.find({ clubId: CLUB_ID, page: PAGE });
+
+      expect(ids(found)).toEqual(['com-pagina']);
+    });
+
+    // E o outro lado da mesma moeda: sem filtro de página, o grifo sem página
+    // aparece. Sem este teste, um fake que descartasse toda linha de página nula
+    // passaria no de cima por acidente.
+    it('returns a highlight with no page when the filter asks for no page', async () => {
+      await highlights.save(aClubHighlight({ id: 'sem-pagina', page: null }));
+
+      const found = await highlights.find({ clubId: CLUB_ID });
+
+      expect(ids(found)).toEqual(['sem-pagina']);
+    });
+
+    // Cada grifo erra em UM filtro só, então cada filtro que deixasse de ser
+    // aplicado traria um grifo a mais.
+    it('combines every filter with AND', async () => {
+      await highlights.save(
+        aClubHighlight({ id: 'wrong-club', clubId: OTHER_CLUB_ID }),
+      );
+      await highlights.save(
+        aClubHighlight({ id: 'wrong-book', bookId: OTHER_BOOK_ID }),
+      );
+      await highlights.save(
+        aClubHighlight({ id: 'wrong-author', userId: OTHER_AUTHOR_ID }),
+      );
+      await highlights.save(
+        aClubHighlight({ id: 'wrong-colour', color: GREEN }),
+      );
+      await highlights.save(
+        aClubHighlight({ id: 'wrong-page', page: OTHER_PAGE }),
+      );
+      await highlights.save(aClubHighlight({ id: 'the-one' }));
+
+      const found = await highlights.find({
+        clubId: CLUB_ID,
+        bookId: BOOK_ID,
+        authorId: AUTHOR_ID,
+        color: YELLOW,
+        page: PAGE,
+      });
+
+      expect(ids(found)).toEqual(['the-one']);
+    });
+
+    // `status` ausente é "os dois", como no `NoteFilter`. Quem esconde o
+    // arquivado é o UseCase, não o repositório.
+    //
+    // Ordena antes de comparar: o assunto aqui é COBERTURA de status, não a
+    // ordem — que tem teste dedicado (`enumerates in reverse insertion order`).
+    // Pinar a ordem aqui faria este teste quebrar por um motivo que não tem nada
+    // a ver com o nome dele se a armadilha do fake um dia virar outro critério
+    // legítimo (§7.2, o corolário).
+    it('returns both statuses when the filter carries no status', async () => {
+      await highlights.save(anArchivedClubHighlight({ id: 'archived' }));
+      await highlights.save(aClubHighlight({ id: 'active' }));
+
+      const found = await highlights.find({ clubId: CLUB_ID });
+
+      expect(ids(found).sort()).toEqual(['active', 'archived']);
+    });
+
+    it('returns only the ACTIVE ones when the filter says ACTIVE', async () => {
+      await highlights.save(anArchivedClubHighlight({ id: 'archived' }));
+      await highlights.save(aClubHighlight({ id: 'active' }));
+
+      const found = await highlights.find({
+        clubId: CLUB_ID,
+        status: 'ACTIVE',
+      });
+
+      expect(ids(found)).toEqual(['active']);
+    });
+
+    // E o outro sentido, senão um `find` que ignorasse o `status` passaria no de
+    // cima quando só houvesse grifo ativo.
+    it('returns only the ARCHIVED ones when the filter says ARCHIVED', async () => {
+      await highlights.save(anArchivedClubHighlight({ id: 'archived' }));
+      await highlights.save(aClubHighlight({ id: 'active' }));
+
+      const found = await highlights.find({
+        clubId: CLUB_ID,
+        status: 'ARCHIVED',
+      });
+
+      expect(ids(found)).toEqual(['archived']);
+    });
+
+    /**
+     * ⚠️ **A ARMADILHA DELIBERADA, agora no `find`.** O fake enumera na ordem
+     * INVERSA à de inserção, e isso NÃO é bug: a Tarefa 07 descobriu um teste de
+     * ordenação que passava com a implementação errada porque os fixtures
+     * estavam na ordem esperada. Com o fake invertido, um `listHighlights` sem
+     * `sort` FALHA. → §7.2.
+     *
+     * Três grifos, e não dois: com dois, "invertido" e "ordenado por id
+     * decrescente" dariam o mesmo resultado. A pré-condição vem do `byId`, e não
+     * do `saved`, porque o `saved` tem a mesma armadilha sob teste em outro
+     * lugar.
+     */
+    it('enumerates in reverse insertion order', async () => {
+      await highlights.save(aClubHighlight({ id: 'b-inserido-1o' }));
+      await highlights.save(aClubHighlight({ id: 'a-inserido-2o' }));
+      await highlights.save(aClubHighlight({ id: 'c-inserido-3o' }));
+
+      for (const id of ['b-inserido-1o', 'a-inserido-2o', 'c-inserido-3o']) {
+        await expect(highlights.byId(id)).resolves.not.toBeNull();
+      }
+
+      const found = await highlights.find({ clubId: CLUB_ID });
+
+      expect(ids(found)).toEqual([
+        'c-inserido-3o',
+        'a-inserido-2o',
+        'b-inserido-1o',
+      ]);
+    });
+
+    it('returns an empty list for a club with no highlights', async () => {
+      await highlights.save(
+        aClubHighlight({ id: 'theirs', clubId: OTHER_CLUB_ID }),
+      );
+
+      await expect(highlights.find({ clubId: CLUB_ID })).resolves.toEqual([]);
+    });
+
+    // Clona na saída, como as outras leituras: o `listHighlights` ordena o array
+    // que recebe daqui, e o store não pode sentir isso.
+    it('does not let the caller corrupt the store through what find returned', async () => {
+      await highlights.save(
+        aClubHighlight({ id: 'highlight-x', commentDoc: aDoc('um') }),
+      );
+
+      const first = required((await highlights.find({ clubId: CLUB_ID }))[0]);
+      first.quote = 'adulterado';
+      const paragraph = first.commentDoc?.content?.[0];
+      if (paragraph?.content?.[0]) paragraph.content[0].text = 'adulterado';
+
+      const second = required((await highlights.find({ clubId: CLUB_ID }))[0]);
+      expect(second.quote).not.toBe('adulterado');
+      expect(JSON.stringify(second.commentDoc)).not.toContain('adulterado');
+    });
+
+    // Mesmo padrão do `saveCalls` e do `compareCalls` do `PasswordHasherFake`
+    // (§6.4 e §7.3): é o que deixa o teste do `listHighlights` afirmar que "o
+    // corte de tenant veio ANTES da consulta" sem depender do resultado. E o
+    // lado POSITIVO junto, senão um incremento apagado deixa todo `toBe(0)`
+    // passar por acidente.
+    it('counts every find call', async () => {
+      expect(highlights.findCalls).toBe(0);
+
+      await highlights.find({ clubId: CLUB_ID });
+      await highlights.find({ clubId: OTHER_CLUB_ID });
+
+      expect(highlights.findCalls).toBe(2);
+    });
+
+    // E guarda o filtro de cada chamada: é o que prova que o UseCase manda UM
+    // `HighlightFilter` só, com `status: 'ACTIVE'` e sem chave à toa — nada
+    // disso muda o resultado num cenário sem grifo arquivado (§7.3).
+    it('records the filter of every find call', async () => {
+      await highlights.find({ clubId: CLUB_ID, status: 'ACTIVE' });
+      await highlights.find({ clubId: OTHER_CLUB_ID, color: GREEN });
+
+      expect(highlights.findFilters).toStrictEqual([
+        { clubId: CLUB_ID, status: 'ACTIVE' },
+        { clubId: OTHER_CLUB_ID, color: GREEN },
+      ]);
+    });
+
+    // O registro é uma CÓPIA: um chamador que reusasse o objeto do filtro entre
+    // duas consultas reescreveria o histórico e o teste do UseCase mentiria.
+    it('records a copy of the filter, not the caller object', async () => {
+      const filter = { clubId: CLUB_ID, page: PAGE };
+
+      await highlights.find(filter);
+      filter.page = OTHER_PAGE;
+
+      expect(highlights.findFilters).toStrictEqual([
+        { clubId: CLUB_ID, page: PAGE },
+      ]);
+    });
+  });
+
+  /**
+   * Regra 21 — **A ARMADILHA DELIBERADA, no `saved`.**
    *
    * A enumeração de coleção vem na ordem INVERSA à de inserção. Não é bug: a
    * Tarefa 07 descobriu um teste de ordenação que passava com a implementação

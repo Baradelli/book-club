@@ -242,6 +242,22 @@ isto?"** — nas duas direções. Já são **cinco** aparições desta classe, e
 | Coluna nula no `find` (Tarefa 10) | `WHERE "planItemId" = 'x'` contra coluna nula é **falso** | A nota avulsa casaria o filtro por dia de leitura, e a tela do dia mostraria o que não é dela |
 | `update(id, patch)` da nota (Tarefa 11) | O patch que o repositório **honra de fato** — o `toUpdateData` do Prisma tinha allowlist (`title`, `reference`, `doc`, `plainText`, `status`, `archivedAt`, `updatedAt`), o fake aplicava **toda** chave menos `id` | `update(id, { userId: 'x' })` **trocava a autoria no fake** e era **no-op silencioso no Postgres**: todo teste de autoria escrito contra o fake afirmaria uma regra que o banco não tem |
 
+⚠️ **A saída da 4ª aparição, decidida na Tarefa 23: a regra virou UM arquivo.** O `matches`
+(igualdade contra coluna anulável) estava **byte-idêntico** no `NoteRepositoryFake` e no
+`HighlightRepositoryFake`, com um comentário dizendo que a duplicação era deliberada porque
+"são dois fakes independentes". O argumento é falso, e é a **lição nº 3 do MVP 1** de novo: o
+que está duplicado não é detalhe de repositório, é a codificação de uma regra do **Postgres** —
+e os dois repositórios Prisma delegam essa comparação ao mesmo banco, então o acoplamento já
+existe; ele só não estava escrito num lugar. Agora mora em
+`usecases/_fakes/sql-equality.ts`, com este §7.1 no docblock dele. Medido antes e depois: o
+mutante "descarte cego de nulos" acusa **3** no lado do grifo e **33** no da nota, sem queda
+de nenhum lado (verificado por mutação do orquestrador — 36 acusadores, a união). O
+`matchesText` **não** se mudou: tem um chamador só, e helper compartilhado sem segundo
+chamador é especulação — o segundo chega com a busca de grifo da Tarefa 29. É o padrão a
+copiar quando uma fidelidade aparecer no terceiro fake (o MVP 3 traz `ReadingLog` e
+`ActivityEvent`): **extrair, não cobrir duas vezes** — o irmão do §7.1.1, onde a saída foi
+estreitar o tipo em vez de testar a divergência.
+
 As duas do meio são do mesmo par de linhas de código, e a quarta **foi entregue sem teste**:
 o comentário afirmava a fidelidade, e a assimetria (o método vizinho tinha o teste análogo
 para `= NULL`) foi o que denunciou o esquecimento. **Fidelidade afirmada em

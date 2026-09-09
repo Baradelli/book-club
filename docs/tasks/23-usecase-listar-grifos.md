@@ -126,24 +126,24 @@ nele, **pare e reporte**) · `packages/{ui,app,shared}/**`. Nenhuma classe de er
 
 ## Definição de pronto
 
-- [ ] O corte de tenant vem **antes** da consulta, com `findCalls === 0` **e** o lado positivo
+- [x] O corte de tenant vem **antes** da consulta, com `findCalls === 0` **e** o lado positivo
       (1).
-- [ ] `bookId` de outro clube devolve **vazio**, não 404 (4).
-- [ ] ⚠️ `page` **não** casa coluna nula, com teste no fake (8).
-- [ ] `status: 'ACTIVE'` provado pelo `findFilters`, não pelo resultado (10).
-- [ ] **Um** `find`, **um** filtro, sem chave à toa (11).
-- [ ] A ordem tem fixture que faz a implementação errada **falhar**, com a precondição pinada
+- [x] `bookId` de outro clube devolve **vazio**, não 404 (4).
+- [x] ⚠️ `page` **não** casa coluna nula, com teste no fake (8).
+- [x] `status: 'ACTIVE'` provado pelo `findFilters`, não pelo resultado (10).
+- [x] **Um** `find`, **um** filtro, sem chave à toa (11).
+- [x] A ordem tem fixture que faz a implementação errada **falhar**, com a precondição pinada
       (12, 13).
-- [ ] Nada sugere privacidade em nome de campo, comentário ou teste (6).
-- [ ] **Custo de heap por grifo MEDIDO** e colado (decisão F) — sem número afirmado sem
+- [x] Nada sugere privacidade em nome de campo, comentário ou teste (6).
+- [x] **Custo de heap por grifo MEDIDO** e colado (decisão F) — sem número afirmado sem
       medição.
-- [ ] `pnpm -r test`, `pnpm -r typecheck`, `pnpm lint`, `pnpm prettier --check .`,
+- [x] `pnpm -r test`, `pnpm -r typecheck`, `pnpm lint`, `pnpm prettier --check .`,
       `pnpm --filter @clube/app build` limpos, contagens coladas.
-- [ ] `shared`, `ui` e `app` **intocados** nas contagens da Tarefa 22.
-- [ ] Integração **não rodada** (escreve no banco do dono), e `prisma/`/`repositories/`/
+- [x] `shared`, `ui` e `app` **intocados** nas contagens da Tarefa 22.
+- [x] Integração **não rodada** (escreve no banco do dono), e `prisma/`/`repositories/`/
       `routes/` intocados — provado por `git status` e por data de modificação.
-- [ ] **Linhas de código coladas** dos arquivos novos e do crescimento do port e do fake.
-- [ ] Checklist marcada; a linha 23 do `BACKLOG.md` é do orquestrador.
+- [x] **Linhas de código coladas** dos arquivos novos e do crescimento do port e do fake.
+- [x] Checklist marcada; a linha 23 do `BACKLOG.md` é do orquestrador.
 
 ## Registrado para a Tarefa 29 (a busca)
 

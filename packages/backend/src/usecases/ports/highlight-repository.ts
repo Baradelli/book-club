@@ -1,4 +1,70 @@
+import type { HighlightColor } from '@clube/shared';
+
+import type { GeneralStatus } from '../../domain/club';
 import type { Highlight } from '../../domain/highlight';
+
+/**
+ * O filtro do acervo de grifos. Mesmo formato do `NoteFilter`: o `clubId` é
+ * obrigatório porque é o corte de tenant, e todo o resto é opcional.
+ *
+ * **Tudo é igualdade** — o `NoteFilter` inteiro também é, tirando o `text`. Sem
+ * faixa de página (`pageFrom`/`pageTo`): é aditiva e ninguém pediu (decisão C
+ * da Tarefa 23).
+ *
+ * **Sem `text`.** A busca de grifo é a Tarefa 29, e é ela a chamadora — campo de
+ * filtro sem chamador é especulação (`docs/WORKFLOW.md`). Ela ainda tem uma
+ * pergunta de produto a fechar: se o `text` casa `quote` **ou** `commentText`
+ * (a decisão fechada do MVP 2 nomeia só os campos derivados, e uma busca de
+ * grifos que ignore o `quote` não acha *a frase que a pessoa grifou*).
+ */
+export interface HighlightFilter {
+  /** OBRIGATÓRIO. É o corte de tenant, sempre em AND com o resto. */
+  clubId: string;
+  bookId?: string;
+  /**
+   * O autor. É o "de \<pessoa\>" do filtro de navegação (→ ADR 0002): uma lente
+   * sobre o mesmo acervo, **nunca** uma permissão. Dentro do clube não existe
+   * grifo privado.
+   */
+  authorId?: string;
+  /**
+   * Uma das cinco da paleta fixa de `@clube/shared`, e **igualdade exata**: o
+   * valor gravado é o hex minúsculo de 6 dígitos, e há uma grafia só por cor
+   * (duas grafias do mesmo amarelo fariam o filtro perder metade dos grifos).
+   *
+   * Chega **já tipado**, e o UseCase não revalida: quem valida enum de query
+   * string é o `z.enum` da borda (Tarefa 24) — é o precedente exato do
+   * `kind?: NoteKind` do `NoteFilter`. Duas validações da mesma regra são dois
+   * donos, que é como as duas divergem na primeira correção.
+   */
+  color?: HighlightColor;
+  /**
+   * A página, igualdade exata.
+   *
+   * ⚠️ **É a única coluna filtrável NULA** (grifo sem página é caso legítimo —
+   * `Highlight.page` é anulável de propósito). No Postgres `WHERE "page" = 45`
+   * contra `NULL` é **falso**, então pedir uma página **não** traz o grifo sem
+   * página. O fake reproduz isso, e tem teste: fidelidade afirmada em comentário
+   * e não em teste é fidelidade que o próximo refactor apaga
+   * (`docs/CONVENCOES-CODIGO.md` §7.1).
+   *
+   * ⚠️ **A INTEGRALIDADE é responsabilidade da BORDA, e o tipo daqui não a
+   * expressa.** `number` em TypeScript é ponto flutuante, e a coluna vai ser
+   * `Int?` (Tarefa 24). Divergência fake × Prisma, medida e registrada:
+   * `find({ clubId, page: 45.5 })` devolve **lista vazia** no fake, e no Prisma
+   * um `45.5` (ou qualquer valor fora de int32) num campo `Int` **lança** — ou
+   * seja, `?page=45.5` viraria **500** onde a suíte unitária inteira diz "lista
+   * vazia". Nenhum teste unitário pode acusar isso, porque o fake não tem
+   * coluna tipada.
+   *
+   * Quem fecha é o `z.coerce.number().int().min(1).max(2147483647)` do schema de
+   * query da Tarefa 24 — não um `Number.isInteger` aqui, que criaria **dois
+   * donos** da mesma regra (o mesmo argumento da decisão D sobre a `color`).
+   */
+  page?: number;
+  /** Ausente = os dois status. */
+  status?: GeneralStatus;
+}
 
 /**
  * O que o `update` de grifo honra. **NÃO é `Partial<Highlight>`, de propósito.**
@@ -48,11 +114,12 @@ export type HighlightPatch = Partial<
 >;
 
 /**
- * O mínimo da Tarefa 22 — três métodos, e a interface cresce com quem a usa.
+ * O mínimo das Tarefas 22 e 23 — quatro métodos, e a interface cresce com quem
+ * a usa.
  *
- * **Sem `find`**: o acervo filtrado é a Tarefa 23, junto do `listHighlights` que
- * o usa, porque foi assim que o `NoteFilter` da Tarefa 10 nasceu bem. Método de
- * port sem chamador é especulação (`docs/WORKFLOW.md`).
+ * O `find` chegou **junto** do `listHighlights` que o usa (Tarefa 23), porque foi
+ * assim que o `NoteFilter` da Tarefa 10 nasceu bem: método de port sem chamador
+ * é especulação (`docs/WORKFLOW.md`).
  *
  * **Sem `delete`**: hard delete não está no escopo. Arquivar é tirar da vista, e
  * o acervo do clube continua íntegro, com autoria (ADR 0002).
@@ -75,4 +142,36 @@ export interface HighlightRepository {
    * identidade, tenant, autoria e nascimento não se patcheiam.
    */
   update(id: string, patch: HighlightPatch): Promise<Highlight>;
+  /**
+   * O acervo filtrado.
+   *
+   * **Sem promessa de ordem:** quem ordena é o `listHighlights`, porque a ordem
+   * é regra de produto, não de persistência. O fake enumera INVERTIDO de
+   * propósito, para ninguém depender dela (§7.2).
+   *
+   * **Sem paginação** (decisão F da Tarefa 23): o teto é **válvula** no
+   * repositório Prisma da Tarefa 24, como o `take: 500` que a Tarefa 11 mediu e
+   * adotou na nota — não paginação. A primeira tela que paginar troca por cursor.
+   *
+   * ⚠️ **A VÁLVULA NÃO É DECIDÍVEL NO UNITÁRIO, e é por isso que este parágrafo
+   * existe** (§7.10: afirmação de indecidibilidade vem com onde a propriedade
+   * **É** provada). O fake não tem teto de linhas, então nenhum mutante da suíte
+   * unitária pode acusar `take` ausente, `take` **sem** `orderBy` ao lado, nem
+   * `orderBy` sem o desempate por `id`. As três propriedades se provam no
+   * **teste de contrato** do `PrismaHighlightRepository` (Tarefa 24), contra o
+   * banco:
+   *
+   * - o `orderBy` é **obrigatório junto do `take`**, porque um `take` sem ordem
+   *   total corta um conjunto que o Postgres devolve em qualquer ordem (plano de
+   *   execução, `VACUUM`) — o corte sairia não-determinístico, e a "válvula"
+   *   esconderia linhas diferentes a cada request. O `PrismaNoteRepository` já
+   *   documenta exatamente isso.
+   * - o desempate por `id` no `orderBy` do SQL é o que faz a fronteira do `take`
+   *   ser estável quando dois grifos empatam em `createdAt` — o mesmo empate que
+   *   o `listHighlights` desempata em memória.
+   *
+   * O `sort` do UseCase **não** substitui o `orderBy`: ele ordena o que chegou,
+   * e o que chegou é decidido pelo corte do banco.
+   */
+  find(filter: HighlightFilter): Promise<Highlight[]>;
 }
