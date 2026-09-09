@@ -23,19 +23,26 @@
 | **Escrever a anotação do dia**, com autosave e o editor completo | pelo atalho de hoje |
 | **Ler o que a outra pessoa escreveu** naquele mesmo dia | a mesma tela |
 | **Escrever a anotação do dia SEM conexão** — o texto fica guardado e sobe sozinho | a mesma tela (§6.1) |
+| **Cadastrar o livro do mês e o plano**, com o gerador de dias | `/clubs/:id/books/new` (§5.1) |
+| **Anotação avulsa** (título e referência próprios) e o acervo filtrável | aba Anotações do livro |
 | O estado "nenhum clube ainda" | `/` com um usuário sem membership |
 | Seletor de clube | `/` com **2+** clubes |
 | Tema claro/escuro e idioma pt/en | cabeçalho |
-| Instalar como app (PWA) | menu do navegador |
+| Instalar como app (PWA) — **só em `localhost`**, ver a ressalva abaixo | menu do navegador |
 | Rota inexistente | qualquer `/xyz` |
 
 **NÃO dá, e é importante você saber antes de procurar:**
 
+- **Instalar como app (PWA) pelo IP da rede.** Service worker exige contexto seguro
+  (HTTPS ou `localhost`), e `http://192.168.0.83:5173` não é nenhum dos dois — o navegador
+  não vai oferecer "instalar". Isso **não afeta** o teste de escrita sem conexão do §6.1: o
+  rascunho e a fila vivem no IndexedDB, que funciona em `http` normalmente.
+- **O filtro por PESSOA.** Ele é `Tudo · Minhas · De outras pessoas`, e não `de <nome>`:
+  nenhuma rota lista os membros do clube com nome (é a pergunta 1 do `docs/ACEITE-MVP.md`).
+
 - **Menções `@`/`[[` e colar imagem no editor** → ficaram de fora da Tarefa 18 de propósito:
   não existe endpoint de upload no backend, e não há tela de busca de anotação para as menções
   apontarem. As duas são "capability-gated" por prop — ligar depois é passar a prop.
-- **A anotação avulsa** (a que não é de um dia do plano) e o filtro **Tudo · Minhas · de X** →
-  Tarefa 19.
 - ⚠️ **ABRIR O APP DO ZERO SEM CONEXÃO** (o "cold start" no metrô) → **ainda não**, e esta é a
   confusão mais provável. A Tarefa 21 fez a **escrita** sobreviver à queda da rede; a
   **leitura** (`/me`, o livro, as anotações) continua indo ao servidor, então abrir o app com
@@ -45,7 +52,6 @@
 - **Criar anotação avulsa sem conexão** → de fora de propósito: o `POST` de criação não é
   idempotente e o backend não tem chave de idempotência, então reenviar às cegas criaria nota
   duplicada. A tela avulsa continua exigindo conexão para **criar**.
-- **Cadastrar livro pela interface** → Tarefa 20. Por enquanto é pela API (§5 aqui).
 - **Criar clube e convidar pela interface** → MVP 4 (Tarefas 42/43). Por API (§5).
 - Grifos, marcar "li", feed, notificação → MVPs 2 e 3.
 
@@ -74,23 +80,54 @@ SEED_ADMIN_FORCE_PASSWORD=1 pnpm prisma:seed
 
 ---
 
-## 3. Subir
+## 3. Subir — e no CELULAR, que é onde o app se usa
 
 Dois terminais:
 
 ```bash
 # terminal 1 — a API
-pnpm dev:backend        # http://localhost:3333
+pnpm dev:backend        # escuta em 0.0.0.0:3333 (a máquina toda, não só localhost)
 
 # terminal 2 — o app
-pnpm dev:app            # http://localhost:5173
+pnpm dev:app            # `vite --host`: publica na rede e imprime o endereço
 ```
 
-Confira que subiram:
+O `dev:app` imprime as duas coisas. **No celular use a linha `Network`**, não a `Local`:
+
+```
+➜  Local:   http://localhost:5173/
+➜  Network: http://192.168.0.83:5173/     ← esta
+```
+
+### ⚠️ O `.env` do app tem o IP, e ele muda
+
+`packages/app/.env` guarda **como o navegador alcança a API**:
+
+```
+VITE_API_URL=http://192.168.0.83:3333
+```
+
+Tem de ser o **IP da máquina na rede**, nunca `localhost`: o `localhost` do celular é o
+próprio celular, então com `localhost` ali o app abre e **nenhuma requisição funciona** — o
+login incluído. O sintoma é cruel, porque a tela carrega bonita e só falha ao enviar.
+
+Quando o roteador renovar o DHCP e o IP mudar, descubra o novo e troque a linha:
 
 ```bash
-curl http://localhost:3333/health        # {"status":"ok"}
+ipconfig | grep -A 4 "Ethernet"     # o IPv4 da placa que está na sua rede
 ```
+
+Confira que subiram — **pelo IP, que é o que o celular vai usar**:
+
+```bash
+curl http://192.168.0.83:3333/health     # {"status":"ok"}
+curl -o /dev/null -w "%{http_code}
+" http://192.168.0.83:5173/     # 200
+```
+
+Se o `curl` pelo IP funcionar e o celular não, sobrou uma coisa: **o firewall do Windows**.
+Ele já libera o `node.exe`; se você trocar a versão do Node, a liberação é por executável e o
+Windows vai perguntar de novo — responda **permitir**.
 
 E abra **http://localhost:3333/docs** — é o Swagger com **todas** as rotas, e é por ali que
 você vai criar clube e livro sem escrever `curl`.
@@ -107,7 +144,8 @@ powershell "Stop-Process -Id <PID> -Force"
 
 ## 4. Entrar
 
-1. Abra **http://localhost:5173** → você é mandado para `/login`.
+1. Abra **http://192.168.0.83:5173** (no computador, `http://localhost:5173` também serve) →
+   você é mandado para `/login`.
 2. E-mail `admin@clube.local`, senha do `.env`.
 3. Você cai na home.
 
@@ -120,7 +158,7 @@ Vale testar dois caminhos aqui:
 - **Senha errada** → mensagem de credencial inválida, **e você continua na tela de login** (um
   401 de login não desloga ninguém — foi conserto da Tarefa 15).
 - **Abrir `/` sem estar logado** → vai para `/login`, e depois de entrar **volta para onde você
-  queria**, não para a home. Teste com `http://localhost:5173/books/abc?tab=plano#dia-3`: você
+  queria**, não para a home. Teste com `http://192.168.0.83:5173/books/abc?tab=plano#dia-3`: você
   vai para o login, entra, e cai naquele endereço. Use um `bookId` que exista para ver a tela
   do livro de verdade; com um id inventado, o que se testa é o **destino preservado** (e a
   frase própria de "livro não encontrado", que não é a genérica).
