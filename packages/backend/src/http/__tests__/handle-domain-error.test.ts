@@ -7,9 +7,11 @@ import {
   DuplicateMembershipError,
   EmailAlreadyInUseError,
   ForbiddenRoleError,
+  HighlightNotFoundError,
   InvalidBookError,
   InvalidClubError,
   InvalidCredentialsError,
+  InvalidHighlightError,
   InvalidInviteError,
   InvalidNoteError,
   InviteAlreadyUsedError,
@@ -47,12 +49,18 @@ function replySpy() {
 }
 
 describe('handleDomainError', () => {
-  // Uma linha por linha do mapa (20). A mensagem esperada faz parte do
+  // Uma linha por linha do mapa (22). A mensagem esperada faz parte do
   // contrato: só o 400 publica o texto do domínio.
   it.each([
     [400, new InvalidBookError('detalhe-a0'), 'detalhe-a0'],
     [404, new BookNotFoundError('detalhe-a1'), 'Not found'],
     [400, new InvalidNoteError('detalhe-a2'), 'detalhe-a2'],
+    // Regra 20 da Tarefa 22 — os dois erros do grifo entram no mapa no MESMO
+    // commit que cria as classes (decisão H): o teste de exaustividade varre
+    // todas as classes exportadas de `domain/errors`, então uma classe nova sem
+    // status deixa a suíte VERMELHA. Não é escolha.
+    [400, new InvalidHighlightError('detalhe-a6'), 'detalhe-a6'],
+    [404, new HighlightNotFoundError('detalhe-a7'), 'Not found'],
     [404, new PlanItemNotFoundError('detalhe-a3'), 'Not found'],
     [404, new NoteNotFoundError('detalhe-a4'), 'Not found'],
     [403, new NotTheAuthorError('detalhe-a5'), 'Forbidden'],
@@ -93,6 +101,7 @@ describe('handleDomainError', () => {
       new BookNotFoundError(secret),
       new PlanItemNotFoundError(secret),
       new NoteNotFoundError(secret),
+      new HighlightNotFoundError(secret),
       new NotTheAuthorError(secret),
       new InvalidCredentialsError(secret),
       new SessionUserNotFoundError(secret),
@@ -280,5 +289,64 @@ describe('handleDomainError', () => {
 
     expect(notFound.sent[0]?.statusCode).toBe(404);
     expect(notAuthor.sent[0]?.statusCode).toBe(403);
+  });
+
+  /**
+   * Regra 20 da Tarefa 22 — a MESMA barreira do lado do grifo: "esse grifo não
+   * existe para você" (404, o corte de tenant) × "esse grifo é de outra pessoa"
+   * (403, o ADR 0002 — o clube já lê o grifo de todo mundo). O `NotTheAuthorError`
+   * é reusado sem cópia, e é o único 403 de conteúdo do projeto.
+   */
+  it('keeps HighlightNotFoundError and NotTheAuthorError on different statuses', () => {
+    const notFound = replySpy();
+    const notAuthor = replySpy();
+
+    handleDomainError(new HighlightNotFoundError('x'), notFound);
+    handleDomainError(new NotTheAuthorError('y'), notAuthor);
+
+    expect(notFound.sent[0]?.statusCode).toBe(404);
+    expect(notAuthor.sent[0]?.statusCode).toBe(403);
+  });
+
+  /**
+   * Regra 20 — e o outro par: `InvalidHighlightError` é 400 (a pessoa precisa
+   * ler o que está errado no corpo) e `HighlightNotFoundError` é 404 (não
+   * confirmamos a existência do grifo). Colapsar os dois num status faria a
+   * borda responder "corpo inválido" para um grifo de outro clube — que é
+   * exatamente o vazamento que o 404 existe para evitar.
+   */
+  it('keeps InvalidHighlightError and HighlightNotFoundError on different statuses', () => {
+    const invalid = replySpy();
+    const notFound = replySpy();
+
+    handleDomainError(new InvalidHighlightError('quote inválido'), invalid);
+    handleDomainError(new HighlightNotFoundError('x'), notFound);
+
+    expect(invalid.sent[0]?.statusCode).toBe(400);
+    expect(notFound.sent[0]?.statusCode).toBe(404);
+  });
+
+  /**
+   * Regra 20, decisão D — um `commentDoc` malformado sai como `InvalidNoteError`
+   * (o `assertNoteDoc` é reusado sem renomear), e um `quote`/`color`/`page`
+   * malformado sai como `InvalidHighlightError`. O que a borda precisa garantir
+   * é que os DOIS caem na mesma classe 400: é isso que faz a reutilização não
+   * mudar o contrato HTTP do grifo.
+   */
+  it('answers 400 to both invalid-body errors a highlight can raise', () => {
+    const fromHighlight = replySpy();
+    const fromReusedDocGate = replySpy();
+
+    handleDomainError(
+      new InvalidHighlightError('page inválida'),
+      fromHighlight,
+    );
+    handleDomainError(
+      new InvalidNoteError('comment doc inválido'),
+      fromReusedDocGate,
+    );
+
+    expect(fromHighlight.sent[0]?.statusCode).toBe(400);
+    expect(fromReusedDocGate.sent[0]?.statusCode).toBe(400);
   });
 });

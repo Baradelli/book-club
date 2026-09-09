@@ -708,8 +708,88 @@ Sem grifos em tela própria (MVP 2), sem marcar "li", sem feed e sem notificaç�
 
 ### Bloco E — Grifos
 
-- [ ] **22** — Domínio `Highlight` + UseCases `createHighlight` · `editHighlight` ·
-      `archiveHighlight` (só o autor). → _a detalhar_
+- [x] **22** — Domínio `Highlight` + UseCases `createHighlight` · `editHighlight` ·
+      `archiveHighlight` (só o autor). → `tasks/22-usecase-grifo.md`
+      _**O MVP 2 COMEÇOU pelo domínio, e o grifo já nasce com autoria.** Entregue:
+      `HIGHLIGHT_COLORS` (a paleta fixa de 5 cores) em **`packages/shared`**,
+      `domain/highlight.ts` com os 4 portões (`normalizeHighlightQuote`,
+      `assertHighlightColor`, `normalizeHighlightPage`, `normalizeHighlightComment`), 2 erros
+      novos **já mapeados**, o port + o fake, `highlightForAuthor` (cópia fiel do
+      `noteForAuthor`) e os 3 UseCases. **320 shared + 175 ui + 1213 backend + 424 app.**
+      Backend +264: 252 de grifo, 5 do `handle-domain-error`, 7 da rodada de correção._
+      _**A paleta mora em `shared` e guarda o HEX, não o `rgba` do editor.** Três chamadores
+      precisam da mesma lista — o domínio, o `z.enum` da borda (Tarefa 24) e a tela (25) —, e é
+      o caminho medido do `calendar-day` na Tarefa 07. O valor é a **cor base** (`#facc15` …)
+      porque o alpha do editor é decisão de renderização: guardar `rgba(250, 204, 21, 0.40)`
+      faria o `z.enum` depender de espaço em branco e de duas casas decimais. **O espelhamento
+      que o ADR 0004 exige tem teste, e ele morde nas DUAS direções** — o teste de `shared` lê
+      o `RichEditor.tsx` do disco: mutar um hex da paleta dá **44** acusadores, mutar a `rgba`
+      do editor dá **1**, e ele não depende do diretório de trabalho. Duas listas escritas à
+      mão não são espelho, são cópia que envelhece._
+      _**Uma pendência da Tarefa 05 que não se repetiu:** medi antes de escrever a spec que o
+      `NOT_YET_MAPPED` do teste de exaustividade está **vazio** e que ele varre todas as
+      classes exportadas de `domain/errors` — então classe de erro nova **sem status deixa a
+      suíte vermelha**. Registrar os dois erros no `handleDomainError` não era escolha, era
+      requisito do mesmo commit, e a spec já nasceu dizendo isso (decisão H). O vermelho foi
+      colado antes do conserto._
+      _**⚠️ O ACHADO ALTO, e ele é uma classe de asserção nova: o relógio escolheu o valor
+      esperado.** `createdAt === updatedAt` (e `archivedAt === updatedAt`) tinha **ZERO
+      acusadores em 1206 testes, em três rodadas** — duas chamadas a `new Date()` no mesmo tick
+      devolvem o **mesmo milissegundo**, então a igualdade provava "a suíte é rápida", não "o
+      UseCase leu o relógio uma vez". E **cinco blocos de prosa afirmavam o contrário**, com a
+      justificativa exata que a medição desmente (*"duas chamadas divergiriam em
+      milissegundos"*). Consertado com um **relógio que anda e CONTA leituras**
+      (`test-support/advancing-clock.ts`, 33 linhas), cujo primeiro teste é a precondição "duas
+      leituras consecutivas diferem" — senão o acusador novo vira a identidade antiga. **0 → 1
+      acusador** em cada UseCase, verificado por mutação do orquestrador com `md5sum -c` +
+      `diff`. **Gerou a 4ª aparição do §7.8** do `CONVENCOES-CODIGO`, com a regra: *"um relógio
+      só" se prova contando leituras, nunca comparando instantes* — é o §7.3 (contador, não
+      cronômetro) aplicado ao relógio do próprio domínio._
+      _**As guardas de tenant e de autoria, ao contrário do MVP 1, nasceram com acusador.**
+      Medido por mutação: inverter a ordem membership→autoria no `highlightForAuthor` dá **9**
+      acusadores e remover o `assertMembership` dá **12** (no MVP 1, três guardas tinham zero);
+      mover a guarda de patch vazio para **antes** do guard de autoria dá **5**; apagá-la dá
+      **3**; o envenenamento com fallback (`input.userId ?? actor`) dá **1**; validar o corpo
+      antes do corte de tenant dá **1**; trocar a cópia campo a campo do fake por spread dá
+      **3**. Nenhum zero em guarda._
+      _**Três achados BAIXO, e num deles o executor discordou COM MEDIÇÃO e estava certo:** eu
+      pedi para trocar o ator de um teste de contrabando de `clubId`, e ele mediu que o teste
+      **não pode** acusar aquele mutante por um motivo **estrutural** — o `editHighlight` monta
+      o input do guard campo por campo, então um `clubId` do corpo nunca chega lá. E o "gêmeo
+      no `archive`" que eu supus **não existe** (aquele input não tem corpo). Aplicou a
+      alternativa: renomear para o que o teste prova, com ponteiro **pelo nome** do teste que
+      prova a propriedade (§7.4). Os outros dois: duas asserções `toBe(docToText(doc))` eram
+      identidades (apagadas, e a contagem não caiu de 8) e meia frase de docblock
+      indistinguível por construção ("conta a chamada, não o sucesso" num `save` que não pode
+      falhar — contar só o sucesso dá **0** acusadores ali)._
+      _**Decisões registradas para ninguém "consertar":** `commentDoc` é **anulável** (registro
+      o grifo sem ter comentário ainda — o mesmo argumento com que o ADR 0004 recusou o grifo
+      dentro da nota) · o comentário reusa **`assertNoteDoc` + `docToText` sem renomear**, então
+      um `commentDoc` malformado sai como `InvalidNoteError`: outro nome, o **mesmo 400** na
+      borda, e há teste pinando que as duas classes de um corpo de grifo caem no mesmo status ·
+      `page` é inteiro ≥ 1 e **não** é conferido contra `book.totalPages` (é opcional, e a
+      edição de quem grifa pode ser outra) · **sem teto no `quote`** (o teto é o `bodyLimit` da
+      rota, Tarefa 24) · `color`/`page`/`commentDoc` são `unknown` no input, como o `doc` do
+      `createFreeNote` — o portão é o domínio, não o cliente._
+      _**⚠️ Para a Tarefa 24, medido:** o `docs/plano-clube-do-livro.md` §6 declara
+      `updatedAt DateTime @updatedAt` no `Highlight` — **está desatualizado, o ADR 0008 o
+      emenda**, e o modelo tem de nascer **sem** `@updatedAt` (o domínio já é o dono do campo,
+      e é isso que o relógio contado prova). O plano não foi editado._
+      _**Complexidade sob controle:** o maior arquivo de produção tem **72** linhas de código
+      (`edit-highlight.ts`); o fake tem **68** contra **145** do `NoteRepositoryFake` — o
+      dividendo do `HighlightPatch` estreito que o §7.1.1 mandava (ele cita esta fatia pelo
+      nome). Nenhuma abstração sem chamador: 3 métodos no port, os 3 usados; 9 chaves no patch,
+      as 9 usadas; `find` e `delete` **corretamente ausentes** (a 23 e o hard delete que não
+      existe)._
+      _**Dívida registrada:** `packages/ui` não tem pino próprio da paleta do editor — o
+      espelho morde nas duas direções, mas o único guarda das cores do editor vive em **outro
+      pacote**, e quem rodar só `pnpm --filter @clube/ui test` depois de corrigir uma cor vê
+      verde. Vai para a **Tarefa 25**, que toca a paleta do front de qualquer forma._
+      _**Gates:** 320 · 175 · 1213 · 424; `typecheck`, `lint`, `prettier --check .` e o build
+      limpos. Chunk de entrada **400.129 B** com **0 marcas** de TipTap (era 400.126; +3 B de
+      grafo de módulos — a paleta é totalmente tree-shaken, `grep -c facc15` no chunk dá 0).
+      `prisma/`, `repositories/`, `routes/`, `ui/` e `app/` **intocados**; integração **não
+      rodada** (escreve no banco do dono), e não havia como o número mudar._
 - [ ] **23** — UseCase `listHighlights(filter)` — por livro, autor, cor, página. → _a detalhar_
 - [ ] **24** — Repo Prisma + rotas `/highlights` + teste de tenant. → _a detalhar_
 - [ ] **25** — Tela de grifos do livro: lista por cor, criar/editar com o editor no
@@ -719,6 +799,22 @@ Sem grifos em tela própria (MVP 2), sem marcar "li", sem feed e sem notificaç�
 
 - [ ] **26** — `listNotes` completo: `kind` (pré-definida × avulsa), `planItemId`/capítulo,
       texto. → _a detalhar_
+- [ ] **26a** — `GET /clubs/:clubId/members` (id, nome, papel, status), com o corte de tenant
+      de sempre. **Fatia INSERIDA pelo orquestrador do MVP 2**, antes da 27. → _a detalhar_
+      _**Por que ela existe:** a 27 pede filtro **por pessoa**, e ele **não é implementável**
+      sem esta rota — a lacuna está medida e registrada três vezes no MVP 1 (linhas 17, 18 e
+      19). Medido de novo agora: o `MembershipRepository` tem só `save · byUserAndClub ·
+      findByUser`, **não existe `findByClub`**; o `/me` traz só os **meus** clubes; e as notas
+      e a sobreposição de autoria trazem `userId`, nunca nome. Por isso o filtro entregue na
+      19 é `Tudo · Minhas · De outras pessoas` e a nota alheia aparece como "Alguém do clube".
+      Resolve **duas** coisas de uma vez: o chip `de <nome>` e o avatar passar a dizer quem
+      escreveu. É a pergunta 1 do `docs/ACEITE-MVP.md`, cuja recomendação era exatamente
+      "fazer no início do MVP 2"._
+      _**Ela antecipa parte da linha 41 (MVP 4)**, que lista `/clubs/:clubId/members` junto das
+      rotas `/admin/*`. A 41 continua com os UseCases de gerência (`changeMemberRole`,
+      `removeMember`); só a **leitura** da lista vem para cá._
+      _⚠️ **Medido:** `User.name` é **anulável** no schema (`name String?`), então a resposta
+      carrega `name: string | null` e a tela precisa de fallback — não dá para supor nome._
 - [ ] **27** — Componente de filtro compartilhado (pessoa · tipo · leitura · cor) em `ui/`.
       → _a detalhar_
 - [ ] **28** — Tela de acervo do livro: anotações + grifos num só lugar, com o filtro.

@@ -8,6 +8,7 @@
 import type { Book, ReadingPlanItem } from '../domain/book';
 import type { Club, Membership } from '../domain/club';
 import { docToText } from '../domain/doc-to-text';
+import type { Highlight } from '../domain/highlight';
 import type { Invite } from '../domain/invite';
 import { normalizeEmail } from '../domain/normalize-email';
 import type { Note, NoteDoc } from '../domain/note';
@@ -167,6 +168,49 @@ export function aNote(overrides: Partial<Note> = {}): Note {
     reference: null,
     doc,
     plainText: docToText(doc),
+    status: 'ACTIVE',
+    archivedAt: null,
+    createdAt: new Date(FIXED_ISO),
+    updatedAt: new Date(FIXED_ISO),
+    ...overrides,
+  };
+}
+
+/**
+ * O grifo do livro de papel. **Sem chave natural** — o grifo é ilimitado por
+ * decisão de produto (não há `@@unique` nenhum na tabela) —, então leva id
+ * fixo, sobrescrevível, como o `aBook`.
+ *
+ * `commentText` é derivado do `commentDoc` por padrão, mas **um `commentText`
+ * explícito vence** — o `docToText` está ANTES do `...overrides` de propósito,
+ * pela mesma assimetria deliberada do `aNote`: a regra 14 do `editHighlight`
+ * ("editar o trecho não recalcula o `commentText`") só é MENSURÁVEL com um
+ * grifo cujo `commentText` divirja do `commentDoc`. Com os dois coerentes, "não
+ * recalculou" e "recalculou e deu no mesmo" dão o mesmo resultado.
+ *
+ * E o estado é realista: o `commentText` gravado pode ter sido derivado por uma
+ * versão ANTERIOR do `docToText`. → ADR 0001.
+ *
+ * A `color` é o literal `'#facc15'` e não `HIGHLIGHT_COLORS[0]`: um reordenamento
+ * da paleta não pode trocar o fixture em silêncio.
+ */
+export function aHighlight(overrides: Partial<Highlight> = {}): Highlight {
+  const commentDoc =
+    overrides.commentDoc === undefined
+      ? aDoc('me lembrou da coragem de continuar.')
+      : overrides.commentDoc;
+
+  return {
+    id: 'highlight-1',
+    clubId: 'club-1',
+    bookId: 'book-1',
+    userId: 'user-1',
+    quote: 'não é o que você tem, é o que você faz com o que tem',
+    color: '#facc15',
+    page: 45,
+    reference: null,
+    commentDoc,
+    commentText: commentDoc === null ? '' : docToText(commentDoc),
     status: 'ACTIVE',
     archivedAt: null,
     createdAt: new Date(FIXED_ISO),

@@ -99,6 +99,36 @@ export class NoteNotFoundError extends Error {
 }
 
 /**
+ * Entrada malformada de grifo — vira 400 na borda.
+ *
+ * Cobre `quote` vazio, `color` fora da paleta e `page` que não é inteiro ≥ 1.
+ * Um erro só para as três famílias pelo mesmo motivo do `InvalidNoteError`: na
+ * borda os três viram 400 igual, e é o `details` do errorSchema que diz qual
+ * campo está errado.
+ *
+ * ⚠️ O `commentDoc` malformado NÃO passa por aqui: o portão dele é o
+ * `assertNoteDoc`, reusado sem renomear (Tarefa 22, decisão D), e sai como
+ * `InvalidNoteError`. É o MESMO tipo de dado — ProseMirror JSON, governado pelo
+ * ADR 0001 com a mesma frase —, e um `assertCommentDoc` próprio seria uma cópia
+ * da regra. Os dois são 400 na borda, então o contrato HTTP do grifo é um só.
+ */
+export class InvalidHighlightError extends Error {
+  override readonly name = 'InvalidHighlightError';
+}
+
+/**
+ * Grifo inexistente OU arquivado OU de um clube que não é o seu — vira 404.
+ *
+ * Um erro só para os três casos, pelo mesmo motivo do `NoteNotFoundError`:
+ * distinguir "não existe" de "existe em outro clube" é justamente o vazamento
+ * que o 404 do corte de tenant evita. Arquivado entra aqui porque desarquivar é
+ * MVP 4 — até lá, arquivado é invisível, inclusive para o próprio autor.
+ */
+export class HighlightNotFoundError extends Error {
+  override readonly name = 'HighlightNotFoundError';
+}
+
+/**
  * O ator é membro ativo do clube da nota, mas a nota não é dele — vira **403**.
  *
  * É o único lugar do projeto onde 403 é o certo para conteúdo, e a razão é o

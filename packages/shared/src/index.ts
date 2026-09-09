@@ -10,6 +10,10 @@ export * from './book';
 export * from './calendar-day';
 export * from './club';
 export * from './error';
+// A paleta fixa de 5 cores do `Highlight` (MVP 2, Tarefa 22). Mora aqui pelo
+// mesmo motivo do `calendar-day`: o domínio do backend, o `z.enum` da borda
+// (Tarefa 24) e a tela de grifos (Tarefa 25) precisam da MESMA lista.
+export * from './highlight-color';
 export * from './invite';
 // "Que dia é hoje" no fuso de quem olha a tela, com `Intl` e sem Luxon
 // (`CLAUDE.md`). Nasceu na Tarefa 16 — o `CLAUDE.md` prometia este arquivo

@@ -466,7 +466,8 @@ A irmã do §7.4: aqui o `expect` existe, o valor não é impossível, e a asser
 asserta nada — porque o esperado é produzido pela mesma coisa que produz o obtido. Se a
 implementação mudar, os dois lados mudam **juntos**, e o teste continua verde.
 
-Três aparições, todas medidas na rodada de correção da Tarefa 16:
+Quatro aparições. As três primeiras medidas na rodada de correção da Tarefa 16; a quarta na
+Tarefa 22, e ela acrescenta um terceiro autor do valor esperado — **o relógio**:
 
 | Onde | O que parecia | O que era |
 |---|---|---|
@@ -474,8 +475,19 @@ Três aparições, todas medidas na rodada de correção da Tarefa 16:
 | `FORMAT_LOCALE` | `expect(new Intl.DateTimeFormat(FORMAT_LOCALE).resolvedOptions().calendar).toBe('gregory')` prova o pino da locale | numa máquina `en-US` (o CI) o `undefined` **também** resolve `gregory`/`latn`. O que precisa estar certo é o pino, então a asserção é sobre a **string** da locale, mais um par positivo que mostra `th-TH` respondendo o ano budista |
 | Ordem dos clubes | `'Clube do Casal'` antes de `'Clube dos Amigos'` é a ordem da API, e ordenar por nome "mudaria o padrão" | **falso**: o espaço (U+0020) precede o `s`, então a ordem alfabética COINCIDIA com a da API, no `sort()` cru **e** no `localeCompare(_, 'pt')`. É o §7.2 outra vez, e a saída é a mesma: escolher o fixture para a implementação errada **falhar**, e **pinar a precondição** |
 
+| `createdAt === updatedAt` (Tarefa 22) | `expect(h.createdAt).toEqual(h.updatedAt)` prova que o UseCase leu o relógio **uma** vez | **falso, e com prosa afirmando o contrário.** Duas chamadas a `new Date()` no mesmo tick devolvem o MESMO milissegundo, então o mutante que troca `const now` por dois `new Date()` passa em **1206/1206**, em três rodadas — a asserção prova "a suíte é rápida". Pior: o comentário do código dizia que *"duas chamadas divergiriam em milissegundos e deixariam a igualdade não-determinística"*, que é a justificativa exata que a medição desmente. O conserto é um **relógio que anda** (`test-support/advancing-clock.ts`: subclasse de `Date` em que cada leitura sem argumento avança 1 s e é **contada**), e o esperado passa a ser `clock.at(1)`, derivado de uma constante — não do código sob teste. **0 → 1 acusador**, verificado por mutação do orquestrador |
+
 A pergunta a fazer, e ela é uma só: **quem escolheu o valor esperado?** Se a resposta for "a
-função que estou testando", ou "o ambiente", não há asserção — há uma identidade.
+função que estou testando", ou "o ambiente", ou **"o relógio"**, não há asserção — há uma
+identidade.
+
+⚠️ **O relógio é o caso mais fácil de escrever e o mais difícil de ver**, porque a asserção
+parece uma invariante de domínio ("nascimento e última mudança são o mesmo instante") e a
+igualdade é verdadeira nas duas implementações. A regra que sai daqui: **"um relógio só" se
+prova contando leituras, nunca comparando instantes.** Contador de leituras, como o §7.3 já
+manda para chamadas de repositório — e o primeiro teste do próprio relógio de teste é a
+**precondição** de que duas leituras consecutivas diferem, senão o acusador novo vira a
+identidade antiga.
 
 **Corolário de fixture: fixture não depende do RELÓGIO.** Um `month: '2026-09'` escrito à mão
 num teste que compara `book.month` com o mês de hoje prova a regra só enquanto o relógio

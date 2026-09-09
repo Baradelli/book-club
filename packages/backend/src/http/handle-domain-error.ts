@@ -4,9 +4,11 @@ import {
   DuplicateMembershipError,
   EmailAlreadyInUseError,
   ForbiddenRoleError,
+  HighlightNotFoundError,
   InvalidBookError,
   InvalidClubError,
   InvalidCredentialsError,
+  InvalidHighlightError,
   InvalidInviteError,
   InvalidNoteError,
   InviteAlreadyUsedError,
@@ -38,6 +40,10 @@ const STATUS_BY_ERROR: ReadonlyArray<
   [InvalidBookError, 400],
   [InvalidClubError, 400],
   [InvalidNoteError, 400],
+  // `quote` vazio, `color` fora da paleta ou `page` que não é inteiro ≥ 1. O
+  // `commentDoc` malformado sai como `InvalidNoteError` (o `assertNoteDoc` é
+  // reusado sem renomear, Tarefa 22 decisão D) e cai no mesmo 400.
+  [InvalidHighlightError, 400],
   [InvalidInviteError, 400],
   [WeakPasswordError, 400],
   [InvalidCredentialsError, 401],
@@ -55,6 +61,10 @@ const STATUS_BY_ERROR: ReadonlyArray<
   // Nota inexistente, arquivada ou de outro clube: os três são 404, pelo mesmo
   // motivo do livro.
   [NoteNotFoundError, 404],
+  // Grifo inexistente, arquivado ou de outro clube: os três são 404, pelo mesmo
+  // motivo da nota. O 403 do grifo é o `NotTheAuthorError` acima, reusado sem
+  // cópia, e só é alcançável DEPOIS do membership.
+  [HighlightNotFoundError, 404],
   // Item de plano inexistente é 404 pelo mesmo motivo do livro: a resposta não
   // diz se o item não existe ou se é de um clube que não é o seu.
   [PlanItemNotFoundError, 404],
