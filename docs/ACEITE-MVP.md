@@ -499,3 +499,66 @@ _(a preencher)_
 
 - [ ] **MVP 2 fechado** — data: ____
 - [ ] Pendências que entram no MVP 3: ____
+
+---
+
+# MVP 3 — em aceite
+
+**Estado:** em execução. Esta seção nasce **durante** o MVP, não no fim: as perguntas são
+escritas no momento em que a decisão aparece, e não depois — apontar para uma pergunta que
+ainda não existe foi um achado MÉDIO da última fatia do MVP 2, e o alvo era a própria IA.
+O roteiro de aceite e o veredito são preenchidos no fechamento.
+
+**A definição, do `docs/BACKLOG.md`:** *"Eu marco que li o trecho de hoje e vejo onde eu e o
+clube estamos no livro. Recebo um lembrete no horário que eu escolhi — e não recebo se eu já
+li. E quando ela lê, escreve ou grifa, meu celular avisa e a atividade aparece no feed da
+home."*
+
+## B. As perguntas — o que só você decide
+
+### 1. ⚠️ Como você quer ver progresso? (a pergunta central do MVP 3)
+
+**Por que ela existe:** o MVP 3 é o MVP de ritmo, e o projeto tem uma guarda **automática**
+contra vocabulário de cobrança que roda no catálogo (`pt` **e** `en`) e no DOM de **todos** os
+estados de toda tela. Ela proíbe, por regex, a forma `"12 de 30"` / `"12 of 30"` / `"12/30"` /
+`"+3"` (`COUNTER_SHAPE`), e a lista `GUILT_TERMS` proíbe `falta`, `deixou`, `atras`, `penden`,
+`perdeu`, `behind`, `missed`, `overdue` e — explicitamente — **`streak`**, comentado no código
+como *"o placar disfarçado de incentivo"*. Ou seja: **"você leu 12 de 30 dias" é literalmente
+vermelho por teste.**
+
+A guarda **não está errada** — ela é o §1 do plano de produto (*"incentivo por presença, não
+por comparação"*) e já mordeu tentativas reais no MVP 1 e no MVP 2. O que estava por decidir
+era **a forma de mostrar progresso sem contador e sem comparação**.
+
+**Como ficou (o padrão conservador, implementado):** progresso é **presença, não placar**. A
+tela do livro já mostrava, em cada dia do plano, um avatar por pessoa que **escreveu** — sem
+número, sem "+2" de estouro, e nada quando ninguém escreveu. O `ReadingLog` estende isso de
+graça: cada dia ganha também a marca de quem **leu**, na mesma linha e com a mesma construção,
+mais um toque em primeira pessoa no dia de hoje ("li hoje"). "Onde estamos" se lê varrendo a
+lista com o olho — que é uma resposta **espacial**, não um número.
+
+**E a metade estrutural, que é mais forte que a regex:** a rota de progresso **não devolve
+contagem nenhuma**. Só presença por dia. Um número que não existe no contrato não pode ser
+renderizado por engano. Isso importa porque foi **medido** que a guarda tem um furo: a
+`COUNTER_SHAPE` pega `"12 de 30"` mas **não** pega um `"12 dias lidos"` solto, e `GUILT_TERMS`
+não tem "lidos". Em vez de alargar a regex por palpite — o caminho que quase matou a guarda no
+MVP 1, quando o radical `'tras'` casava dentro de "ou**tras**" e o teste passou a mandar no
+produto —, o número foi tornado **inalcançável na fronteira da API**.
+
+**As alternativas, se você quiser outra coisa:**
+
+- **(a)** como está: marca por dia, sem agregado nenhum;
+- **(b)** uma **barra sem número** por pessoa. Não tem dígito, mas põe duas pessoas na mesma
+  escala — é placar sem placar, e responde "quem está na frente?" num relance;
+- **(c)** **número na tela** ("12 de 30", porcentagem, contador). Isto **exige afrouxar a
+  guarda anti-culpa**, e o efeito não é local: muda o MVP 3 inteiro e reabre a **pergunta 5 do
+  MVP 2** (contador de resultados na busca), que hoje está respondida por "não existe contador
+  em lugar nenhum".
+
+**Recomendação:** **(a)**, e use o app por algumas semanas antes de decidir. A pergunta que
+importa não é "quantos dias eu li", é "eu leio hoje?" — e a lista de dias com marca responde
+essa, sem convidar ninguém a se comparar com a outra pessoa. Se depois de usar você **sentir
+falta** do número, ele é aditivo: um campo na rota e uma linha na tela. Relaxar a guarda é a
+parte cara, e é sua.
+
+**Resposta:**
