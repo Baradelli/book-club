@@ -333,4 +333,58 @@ describe('bookWithPlanResponseSchema', () => {
       false,
     );
   });
+
+  /**
+   * ⚠️ REGRA 14 da Tarefa 32 — o `readers` CHEGA, e é o `.optional()` que faz
+   * esta fatia caber sem tocar `packages/app`.
+   *
+   * Sem o campo declarado aqui, o `readers` que o `getBookWithPlan` passou a
+   * devolver sairia **apagado** pelo serializer, com 200 e sem erro nenhum
+   * (§6.1) — que é exatamente a armadilha que o `writers` documentou na
+   * Tarefa 11.
+   */
+  it('carries readers out, next to writers', () => {
+    const parsed = bookWithPlanResponseSchema.parse({
+      ...aBookWithPlan([{ planItemId: 'plan-1', userIds: ['user-a'] }]),
+      readers: [{ planItemId: 'plan-2', userIds: ['user-b', 'user-c'] }],
+    });
+
+    expect(parsed.writers).toEqual([
+      { planItemId: 'plan-1', userIds: ['user-a'] },
+    ]);
+    // As duas sobreposições são INDEPENDENTES: ler não é escrever, e a
+    // resposta as carrega separadas. Um handler que passasse a mesma lista nos
+    // dois campos acusaria aqui.
+    expect(parsed.readers).toEqual([
+      { planItemId: 'plan-2', userIds: ['user-b', 'user-c'] },
+    ]);
+  });
+
+  /**
+   * ⚠️ **A FASE 1 DO PHASE-IN, e o teste que ela pede.** Diferente do
+   * `writers`, uma resposta SEM `readers` é aceita — e é isso que deixa os 164
+   * testes de tela de `packages/app` continuarem passando enquanto a 32b não
+   * sobe os fixtures. O docblock do schema é o dono do argumento; este teste
+   * é o que faz a fase 2 (tirar o `optional()`) ficar VERMELHA aqui em vez de
+   * passar batida.
+   */
+  it('still accepts a response without readers, which is the phase-1 shape', () => {
+    const parsed = bookWithPlanResponseSchema.parse(aBookWithPlan([]));
+
+    expect(parsed.readers).toBeUndefined();
+  });
+
+  // Nenhum contador de progresso atravessa: progresso é presença, e é o
+  // contrato que torna o número irrenderizável.
+  it('drops a progress count somebody adds to the book response', () => {
+    const parsed = bookWithPlanResponseSchema.parse({
+      ...aBookWithPlan([]),
+      readers: [],
+      readDays: 12,
+      progress: 0.4,
+    });
+
+    expect(parsed).not.toHaveProperty('readDays');
+    expect(parsed).not.toHaveProperty('progress');
+  });
 });

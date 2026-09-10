@@ -6,6 +6,7 @@ import { PrismaHighlightRepository } from '../repositories/prisma-highlight-repo
 import { PrismaInviteRepository } from '../repositories/prisma-invite-repository';
 import { PrismaMembershipRepository } from '../repositories/prisma-membership-repository';
 import { PrismaNoteRepository } from '../repositories/prisma-note-repository';
+import { PrismaReadingLogRepository } from '../repositories/prisma-reading-log-repository';
 import { PrismaReadingPlanItemRepository } from '../repositories/prisma-reading-plan-item-repository';
 import { PrismaSettingsRepository } from '../repositories/prisma-settings-repository';
 import { PrismaUserRepository } from '../repositories/prisma-user-repository';
@@ -20,6 +21,7 @@ export interface Repositories {
   planItems: PrismaReadingPlanItemRepository;
   notes: PrismaNoteRepository;
   highlights: PrismaHighlightRepository;
+  readingLogs: PrismaReadingLogRepository;
 }
 
 /**
@@ -38,5 +40,6 @@ export function buildRepositories(prisma: PrismaClient): Repositories {
     planItems: new PrismaReadingPlanItemRepository(prisma),
     notes: new PrismaNoteRepository(prisma),
     highlights: new PrismaHighlightRepository(prisma),
+    readingLogs: new PrismaReadingLogRepository(prisma),
   };
 }

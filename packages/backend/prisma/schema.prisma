@@ -1,9 +1,9 @@
-// Schema dos Blocos A (Tarefa 03), B (Tarefa 07), C (Tarefa 11) e E
-// (Tarefa 24). Os modelos vêm do esqueleto de referência em
+// Schema dos Blocos A (Tarefa 03), B (Tarefa 07), C (Tarefa 11), E
+// (Tarefa 24) e F (Tarefa 32). Os modelos vêm do esqueleto de referência em
 // docs/plano-clube-do-livro.md §6, recortando as relações que apontam para
-// modelos que ainda não existem (ReadingLog, ActivityEvent, NoteLink,
-// Attachment, PushSubscription, NotificationDelivery) — cada um nasce na sua
-// tarefa, com a sua migration.
+// modelos que ainda não existem (ActivityEvent, NoteLink, Attachment,
+// PushSubscription, NotificationDelivery) — cada um nasce na sua tarefa, com a
+// sua migration.
 //
 // Onde este arquivo divergir do §6, a divergência está registrada num ADR:
 // `ReadingPlanItem.order` tem @@index e não @@unique (ADR 0007), e
@@ -56,6 +56,7 @@ model User {
   booksCreated Book[]       @relation("BookCreator")
   notes        Note[]
   highlights   Highlight[]
+  readingLogs  ReadingLog[]
 }
 
 model Club {
@@ -71,6 +72,7 @@ model Club {
   books       Book[]
   notes       Note[]
   highlights  Highlight[]
+  readingLogs ReadingLog[]
 }
 
 model Membership {
@@ -119,11 +121,12 @@ model Book {
   archivedAt  DateTime?
   createdAt   DateTime      @default(now())
 
-  club       Club              @relation(fields: [clubId], references: [id])
-  createdBy  User              @relation("BookCreator", fields: [createdById], references: [id])
-  planItems  ReadingPlanItem[]
-  notes      Note[]
-  highlights Highlight[]
+  club        Club              @relation(fields: [clubId], references: [id])
+  createdBy   User              @relation("BookCreator", fields: [createdById], references: [id])
+  planItems   ReadingPlanItem[]
+  notes       Note[]
+  highlights  Highlight[]
+  readingLogs ReadingLog[]
 
   @@index([clubId, status])
 }
@@ -140,8 +143,9 @@ model ReadingPlanItem {
   reference String? // texto livre: "p. 45-62"
   createdAt DateTime @default(now())
 
-  book  Book   @relation(fields: [bookId], references: [id])
-  notes Note[]
+  book        Book         @relation(fields: [bookId], references: [id])
+  notes       Note[]
+  readingLogs ReadingLog[]
 
   // A chave natural do dia de leitura e do diff do replacePlanItems.
   @@unique([bookId, date])
@@ -285,6 +289,70 @@ model Highlight {
   // O acervo do clube, do mais recente para o mais antigo: é a ordem em que o
   // `listHighlights` o pede, e o mesmo índice que o `Note` tem.
   @@index([clubId, createdAt])
+}
+
+// Bloco F (Tarefa 32) — "eu li o trecho de hoje". SEIS colunas e nada mais: o
+// docblock de `src/domain/reading-log.ts` é o dono de cada ausência, e elas são
+// decisão, não esquecimento.
+//
+// - SEM `status`/`archivedAt`: `ReadingLog` é log IMUTÁVEL, a exceção
+//   documentada ao soft delete do projeto (`CLAUDE.md`). Desmarcar "li" é hard
+//   delete da linha.
+// - SEM `updatedAt`: nenhum caminho reescreve a linha. Instante sem dono é
+//   campo que mente (ADR 0008).
+// - SEM `createdAt`: ele É o `readAt` — a linha nasce no ato de marcar, e dois
+//   nomes para o mesmo instante são a duplicação que a lição nº 3 do MVP 1
+//   proíbe.
+// - SEM contador e SEM percentual: progresso é CALCULADO a partir dos logs,
+//   nunca guardado (decisão fechada do MVP 3).
+model ReadingLog {
+  id         String   @id @default(cuid())
+  clubId     String
+  bookId     String
+  userId     String // o LEITOR. Sempre o ator; nunca vem do input.
+  // NÃO anulável — a diferença que salta aos olhos em relação ao `Note`, onde
+  // ele é nulo justamente para a anotação avulsa existir. Não existe leitura
+  // avulsa: ler é sempre ler um trecho do plano.
+  planItemId String
+  // SEM `@default(now())`, ao contrário de todo `createdAt` do projeto: o dono
+  // do instante é o UseCase (ADR 0008), e aqui nem a rede de segurança faz
+  // sentido — uma linha inserida por fora sem `readAt` é uma leitura sem hora,
+  // e é melhor o INSERT falhar do que gravar "agora" por acidente.
+  readAt     DateTime
+
+  club     Club            @relation(fields: [clubId], references: [id])
+  book     Book            @relation(fields: [bookId], references: [id])
+  user     User            @relation(fields: [userId], references: [id])
+  // `onDelete: Restrict` EXPLÍCITO, e não herdado. Para relação OBRIGATÓRIA o
+  // default do Prisma já é `Restrict` (lido do SQL gerado na Tarefa 24, não
+  // suposto) — mas foi exatamente um implícito que quase produziu corrupção
+  // silenciosa no `Note.planItem`, onde a relação é OPCIONAL e o default é
+  // `SetNull`. A regra que sai daquele susto é declarar, e dizer por quê:
+  // remover um dia do plano que alguém já leu tem de FALHAR, não apagar nem
+  // zerar o registro de leitura de ninguém.
+  //
+  // ⚠️ E aqui NÃO há guarda de domínio na frente deste `Restrict`, ao
+  // contrário do `Note`: o `replacePlanItems` confere nota
+  // (`planItemIdsWithAnyNote`) e NÃO confere leitura. Medido na Tarefa 32 e
+  // registrado no relatório dela: remover um dia que só tem leitura estoura
+  // aqui, como erro de banco (500), em vez do 400 com mensagem. Nada é
+  // gravado — a operação inteira é uma transação —, então é o STATUS que está
+  // errado, não o dado.
+  planItem ReadingPlanItem @relation(fields: [planItemId], references: [id], onDelete: Restrict)
+
+  // A identidade do registro: o par (dia, pessoa). É ele que faz a
+  // idempotência do `markRead` ser do BANCO e não só do UseCase — dois toques
+  // simultâneos na tela, ou o retry da fila offline, viram UMA linha. E é por
+  // ele existir que nenhum dos dois UseCases recebe id de log no input: o log
+  // de outra pessoa é inalcançável (decisão E da Tarefa 30).
+  @@unique([planItemId, userId])
+  // "quem já leu cada dia deste livro" — a sobreposição da tela do livro e o
+  // `computeBookProgress`. É a única consulta por coleção que existe.
+  //
+  // NADA de `@@index([clubId, createdAt])`, que as outras tabelas de conteúdo
+  // têm: não há listagem cronológica de leitura em lugar nenhum do produto, e
+  // índice sem consulta é custo de escrita à toa (decisão G da Tarefa 32).
+  @@index([bookId])
 }
 
 model Settings {

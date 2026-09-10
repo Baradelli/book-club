@@ -6,6 +6,10 @@ import { generalStatus } from './club';
 // aqui — `CLAUDE.md` proíbe duplicar schema, e duas cópias divergiriam na
 // primeira vez que a sobreposição ganhasse um campo.
 import { planItemWritersResponseSchema } from './note';
+// A sobreposição de LEITURA, e ela é um schema próprio — mesmo formato do
+// `writers`, nome honesto (decisão D da Tarefa 31). O que se reusa entre as
+// duas é a conta, no domínio do backend, não o schema.
+import { planItemReadersResponseSchema } from './reading-log';
 import { findPlanDateProblem } from './reading-plan-dates';
 
 /**
@@ -157,24 +161,83 @@ export const planItemResponseSchema = z.object({
 });
 
 /**
- * Abrir o livro: cadastro + plano + **quem já escreveu em cada dia**.
+ * Abrir o livro: cadastro + plano + **quem já escreveu** + **quem já leu**
+ * cada dia.
  *
- * O `writers` entrou na Tarefa 11, e ele PRECISA estar declarado aqui: o
+ * Os dois campos de sobreposição PRECISAM estar declarados aqui: o
  * `serializerCompiler` do Zod descarta campo não declarado, então um
- * `getBookWithPlan` que passasse a devolver a sobreposição sem este campo
- * responderia 200 com o `writers` **apagado** — e nada avisaria.
+ * `getBookWithPlan` que passasse a devolvê-los sem esta linha responderia 200
+ * com o campo **apagado** — e nada avisaria.
  * → `docs/CONVENCOES-CODIGO.md` §6.1.
  *
- * É **obrigatório**, não opcional: um livro em que ninguém escreveu tem
- * `writers: []`, que é uma resposta legítima e o que a tela sabe desenhar. Com
- * `.optional()` o front ganharia um caso `undefined` que só significa "o
- * servidor esqueceu". O `POST /clubs/:clubId/books` também usa este schema e
- * manda `[]` — um livro criado neste instante não tem anotação nenhuma.
+ * Os dois são **obrigatórios**, não opcionais: um livro em que ninguém
+ * escreveu (ou leu) tem `[]`, que é uma resposta legítima e o que a tela sabe
+ * desenhar. Com `.optional()` o front ganharia um caso `undefined` que só
+ * significa "o servidor esqueceu". O `POST /clubs/:clubId/books` também usa
+ * este schema e manda `[]` nos dois — um livro criado neste instante não tem
+ * anotação nem leitura nenhuma.
+ *
+ * É por o `readers` vir JUNTO do livro que a 32b desenha as duas sobreposições
+ * numa requisição só — **não** existe `GET /books/:bookId/readers`, de
+ * propósito: a `/writers` equivalente existe sem cliente nenhum desde a Tarefa
+ * 11 (medido — o app lê o `writers` daqui), e criar a gêmea seria repetir um
+ * erro já pago.
+ *
+ * ⚠️ E **nenhum contador**: nem `readDays`, nem total, nem percentual.
+ * Progresso é presença, e é o contrato que torna o número irrenderizável.
+ *
+ * ⚠️⚠️ **POR QUE O `readers` É `.optional()` E O `writers` NÃO — e os dois
+ * números que decidiram.**
+ *
+ * O §6.8 diz que campo NOVO no backend é a direção segura porque "o `parse` do
+ * Zod faz strip, o front antigo ignora". Isso vale quando o front tem uma
+ * CÓPIA velha do schema; aqui o schema é **um só**, morando no `shared`, então
+ * declarar `readers` obrigatório torna obrigatório também tudo o que
+ * **produz** uma resposta destas — inclusive os fixtures dos testes de tela,
+ * que só vão saber dele na 32b.
+ *
+ * 1. **Obrigatório: 164 testes falhando em 7 arquivos** de `packages/app`
+ *    (medido na Tarefa 32), e esta fatia não pode tocar o app — a 32b sobe a
+ *    tela e os fixtures juntos.
+ * 2. **`.default([])`, que daria tipo de saída não-opcional e deixaria o
+ *    fixture antigo passar, NÃO COMPILA aqui**: o `RequestOptions.schema` do
+ *    cliente é `ZodType<TOut>`, cujo terceiro parâmetro (`Input`) cai para
+ *    `TOut` também — e `.default()` é justamente o caso em que entrada e saída
+ *    DIFEREM. Medido: `TS2345` em `book.tsx:226` e `book-form.tsx:158`, com
+ *    `readers?: ... | undefined` do lado do valor. Alargar aquela assinatura é
+ *    mudança no cliente HTTP compartilhado e está fora desta fatia.
+ *
+ * Então `optional()` é a **fase 1** do phase-in de duas etapas que o próprio
+ * §6.8 prescreve, palavra por palavra. **A fase 2 é da 32b**: ela sobe a tela
+ * e os fixtures, tira o `optional()`, e com isso recupera uma proteção real —
+ * com o campo obrigatório, um handler que ESQUECESSE o `readers` responde 500
+ * (erro de serialização, logado) em vez de omitir o campo em silêncio, que é o
+ * mesmo argumento pelo qual o `writers` nasceu obrigatório.
+ *
+ * ⚠️⚠️ **E O QUE O `optional()` CUSTA, medido na rodada de correção da 32 —
+ * porque "quem segura a ponta é a integração" é verdade e insuficiente.**
+ * Mutante: apagar `readers` do `send()` de `GET /books/:bookId` em
+ * `book-routes.ts`. Resultado:
+ *
+ * ```
+ * pnpm -r typecheck          → verde   (o campo é opcional: o handler pode omitir)
+ * backend unit               → 1399/1399 PASSAM
+ * integração                 → 4 falhas, TODAS no mesmo bloco
+ *                              (`the reading overlay inside GET /books/:bookId`)
+ * ```
+ *
+ * Ou seja: com o `optional()`, a fiação `getBookWithPlan → rota → resposta`
+ * **não tem guarda nenhuma fora da integração**, e os quatro acusadores estão
+ * todos num `describe` só. Quem apagar aquele bloco apaga a guarda inteira.
+ * Com o campo obrigatório (fase 2), o mesmo mutante vira **500** de erro de
+ * serialização, logado — que é a proteção que o `writers` tem hoje e o
+ * `readers` não.
  */
 export const bookWithPlanResponseSchema = z.object({
   book: bookResponseSchema,
   planItems: z.array(planItemResponseSchema),
   writers: planItemWritersResponseSchema,
+  readers: planItemReadersResponseSchema.optional(),
 });
 
 /**

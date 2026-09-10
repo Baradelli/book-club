@@ -78,6 +78,10 @@ export const bookRoutes: FastifyPluginAsyncZod<{
     // `GET /books/:bookId/writers`: abrir um livro é UM corte de tenant, não
     // dois. → decisão D da Tarefa 11.
     repos.notes,
+    // E o `readers` pelo MESMO argumento (decisão D da Tarefa 32): a rota
+    // gêmea `GET /books/:bookId/readers` não existe, e não vai existir — a
+    // `/writers` equivalente está sem cliente desde a Tarefa 11.
+    repos.readingLogs,
   );
   const editBook = new EditBook(assertMembership, repos.books);
   const archiveBook = new ArchiveBook(assertMembership, repos.books);
@@ -123,6 +127,12 @@ export const bookRoutes: FastifyPluginAsyncZod<{
           // de propósito: com `.optional()` o front ganharia um caso
           // `undefined` que só significa "o servidor esqueceu".
           writers: [],
+          // O mesmo vale para a leitura, e o `[]` é EXPLÍCITO mesmo o schema
+          // aceitando a ausência hoje: o `optional()` do `readers` é a fase 1
+          // de um phase-in que a 32b encerra (→ o docblock de
+          // `bookWithPlanResponseSchema`), e omitir aqui deixaria esta rota
+          // quebrada no dia em que ele sair.
+          readers: [],
         });
       } catch (error) {
         return handleDomainError(error, reply);
@@ -184,10 +194,11 @@ export const bookRoutes: FastifyPluginAsyncZod<{
     },
     async (req, reply) => {
       try {
-        const { book, planItems, writers } = await getBookWithPlan.execute({
-          bookId: req.params.bookId,
-          actorUserId: req.user.sub,
-        });
+        const { book, planItems, writers, readers } =
+          await getBookWithPlan.execute({
+            bookId: req.params.bookId,
+            actorUserId: req.user.sub,
+          });
         return reply.status(200).send({
           book: toBookResponse(book),
           planItems: planItems.map(toPlanItemResponse),
@@ -196,6 +207,10 @@ export const bookRoutes: FastifyPluginAsyncZod<{
           // declarado, então um `writers` esquecido lá sairia APAGADO, com 200 e
           // sem erro. → CONVENCOES-CODIGO §6.1, regra 35.
           writers,
+          // E o `readers`, pela mesma razão e com a mesma armadilha (regra 14
+          // da Tarefa 32). Nenhum contador viaja junto: progresso é presença,
+          // e o schema o apagaria de qualquer forma.
+          readers,
         });
       } catch (error) {
         return handleDomainError(error, reply);

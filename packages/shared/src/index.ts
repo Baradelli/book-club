@@ -24,4 +24,8 @@ export * from './invite';
 // desde a 12.
 export * from './local-day';
 export * from './note';
+// Os schemas de borda do registro de leitura (MVP 3, Tarefa 32). Arquivo
+// próprio pelo mesmo motivo do `highlight.ts`: espelha a separação de arquivo
+// de rota que o backend fez.
+export * from './reading-log';
 export * from './reading-plan-dates';

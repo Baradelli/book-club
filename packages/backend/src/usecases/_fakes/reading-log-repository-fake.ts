@@ -1,21 +1,57 @@
 import type { ReadingLog } from '../../domain/reading-log';
-import type { ReadingLogRepository } from '../ports/reading-log-repository';
+import type {
+  ReadingLogFilter,
+  ReadingLogRepository,
+} from '../ports/reading-log-repository';
 
 export class ReadingLogRepositoryFake implements ReadingLogRepository {
   private store = new Map<string, ReadingLog>();
   private saveCallCount = 0;
   private deleteCallCount = 0;
   private byPlanItemAndUserCallCount = 0;
+  private findCallCount = 0;
+  private findFiltersSeen: ReadingLogFilter[] = [];
 
+  /**
+   * Upsert com o alvo em **`(planItemId, userId)`**, espelhando o
+   * `PrismaReadingLogRepository.save`.
+   *
+   * ⚠️ **Este método LANÇAVA no par duplicado até a rodada de correção da
+   * Tarefa 32**, porque a Tarefa 30 supôs que o Prisma faria upsert por `id`.
+   * O revisor mediu que aquela escolha produzia **500** na corrida do
+   * `markRead` (o `handle-domain-error.ts` não mapeia `P2002`), o repositório
+   * passou a mirar o índice composto, e este fake seguiu — senão ele ficaria
+   * **mais restritivo que o banco**, que é a direção do §7.1 que esconde
+   * melhor, porque a suíte fica verde. O veredito e o histórico moram no
+   * docblock do `describe('upsert on (planItemId, userId)')` da suíte deste
+   * arquivo.
+   *
+   * O `id` que chega é **descartado** quando o par já existe: a linha mantém a
+   * chave primária que tem, e é o que o Postgres faz. Sem isso, a corrida
+   * trocaria a PK de um log existente.
+   *
+   * **Nenhuma exceção emulada aqui**, e é de propósito (§7.1.1: uma semântica
+   * emulada a menos é uma fonte de bug a menos). O único `P2002` que o banco
+   * ainda dá neste caminho é colisão de **chave primária** — mesmo `id`, par
+   * diferente —, e nenhum UseCase consegue produzi-la: os ids saem de
+   * `randomUUID()`. Emular o que não tem chamador é a especulação que o
+   * `docs/WORKFLOW.md` proíbe.
+   */
   async save(log: ReadingLog): Promise<ReadingLog> {
-    // Conta a CHAMADA, não o sucesso: uma escrita recusada pelo índice também
-    // foi uma tentativa, e é isso que o teste do UseCase quer saber (§7.3).
+    // Conta a CHAMADA, não o sucesso: uma escrita que converge sobre uma linha
+    // existente também foi uma tentativa, e é isso que o teste do UseCase quer
+    // saber (§7.3).
     this.saveCallCount += 1;
 
-    this.assertUniquePlanItemAndUser(log);
+    const existing = [...this.store.values()].find(
+      (row) => row.planItemId === log.planItemId && row.userId === log.userId,
+    );
+    // `Map.set` sobre uma chave que já existe preserva a POSIÇÃO dela, então a
+    // armadilha de ordem do `saved` continua valendo depois de um upsert.
+    const row = existing ? { ...log, id: existing.id } : log;
 
-    this.store.set(log.id, this.clone(log));
-    return this.clone(log);
+    this.store.set(row.id, this.clone(row));
+    return this.clone(row);
   }
 
   /**
@@ -40,17 +76,57 @@ export class ReadingLogRepositoryFake implements ReadingLogRepository {
   }
 
   /**
+   * "Quem leu o quê neste livro" — o `find` que a Tarefa 32 trouxe, junto da
+   * implementação Prisma (§6.9).
+   *
+   * ⚠️ **Nenhuma semântica de `NULL` a emular aqui**, e é a diferença que
+   * salta aos olhos em relação ao `NoteRepositoryFake`, que precisa do
+   * `sql-equality.ts` para isso: os três campos deste filtro batem em colunas
+   * **não anuláveis**, então `===` é fiel ao `=` do Postgres sem ressalva. A
+   * regra do §7.1 que o `sql-equality.ts` codifica (`WHERE col = 'x'` contra
+   * coluna nula é FALSO) não tem o que decidir quando não há coluna nula —
+   * importá-lo aqui seria pagar acoplamento por uma regra que não se aplica.
+   *
+   * **Campo ausente não filtra**, que é o que faz `{ bookId }` sozinho devolver
+   * o livro inteiro — o caso da sobreposição da tela.
+   *
+   * **Sem teto de linhas**, como o port declara: um `take` aqui apagaria
+   * leitores em silêncio. O motivo inteiro (e a medição que desmentiu a
+   * previsão do `docs/BACKLOG.md`) mora no docblock do port — uma verdade, um
+   * lugar.
+   */
+  async find(filter: ReadingLogFilter): Promise<ReadingLog[]> {
+    this.findCallCount += 1;
+    // Uma CÓPIA, não a referência: o chamador pode reusar (e mutar) o objeto
+    // que passou, e um filtro pinado que mudasse depois não pinaria nada.
+    this.findFiltersSeen.push({ ...filter });
+
+    return this.inReverseInsertionOrder()
+      .filter((log) => log.bookId === filter.bookId)
+      .filter(
+        (log) => filter.userId === undefined || log.userId === filter.userId,
+      )
+      .filter(
+        (log) =>
+          filter.planItemId === undefined ||
+          log.planItemId === filter.planItemId,
+      )
+      .map((log) => this.clone(log));
+  }
+
+  /**
    * Hard delete, e **idempotente**: `Map.delete` de uma chave que não existe é
    * um no-op silencioso.
    *
    * Isso é fidelidade ao que o port CONTRATA, e não indulgência.
    *
-   * ⚠️ A pergunta do §7.1 é "o Postgres faria isto?", e aqui a resposta depende
-   * de qual chamada de Prisma a Tarefa 32 escrever. **O dono dessa decisão é o
-   * docblock de `ports/reading-log-repository.ts` (`delete`)** — inclusive a
-   * separação entre o que ali está medido e o que não está. Não repita a
-   * afirmação aqui: uma verdade sobre o banco copiada para um segundo arquivo
-   * é como a frase errada da Tarefa 23 viajou por quatro (§7.1).
+   * ⚠️ A pergunta do §7.1 é "o Postgres faria isto?", e a Tarefa 32 respondeu:
+   * o repositório usa `deleteMany`, que devolve `{ count: 0 }` em vez de
+   * lançar. **O dono dessa decisão é o docblock de
+   * `ports/reading-log-repository.ts` (`delete`)**, com a medição do `P2025`
+   * colada lá. Não repita a afirmação aqui: uma verdade sobre o banco copiada
+   * para um segundo arquivo é como a frase errada da Tarefa 23 viajou por
+   * quatro (§7.1).
    */
   async delete(id: string): Promise<void> {
     // Conta a CHAMADA, não o sucesso: apagar um id que não está lá também foi
@@ -129,48 +205,33 @@ export class ReadingLogRepositoryFake implements ReadingLogRepository {
     return this.byPlanItemAndUserCallCount;
   }
 
-  private inReverseInsertionOrder(): ReadingLog[] {
-    return [...this.store.values()].reverse();
+  /**
+   * Quantas vezes `find` foi chamado.
+   *
+   * O corte de tenant do `getBookWithPlan` precisa dele, e precisa **para cada
+   * leitura de conteúdo** (§7.3): a auditoria da Tarefa 10 achou um mutante que
+   * lia o plano antes do corte e sobrevivia a 906 testes, porque o único
+   * contador afirmado era o das notas. Quem já leu cada dia é conteúdo do clube
+   * tanto quanto o plano e a anotação.
+   */
+  get findCalls(): number {
+    return this.findCallCount;
   }
 
   /**
-   * Contrato do fake, não regra de domínio: emula o
-   * `@@unique([planItemId, userId])` que a Tarefa 32 declara no Postgres.
+   * Os filtros que o `find` recebeu, em cópia.
    *
-   * ⚠️ **A fidelidade tem DUAS direções, e a restritiva é a que esconde
-   * melhor** — a suíte fica verde (§7.1, sexta aparição da classe do ADR 0007):
-   *
-   * 1. **Recusa o segundo `save` do mesmo par**, linha por linha e contra o
-   *    estado da tabela naquele instante — a linha do próprio id não colide
-   *    consigo mesma. Sem isso, a idempotência do `markRead` passaria verde com
-   *    um segundo `INSERT`, e o `P2002` só apareceria em produção.
-   * 2. **Aceita** o mesmo `planItemId` com **outro** `userId` (o clube inteiro
-   *    lê o mesmo trecho — é o produto) e o mesmo `userId` com **outro**
-   *    `planItemId` (a pessoa lê o livro, um dia por vez). Um fake "cuidadoso"
-   *    que recusasse qualquer um dos dois faria o caso central nascer provando
-   *    o comportamento errado, sem nada ficar vermelho.
-   *
-   * ⚠️ **A metade do `NULL` do `NoteRepositoryFake` NÃO existe aqui**, e a
-   * ausência é a diferença que salta aos olhos entre os dois fakes: o
-   * `Note.planItemId` é anulável (é o que faz a anotação avulsa existir) e um
-   * índice único do Postgres não compara `NULL` com `NULL`, então lá o `null`
-   * precisa de um `return` antecipado. `ReadingLog.planItemId` é **não
-   * anulável** — não existe leitura avulsa —, então não há `NULL` que colida
-   * nem que deixe de colidir.
-   *
-   * E recusa **ANTES** de escrever: uma escrita parcial esconderia a regra
-   * "nada é gravado se a validação falha" dos UseCases.
+   * O contador não distingue "o filtro foi para o repositório" de "o resultado
+   * deu certo" (§7.3) — este distingue. É por ele que o `getBookWithPlan` prova
+   * que manda **um** filtro só, com o `bookId` do livro e **nenhuma chave à
+   * toa**: nada disso muda o resultado num clube de duas pessoas.
    */
-  private assertUniquePlanItemAndUser(log: ReadingLog): void {
-    for (const existing of this.store.values()) {
-      if (existing.id === log.id) continue;
-      if (existing.planItemId !== log.planItemId) continue;
-      if (existing.userId !== log.userId) continue;
+  get findFilters(): readonly ReadingLogFilter[] {
+    return this.findFiltersSeen.map((filter) => ({ ...filter }));
+  }
 
-      throw new Error(
-        `ReadingLogRepositoryFake: writing reading log ${log.id} violates unique(planItemId, userId) — ${existing.id} already belongs to user ${log.userId} on plan item ${log.planItemId}`,
-      );
-    }
+  private inReverseInsertionOrder(): ReadingLog[] {
+    return [...this.store.values()].reverse();
   }
 
   /**

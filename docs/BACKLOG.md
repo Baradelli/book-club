@@ -1840,7 +1840,101 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       Fica para um commit que **só** renomeie, com o `diff` 12→12 provando que nenhum sumiu._
       _**Gates:** `test` · `typecheck` · `lint` · `prettier --check` · `build` limpos.
       `shared`, `ui`, `app` e `prisma/` **intocados**._
-- [ ] **32** — Repo Prisma + rotas + progresso na tela do livro. → _a detalhar_
+- [x] **32** — Repo Prisma + rotas do `ReadingLog`. ⚠️ **FATIA DIVIDIDA pelo orquestrador**:
+      a tela é a **32b**, e a lacuna que esta fatia descobriu é a **32c**.
+      → `tasks/32-prisma-rotas-reading-log.md`
+      _**O "LI" SOBREVIVE AO RECARREGAR.** Entregue: `model ReadingLog` + migration
+      (`20260910165956_reading_log`, gerada pelo Prisma), `find(filter)` no port **com a
+      implementação Prisma na mesma unidade** (§6.9), o repositório com contrato,
+      `PUT`/`DELETE /plan-items/:planItemId/reading-log`, e o `readers` na resposta do livro.
+      **426 shared** (era 415) **· 195 ui** (intocado) **· 1399 backend** (era 1382) **· 620
+      app** (intocado). **Integração 436** (era 387). Chunk **416.251 B** (+144), folga
+      33.749. Banco conferido por consulta: `ReadingLog` em **0** linhas, zero fixture `t32`,
+      super-admin do seed intacto com o mesmo `createdAt`._
+      _**Por que dividida, com o número:** a fatia irmã do MVP 2 — a **24**, "Repo Prisma +
+      rotas" do grifo — custou **4.324 inserções em 16 arquivos**, e a tela foi a **25**,
+      separada. Juntar tela aqui faria uma fatia do tamanho de duas das maiores do MVP 2._
+      _**Escopo cortado por medição:** **não** existe `GET /books/:bookId/readers`. O app
+      **nunca chama** a `/books/:bookId/writers` equivalente — ele lê o `writers` do
+      `GET /books/:bookId` (`book.tsx:289`). Aquela rota existe **sem cliente** desde a
+      Tarefa 11; criar a gêmea repetiria um erro já pago._
+      _**⚠️ O ACHADO ALTO: 500 no gesto central da fatia seguinte.** O `save` fazia upsert por
+      `id`, então dois `PUT` concorrentes no mesmo dia geravam ids diferentes, os dois viravam
+      INSERT, e o segundo violava o índice → `P2002`. Conferido elo por elo pelo orquestrador:
+      `grep P2002` no `handle-domain-error.ts` devolve **nada** (não é erro de domínio, cai no
+      handler genérico → **500**), e o `prisma-note-repository.ts:149` documenta, palavra por
+      palavra, que é por isso que a nota mira o índice composto. O executor havia registrado a
+      corrida com honestidade exemplar no docblock ("é o registrado, não o desejado"), mas
+      **duas premissas dele caíram**: a janela não é "um toque duplo em milissegundos", é a
+      **latência do round-trip** (200 ms–1 s em rede ruim) mais o retry da fila offline; e as
+      regras 5 e 6 da spec **não o obrigavam** — a regra 5 é sobre o índice morder, e isso se
+      prova melhor com um `create` cru. Consertado: upsert em `planItemId_userId`, com os dois
+      lados medidos._
+      _**⚠️ E o conserto obrigou uma correção que ninguém pediu — a 7ª aparição do §7.1.** Com
+      o Prisma passando a fazer upsert no par, o **fake** que lançava ficou **mais restritivo
+      que o banco** — a direção que o §7.1 diz esconder melhor, porque a suíte fica verde. O
+      executor viu e corrigiu no mesmo commit, em vez de plantar o bug que o próprio arquivo
+      existe para avisar._
+      _**⚠️ DÍVIDA ALHEIA DESCOBERTA, medida pelo orquestrador e NÃO consertada:** o
+      `NoteRepositoryFake.save` **lança** no par duplicado (`assertUniquePlanItemAndUser`)
+      enquanto o `PrismaNoteRepository.save` faz **upsert no índice composto** — a **mesma**
+      divergência, viva desde a Tarefa 11. Medido: **exatamente um** teste a pina
+      (`refuses a second note of the same author on the same plan item`), e ele codifica um
+      comportamento que o repositório real não tem. Fica para quem reabrir o fake da nota._
+      _**O outro ALTO, e a decisão do orquestrador: `readers` é `.optional()` — FASE 1 de
+      propósito.** Obrigatório derruba **164 testes em 7 arquivos** do app (que a spec proibia
+      tocar) e `.default([])` **não compila** contra o `RequestOptions.schema`. Medido pelo
+      orquestrador: **não há factory compartilhado no app**, os 7 arquivos montam a resposta à
+      mão — fechar agora seria churn nos mesmos arquivos que a 32b abre. **O preço está
+      medido e escrito:** o handler que **esquece** o `readers` compila e passa em
+      **1399/1399** unitários (mutação do orquestrador em `book-routes.ts`); os únicos
+      acusadores são **4, todos em integração, num `describe` só**. **A fase 2 é regra dura da
+      primeira unidade da 32b** — dívida com prazo é decisão._
+      _**A afirmação do `P2025` foi MEDIDA e o rótulo trocado pelo fato:** `delete` levanta
+      `P2025`, `deleteMany` devolve `{count: 0}`. E virou **teste permanente** — sem ele,
+      "escolhemos `deleteMany`" e "`delete` também serviria" dariam o mesmo resultado
+      observável, e a prescrição seria superstição._
+      _**Outros achados corrigidos:** uma **asserção vazia** (`asks the database for every
+      row, with no LIMIT` rodava `EXPLAIN` sobre uma consulta escrita **à mão no teste**, não
+      sobre a que o repositório emite — um `take: 500` a deixaria verde; trocada por captura
+      do SQL realmente emitido, e de brinde descobriu-se que o Prisma acrescenta `ORDER BY id`
+      junto do `take`, dando um segundo acusador); **4 dos 5 testes de 404 sem precondição do
+      próprio verbo** (o falso verde do Fastify — medido: com a rota desregistrada, o bloco
+      isolado ficava todo verde; agora 4 e 5 acusam); e prosa falsa num teste cujo `ghostDay`
+      **tinha** sido marcado._
+      _**A recusa do `FIND_ROW_LIMIT` ficou, e agora com o número:** ~30 dias × 2–10 membros =
+      **60 a 300** linhas; patológico ~3.000 ≈ **1,2 MB** contra os **3,4 MB** que o
+      `take: 500` da nota permite (a linha de log é ~17× mais barata: sem o `doc`). E um
+      `take` aqui seria **a falha**, não a válvula — a sobreposição perderia leitores em
+      silêncio._
+      _**Decisão registrada (o orquestrador pediu, o executor mediu): NÃO extrair o
+      `planItemForActor`.** O preâmbulo está verbatim em três UseCases, mas o retorno útil é
+      **assimétrico** — o `markRead` usa o livro, o `unmarkRead` o **descarta** (só quer o
+      efeito do guard), o `upsertPlanNote` usa o `planItem.title`. Um par `{ planItem, book }`
+      não é o retorno certo em um dos três. Fica para o quarto chamador._
+      _**Dívidas registradas:** a **32c** (abaixo); e **não há checagem de drift**
+      `schema.prisma` × migrations no repositório — se alguém tirar o `@@unique` do schema sem
+      gerar migration, os dois guardas do índice ficam verdes e o estrago aparece na próxima
+      `migrate dev` de outra pessoa. É do repositório inteiro, não desta tabela._
+      _**Gates:** os cinco limpos, verificados pelo orquestrador. `ui` e `app` intocados._
+
+- [ ] **32b** — A marca de leitura na tela do livro. ⚠️ **FATIA INSERIDA**, e a **primeira
+      unidade dela encerra a fase 2 do `readers`** (tirar o `.optional()`), antes da tela.
+      → _a detalhar_
+
+- [ ] **32c** — `replacePlanItems` recusa remover dia que já tem LEITURA. ⚠️ **FATIA
+      INSERIDA**, com o motivo medido na 32. → _a detalhar_
+      _**A lacuna, medida e pinada em teste na Tarefa 32:** a guarda de domínio do
+      `replacePlanItems` consulta **só `Note`** (`planItemIdsWithAnyNote`), então um dia do
+      plano que tem **só leitura** passa por ela e estoura na **FK** — vira **500** em vez do
+      **400** com mensagem. O dado **fica a salvo** (`replaceForBook` roda em `$transaction`).
+      É **caso de terça-feira**, não raro: o admin edita o plano do livro do mês e basta uma
+      pessoa ter marcado "li" sem escrever nota — e pior, a guarda de nota **funciona**, então
+      o admin aprende que o sistema recusa com mensagem clara e é surpreendido por um 500 mudo
+      no caso irmão. **Foi a Tarefa 32 que introduziu este caminho.** O conserto cabe no port
+      como está (`logs.find({bookId})` intersectado com `removeIds`), mas cresce o construtor
+      do `ReplacePlanItems` para cinco dependências e mexe em `book-routes.ts` e em toda
+      instanciação do teste dele — unidade com auditoria própria._
 
 ### Bloco H — Atividade
 

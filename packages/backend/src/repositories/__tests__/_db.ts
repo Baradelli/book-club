@@ -46,6 +46,7 @@ export interface Fixtures {
   inviteIds?: string[];
   membershipIds?: string[];
   highlightIds?: string[];
+  readingLogIds?: string[];
   noteIds?: string[];
   planItemIds?: string[];
   bookIds?: string[];
@@ -63,6 +64,7 @@ export async function removeFixtures(fixtures: Fixtures): Promise<void> {
     inviteIds = [],
     membershipIds = [],
     highlightIds = [],
+    readingLogIds = [],
     noteIds = [],
     planItemIds = [],
     bookIds = [],
@@ -90,6 +92,19 @@ export async function removeFixtures(fixtures: Fixtures): Promise<void> {
   // há FK entre as duas tabelas.
   if (highlightIds.length > 0) {
     await prisma.highlight.deleteMany({ where: { id: { in: highlightIds } } });
+  }
+  // O log de leitura antes do plano, do livro, do clube e do usuário: as
+  // QUATRO relações do `ReadingLog` são obrigatórias e saem
+  // `ON DELETE RESTRICT` (a do `planItem` está declarada explicitamente no
+  // schema; as outras três são o default do Prisma para relação obrigatória, e
+  // o SQL da migration `20260910165956_reading_log` confirma as quatro). Sem
+  // isto a limpeza estoura na FK, e um teste que falhe no meio vaza fixture no
+  // banco de desenvolvimento do dono. Não tem ordem obrigatória em relação à
+  // nota nem ao grifo: não há FK entre essas tabelas.
+  if (readingLogIds.length > 0) {
+    await prisma.readingLog.deleteMany({
+      where: { id: { in: readingLogIds } },
+    });
   }
   // A nota antes do plano: `Note.planItemId` é ON DELETE RESTRICT (declarado
   // EXPLICITAMENTE no schema — para relação opcional o default do Prisma seria

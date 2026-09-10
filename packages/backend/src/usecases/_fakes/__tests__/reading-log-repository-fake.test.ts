@@ -10,23 +10,15 @@ const PLAN_ITEM_ID = 'plan-book-1-2026-10-01';
 const OTHER_PLAN_ITEM_ID = 'plan-book-1-2026-10-02';
 const READ_ISO = '2026-10-01T18:30:00.000Z';
 
-async function caught(promise: Promise<unknown>): Promise<Error> {
-  try {
-    await promise;
-  } catch (error) {
-    if (error instanceof Error) return error;
-    throw new Error(`expected an Error, got ${typeof error}`);
-  }
-  throw new Error('expected the promise to reject, but it resolved');
-}
-
 /**
  * Regra 21 — o fake do log de leitura tem suíte própria, como os onze fakes
  * anteriores.
  *
- * O port tem `save` · `byPlanItemAndUser` · `delete`, e **só**: o `find` chega
- * na Tarefa 32, junto da implementação Prisma que o satisfaz. Não há `update`
- * — o log é imutável por decisão fechada do MVP 3.
+ * O port tem `save` · `byPlanItemAndUser` · `find` · `delete`. Nasceu com os
+ * três primeiros na Tarefa 30; o `find` chegou na **32**, junto da
+ * implementação Prisma que o satisfaz — que é o que o §6.9 exige de quem
+ * cresce um port. Não há `update`: o log é imutável por decisão fechada do
+ * MVP 3.
  */
 describe('ReadingLogRepositoryFake', () => {
   let logs: ReadingLogRepositoryFake;
@@ -129,9 +121,14 @@ describe('ReadingLogRepositoryFake', () => {
       expect(logs.saveCalls).toBe(2);
     });
 
-    // Conta a CHAMADA, não o sucesso: a escrita que o índice recusou também foi
-    // uma tentativa, e é isso que o teste do UseCase quer saber (§7.3).
-    it('counts the save call the unique index refused', async () => {
+    /**
+     * Conta a CHAMADA, e aqui a segunda **converge** sobre a primeira em vez
+     * de ser recusada — é a rodada de correção da Tarefa 32 (achado 1). O
+     * contador continua sendo o que separa "não chamou" de "chamou e a linha
+     * não mudou de número" (§7.3): sem ele, `saved.length === 1` sozinho não
+     * distingue as duas.
+     */
+    it('counts the save call that converged onto an existing pair', async () => {
       await logs.save(
         aReadingLog({
           id: 'log-a',
@@ -140,15 +137,13 @@ describe('ReadingLogRepositoryFake', () => {
         }),
       );
 
-      await expect(
-        logs.save(
-          aReadingLog({
-            id: 'log-b',
-            planItemId: PLAN_ITEM_ID,
-            userId: READER_ID,
-          }),
-        ),
-      ).rejects.toThrow();
+      await logs.save(
+        aReadingLog({
+          id: 'log-b',
+          planItemId: PLAN_ITEM_ID,
+          userId: READER_ID,
+        }),
+      );
 
       expect(logs.saveCalls).toBe(2);
       expect(logs.saved).toHaveLength(1);
@@ -159,27 +154,81 @@ describe('ReadingLogRepositoryFake', () => {
    * ⚠️ Regra 17 — **A FIDELIDADE NAS DUAS DIREÇÕES** (§7.1), e já são **seis**
    * aparições desta classe de bug no projeto.
    *
-   * A pergunta é sempre "o Postgres faria isto?", e ela tem de ser respondida
-   * nos dois sentidos:
+   * ⚠️⚠️ **ESTE BLOCO MUDOU DE VEREDITO NA RODADA DE CORREÇÃO DA TAREFA 32, e
+   * o motivo é a lição inteira.** Ele nascia (Tarefa 30) afirmando que o
+   * segundo `save` do mesmo par é **recusado**, porque supunha que o
+   * repositório Prisma faria upsert por `id`. A 32 implementou assim, e o
+   * revisor mediu que aquilo produzia **500** no gesto central da 32b: o
+   * `handle-domain-error.ts` não mapeia `P2002`, e a janela da corrida não é
+   * "um toque duplo em milissegundos" — é a latência do round-trip mais o
+   * retry da fila offline. O `save` passou a mirar o índice composto, como o
+   * `PrismaNoteRepository`, e **o segundo `save` do mesmo par agora
+   * ATUALIZA**.
    *
-   * - **Restritiva demais** é a que esconde melhor, porque a suíte fica verde:
-   *   um fake que recusasse o mesmo `planItemId` com **outro** `userId` faria
-   *   "duas pessoas leram o mesmo dia" — o caso central do produto — nascer
-   *   provando o comportamento errado. → ADR 0007.
-   * - **Permissiva demais**: um fake que aceitasse o segundo `save` do mesmo
-   *   par esconderia o `P2002` que o Postgres vai dar na Tarefa 32, e a
-   *   idempotência do `markRead` passaria verde com um segundo `INSERT`.
+   * Se este arquivo tivesse ficado como estava, o fake seria **mais
+   * restritivo que o banco** — a direção do §7.1 que esconde melhor, porque a
+   * suíte fica verde: ele recusaria o que o Postgres aceita, e o caso legítimo
+   * (a corrida convergindo) nunca teria teste. A pergunta é sempre "o Postgres
+   * faria isto?", e a resposta mudou junto com a chamada de Prisma.
+   *
+   * As duas direções que continuam valendo, e as duas são o produto:
+   *
+   * - o clube inteiro lê o mesmo trecho (mesmo `planItemId`, outro `userId`);
+   * - a pessoa lê o livro um dia por vez (mesmo `userId`, outro `planItemId`).
+   *
+   * Um fake que recusasse qualquer um dos dois faria o caso central nascer
+   * provando o comportamento errado (→ ADR 0007).
+   *
+   * ⚠️ **O `P2002` NÃO desapareceu — mudou de porta.** O índice continua
+   * mordendo um `INSERT` cru do mesmo par, e é isso que o teste de contrato
+   * `states the precondition: a raw insert of the same pair raises P2002`
+   * prova contra o Postgres. O que este fake emula é o `save`, e o `save` não
+   * passa mais por lá.
    *
    * ⚠️ E a diferença em relação ao `NoteRepositoryFake`, que é o vizinho de
    * onde este fake foi copiado: **aqui não existe a metade do `NULL`**. O
    * `Note.planItemId` é anulável (é o que faz a anotação avulsa existir), e o
    * índice único do Postgres não compara `NULL` com `NULL`, então N avulsas do
    * mesmo autor convivem. `ReadingLog.planItemId` é **não anulável** — não há
-   * leitura avulsa —, então aquela fidelidade não tem o que emular aqui.
+   * leitura avulsa —, então aquela fidelidade não tem o que emular aqui. Nota
+   * de dívida ALHEIA, medida nesta rodada e **não** consertada: o
+   * `NoteRepositoryFake.save` ainda **lança** no par duplicado enquanto o
+   * `PrismaNoteRepository.save` faz upsert no índice composto — é a mesma
+   * divergência que este arquivo acabou de corrigir, na tabela do lado.
    */
-  describe('unique(planItemId, userId)', () => {
-    it('refuses a second log of the same reader on the same plan item', async () => {
+  describe('upsert on (planItemId, userId)', () => {
+    it('overwrites the row of the same pair instead of adding a second', async () => {
       await logs.save(
+        aReadingLog({
+          id: 'log-a',
+          planItemId: PLAN_ITEM_ID,
+          userId: READER_ID,
+          readAt: new Date('2026-10-01T06:00:00.000Z'),
+        }),
+      );
+
+      await logs.save(
+        aReadingLog({
+          id: 'log-b',
+          planItemId: PLAN_ITEM_ID,
+          userId: READER_ID,
+          readAt: new Date(READ_ISO),
+        }),
+      );
+
+      expect(logs.saved).toHaveLength(1);
+      expect(required(logs.saved[0]).readAt.toISOString()).toBe(READ_ISO);
+    });
+
+    /**
+     * ⚠️ O `id` do segundo `save` é **DESCARTADO**, e a linha mantém o do
+     * primeiro — é o que o upsert no índice composto faz no Postgres, provado
+     * lá pelo contrato (`keeps the id of the first row when a second save
+     * carries the same pair`). Sem esta asserção, um fake que trocasse a chave
+     * primária na convergência passaria no teste de cima.
+     */
+    it('keeps the id of the first row, and returns it', async () => {
+      const first = await logs.save(
         aReadingLog({
           id: 'log-a',
           planItemId: PLAN_ITEM_ID,
@@ -187,15 +236,17 @@ describe('ReadingLogRepositoryFake', () => {
         }),
       );
 
-      await expect(
-        logs.save(
-          aReadingLog({
-            id: 'log-b',
-            planItemId: PLAN_ITEM_ID,
-            userId: READER_ID,
-          }),
-        ),
-      ).rejects.toThrow(/unique\(planItemId, userId\)/);
+      const second = await logs.save(
+        aReadingLog({
+          id: 'log-b',
+          planItemId: PLAN_ITEM_ID,
+          userId: READER_ID,
+        }),
+      );
+
+      expect(second.id).toBe(first.id);
+      expect(second.id).toBe('log-a');
+      expect(logs.saved.map((log) => log.id)).toEqual(['log-a']);
     });
 
     // A OUTRA direção, e é o caso central do produto: o clube inteiro lê o
@@ -237,49 +288,34 @@ describe('ReadingLogRepositoryFake', () => {
       expect(logs.saved).toHaveLength(1);
     });
 
-    it('refuses before writing: the store keeps only the first log', async () => {
+    /**
+     * ⚠️ **A CORRIDA DO `markRead`, no fake**: dois `execute` que leram `null`
+     * no `byPlanItemAndUser` chegam com ids diferentes e o mesmo par, e o
+     * `save` **não lança** — é o irmão em memória de
+     * `does not throw and leaves one row when two saves of the same pair race`
+     * do teste de contrato.
+     *
+     * O `Promise.all` aqui não cria concorrência de verdade (o fake é
+     * síncrono); o que ele registra é a FORMA da chamada, e ela é a que a 32b
+     * vai produzir.
+     */
+    it('does not throw when two saves of the same pair race', async () => {
       const first = aReadingLog({
         id: 'log-a',
         planItemId: PLAN_ITEM_ID,
         userId: READER_ID,
       });
-      await logs.save(first);
+      const second = aReadingLog({
+        id: 'log-b',
+        planItemId: PLAN_ITEM_ID,
+        userId: READER_ID,
+      });
 
-      await expect(
-        logs.save(
-          aReadingLog({
-            id: 'log-b',
-            planItemId: PLAN_ITEM_ID,
-            userId: READER_ID,
-          }),
-        ),
-      ).rejects.toThrow();
+      const [a, b] = await Promise.all([logs.save(first), logs.save(second)]);
 
-      expect(logs.saved).toEqual([first]);
-    });
-
-    // Contrato do fake, não regra de domínio: quem cair aqui escreveu um log
-    // que o Postgres recusaria, e isso é bug de código, não entrada de usuário.
-    it('signals an index violation with a raw Error, never a domain error', async () => {
-      await logs.save(
-        aReadingLog({
-          id: 'log-a',
-          planItemId: PLAN_ITEM_ID,
-          userId: READER_ID,
-        }),
-      );
-
-      const error = await caught(
-        logs.save(
-          aReadingLog({
-            id: 'log-b',
-            planItemId: PLAN_ITEM_ID,
-            userId: READER_ID,
-          }),
-        ),
-      );
-
-      expect(error.name).toBe('Error');
+      expect(a.id).toBe(b.id);
+      expect([first.id, second.id]).toContain(a.id);
+      expect(logs.saved).toHaveLength(1);
     });
   });
 
@@ -436,6 +472,170 @@ describe('ReadingLogRepositoryFake', () => {
       await logs.delete('log-que-nunca-existiu');
 
       expect(logs.deleteCalls).toBe(2);
+    });
+  });
+
+  /**
+   * O `find(filter)` da Tarefa 32 — o que serve "quem já leu cada dia deste
+   * livro" à resposta do livro e ao `computeBookProgress`.
+   *
+   * O filtro é `{ bookId, userId?, planItemId? }` e **não** tem `clubId`
+   * (decisão F): quem corta o tenant é o `bookForActor`, que resolve o clube
+   * pelo livro. Um `clubId` aqui criaria uma **segunda** regra de tenant para
+   * manter em dia com aquela.
+   */
+  describe('find', () => {
+    const BOOK_ID = 'book-1';
+    const OTHER_BOOK_ID = 'book-2';
+
+    /** Um log de um livro/dia/leitor, com id derivado dos três. */
+    async function seed(
+      bookId: string,
+      planItemId: string,
+      userId: string,
+    ): Promise<ReadingLog> {
+      return await logs.save(
+        aReadingLog({
+          id: `log-${bookId}-${planItemId}-${userId}`,
+          bookId,
+          planItemId,
+          userId,
+        }),
+      );
+    }
+
+    it('returns only the logs of the asked book', async () => {
+      const mine = await seed(BOOK_ID, PLAN_ITEM_ID, READER_ID);
+      await seed(OTHER_BOOK_ID, OTHER_PLAN_ITEM_ID, READER_ID);
+
+      await expect(logs.find({ bookId: BOOK_ID })).resolves.toEqual([mine]);
+    });
+
+    it('narrows by userId', async () => {
+      const mine = await seed(BOOK_ID, PLAN_ITEM_ID, READER_ID);
+      await seed(BOOK_ID, PLAN_ITEM_ID, OTHER_READER_ID);
+
+      await expect(
+        logs.find({ bookId: BOOK_ID, userId: READER_ID }),
+      ).resolves.toEqual([mine]);
+    });
+
+    it('narrows by planItemId', async () => {
+      const first = await seed(BOOK_ID, PLAN_ITEM_ID, READER_ID);
+      await seed(BOOK_ID, OTHER_PLAN_ITEM_ID, READER_ID);
+
+      await expect(
+        logs.find({ bookId: BOOK_ID, planItemId: PLAN_ITEM_ID }),
+      ).resolves.toEqual([first]);
+    });
+
+    /**
+     * Os filtros entram em **AND**, não em OR: cada um sozinho casa mais de um
+     * log, e juntos casam um só. Sem este par, um `find` que ignorasse um dos
+     * campos passaria nos dois testes de cima.
+     */
+    it('combines every filter with AND', async () => {
+      const target = await seed(BOOK_ID, PLAN_ITEM_ID, READER_ID);
+      await seed(BOOK_ID, PLAN_ITEM_ID, OTHER_READER_ID);
+      await seed(BOOK_ID, OTHER_PLAN_ITEM_ID, READER_ID);
+
+      await expect(
+        logs.find({
+          bookId: BOOK_ID,
+          planItemId: PLAN_ITEM_ID,
+          userId: READER_ID,
+        }),
+      ).resolves.toEqual([target]);
+      // Um campo trocado e o resultado é vazio — é o que prova que é AND.
+      await expect(
+        logs.find({
+          bookId: BOOK_ID,
+          planItemId: OTHER_PLAN_ITEM_ID,
+          userId: OTHER_READER_ID,
+        }),
+      ).resolves.toEqual([]);
+    });
+
+    // Campo AUSENTE não filtra por ele — é o que faz `{ bookId }` sozinho
+    // devolver o livro inteiro, que é o caso da sobreposição da tela.
+    it('does not filter by a field the filter omits', async () => {
+      await seed(BOOK_ID, PLAN_ITEM_ID, READER_ID);
+      await seed(BOOK_ID, PLAN_ITEM_ID, OTHER_READER_ID);
+      await seed(BOOK_ID, OTHER_PLAN_ITEM_ID, READER_ID);
+
+      expect(await logs.find({ bookId: BOOK_ID })).toHaveLength(3);
+    });
+
+    it('returns an empty list for a book nobody read', async () => {
+      await seed(BOOK_ID, PLAN_ITEM_ID, READER_ID);
+
+      await expect(logs.find({ bookId: 'book-fantasma' })).resolves.toEqual([]);
+    });
+
+    /**
+     * ⚠️ A ARMADILHA DO §7.2 vale para o `find` também, e é aqui que ela é
+     * assunto: o port **não promete ordem**, e o fake enumera INVERTIDO de
+     * propósito. Quem consome (`groupReadersByPlanItem`) ordena pelo plano.
+     */
+    it('enumerates in reverse insertion order', async () => {
+      await seed(BOOK_ID, 'plan-b-inserido-1o', READER_ID);
+      await seed(BOOK_ID, 'plan-a-inserido-2o', READER_ID);
+      await seed(BOOK_ID, 'plan-c-inserido-3o', READER_ID);
+
+      expect((await logs.find({ bookId: BOOK_ID })).map((l) => l.planItemId)) //
+        .toEqual([
+          'plan-c-inserido-3o',
+          'plan-a-inserido-2o',
+          'plan-b-inserido-1o',
+        ]);
+    });
+
+    // Clona na saída, como o `saved`: o store nunca devolve referência sua.
+    it('does not let the caller mutate the store through what find returned', async () => {
+      await logs.save(
+        aReadingLog({
+          id: 'log-a',
+          bookId: BOOK_ID,
+          readAt: new Date(READ_ISO),
+        }),
+      );
+
+      const [found] = await logs.find({ bookId: BOOK_ID });
+      required(found).readAt.setFullYear(1999);
+
+      expect(required(logs.saved[0]).readAt.toISOString()).toBe(READ_ISO);
+    });
+
+    /**
+     * O contador, com o lado POSITIVO também (§7.3, e o §7.4 logo atrás): ele
+     * existe para o `getBookWithPlan` poder afirmar que o corte de tenant
+     * **recusou antes de ler** — quem não é membro ativo não gera nem uma
+     * consulta ao registro de leitura do clube.
+     */
+    it('counts every find call', async () => {
+      expect(logs.findCalls).toBe(0);
+
+      await logs.find({ bookId: BOOK_ID });
+      await logs.find({ bookId: OTHER_BOOK_ID });
+
+      expect(logs.findCalls).toBe(2);
+    });
+
+    /**
+     * E o que o contador NÃO distingue: "o filtro foi para o repositório" ×
+     * "o resultado deu certo" (§7.3). O `findFilters` guarda uma **cópia** de
+     * cada filtro, e é o que deixa o `getBookWithPlan` provar que manda UM
+     * filtro só, com o `bookId` e nada à toa.
+     */
+    it('pins a copy of every filter it was given', async () => {
+      const filter = { bookId: BOOK_ID, userId: READER_ID };
+
+      await logs.find(filter);
+      filter.userId = OTHER_READER_ID;
+
+      expect(logs.findFilters).toEqual([
+        { bookId: BOOK_ID, userId: READER_ID },
+      ]);
     });
   });
 

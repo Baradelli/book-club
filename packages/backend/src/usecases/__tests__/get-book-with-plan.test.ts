@@ -3,15 +3,18 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { Book, ReadingPlanItem } from '../../domain/book';
 import { BookNotFoundError, NotAMemberError } from '../../domain/errors';
 import type { Note } from '../../domain/note';
+import type { ReadingLog } from '../../domain/reading-log';
 import {
   aBook,
   aMembership,
   aNote,
   aPlanItem,
+  aReadingLog,
 } from '../../test-support/builders';
 import { BookRepositoryFake } from '../_fakes/book-repository-fake';
 import { MembershipRepositoryFake } from '../_fakes/membership-repository-fake';
 import { NoteRepositoryFake } from '../_fakes/note-repository-fake';
+import { ReadingLogRepositoryFake } from '../_fakes/reading-log-repository-fake';
 import { ReadingPlanItemRepositoryFake } from '../_fakes/reading-plan-item-repository-fake';
 import { AssertMembership } from '../assert-membership';
 import type { GetBookWithPlanInput } from '../get-book-with-plan';
@@ -74,6 +77,7 @@ describe('GetBookWithPlan', () => {
   let books: BookRepositoryFake;
   let plan: ReadingPlanItemRepositoryFake;
   let notes: NoteRepositoryFake;
+  let logs: ReadingLogRepositoryFake;
   let useCase: GetBookWithPlan;
   let stored: Book;
 
@@ -82,11 +86,13 @@ describe('GetBookWithPlan', () => {
     books = new BookRepositoryFake();
     plan = new ReadingPlanItemRepositoryFake();
     notes = new NoteRepositoryFake();
+    logs = new ReadingLogRepositoryFake();
     useCase = new GetBookWithPlan(
       new AssertMembership(memberships),
       books,
       plan,
       notes,
+      logs,
     );
 
     stored = aBook({ id: BOOK_ID, clubId: CLUB_ID });
@@ -130,6 +136,16 @@ describe('GetBookWithPlan', () => {
       clubId: CLUB_ID,
       bookId: BOOK_ID,
       ...overrides,
+    });
+  }
+
+  /** Uma leitura marcada. O id sai do par (dia, leitor), como no banco. */
+  function aDayLog(planItemId: string, userId: string): ReadingLog {
+    return aReadingLog({
+      clubId: CLUB_ID,
+      bookId: BOOK_ID,
+      planItemId,
+      userId,
     });
   }
 
@@ -280,26 +296,50 @@ describe('GetBookWithPlan', () => {
 
       expect(plan.findByBookCalls).toBe(0);
       expect(notes.planItemWritersByBookCalls).toBe(0);
+      // ⚠️ E o REGISTRO DE LEITURA também: quem já leu cada dia é conteúdo
+      // do clube tanto quanto o plano e a anotação, e o §7.3 pede o contador
+      // para CADA leitura de conteúdo — foi a falta de um deles que deixou um
+      // mutante sobreviver a 906 testes na Tarefa 10.
+      expect(logs.findCalls).toBe(0);
     });
 
-    it('never reads the plan nor the notes when the book does not exist', async () => {
+    it('never reads the plan, the notes nor the reading logs when the book does not exist', async () => {
       await expect(
         useCase.execute(validInput({ bookId: 'book-ghost' })),
       ).rejects.toBeInstanceOf(BookNotFoundError);
 
       expect(plan.findByBookCalls).toBe(0);
       expect(notes.planItemWritersByBookCalls).toBe(0);
+      expect(logs.findCalls).toBe(0);
     });
 
     // O lado POSITIVO do contador: sem ele, um incremento apagado deixaria
     // todo `toBe(0)` acima passar por acidente. → §7.3.
-    it('reads the plan and the notes exactly once for a member', async () => {
+    it('reads the plan, the notes and the reading logs exactly once for a member', async () => {
       await seedThreeDayPlan();
 
       await useCase.execute(validInput());
 
       expect(plan.findByBookCalls).toBe(1);
       expect(notes.planItemWritersByBookCalls).toBe(1);
+      expect(logs.findCalls).toBe(1);
+    });
+
+    /**
+     * ⚠️ E o que o contador NÃO distingue (§7.3): que o filtro que foi ao
+     * repositório é **UM só**, com o `bookId` do livro e **nenhuma chave à
+     * toa**. Um `find` por dia (N idas ao banco) e um `find({ bookId })`
+     * devolvem exatamente a mesma sobreposição — só o `findFilters` os separa.
+     *
+     * E o `bookId` é o do LIVRO RESOLVIDO (`book.id`), não o do input: é o
+     * mesmo motivo pelo qual o `clubId` não está no `ReadingLogFilter`.
+     */
+    it('asks the reading logs for the whole book, in one filter and with no spare key', async () => {
+      await seedThreeDayPlan();
+
+      await useCase.execute(validInput());
+
+      expect(logs.findFilters).toEqual([{ bookId: BOOK_ID }]);
     });
   });
 
@@ -412,6 +452,137 @@ describe('GetBookWithPlan', () => {
     });
   });
 
+  /**
+   * O `readers` — a Tarefa 32, e é a sobreposição irmã do `writers`.
+   *
+   * O agrupamento em si é do `groupReadersByPlanItem`, que delega ao
+   * `groupUsersByPlanItem` (Tarefa 31): as três propriedades da saída (ordem
+   * do plano, nenhum `planItemId` de fora, nenhum dia vazio) estão testadas
+   * lá, uma vez só. Aqui prova-se a FIAÇÃO — que o campo existe, que sai na
+   * ordem do plano, e que ele é INDEPENDENTE do `writers`.
+   */
+  describe('readers', () => {
+    beforeEach(seedThreeDayPlan);
+
+    it('returns who already read each day of the plan', async () => {
+      await logs.save(aDayLog(DAY_1_ID, ZECA_ID));
+      await logs.save(aDayLog(DAY_1_ID, ANA_ID));
+      await logs.save(aDayLog(DAY_3_ID, ANA_ID));
+
+      const { readers } = await useCase.execute(validInput());
+
+      expect(readers).toEqual([
+        { planItemId: DAY_1_ID, userIds: [ANA_ID, ZECA_ID] },
+        { planItemId: DAY_3_ID, userIds: [ANA_ID] },
+      ]);
+    });
+
+    // Ordem do PLANO, não a que o repositório enumerou — o fake enumera
+    // invertido de propósito (§7.2), e os fixtures entram fora de ordem.
+    it('orders the overlay by the plan order', async () => {
+      await logs.save(aDayLog(DAY_3_ID, ANA_ID));
+      await logs.save(aDayLog(DAY_1_ID, ANA_ID));
+      await logs.save(aDayLog(DAY_2_ID, ANA_ID));
+
+      const { readers } = await useCase.execute(validInput());
+
+      expect(readers.map((entry) => entry.planItemId)).toEqual([
+        DAY_1_ID,
+        DAY_2_ID,
+        DAY_3_ID,
+      ]);
+    });
+
+    // Livro que ninguém leu dá lista VAZIA, não três entradas vazias — e o
+    // campo existe, para a tela não ter de adivinhar.
+    it('returns an empty overlay for a book nobody read', async () => {
+      const { readers } = await useCase.execute(validInput());
+
+      expect(readers).toEqual([]);
+    });
+
+    /**
+     * ⚠️ **LER NÃO É ESCREVER, e as duas sobreposições são INDEPENDENTES.**
+     *
+     * É o teste que a decisão B da Tarefa 31 pede: `groupWritersByPlanItem` e
+     * `groupReadersByPlanItem` têm a mesma conta por dentro e a tipagem é
+     * estrutural, então trocar um pelo outro no `getBookWithPlan`
+     * **compilaria**. Com os dias e as pessoas escolhidos para não coincidir,
+     * essa troca acusa: quem leu o dia 1 é a ANA, quem escreveu nele é o ZECA,
+     * e o dia 2 tem leitura e nenhuma nota.
+     */
+    it('keeps the reading overlay independent from the writing one', async () => {
+      await notes.save(aDayNote({ planItemId: DAY_1_ID, userId: ZECA_ID }));
+      await notes.save(aDayNote({ planItemId: DAY_3_ID, userId: ZECA_ID }));
+      await logs.save(aDayLog(DAY_1_ID, ANA_ID));
+      await logs.save(aDayLog(DAY_2_ID, ANA_ID));
+
+      const { writers, readers } = await useCase.execute(validInput());
+
+      expect(writers).toEqual([
+        { planItemId: DAY_1_ID, userIds: [ZECA_ID] },
+        { planItemId: DAY_3_ID, userIds: [ZECA_ID] },
+      ]);
+      expect(readers).toEqual([
+        { planItemId: DAY_1_ID, userIds: [ANA_ID] },
+        { planItemId: DAY_2_ID, userIds: [ANA_ID] },
+      ]);
+    });
+
+    // A sobreposição de um livro não vaza para o outro, nem entre chamadas da
+    // MESMA instância (a rota compõe o UseCase uma vez e reusa por request).
+    it('does not leak the overlay between two executes of the same instance', async () => {
+      await books.save(aBook({ id: 'book-2', clubId: CLUB_ID }));
+      await plan.saveMany([
+        aPlanItem({ bookId: 'book-2', order: 0, date: '2026-11-01' }),
+      ]);
+      await logs.save(aDayLog(DAY_1_ID, ANA_ID));
+      await logs.save(
+        aReadingLog({
+          clubId: CLUB_ID,
+          bookId: 'book-2',
+          planItemId: 'plan-book-2-2026-11-01',
+          userId: ZECA_ID,
+        }),
+      );
+
+      const first = await useCase.execute(validInput());
+      const second = await useCase.execute(validInput({ bookId: 'book-2' }));
+      const third = await useCase.execute(validInput());
+
+      expect(first.readers).toEqual([
+        { planItemId: DAY_1_ID, userIds: [ANA_ID] },
+      ]);
+      expect(second.readers).toEqual([
+        { planItemId: 'plan-book-2-2026-11-01', userIds: [ZECA_ID] },
+      ]);
+      expect(third.readers).toEqual(first.readers);
+    });
+
+    /**
+     * ⚠️ **NENHUM CONTADOR NA SAÍDA** — progresso é presença, e é decisão do
+     * dono (`docs/ACEITE-MVP.md`, MVP 3, pergunta 1). A guarda é sobre as
+     * CHAVES da saída, e não sobre um número esperado: é o que faz um
+     * `readDays` acrescentado por engano ficar vermelho aqui, em vez de
+     * chegar ao `shared` e à tela.
+     */
+    it('returns no count, no total and no percentage', async () => {
+      await logs.save(aDayLog(DAY_1_ID, ANA_ID));
+
+      const output = await useCase.execute(validInput());
+
+      expect(Object.keys(output).sort()).toEqual([
+        'book',
+        'planItems',
+        'readers',
+        'writers',
+      ]);
+      for (const entry of output.readers) {
+        expect(Object.keys(entry).sort()).toEqual(['planItemId', 'userIds']);
+      }
+    });
+  });
+
   // Regra 19
   it('returns the book and its plan ordered by order', async () => {
     await seedThreeDayPlan();
@@ -437,6 +608,7 @@ describe('GetBookWithPlan', () => {
       books,
       reversing,
       notes,
+      logs,
     );
 
     // Pré-condição do teste: o repositório está realmente fora de ordem.

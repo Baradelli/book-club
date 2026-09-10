@@ -22,6 +22,7 @@ import { inviteRoutes } from '../routes/invite-routes';
 import { meRoutes } from '../routes/me-routes';
 import { noteRoutes } from '../routes/note-routes';
 import { publicRoutes } from '../routes/public-routes';
+import { readingLogRoutes } from '../routes/reading-log-routes';
 import { publicMessageForStatus } from './handle-domain-error';
 
 declare module '@fastify/jwt' {
@@ -312,6 +313,11 @@ export async function buildServer(
     // notaria — quem acusa é o bloco `authentication` do
     // `highlight-routes.integration.test.ts`.
     await api.register(highlightRoutes, { prisma });
+    // DENTRO do escopo autenticado, pelo mesmo motivo das rotas de grifo: as
+    // duas rotas de leitura nasceriam PÚBLICAS se o registro fosse para fora
+    // dele, e nada mais no projeto notaria — quem acusa é o bloco
+    // `authentication` do `reading-log-routes.integration.test.ts`.
+    await api.register(readingLogRoutes, { prisma });
   });
 
   return app;
