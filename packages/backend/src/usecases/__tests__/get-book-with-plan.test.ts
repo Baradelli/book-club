@@ -308,8 +308,11 @@ describe('GetBookWithPlan', () => {
    * `CLAUDE.md` diz que o `getBookWithPlan` devolve "livro + plano + quem já
    * escreveu", e agora rota, repositório e schema estão na mesma fatia.
    *
-   * O agrupamento em si é da função pura `groupWritersByPlanItem` e tem os
-   * testes dele no `domain/__tests__/plan-item-writers.test.ts`. Aqui prova-se
+   * O agrupamento em si é da função pura `groupWritersByPlanItem`; desde a
+   * Tarefa 31 a conta mora no `groupUsersByPlanItem`, e os 12 testes dela no
+   * `domain/__tests__/plan-item-groups.test.ts` (o
+   * `domain/__tests__/plan-item-writers.test.ts` guarda o que é do NOME).
+   * Aqui prova-se
    * a FIAÇÃO: que o campo existe, que sai na ordem do plano, e que o UseCase lê
    * pelo `planItemWritersByBook` (que filtra `ACTIVE` e ignora avulsa) em vez de
    * carregar o acervo com um `find`.

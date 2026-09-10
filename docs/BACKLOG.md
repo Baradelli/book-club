@@ -1769,8 +1769,77 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       quem repetir a sonda na Tarefa 37 não deve concluir que o helper nasceu._
       _**Gates:** `test` · `typecheck` · `lint` · `prettier --check` · `build` limpos.
       `shared`, `ui`, `app` e `prisma/` **intocados** (`git status` vazio)._
-- [ ] **31** — UseCase `computeBookProgress` (por pessoa e do clube, puro — **TDD pesado**).
-      → _a detalhar_
+- [x] **31** — A sobreposição de leitura, e o agrupamento ganha **um dono só**.
+      → `tasks/31-sobreposicao-de-leitura.md`
+      _**⚠️ A FATIA ERA MENOR DO QUE O BACKLOG DIZIA, e a medição foi a entrega.** Esta linha
+      pedia `computeBookProgress` "por pessoa e do clube, **TDD pesado**". Medido **antes** de
+      escrever a spec: (a) o agrupamento que ela precisa **já existia e já tinha 12 testes**
+      (`groupWritersByPlanItem`, cobrindo plano vazio, duas pessoas no mesmo dia, autor
+      repetido, `planItemId` fora do plano, plano fora de ordem e não-mutação); (b) o
+      `ReadingLog` **já atravessava esse agrupamento sem uma linha de mudança** — confirmado
+      com sonda de compilação (`tsc --noEmit` limpo, sonda apagada), porque `PlanItemWriter`
+      é `{planItemId, userId}` e a tipagem estrutural aceita. É a situação da **Tarefa 26** do
+      MVP 2. **415 shared · 195 ui · 1382 backend** (era 1377) **· 620 app**; chunk
+      **416.107 B**, inalterado. Integração **não rodada** (não toca repositório nem rota)._
+      _**O que a fatia de fato entregou:** o agrupamento virou **um** módulo neutro
+      (`plan-item-groups.ts`), com os 12 testes se **mudando** para lá, e `writers`/`readers`
+      viraram duas chamadoras de **uma linha**. É o `CONVENCOES-CODIGO` §7.1 executando a
+      própria previsão: *"o padrão a copiar quando uma fidelidade aparecer no terceiro fake (o
+      MVP 3 traz `ReadingLog` e `ActivityEvent`): **extrair, não cobrir duas vezes**"`._
+      _**⚠️ O ATALHO FOI RECUSADO DE PROPÓSITO.** `groupWritersByPlanItem(plan, logs)`
+      compilava hoje, sem tocar em nada. Recusado porque **o nome mentiria** — e a Tarefa 29a
+      tinha acabado de pagar duas vezes por prosa-que-mente (`resources` com um locale só,
+      `ensureCatalog` que só carregava inglês). Uma cópia pelo menos se vê; um `writers`
+      devolvendo leitores, não._
+      _**Fatia que MOVE código exige a pergunta da lição nº 19 — "o que perdeu o dono?" — e a
+      resposta foi NADA, medida asserção por asserção.** `diff` normalizado HEAD↔hoje: 12
+      nomes idênticos na mesma ordem, `expect(` de **13 → 15** (+2 pinos), **zero** asserção
+      removida, **zero** operador trocado, **zero** afrouxada. E o lado writers, que encolheu
+      de 12 testes para 2, acusa em **5 de 5** mutantes plantados no wrapper — inclusive as
+      duas reimplementações inline sutis (sem `sort`: 3; sem filtro: 2) e a que devolve na
+      ordem de chegada: 7._
+      _**⚠️ O ACHADO QUE VEIO DO EXECUTOR, e ele desmentiu o argumento do orquestrador.** Eu
+      mandei encolher o `readers` de 10 para 2 testes com o argumento "os dois wrappers têm de
+      ser guardados pelo mesmo critério". Medindo o gêmeo de um mutante seu no outro lado, o
+      executor achou que o `writers` estava com **um critério a menos**: o wrapper podia
+      **ordenar o array de quem chamou** antes de delegar — não muda a saída, só corrompe o
+      array alheio — e isso passava em **1381/1381, ZERO acusadores** (reconfirmado pelo
+      orquestrador). Sem o teste que faltava, o corte do `readers` teria sido feito em nome de
+      uma simetria **que não existia**. Agora são **2 e 2**, pelo mesmo critério: que a função
+      com aquele nome delega, e que não mexe no array recebido (§7.6, snapshot). **0 → 1
+      acusador**, medido dos dois lados._
+      _**⚠️ A PUREZA TINHA ZERO ACUSADORES, e o `grep` do relatório não era guarda.** A regra
+      14 da spec exige função pura, e o executor entregou um `grep` colado em vez de teste —
+      decisão explícita e honestamente registrada. §7.9 decide: **requisito sem guarda
+      automática é intenção**, e `grep` num relatório é medição de um instante. Medido pelo
+      orquestrador: `const impureNow = new Date();` dentro do agrupamento → **1388/1388
+      verdes**. Nasceu o `domain-is-pure.test.ts`, no molde do `no-browser-globals.test.ts`,
+      varrendo `src/domain/` **inteiro** (**17** módulos, nenhum violando) contra `new Date(`,
+      `Date.now(`, `Math.random(` e `process.env` — **com o antídoto do §7.4 medido, não só
+      copiado**: com `sourceFiles` devolvendo `[]`, o teste falha em `expected 0 to be greater
+      than 10`._
+      _**O pino alfabético era MEIO-PINO.** O executor acrescentou aos 12 testes movidos a
+      precondição que antes era só comentário (§7.2, a armadilha `marcos < maria` da Tarefa
+      11) — mas `expect(ANA_ID < ZECA_ID)` afirma um fato sobre duas **constantes**, não sobre
+      a ordem do fixture: **renomear** acusava, **reordenar as duas linhas** dava **0
+      acusadores** e o mutante do `sort` voltava a passar. Trocado por asserção contra o
+      próprio fixture, nos três arquivos; acusa nas duas direções agora._
+      _**O desvio do executor foi MELHOR que a spec, e está medido.** A decisão C pedia tipo
+      estrutural só no neutro; ele o levou também ao `groupReadersByPlanItem`, em vez de
+      receber `ReadingLog`. Isso não amarra o port da Tarefa 32 **e** compra a guarda de
+      travessia hoje: remover `userId` do `ReadingLog` quebra **16** linhas do `typecheck` do
+      domínio; remover `planItemId`, **17**._
+      _**Dois ponteiros que a fatia QUEBROU e consertou** (o preço da lição nº 19):
+      `note-routes.integration.test.ts:1110` e `get-book-with-plan.test.ts:311` mandavam
+      procurar testes num arquivo que deixou de tê-los. É a forma do §7.4 (*"o ponteiro é pelo
+      NOME do teste"*) com o destino apagado._
+      _**Dívida registrada, não consertada:** os 12 nomes movidos carregam vocabulário de nota
+      (`has a writer`, `two authors`) numa função que não conhece nota, e o §7.9 diz que o
+      nome do teste é parte da guarda. **Não renomeados de propósito**: fazê-lo na mesma fatia
+      que os moveu destruiria a prova que mais importa aqui — o `diff` de 12 nomes idênticos.
+      Fica para um commit que **só** renomeie, com o `diff` 12→12 provando que nenhum sumiu._
+      _**Gates:** `test` · `typecheck` · `lint` · `prettier --check` · `build` limpos.
+      `shared`, `ui`, `app` e `prisma/` **intocados**._
 - [ ] **32** — Repo Prisma + rotas + progresso na tela do livro. → _a detalhar_
 
 ### Bloco H — Atividade

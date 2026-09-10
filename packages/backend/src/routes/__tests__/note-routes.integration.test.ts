@@ -1107,7 +1107,8 @@ describe('note routes', () => {
      * teste escolhe qual das duas o banco usa. Ordenar um conjunto que já vem
      * ordenado é indistinguível por construção. Quem prova a ordenação são os
      * unitários dedicados (`sorts the userIds of an entry`, no
-     * `plan-item-writers.test.ts` e no `list-plan-item-writers.test.ts`), onde
+     * `plan-item-groups.test.ts` — para onde a conta e os 12 testes dela se
+     * mudaram na Tarefa 31 — e no `list-plan-item-writers.test.ts`), onde
      * o fake enumera INVERTIDO de propósito (§7.2). Este bloco prova a ordem do
      * PLANO; é essa a regra 34 que ele fecha.
      */

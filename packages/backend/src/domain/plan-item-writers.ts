@@ -1,9 +1,14 @@
 import type { ReadingPlanItem } from './book';
 import type { PlanItemWriter } from './note';
+import { groupUsersByPlanItem } from './plan-item-groups';
 
 /**
  * "Neste dia de leitura, estas pessoas já escreveram" — uma linha da
  * sobreposição de autoria da tela do livro.
+ *
+ * Tem o mesmo formato do `PlanItemReaders` e **não** é o mesmo tipo (decisão D
+ * da Tarefa 31): reusar um para o outro economiza uma interface e custa uma
+ * mentira na resposta da API, onde ela viaja para o `shared` e para a tela.
  *
  * `userIds` é **ordenado**, para a saída ser determinística: nenhum dos dois
  * ports de leitura de nota promete ordem, e o fake enumera invertido de
@@ -16,8 +21,8 @@ export interface PlanItemWriters {
 }
 
 /**
- * Agrupa os pares (dia, autor) **na ordem do plano**. Puro: sem I/O, sem
- * relógio e sem mutar o que recebe.
+ * Agrupa os pares (dia, **autor**) na ordem do plano: quem já escreveu em cada
+ * dia. Puro: sem I/O, sem relógio e sem mutar o que recebe.
  *
  * Existe como função própria — e não como método de um dos dois UseCases —
  * porque os DOIS precisam do mesmo agrupamento: o `getBookWithPlan` o devolve
@@ -26,46 +31,24 @@ export interface PlanItemWriters {
  * livro inteiro. Duas cópias divergiriam no primeiro ajuste, e a divergência
  * apareceria como uma bolinha que muda ao recarregar a página.
  *
- * Três propriedades vêm de o array ser construído a partir do **plano**, e não
- * dos pares:
+ * ⚠️ **A conta em si não mora mais aqui** (Tarefa 31): ela é o
+ * `groupUsersByPlanItem`, neutro, e a leitura (`groupReadersByPlanItem`) o
+ * chama do mesmo jeito. É o §7.1 aplicado — **extrair, não cobrir duas vezes** —
+ * e as três propriedades da saída (ordem do plano, nenhum `planItemId` de fora,
+ * nenhum dia vazio) estão documentadas e testadas lá, uma vez só.
  *
- * 1. **A ordem é a do plano** (`order` crescente), nunca a que o repositório de
- *    notas enumerou. E ordena aqui mesmo com o port do plano prometendo ordem:
- *    a tela do livro não pode virar um plano fora de ordem porque alguém perdeu
- *    o `orderBy` num repositório Prisma.
- * 2. **Um `planItemId` fora do plano não vaza** para a resposta — dado
- *    inconsistente não desenha bolinha num dia que a tela não tem.
- * 3. **Dia sem nota não aparece**: o front sobrepõe no plano que ele já tem, e
- *    devolver todos os dias com `userIds: []` duplicaria o plano numa resposta
- *    que já vem ao lado dele.
+ * O que sobra aqui é o **nome**, e ele é a razão de a função continuar
+ * existindo: um `groupUsersByPlanItem` cru no `getBookWithPlan` não diria de
+ * que sobreposição se trata, e o parâmetro `PlanItemWriter` **documenta** que
+ * esta é a de autoria.
+ *
+ * ⚠️ Documenta, e não *pina*: `PlanItemWriter` é estruturalmente idêntico ao
+ * `PlanItemMark`, então o compilador aceitaria um `ReadingLog[]` aqui sem
+ * reclamar. Quem impede a troca é a leitura humana e o nome — não o `tsc`.
  */
 export function groupWritersByPlanItem(
   plan: readonly ReadingPlanItem[],
   pairs: readonly PlanItemWriter[],
 ): PlanItemWriters[] {
-  // `Set` por dia: o par repetido é UM autor. Os ports não prometem unicidade,
-  // e uma duplicata desenharia a mesma pessoa duas vezes.
-  const authorsByPlanItem = new Map<string, Set<string>>();
-  for (const writer of pairs) {
-    const authors = authorsByPlanItem.get(writer.planItemId);
-    if (authors === undefined) {
-      authorsByPlanItem.set(writer.planItemId, new Set([writer.userId]));
-      continue;
-    }
-    authors.add(writer.userId);
-  }
-
-  // Copia antes de ordenar: o array é de quem chamou (e veio de um
-  // repositório), e mutá-lo é smell de fronteira.
-  return [...plan]
-    .sort((a, b) => a.order - b.order)
-    .flatMap((item) => {
-      const authors = authorsByPlanItem.get(item.id);
-      // `flatMap` e não `map` + `filter`: é o que deixa o dia sem nota
-      // simplesmente não existir no array, em vez de virar um `undefined` que
-      // alguém depois tem de estreitar.
-      if (authors === undefined) return [];
-
-      return [{ planItemId: item.id, userIds: [...authors].sort() }];
-    });
+  return groupUsersByPlanItem(plan, pairs);
 }
