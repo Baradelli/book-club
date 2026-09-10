@@ -1,6 +1,8 @@
 import {
   type BookWithPlanResponse,
   bookWithPlanResponseSchema,
+  type ClubMemberResponse,
+  clubMembersResponseSchema,
   isCalendarDay,
   localDay,
   localTimeZone,
@@ -12,7 +14,9 @@ import { ApiError } from '@clube/shared/client';
 import {
   Button,
   cx,
+  FilterBar,
   FilterChip,
+  type FilterOption,
   FOCUS_RING,
   List,
   ListItem,
@@ -29,7 +33,6 @@ import { Notice, Screen } from './chrome';
 import { dayNotePath } from './day-note';
 import {
   messageFor,
-  type MessageKey,
   resolveApiError,
   type StatusMessages,
 } from './form-errors';
@@ -65,6 +68,16 @@ import { bookEditPath, highlightsPath, isClubAdmin } from './paths';
  * ⚠️ **E NÃO HÁ EDITOR AQUI.** Nenhum `@clube/ui/editor`: o bundle do PWA
  * continua sem TipTap (regra 16), e o acusador é o `bundle-guard.test.ts`, que
  * compila de verdade.
+ *
+ * ⚠️ **O TAMANHO, MEDIDO E REGISTRADO** (contador canônico no docblock de
+ * `highlights.tsx`): **400 linhas** antes da Tarefa 27 e **486** depois — o
+ * filtro por pessoa trouxe uma terceira requisição, um estado, o construtor dos
+ * chips e a resolução de nome das duas metades da tela (o acervo e a
+ * sobreposição do plano). É a segunda maior tela do app, atrás do
+ * `free-note.tsx` (565), e
+ * a lição nº 8 do MVP 1 ("divida ANTES de a tela crescer") aponta para a
+ * **Tarefa 28**, que reabre esta tela para juntar anotações e grifos num acervo
+ * só: é lá que o acervo sai daqui, não numa divisão feita por antecipação.
  */
 
 /**
@@ -197,26 +210,80 @@ type NotesState =
 const NOTES_LOADING: NotesState = { status: 'loading' };
 
 /**
+ * QUEM É O CLUBE — `GET /clubs/:clubId/members` (Tarefa 26a).
+ *
+ * Estado PRÓPRIO, e não um campo do `BookState` nem do `NotesState`: ele é uma
+ * TERCEIRA requisição, e falhar nela não pode apagar o plano nem o acervo.
+ *
+ * ⚠️ **DUAS VARIANTES, E NÃO TRÊS — e isso é uma correção medida.** Este union
+ * tinha `loading`, `ready` e `failed`, e o `failed` era **peso morto**: mutar o
+ * `setMembers({ status: 'failed' })` para nada dava **0 acusadores**, porque
+ * `loading` degrada exatamente igual. Um estado sem consequência é um estado
+ * que ninguém pode acusar — e ele fazia o teste da regra 14 parecer provar "a
+ * FALHA é vista" quando ele provava "o não-`ready` degrada".
+ *
+ * A verdade é que a tela só precisa saber **se conhece as pessoas**: não há
+ * frase de erro (o filtro degrada em silêncio — o acervo é o conteúdo, o filtro
+ * é navegação) e não há botão próprio. Então o não-`ready` é um estado só, e o
+ * `catch` não tem o que escrever: quem já pôs `unknown` foi o começo do efeito.
+ * Quando a Tarefa 28 der uma ação própria à falha (um "tentar de novo" do
+ * filtro), aí ela **volta** a ser uma variante — com comportamento e com teste.
+ */
+type MembersState =
+  | { status: 'unknown' }
+  | { status: 'ready'; members: readonly ClubMemberResponse[] };
+
+const MEMBERS_UNKNOWN: MembersState = { status: 'unknown' };
+
+/**
  * ⚠️ **O FILTRO É NAVEGAÇÃO, NÃO PERMISSÃO** —
  * `docs/adr/0002-visibilidade-total-no-clube.md`.
  *
- * Dentro do clube não existe conteúdo privado: as três opções olham o MESMO
+ * Dentro do clube não existe conteúdo privado: todas as opções olham o MESMO
  * acervo, e nenhuma delas esconde nada de ninguém. Nunca rotular como
- * privacidade, nunca cadeado, nunca "só você vê".
+ * privacidade, nunca cadeado, nunca "só você vê" — e nunca um contador ao lado
+ * do nome ("incentivo por presença, não por comparação", §1 do plano).
  *
- * ⚠️ E `others` é o COMPLEMENTO de `mine`, não um chip por pessoa: nenhuma rota
- * lista os membros do clube com nome (lacuna de backend medida nas Tarefas 17 e
- * 18), e num clube de duas pessoas o complemento é informação completa.
+ * ⚠️ **O RECORTE É O `value` DO CHIP, e ele é uma STRING de propósito.**
+ *
+ * O `FilterBar` é agnóstico de dimensão (decisão G da Tarefa 27) e não sabe o
+ * que é "pessoa": o `value` de cada opção é `string`, e é esta tela — dona do
+ * vocabulário — que interpreta. Três valores fixos e um por pessoa, com
+ * PREFIXO: sem ele, um `userId` que fosse literalmente `mine` viraria O MESMO
+ * chip que "Minhas" — dois chips acesos, e o recorte de um dos dois
+ * desaparecendo em silêncio.
+ *
+ * ⚠️ **E ISSO TEM TESTE, porque o fixture é produzível pelo contrato em que a
+ * tela confia.** A primeira versão desta fatia deixou o prefixo sem acusador,
+ * com a prosa dizendo que o cenário "não é produzível pela API" — meia verdade:
+ * o **backend** gera `randomUUID()`, mas a fronteira que a tela valida é o
+ * `clubMemberResponseSchema`, e ele declara `userId: z.string()` **sem
+ * `.uuid()`** (§6.8: é o cliente que decide o que a tela vê). O teste é
+ * `a member whose userId is literally "mine" does not hijack the "Minhas" chip`,
+ * e o mutante equivalente (sem prefixo) tem **1 acusador**.
  */
-type NoteScope = 'all' | 'mine' | 'others';
+const ALL_SCOPE = 'all';
+const MINE_SCOPE = 'mine';
+/**
+ * ⚠️ O COMPLEMENTO — e ele agora é o **modo degradado** (regra 14).
+ *
+ * Era o filtro por pessoa inteiro na Tarefa 19, porque nenhuma rota listava os
+ * membros. Hoje ele é o que a tela mostra quando **não sabe as pessoas**: o
+ * `GET /members` que falhou, ou o `/me` que ainda não chegou.
+ */
+const OTHERS_SCOPE = 'others';
+const AUTHOR_SCOPE_PREFIX = 'author:';
 
-const NOTE_SCOPES: readonly NoteScope[] = ['all', 'mine', 'others'];
+function authorScope(userId: string): string {
+  return `${AUTHOR_SCOPE_PREFIX}${userId}`;
+}
 
-const SCOPE_LABELS: Readonly<Record<NoteScope, MessageKey>> = {
-  all: 'pages.book.notes.filters.all',
-  mine: 'pages.book.notes.filters.mine',
-  others: 'pages.book.notes.filters.others',
-};
+/** O `userId` de um recorte por pessoa, ou `null` se o recorte é outro. */
+function authorOfScope(scope: string): string | null {
+  return scope.startsWith(AUTHOR_SCOPE_PREFIX)
+    ? scope.slice(AUTHOR_SCOPE_PREFIX.length)
+    : null;
+}
 
 /**
  * REGRA 5 — O RECORTE É FEITO NO CLIENTE, sobre a lista já carregada.
@@ -227,15 +294,18 @@ const SCOPE_LABELS: Readonly<Record<NoteScope, MessageKey>> = {
  */
 function scopedNotes(
   notes: readonly NoteResponse[],
-  scope: NoteScope,
+  scope: string,
   myId: string | undefined,
 ): readonly NoteResponse[] {
-  if (scope === 'all') return notes;
+  const author = authorOfScope(scope);
+  if (author !== null) return notes.filter((note) => note.userId === author);
+  if (scope === ALL_SCOPE) return notes;
   // Sem `/me` não há como partir a lista; mostrar tudo é a resposta honesta
-  // para "ainda não sei quem é você" (e os chips só aparecem com o `me` pronto).
+  // para "ainda não sei quem é você" — nunca uma lista partida ao contrário,
+  // que é a armadilha nomeada da Tarefa 18.
   if (myId === undefined) return notes;
   return notes.filter((note) =>
-    scope === 'mine' ? note.userId === myId : note.userId !== myId,
+    scope === MINE_SCOPE ? note.userId === myId : note.userId !== myId,
   );
 }
 
@@ -308,7 +378,9 @@ export function BookPage() {
    * Medido. Cada carga com o seu gatilho.
    */
   const [notesAttempt, setNotesAttempt] = useState(0);
-  const [scope, setScope] = useState<NoteScope>('all');
+  const [members, setMembers] = useState<MembersState>(MEMBERS_UNKNOWN);
+  /** O `value` do chip escolhido — 'all' | 'mine' | 'others' | 'author:<id>'. */
+  const [scope, setScope] = useState<string>(ALL_SCOPE);
 
   /*
     "QUE DIA É HOJE" — calculado, nunca guardado, com `Intl` e no fuso de quem
@@ -385,6 +457,57 @@ export function BookPage() {
     };
   }, [api, notesClubId, notesBookId, notesAttempt]);
 
+  /*
+    QUEM É O CLUBE (Tarefa 27, regra 10). Depende do CLUBE DO LIVRO — o mesmo
+    `book.clubId` do acervo, e não o clube ativo do cabeçalho: o dono do livro é
+    quem manda, e o backend faz o corte de tenant contra o `Membership` (sem
+    membership, 404).
+
+    Efeito PRÓPRIO: uma falha aqui não apaga o plano nem o acervo, e trocar de
+    livro refaz os dois.
+
+    ⚠️ **E O `notesAttempt` ESTÁ NAS DEPENDÊNCIAS DE PROPÓSITO: o "tentar de
+    novo" do acervo refaz ESTA carga também.** A primeira versão desta fatia o
+    deixou de fora, com uma prosa dizendo que amarrar as duas cargas ao mesmo
+    gatilho era "exatamente o defeito medido no `notesAttempt`" — e a auditoria
+    mostrou que a analogia era **falsa**: o defeito medido era reusar o
+    `attempt` DO LIVRO, que joga o `state` de volta para `loading` e dispara
+    três requisições de anotação. Ligar no `notesAttempt` não faz nada disso,
+    e sem ele uma falha passageira nos nomes só se conserta recarregando o app —
+    com o único botão de "tentar de novo" da seção ali do lado, sem efeito
+    sobre o filtro. Analogia vestida de medição é a classe que já caiu duas
+    vezes na Tarefa 24.
+  */
+  useEffect(() => {
+    if (notesClubId === null) return;
+
+    let cancelled = false;
+    setMembers(MEMBERS_UNKNOWN);
+
+    void api
+      .get(
+        `/clubs/${encodeURIComponent(notesClubId)}/members`,
+        clubMembersResponseSchema,
+      )
+      .then((list) => {
+        if (cancelled) return;
+        setMembers({ status: 'ready', members: list });
+      })
+      .catch(() => {
+        /*
+          Nada a escrever: o estado já é `unknown` desde o começo do efeito, e
+          não há frase de erro para mostrar (regra 14 — ninguém lê um texto de
+          servidor por causa de um chip). O `catch` existe para a rejeição ter
+          dono; se um dia a falha ganhar ação própria, ela volta a ser uma
+          variante do union.
+        */
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, notesClubId, notesAttempt]);
+
   const writers = useMemo(
     () =>
       state.status === 'ready'
@@ -393,7 +516,113 @@ export function BookPage() {
     [state],
   );
 
+  /**
+   * `userId` → nome, para TODO membro — `ACTIVE` e `ARCHIVED`.
+   *
+   * ⚠️ **É AQUI QUE A DECISÃO A DA TAREFA 26a É COBRADA** (regra 11): a rota
+   * devolve os arquivados **exclusivamente** para isto. Sair do clube arquiva o
+   * `Membership` e não apaga o que a pessoa escreveu — "o acervo do clube
+   * continua íntegro, **com autoria**" (ADR 0002) —, então quem saiu não vira
+   * chip e continua tendo nome na anotação que deixou.
+   */
+  const memberNames = useMemo(
+    () =>
+      new Map<string, string | null>(
+        members.status === 'ready'
+          ? members.members.map((member) => [member.userId, member.name])
+          : [],
+      ),
+    [members],
+  );
+
   const locale = i18n.resolvedLanguage ?? 'pt';
+
+  /**
+   * O nome de quem escreveu — `null` quando não se sabe.
+   *
+   * ⚠️ **O `me` VEM PRIMEIRO, e não é redundância**: o `/me` responde antes de
+   * `/clubs/:id/members` no caminho comum, e sou eu que apareço na tela
+   * primeiro. Sem esta ordem, o meu avatar cairia no glifo neutro no frame entre
+   * as duas respostas — o que a Tarefa 18 pagou para não acontecer.
+   *
+   * Nunca o `userId` como nome: com o id, o `PersonAvatar` extrai a primeira
+   * letra do UUID e desenha uma inicial que tem cara de inicial e não é de
+   * ninguém (medido na Tarefa 17). `null` cai no glifo neutro.
+   */
+  function nameOfWriter(userId: string): string | null {
+    if (me !== null && userId === me.id) return me.name;
+    return memberNames.get(userId) ?? null;
+  }
+
+  /**
+   * ⚠️ **OS CHIPS DO FILTRO POR PESSOA — E É AQUI QUE A TAREFA 26a É COBRADA**
+   * (Tarefa 27, regras 10 a 14).
+   *
+   * `Tudo · Minhas · De Maria · De Zeca`, e o que **não** entra é metade da
+   * regra:
+   *
+   * - **eu não viro chip** — eu sou o "Minhas" (regra 13). Dois chips para o
+   *   mesmo recorte é confusão, e o de baixo faria o de cima parecer quebrado;
+   * - **quem saiu do clube não vira chip** (regra 11, decisão A da 26a): os
+   *   `ARCHIVED` chegam na resposta **exclusivamente** para resolver o nome de
+   *   quem escreveu e saiu, e isso acontece na lista, não no filtro;
+   * - **`name: null` não vira chip vazio nem "null"**: cai numa frase do
+   *   catálogo (regra 12), porque o backend não inventa fallback (decisão C da
+   *   26a) — e em qual idioma ele inventaria?
+   *
+   * ⚠️ **E O `me` NULO DEGRADA O FILTRO INTEIRO, de propósito.** É a armadilha
+   * nomeada da Tarefa 18 na sua segunda cara: o `me` é `null` fora do `ready`,
+   * e com os membros carregados eu ganharia um chip MEU ao lado de um "Minhas"
+   * que mostra tudo. Saber quem são as pessoas não basta — é preciso saber qual
+   * delas sou eu. Então, sem `me`, volta o complemento da Tarefa 19.
+   */
+  function authorOptions(): FilterOption[] {
+    const fixed: FilterOption[] = [
+      // O estado neutro é do CHAMADOR (decisão H): o `FilterBar` não sabe que
+      // existe um "tudo", e o rótulo dele é texto que só a tela traduz.
+      { value: ALL_SCOPE, label: t('pages.book.notes.filters.all') },
+      { value: MINE_SCOPE, label: t('pages.book.notes.filters.mine') },
+    ];
+
+    if (members.status !== 'ready' || me === null) {
+      return [
+        ...fixed,
+        { value: OTHERS_SCOPE, label: t('pages.book.notes.filters.others') },
+      ];
+    }
+
+    const myId = me.id;
+
+    return [
+      ...fixed,
+      // A ordem é a que a API devolveu (o `listClubMembers` ordena por nome). A
+      // tela NÃO reordena — duas ordens seriam duas verdades.
+      ...members.members
+        .filter(
+          (member) => member.status === 'ACTIVE' && member.userId !== myId,
+        )
+        .map((member) => ({
+          value: authorScope(member.userId),
+          label:
+            member.name === null
+              ? t('pages.book.notes.filters.unnamed')
+              : t('pages.book.notes.filters.person', { name: member.name }),
+          /*
+            DECISÃO D: o `PersonAvatar` no slot `start` do `FilterChip` — o slot
+            nasceu na Tarefa 13 para este uso exato, e é o `PersonAvatar` que é
+            novo nele: o slot já tinha DOIS chamadores com `ColorSwatch` (as
+            duas telas de grifo, Tarefas 24/25), ao contrário do que a decisão D
+            da spec afirmava (medido por `git grep "start="`). Sem
+            `label` de propósito: o nome está escrito ao lado, e um `aria-label`
+            igual faria o leitor de tela repetir. A cor vem do `id`, e a inicial
+            agora é a de VERDADE — é isso que a Tarefa 26a comprou.
+          */
+          start: (
+            <PersonAvatar id={member.userId} name={member.name} size="sm" />
+          ),
+        })),
+    ];
+  }
 
   /**
    * O ACERVO, abaixo do plano — regras 1 a 8 da Tarefa 19.
@@ -428,32 +657,48 @@ export function BookPage() {
     }
 
     const all = notes.notes;
-    const visible = scopedNotes(all, scope, me?.id);
+    const options = authorOptions();
+    /*
+      ⚠️ **O RECORTE É DERIVADO DO QUE ESTÁ NA TELA**: um `scope` sem chip
+      correspondente volta para "Tudo". Sem isto, dois caminhos reais deixam o
+      filtro com NENHUM chip aceso e a lista recortada por um critério
+      invisível — escolher "De outras pessoas" enquanto os membros carregam
+      (o chip morre quando eles chegam) e ficar num chip de quem saiu do clube
+      no meio da sessão. Sempre exatamente um chip pressionado.
+    */
+    const selected = options.some((option) => option.value === scope)
+      ? scope
+      : ALL_SCOPE;
+    const visible = scopedNotes(all, selected, me?.id);
 
     return (
       <>
         {/*
-          REGRA 4: os três chips, com `aria-pressed` — e o chip só existe se
-          houver acervo. Filtrar o vazio é oferecer uma escolha que não muda
-          nada.
+          REGRA 4: os chips, com `aria-pressed` — e eles só existem se houver
+          acervo. Filtrar o vazio é oferecer uma escolha que não muda nada.
+
+          ⚠️ **E A COMPOSIÇÃO É DO `FilterBar`** (Tarefa 27, regra 7): o
+          `role="group"`, o `aria-label` e o `aria-pressed` moravam aqui E na
+          tela de grifos — duas cópias da mesma acessibilidade, que é como as
+          duas saem de sincronia no primeiro conserto. O que sobra aqui é o
+          VOCABULÁRIO, porque `packages/ui` não traduz (decisão B da Tarefa 13).
         */}
         {all.length === 0 ? null : (
-          <div
-            aria-label={t('pages.book.notes.filters.label')}
-            className="flex flex-wrap items-center gap-2"
-            role="group"
-          >
-            {NOTE_SCOPES.map((candidate) => (
-              <FilterChip
-                key={candidate}
-                label={t(SCOPE_LABELS[candidate])}
-                onPress={() => {
-                  setScope(candidate);
-                }}
-                pressed={scope === candidate}
-              />
-            ))}
-          </div>
+          <FilterBar
+            groups={[
+              {
+                id: 'author',
+                label: t('pages.book.notes.filters.label'),
+                options,
+                selected,
+                onSelect: (option) => {
+                  // Controlado (decisão A): a barra devolve a opção, e quem
+                  // guarda a escolha é a tela.
+                  setScope(option.value);
+                },
+              },
+            ]}
+          />
         )}
 
         {visible.length === 0 ? (
@@ -483,14 +728,26 @@ export function BookPage() {
             */}
             {visible.map((note) => {
               const mine = note.userId === me?.id;
+              /*
+                ⚠️ **O NOME DE QUEM ESCREVEU — a outra metade da regra 11.**
+
+                `memberNames` cobre `ACTIVE` **e** `ARCHIVED`: a anotação de
+                quem saiu do clube deixa de dizer "Alguém do clube" e passa a
+                dizer o nome dela. Sem membro conhecido (o `GET /members` que
+                falhou, ou um autor que não está mais na lista), volta o
+                genérico do catálogo — nunca o `userId`, que não é nome de
+                ninguém.
+              */
+              const writerName = nameOfWriter(note.userId);
               // REGRA 2: autoria em TEXTO, não só na cor do avatar. O avatar
               // vai sem `label` de propósito: o nome já está escrito ao lado, e
               // um `aria-label` igual faria o leitor de tela repetir.
-              const author = t(
-                mine
-                  ? 'pages.book.notes.author.you'
-                  : 'pages.book.notes.author.other',
-              );
+              //
+              // "Você" ganha do nome quando a nota é minha: eu não me leio pelo
+              // nome numa lista em que também estão os outros.
+              const author = mine
+                ? t('pages.book.notes.author.you')
+                : (writerName ?? t('pages.book.notes.author.other'));
               const excerpt = excerptOf(note.plainText);
 
               return (
@@ -507,7 +764,7 @@ export function BookPage() {
                   start={
                     <PersonAvatar
                       id={note.userId}
-                      name={mine ? (me?.name ?? null) : null}
+                      name={writerName}
                       size="sm"
                     />
                   }
@@ -688,15 +945,46 @@ export function BookPage() {
                   start={
                     authors.length === 0 ? undefined : (
                       <span className="flex items-center gap-1">
-                        {authors.map((userId) => (
-                          <PersonAvatar
-                            id={userId}
-                            key={userId}
-                            label={t('pages.book.plan.writer')}
-                            name={userId === me?.id ? me.name : null}
-                            size="sm"
-                          />
-                        ))}
+                        {authors.map((userId) => {
+                          const authorName = nameOfWriter(userId);
+
+                          return (
+                            <PersonAvatar
+                              id={userId}
+                              key={userId}
+                              /*
+                                ⚠️ **AS DUAS METADES DO NOME, e a segunda foi
+                                uma correção medida.** A primeira versão desta
+                                fatia dava nome ao ACERVO e deixava a
+                                sobreposição do plano — dois dedos acima, na
+                                mesma tela — com o glifo neutro e a frase
+                                genérica: a mesma pessoa aparecia como "Maria"
+                                embaixo e como "alguém" em cima, visível ao dono
+                                no primeiro scroll.
+
+                                A razão registrada então ("trocar o `aria-label`
+                                pelo nome cru perderia o 'escreveu neste dia'")
+                                era boa e cobria só a metade FALADA: a inicial
+                                visual nunca teve esse custo. A saída é uma
+                                chave INTERPOLADA, que mantém as duas coisas.
+
+                                O fallback é a frase genérica, e ele é o estado
+                                real de quem não conhece as pessoas (o
+                                `GET /members` que falhou, ou o autor que não
+                                está na lista).
+                              */
+                              label={
+                                authorName === null
+                                  ? t('pages.book.plan.writer')
+                                  : t('pages.book.plan.writerNamed', {
+                                      name: authorName,
+                                    })
+                              }
+                              name={authorName}
+                              size="sm"
+                            />
+                          );
+                        })}
                       </span>
                     )
                   }

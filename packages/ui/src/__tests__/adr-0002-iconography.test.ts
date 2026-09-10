@@ -148,6 +148,10 @@ describe('no privacy iconography anywhere in @clube/ui (rule 27, ADR 0002)', () 
     expect(scanned.length).toBeGreaterThan(8);
     for (const file of [
       'filter-chip.tsx',
+      // O componente da Tarefa 27, pinado por NOME: a barra de filtro é o
+      // lugar mais provável de alguém explicar uma privacidade que não existe,
+      // e a varredura só protege o que ela comprovadamente lê.
+      'filter-bar.tsx',
       'list.tsx',
       'sheet.tsx',
       'person-avatar.tsx',

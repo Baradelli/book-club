@@ -1,3 +1,4 @@
+import { mentionsPrivacyTerm, PRIVACY_TERMS } from '@clube/shared/adr-0002';
 import { expect } from 'vitest';
 
 import { readableText, withoutDiacritics } from './harness';
@@ -48,40 +49,20 @@ import { readableText, withoutDiacritics } from './harness';
  */
 
 /**
- * Radicais, não palavras (a mesma disciplina do `GUILT_TERMS`), já sem acento e
- * em minúscula — a varredura passa por `withoutDiacritics`.
+ * ⚠️ **A LISTA E O MATCHER MORAM EM `shared` DESDE A RODADA DE CORREÇÃO DA
+ * TAREFA 27** (`locales/__tests__/privacy-terms.ts`, exportado por
+ * `@clube/shared/adr-0002`), e são REEXPORTADOS aqui porque os arquivos de
+ * teste do app os importam deste módulo.
  *
- * Os dois idiomas, porque o vocabulário do ADR não é do `pt`: uma tela que
- * escrevesse "Only you can see this" erraria igual.
+ * Por que subiram: faltava a terceira guarda da partição — a de **CATÁLOGO**.
+ * Medido: `person: 'By {{name}} (only you can see this)'` plantado no `en` dava
+ * **0 acusadores em 1.146 testes**, e a mesma frase em `pt` dava **12**, porque
+ * todo teste de tela pina `pt`. A varredura de catálogo
+ * (`shared/src/locales/__tests__/adr-0002.test.ts`) percorre `pt` **e** `en`
+ * inteiros com **esta mesma lista** — importada, nunca copiada, que é a lição
+ * nº 3 do MVP 1 e o que o `guilt-terms.ts` já fazia pelo eixo anti-culpa.
  */
-export const PRIVACY_TERMS: readonly string[] = [
-  // Iconografia e rótulo, em português
-  'cadead', // cadeado · cadeados
-  'privad', // privado · privada · privadas
-  'secret',
-  'oculto',
-  'oculta',
-  'so voc', // "só você vê", já sem acento
-  'somente voc',
-  'apenas voc',
-  'visivel para',
-  'visivel so',
-  // Inglês
-  'private',
-  'only you',
-  'visible to',
-  'hidden from',
-];
-
-/**
- * ⚠️ ANCORADO À ESQUERDA, e pelo mesmo motivo medido em `ui/`: um `includes`
- * cru acusa `block`/`unlock`/`SCROLL_LOCK_CLASS` e meia dúzia de identificadores
- * legítimos. Sem âncora à direita, para o radical pegar o plural.
- */
-export function mentionsPrivacyTerm(text: string, term: string): boolean {
-  const escaped = term.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-  return new RegExp(`\\b${escaped}`, 'u').test(text);
-}
+export { mentionsPrivacyTerm, PRIVACY_TERMS };
 
 /**
  * A varredura sobre uma STRING qualquer — é o que permite as duas superfícies

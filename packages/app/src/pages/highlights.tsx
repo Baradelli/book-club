@@ -6,7 +6,14 @@ import {
   highlightsResponseSchema,
 } from '@clube/shared';
 import { ApiError } from '@clube/shared/client';
-import { Button, FilterChip, List, PersonAvatar, Sheet } from '@clube/ui';
+import {
+  Button,
+  FilterBar,
+  type FilterGroup,
+  List,
+  PersonAvatar,
+  Sheet,
+} from '@clube/ui';
 import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -144,6 +151,29 @@ const COMMENT_EXCERPT_LENGTH = 120;
 function excerptOf(text: string, max: number): string {
   const clean = text.trim().replace(/\s+/gu, ' ');
   return clean.length <= max ? clean : `${clean.slice(0, max)}…`;
+}
+
+/**
+ * O `value` do chip "todas as cores" (Tarefa 27).
+ *
+ * ⚠️ Ele não pode colidir com uma cor da paleta, e não colide **por
+ * construção**: toda `HighlightColor` é um hex de sete caracteres começando com
+ * `#` (`shared/src/highlight-color.ts`), então `colorFromChipValue` devolver
+ * `null` para esta string é a mesma coisa que devolver `null` para qualquer
+ * valor que não seja da paleta — e "não é da paleta" é exatamente "todas".
+ */
+const EVERY_COLOR = 'all';
+
+/**
+ * O `value` do chip de volta ao recorte — `null` é "todas".
+ *
+ * ⚠️ **É o `find` da lista de `@clube/shared` que estreita, não um `as`.** O
+ * `FilterOption.value` é `string` de propósito (o `FilterBar` é agnóstico de
+ * dimensão — decisão G da Tarefa 27), e a tela é a dona do vocabulário: um
+ * valor que não está na paleta não vira cor, vira "todas".
+ */
+function colorFromChipValue(value: string): HighlightColor | null {
+  return HIGHLIGHT_COLORS.find((candidate) => candidate === value) ?? null;
 }
 
 /**
@@ -423,6 +453,43 @@ export function HighlightsPage() {
     const all = list.highlights;
     const visible = scopedHighlights(all, color);
 
+    /**
+     * ⚠️ **UMA DIMENSÃO, NO COMPONENTE COMPARTILHADO** (Tarefa 27, regra 7).
+     *
+     * Esta tela tinha a sua própria composição de chips, e o `book.tsx` tinha
+     * outra — duas cópias da mesma acessibilidade (o `role="group"`, o
+     * `aria-label`, o `aria-pressed`), que é como as duas saem de sincronia no
+     * primeiro conserto. Agora o grupo é do `FilterBar`, e o que sobra aqui é
+     * **o vocabulário**: `packages/ui` não traduz (decisão B da Tarefa 13),
+     * então o rótulo de cada chip chega pronto pelo `t()`.
+     *
+     * ⚠️ **E A COR NUNCA É O ÚNICO PORTADOR** (regra 4 da Tarefa 25): a amostra
+     * vai no slot `start` e o **nome** vai no `label`. Um chip só-com-bolinha
+     * não diria nada a quem não distingue as cinco cores — e o
+     * `FilterOption.label` é obrigatório justamente para isso não compilar.
+     */
+    const colorGroup: FilterGroup = {
+      id: 'color',
+      label: t('pages.highlights.filters.label'),
+      options: [
+        /* O estado neutro é do CHAMADOR (decisão H): o componente não sabe que
+           existe um "todas", e o rótulo dele é texto que só a tela traduz. */
+        { value: EVERY_COLOR, label: t('pages.highlights.filters.all') },
+        /* A ordem é a de `@clube/shared` — a mesma da barra do editor. */
+        ...HIGHLIGHT_COLORS.map((candidate) => ({
+          value: candidate,
+          label: t(COLOR_LABEL_KEYS[candidate]),
+          start: <ColorSwatch color={candidate} />,
+        })),
+      ],
+      selected: color ?? EVERY_COLOR,
+      onSelect: (option) => {
+        // Controlado (decisão A): a barra devolve a opção, e quem muda o
+        // estado é a tela.
+        setColor(colorFromChipValue(option.value));
+      },
+    };
+
     return (
       <>
         {/*
@@ -430,33 +497,7 @@ export function HighlightsPage() {
           houver acervo. Filtrar o vazio é oferecer uma escolha que não muda
           nada (a lição do `book.tsx`).
         */}
-        {all.length === 0 ? null : (
-          <div
-            aria-label={t('pages.highlights.filters.label')}
-            className="flex flex-wrap items-center gap-2"
-            role="group"
-          >
-            <FilterChip
-              label={t('pages.highlights.filters.all')}
-              onPress={() => {
-                setColor(null);
-              }}
-              pressed={color === null}
-            />
-            {/* A ordem é a de `@clube/shared` — a mesma da barra do editor. */}
-            {HIGHLIGHT_COLORS.map((candidate) => (
-              <FilterChip
-                key={candidate}
-                label={t(COLOR_LABEL_KEYS[candidate])}
-                onPress={() => {
-                  setColor(candidate);
-                }}
-                pressed={color === candidate}
-                start={<ColorSwatch color={candidate} />}
-              />
-            ))}
-          </div>
-        )}
+        {all.length === 0 ? null : <FilterBar groups={[colorGroup]} />}
 
         {visible.length === 0 ? (
           /*

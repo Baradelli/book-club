@@ -587,6 +587,21 @@ A partição a copiar, e ela é a lição:
   ⚠️ Todo teste de tela **pina `pt`** (o `navigator.language` do jsdom é `en-US`), então uma
   guarda de palavra que vive na tela **nunca vê o catálogo `en`** — metade dos idiomas que o
   app declara suportar.
+
+  ⚠️⚠️ **E esta regra foi aplicada a UM dos dois vocabulários por nove fatias.** A Tarefa 16
+  subiu o **anti-culpa** para o catálogo e deixou a **privacidade do ADR 0002** no DOM — e a
+  Tarefa 27 mediu o custo: a frase `'By {{name}} (only you can see this)'` plantada no `en.ts`
+  passava em **1.146 testes**, com **zero acusadores**, enquanto a mesma frase em `pt` dava
+  **12**. A assimetria não era a lista de termos nem o instrumento (o `readableText()` pega
+  frase em atributo, e isso está medido): era o **lugar**. Consertado na 27 com um
+  `privacy-terms.ts` ao lado do `guilt-terms.ts`, e o `adr-0002-dom.ts` do app passou a
+  **importar** a lista em vez de ser o dono dela.
+
+  **A pergunta que fica para toda guarda de vocabulário nova:** *ela vive no catálogo, e
+  percorre os DOIS locales?* Se a resposta for "vive na tela", ela guarda metade dos idiomas —
+  e a metade que ela não guarda é justamente a que ninguém revisa lendo. Ter **uma** guarda de
+  catálogo funcionando é o que faz a segunda parecer coberta: o eixo que subiu dá a sensação de
+  que o eixo que ficou também subiu.
 - **O que não é catálogo é DOM**: número renderizado a partir de dado (um "0 de 30 dias" não
   está em catálogo nenhum) e cor. E aí a varredura roda em **todos** os estados — o estado
   "feliz" incluído, que na Tarefa 16 era exatamente o que faltava.

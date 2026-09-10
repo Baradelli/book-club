@@ -573,6 +573,64 @@ describe('the colour filter is CLIENT-SIDE and changes the list (rule 7)', () =>
     expect(requestsTo(calls, '/highlights?')).toHaveLength(1);
   });
 
+  it('⚠️ draws the chips with the SHARED FilterBar, in ONE named group (rules 1, 7, 8 of task 27)', async () => {
+    /*
+      ⚠️ **ESTE TESTE É METADE DA MEDIÇÃO DA REGRA 8 DA TAREFA 27**, e a outra
+      metade é o teste gêmeo em `book.test.tsx`: mudar a marcação do `FilterBar`
+      tem de deixar vermelho em **mais de uma** suíte de tela. Se acusasse numa
+      só, uma das duas telas não estaria usando o componente compartilhado — é a
+      regra 2 da Tarefa 25, que pegou exatamente isso.
+
+      O que ele pina é o que a COMPOSIÇÃO entrega e o `FilterChip` não: o
+      `role="group"` com nome acessível próprio (decisão C). Sem ele, quem ouve
+      a tela recebe seis botões seguidos sem saber de que dimensão são.
+    */
+    await renderHighlights();
+    await waitForRows(5);
+
+    const group = screen.getByRole('group', {
+      name: pt.pages.highlights.filters.label,
+    });
+    // UM grupo só: esta tela tem uma dimensão (a cor). O segundo grupo chega
+    // com o acervo unificado da Tarefa 28.
+    expect(screen.getAllByRole('group')).toHaveLength(1);
+
+    // Os seis chips, na ordem de `@clube/shared` — "todas" primeiro, e depois a
+    // paleta na mesma ordem da barra do editor.
+    expect(
+      Array.from(group.querySelectorAll('button')).map(
+        (chipButton) => chipButton.textContent,
+      ),
+    ).toEqual([
+      ALL_COLORS,
+      COLOR_NAMES.yellow,
+      COLOR_NAMES.green,
+      COLOR_NAMES.orange,
+      COLOR_NAMES.blue,
+      COLOR_NAMES.pink,
+    ]);
+    expectNoGuilt();
+  });
+
+  it('⚠️ keeps the colour NAME on every chip — colour is never the only carrier (rule 3 of task 27)', async () => {
+    /*
+      A regra 4 da Tarefa 25, medida lá: apagar o nome da cor dá 2 acusadores.
+      Aqui o par é o outro: a amostra entra pelo slot `start` do chip e o NOME
+      continua sendo o nome acessível — um chip só-com-bolinha não diria nada a
+      quem não distingue as cinco cores.
+    */
+    await renderHighlights();
+    await waitForRows(5);
+
+    for (const name of Object.values(COLOR_NAMES)) {
+      const chipButton = chip(name);
+      expect(chipButton.textContent).toContain(name);
+      // E a bolinha está DENTRO do chip, fora do caminho do leitor de tela.
+      expect(chipButton.querySelector('[aria-hidden="true"]')).not.toBeNull();
+    }
+    expectNoGuilt();
+  });
+
   it('uses aria-pressed, not aria-checked', async () => {
     // O chip é um botão de DOIS ESTADOS, não um controle de formulário
     // (regra 25 da Tarefa 13): `aria-checked` faria o leitor de tela anunciar
@@ -967,6 +1025,24 @@ describe('the source of the collection screen (rules 20, 21)', () => {
 
     expect(source).not.toContain('@clube/ui/editor');
     expect(source).not.toContain('@tiptap');
+  });
+
+  it('⚠️ builds the filter with the SHARED FilterBar, and keeps NO chip composition of its own (rule 7 of task 27)', () => {
+    /*
+      ⚠️ **A ASSERÇÃO NEGATIVA É A QUE VALE**: uma tela que passasse a usar o
+      `FilterBar` e deixasse a composição antiga ao lado teria duas verdades
+      sobre o mesmo filtro, e a medição da regra 8 (mudar o componente acusa em
+      duas suítes) voltaria a passar por acidente.
+
+      O `role="group"` também sai daqui: a fronteira acessível do grupo é do
+      componente agora (decisão C), e escrevê-la nas duas casas é o jeito
+      silencioso de a segunda sair de sincronia.
+    */
+    const source = stripComments(highlightsSource());
+
+    expect(source).toContain('FilterBar');
+    expect(source).not.toContain('FilterChip');
+    expect(source).not.toContain('role="group"');
   });
 
   it('has exactly ONE red line in the source, and it is the failed archive', () => {

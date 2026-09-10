@@ -127,8 +127,29 @@ function eagerScriptNames(html: string): string[] {
   return [...names];
 }
 
+/**
+ * ⚠️ **BYTES DE VERDADE, E NÃO `String.length`** — correção medida na rodada da
+ * Tarefa 27.
+ *
+ * `asset.code` é uma string JÁ DECODIFICADA, e `.length` conta **unidades de
+ * código UTF-16**, não bytes. Todo caractere acentuado dos catálogos custa
+ * **2 bytes e 1 unidade**, então o teto chamado `..._BYTES` media uma coisa e
+ * se chamava outra: medido neste build, `chars = 417.719` × `bytes = 418.003`
+ * — um gap de 284 que **cresce com conteúdo em português**, exatamente a
+ * direção em que o produto cresce.
+ *
+ * Foi esse gap que produziu a "divergência de 283 B não reproduzida" que a spec
+ * da Tarefa 27 registrou entre duas medições do MESMO build: os dois números
+ * sempre foram o mesmo build, contado em unidades diferentes.
+ *
+ * O teto de 450.000 fica: ele é uma ordem de grandeza de rede, e passar a
+ * contar 284 bytes a mais não muda a decisão — muda o número dizer a verdade.
+ */
 function totalBytes(assets: readonly Asset[]): number {
-  return assets.reduce((sum, asset) => sum + asset.code.length, 0);
+  return assets.reduce(
+    (sum, asset) => sum + Buffer.byteLength(asset.code, 'utf8'),
+    0,
+  );
 }
 
 function contaminated(assets: readonly Asset[]): string[] {

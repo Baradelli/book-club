@@ -1253,8 +1253,116 @@ Sem grifos em tela própria (MVP 2), sem marcar "li", sem feed e sem notificaç�
       marcas de TipTap. Banco em **0** por consulta ao prefixo `t26a-` **e** a `^t[0-9]{2}-` em
       todas as tabelas; super-admin do seed intacto. Nenhuma migration, `packages/ui` e
       `packages/app` **intocados**._
-- [ ] **27** — Componente de filtro compartilhado (pessoa · tipo · leitura · cor) em `ui/`.
-      → _a detalhar_
+- [x] **27** — Componente de filtro compartilhado (pessoa · tipo · leitura · cor) em `ui/`.
+      → `tasks/27-filtro-compartilhado.md`
+      _**O FILTRO DIZ O NOME.** A fatia onde a 26a é cobrada: `De outras pessoas` virou
+      **`De Maria`**, e a lacuna que o MVP 1 registrou três vezes (linhas 17, 18, 19) — a
+      **pergunta 1** do `ACEITE-MVP` — está fechada. Entregue: o `FilterBar` em
+      `packages/ui` (controlado, **agnóstico de dimensão**), a migração dos **dois** filtros
+      que já existiam, o chip por pessoa alimentado pela rota da 26a, e a varredura de
+      strings cravadas. **408 shared + 195 ui + 1287 backend** (intocado) **+ 552 app**._
+      _**⚠️ O BLOQUEADOR É O ACHADO MAIS IMPORTANTE DO MVP 2, e é uma lição que o projeto
+      tinha aprendido pela METADE.** A Tarefa 16 criou a partição do §7.9 — vocabulário é
+      propriedade do **catálogo** (percorre `pt` **e** `en`), o resto é DOM — e a aplicou ao
+      eixo **anti-culpa**. A **privacidade do ADR 0002 ficou no DOM**, por **nove fatias**. E
+      todo teste de tela **pina `pt`**. Medido: `person: 'By {{name}} (only you can see this)'`
+      plantado no **`en.ts`** passava em **1.146 testes** com **ZERO acusadores**; a **mesma**
+      frase em `pt` dava **12**. **Verificado por mutação do orquestrador: 1 acusador em
+      `shared` depois do conserto (era 0), e o `book.test.tsx` do app segue 49/49 VERDE com o
+      plante — que é exatamente a prova de que a guarda estava no LUGAR errado, não fraca.**
+      Consertado com `privacy-terms.ts` ao lado do `guilt-terms.ts`, e o `adr-0002-dom.ts` do
+      app passou a **importar** a lista em vez de ser dono dela (lição nº 3). Falso positivo
+      zero, medido de duas formas — inclusive um teste que pina as palavras legítimas que um
+      radical mal escolhido acusaria (`'isso você escreveu ontem'`, salvo pela âncora `\b`).
+      **Gerou a emenda do §7.9:** ter **uma** guarda de catálogo funcionando é o que faz a
+      segunda parecer coberta._
+      _**Dois ALTO, os dois com zero acusadores:** (1) a invariante "**sempre exatamente um
+      chip pressionado**" não tinha dono, e o próprio docblock nomeava **dois caminhos reais**
+      em que o filtro fica sem nenhum chip aceso recortando a lista por critério invisível
+      (`/members` chega devagar → toco "De outras pessoas" → os membros chegam → o chip morre e
+      o recorte fica). O revisor mediu que **é decidível** (o `Responder` do harness devolve
+      `Promise`, então uma resposta resolvida à mão produz a transição em jsdom) — 0 → 1.
+      (2) O extrator de strings cravadas era **contornável por duas escritas naturais** —
+      `title={'X'}` (o Prettier **não** normaliza `={'x'}` para `="x"`, medido) e
+      `const X = 'prosa'` —, as duas com `eslint`, `prettier` e `tsc` verdes, e o teto de 33
+      **não se movia**. 0 → 2 em cada. É a única guarda que impede o buraco de crescer enquanto
+      a pergunta 7 do aceite não é respondida._
+      _**⚠️ A minha contagem estava pela metade, e o executor a corrigiu:** eu medi "16 strings
+      cravadas, todas no `RichEditor`". São **33 ocorrências / 24 textos / QUATRO arquivos** —
+      `RichEditor.tsx` (18/16), **`slash-command.ts` (13)**, `SlashMenu.tsx` e `MentionList.tsx`
+      —, e o revisor reimplementou o extrator do zero e chegou no mesmo número. O meu `grep`
+      só olhava `label=`/`label:` em `components/*.tsx`. E o executor acrescentou a asserção que
+      a minha regra não pedia e **sem a qual o teto não guarda nada**: **nenhuma string cravada
+      fora dos 4 arquivos isentos** — o teto sozinho deixaria trocar um rótulo do editor por um
+      do filtro em silêncio._
+      _**O número do bundle não eram dois números:** a `bundle-guard` media `asset.code.length`
+      sobre string **decodificada** — unidades **UTF-16**, não bytes —, e os acentos dos
+      catálogos custam 2 bytes e 1 char. Daí o "417.719 × 418.003" e a "divergência de 283 B
+      não reproduzida" que a minha spec registrou: **sempre foi o mesmo build medido de dois
+      jeitos**. Consertado com `Buffer.byteLength`, e agora o número medido é o número do nome.
+      Entrada **418.114 B**, folga **31.886 B**, **0 marcas** de TipTap._
+      _**A atribuição do crescimento, por 4 builds:** `FilterBar` **+347 B** (entra uma vez) ·
+      `book.tsx` **+848 B** · `highlights.tsx` **−12 B — ela ECONOMIZA** · catálogos **+106 B**
+      = +1.289 B, fechando exato. **E a projeção das duas últimas fatias melhorou**, porque a 28
+      **reusa** o `FilterBar`: ~4,2 kB (28) + ~1,6 kB (29) + ~1,1 kB de chaves ≈ **7 kB**, contra
+      os ~14,5 kB projetados na 25. Sobram ~25 kB. **Não precisa do `en` por `import()`** (os
+      8.984 B medidos ficam registrados para quando precisar), e o teto não se eleva._
+      _**Duas prosas falsas, as duas minhas ou copiadas de mim:** (a) *"o slot `start` do
+      `FilterChip` nunca teve chamador"* — **falso**, tinha **dois** (`highlights.tsx:455` e
+      `highlight-fields.tsx:145`, desde as Tarefas 24/25), e a linha 455 é **uma das que esta
+      fatia migrou**; a afirmação estava em quatro arquivos e era a justificativa de peso da
+      minha decisão D. O que é novo é o **`PersonAvatar`** no slot. (b) O docblock do retry
+      dizia que ligar as duas cargas ao mesmo gatilho era "exatamente o defeito medido no
+      `notesAttempt`" — **não era**: aquele defeito era reusar o `attempt` do **livro**, que
+      joga o `state` para `loading`. **A analogia estava vestida de medição**, a classe que já
+      caiu duas vezes na Tarefa 24._
+      _**Três MÉDIO mais, todos com 0 acusadores antes:** o `MembersState.failed` era
+      indistinguível de `loading` (o union voltou a **duas** variantes — a terceira era peso
+      morto e fazia o teste da regra 14 parecer provar "a falha é vista" quando provava "o
+      não-`ready` degrada"); o **retry** não estava pinado em **nenhuma** das duas direções
+      (agora refaz as três cargas, com `/members` = 1 → retry → 2); e o prefixo `author:` era
+      defesa sem dono — o revisor mostrou que o fixture **é** produzível pela fronteira que a
+      tela valida (`clubMemberResponseSchema` declara `userId: z.string()`, **sem `.uuid()`**),
+      então `{ userId: 'mine' }` passa e daria **dois chips acesos**. 0 → 1._
+      _**A inconsistência de vocabulário na MESMA tela, consertada nas duas metades:** o plano
+      dizia "Alguém do clube escreveu neste dia" com glifo neutro enquanto o acervo dois dedos
+      abaixo dizia "M · Maria". Agora um `nameOfWriter` alimenta os dois, com chave
+      **interpolada** (`{{name}} escreveu neste dia`) e fallback na frase genérica. Custo
+      medido: **+111 B**. O fixture teve de trocar `Maria`→`Zeca` porque `Maria`/`Marcos` dão a
+      **mesma** inicial "M" e a asserção não distinguiria "o nome de cada um" de "o meu nos
+      dois" — é o §7.8 aplicado a um fixture de inicial._
+      _**Uma honestidade do executor que vale registrar como método:** o primeiro mutante do
+      item 9 (`AUTHOR_SCOPE_PREFIX = ''`) deu **16** acusadores, e ele o descartou por ser
+      **degenerado** — com prefixo vazio, `''.startsWith('')` faz todo scope virar autor e a
+      lista inteira desaparece. **Mutante degenerado não é medição**; o número que vale é o 1 do
+      mutante equivalente. É a primeira vez no projeto que um agente rejeita o próprio número
+      alto por ser inútil._
+      _**Onde eu errei na direção pessimista:** perguntei se a lista de arquivos da varredura do
+      ADR 0002 em `ui/` era escrita à mão (a classe "guarda que depende de memória"). **É
+      derivada** (`readdirSync` recursivo), e o nome do arquivo na lista é só o **pino positivo**
+      do §7.4. Provado: um componente novo em `ui/src/components/` com cadeado + `<svg>` +
+      frase de privacidade dá **6 acusadores**. Componente novo nasce **dentro** das guardas._
+      _**A migração não perdeu nada**, e o revisor provou mecanizando o `git diff`: nenhum
+      `role=`, nenhum `aria-label=` além do que virou prop, **nenhum token de `className`**
+      (`comm -23` vazio nos dois arquivos), nenhuma chave `pages.*`. E ela é real por **três
+      eixos independentes**, cada um acusando nas **duas** suítes de tela: `aria-label` do grupo
+      (7+1), `start` (2+1), `pressed` (2+2)._
+      _**Complexidade — e o número a vigiar mudou:** `book.tsx` foi de **400 para 486** linhas
+      (a Tarefa 25 o havia aliviado de 426→400). É a **2ª maior tela**, a 79 linhas do
+      `free-note.tsx` (**565**), que segue sendo a maior e que esta fatia não tocou. `FilterBar`
+      **45** linhas, com **2 consumidores provados por mutação** (não por leitura).
+      **A Tarefa 28 é quem tira o acervo do `book.tsx`** — e o número a vigiar agora é 486._
+      _**Dívidas registradas:** a tela de grifos é **o último lugar** onde o alheio ainda é
+      "Alguém do clube" (ela não carrega `/members`) — é da 28, que junta os dois acervos · as
+      17 chamadas duplas `expectNoGuilt(); expectNoPrivacyTalk();` herdadas das Tarefas 19/25
+      (esta fatia **não** acrescentou nenhuma: 10→10 e 12→12, medido) · `FilterChip` sem
+      `renderLink`/`disabled`, então a aba "Anotações" segue como chip à mão — **agora com
+      acusador** (`toHaveLength(1)` sobre `<FilterChip`) · a 3ª cópia de `sourceFiles`/
+      `stripComments` em `ui`, com razão medida (as três varreduras isentam conjuntos
+      diferentes)._
+      _**Gates:** 408 · 195 · 1287 · 552; `typecheck`, `lint`, `prettier --check .` e o build
+      limpos. Entrada **418.114 B** (agora em bytes de verdade). `packages/backend` e `prisma/`
+      **intocados**; os **367** de integração **não** rodados._
 - [ ] **28** — Tela de acervo do livro: anotações + grifos num só lugar, com o filtro.
       → _a detalhar_
 - [ ] **29** — Busca simples por texto no acervo do clube. → _a detalhar_

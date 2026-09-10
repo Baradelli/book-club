@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./client": "./src/client/index.ts",
     "./locales": "./src/locales/index.ts",
-    "./anti-culpa": "./src/locales/__tests__/guilt-terms.ts"
+    "./anti-culpa": "./src/locales/__tests__/guilt-terms.ts",
+    "./adr-0002": "./src/locales/__tests__/privacy-terms.ts"
   },
   "scripts": {
     "test": "vitest run",

@@ -195,13 +195,26 @@ export const pt = {
         /* A ÚNICA marca da lista (decisão C): hoje. Nada mais é destacado. */
         today: 'Hoje',
         /*
-          ⚠️ O nome acessível do avatar é GENÉRICO, e é lacuna registrada da
-          decisão E: o `writers` do `GET /books/:bookId` devolve só `userId`, e
-          o nome de quem não é você não está em nenhuma resposta da API hoje (o
-          `/me` não lista os membros do clube). Quando listar, esta chave morre e
-          o `aria-label` passa a ser o nome da pessoa.
+          ⚠️ **O FALLBACK, e ele deixou de ser o caso comum.** O `writers` do
+          `GET /books/:bookId` devolve só `userId`; desde a Tarefa 26a existe
+          `GET /clubs/:clubId/members` para resolver o nome, e a Tarefa 27 usa
+          essa rota nas DUAS metades desta tela — o acervo e esta sobreposição.
+
+          Esta frase sobrou para o estado real de quem **não conhece as
+          pessoas**: o `GET /members` que falhou, o `/me` que ainda não chegou,
+          ou um autor que não está na lista. Ela não cobra ninguém e não diz
+          "alguém que você não conhece".
         */
         writer: 'Alguém do clube escreveu neste dia',
+        /*
+          ⚠️ **INTERPOLADA, e a razão é a metade FALADA do nome.** Trocar este
+          `aria-label` pelo nome cru ("Maria") daria a inicial certa e perderia
+          o "escreveu neste dia" — o que dá sentido ao avatar sozinho para quem
+          ouve a tela. Com a interpolação, as duas coisas convivem, e a mesma
+          pessoa deixa de ser "Maria" no acervo e "alguém" no plano, dois dedos
+          acima.
+        */
+        writerNamed: '{{name}} escreveu neste dia',
         empty: {
           title: 'Este livro ainda não tem plano de leitura.',
           description:
@@ -230,20 +243,45 @@ export const pt = {
           all: 'Tudo',
           mine: 'Minhas',
           /*
-            ⚠️ **É O COMPLEMENTO DE "MINHAS", E NÃO UM CHIP POR PESSOA.**
-            Nenhuma rota da API lista os membros do clube com nome (lacuna de
-            backend registrada na Tarefa 18), então "de Fulana" é impossível
-            hoje — e num clube de duas pessoas o complemento é informação
-            completa.
+            ⚠️ **O COMPLEMENTO DE "MINHAS" — E ELE VIROU O MODO DEGRADADO.**
 
-            ⚠️ E A FRASE NÃO É "De outras pessoas" POR UM MOTIVO MEDIDO: o
-            radical `tras` da varredura anti-guilt (`locales/__tests__/
-            anti-guilt.test.ts`, que existe para pegar "atrás"/"atrasado")
-            casa dentro de "ou-TRAS". A guarda está certa e a palavra é que
-            tinha de mudar — o sentido é o mesmo, e é o mesmo vocabulário que
-            `pages.dayNote.others.author` já usa.
+            Até a Tarefa 26a nenhuma rota listava os membros do clube com nome,
+            então "De Maria" era impossível e este chip era o filtro por pessoa
+            inteiro. Agora a rota existe (`GET /clubs/:clubId/members`) e a
+            Tarefa 27 monta um chip por membro ativo — este aqui é o que a tela
+            mostra quando **não sabe as pessoas**: `GET /members` que falhou, ou
+            o `/me` que ainda não chegou (e sem saber qual delas sou eu, um chip
+            por pessoa me daria um chip meu ao lado de "Minhas").
+
+            ⚠️ A prosa anterior deste bloco dizia que a frase "não é 'De outras
+            pessoas'" porque o radical `tras` da varredura anti-culpa casa
+            dentro de "ou-TRAS" — e o valor logo abaixo **é** "De outras
+            pessoas", ou seja, o comentário contradizia a linha que ele
+            explicava. O que aconteceu de fato está registrado em
+            `locales/__tests__/guilt-terms.ts`: o radical foi ESTREITADO para
+            `atras` + `' tras'` (com espaço) justamente porque uma guarda que
+            veta palavra inocente passa a mandar no texto do produto. A guarda
+            hoje não casa "outras", e a palavra pôde voltar.
           */
           others: 'De outras pessoas',
+          /*
+            ⚠️ **O CHIP QUE FINALMENTE DIZ O NOME** (Tarefa 27) — a lacuna que o
+            MVP 1 registrou três vezes e a pergunta 1 do `docs/ACEITE-MVP.md`.
+
+            É NAVEGAÇÃO, não permissão (ADR 0002): "De Maria" diz de quem é o
+            acervo que você está olhando, e nunca que a Maria escondeu algo de
+            alguém. E nunca um contador ao lado do nome — "incentivo por
+            presença, não por comparação" (§1 do plano).
+          */
+          person: 'De {{name}}',
+          /*
+            Decisão C da Tarefa 26a: `User.name` é anulável e o backend **não
+            inventa fallback** (um `?? 'Alguém'` no servidor seria texto de
+            interface decidido no lugar errado, e em qual idioma?). Quem escolhe
+            a palavra é a tela, com `t()` — e ela fala de NOME, nunca de quem a
+            pessoa é ou do que ela deixou de fazer.
+          */
+          unnamed: 'De alguém sem nome',
         },
         author: {
           /* REGRA 2: autoria é "você × outra pessoa", e o `me` do contexto

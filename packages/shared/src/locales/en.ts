@@ -94,7 +94,10 @@ export const en: typeof pt = {
       plan: {
         label: 'Days of the reading plan',
         today: 'Today',
+        /* The fallback, for when the screen does not know the people. */
         writer: 'Someone in the club wrote on this day',
+        /* Interpolated, so the avatar keeps the name AND the "on this day". */
+        writerNamed: '{{name}} wrote on this day',
         empty: {
           title: 'This book has no reading plan yet.',
           description:
@@ -109,9 +112,15 @@ export const en: typeof pt = {
           label: 'How to look at the collection',
           all: 'Everything',
           mine: 'Mine',
-          /* The complement of "Mine", never a chip per person: no route lists
-             the members of a club with their names yet. */
+          /* The complement of "Mine" — now the DEGRADED mode: what the screen
+             shows when it does not know the people (task 27). */
           others: 'By other people',
+          /* The chip that finally says the name (task 27). Navigation, never
+             permission — and never a counter beside it. */
+          person: 'By {{name}}',
+          /* `User.name` is nullable and the backend invents no fallback
+             (decision C of task 26a): the screen picks the word. */
+          unnamed: 'By someone with no name',
         },
         author: {
           you: 'You',

@@ -53,6 +53,12 @@ export {
   type FieldControlProps,
   type FieldProps,
 } from './components/field';
+export {
+  FilterBar,
+  type FilterBarProps,
+  type FilterGroup,
+  type FilterOption,
+} from './components/filter-bar';
 export { FilterChip, type FilterChipProps } from './components/filter-chip';
 export { initialsFromName } from './components/initials';
 export {
