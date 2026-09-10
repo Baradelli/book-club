@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAuth } from './auth/auth-context';
 import { useActiveClub } from './club/active-club';
-import { persistLocale } from './i18n';
+import { changeLocale, persistLocale } from './i18n';
 import { AppRoutes } from './router';
 import { isThemePreference, THEME_PREFERENCES, useTheme } from './theme';
 
@@ -47,7 +47,11 @@ function LanguagePicker() {
         onChange={(event) => {
           const next = event.target.value;
           if (!isLocale(next)) return;
-          void i18n.changeLanguage(next);
+          // ⚠️ `changeLocale`, e NÃO `i18n.changeLanguage` (Tarefa 29a): o
+          // catálogo `en` não vem mais no chunk de entrada, então é preciso
+          // buscá-lo antes de trocar a língua — senão a tela fica em `pt` e
+          // parece que a tradução não existe.
+          void changeLocale(i18n, next);
           persistLocale(next);
         }}
       >

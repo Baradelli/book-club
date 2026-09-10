@@ -1621,6 +1621,78 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
 - **O push nunca leva o conteúdo da nota** — só quem e sobre qual tema.
 - Essa feature entra **com port, fake e teste** como qualquer outra. Sem `$queryRaw` na rota.
 
+### Fatia inserida antes do Bloco G
+
+- [x] **29a** — O catálogo `en` sai do chunk de entrada: `import()` + `addResourceBundle`.
+      **Fatia INSERIDA pelo orquestrador do MVP 3**, antes da 30.
+      → `tasks/29a-catalogo-en-sob-demanda.md`
+      _**A FOLGA QUE AS NOVE FATIAS SEGUINTES PRECISAVAM.** Entregue: o subpath
+      `@clube/shared/locales/en`, o `resources` virou `eagerResources` (só `pt`), e o
+      carregador preguiçoso em `packages/app/src/i18n/lazy-catalog.ts`. **415 shared**
+      (era 413) **+ 195 ui** (intocado) **+ 1307 backend** (intocado) **+ 620 app** (era 603).
+      Integração **não rodada** — a fatia não toca repositório, rota nem banco (baseline 387)._
+      _**Por que ela existe, e o número que decidiu:** a folga era **25.005 B** e o MVP 3 tem
+      pelo menos três telas a ~5,9 kB cada. Mas o número que decidiu não foi a folga, foi a
+      **taxa**: com os dois catálogos eager, toda chave nova custava o chunk **duas** vezes
+      (~86 B por par `pt`+`en`); agora custa uma. Feita primeiro, ela barateia as nove fatias
+      seguintes; feita no fim, salvaria só a última._
+      _**⚠️ A MEDIÇÃO CORTOU METADE DO ESCOPO ANTES DE A SPEC SER ESCRITA.** Eu esperava ter de
+      apagar o `export { en }` do barril e reescrever os **10 arquivos de teste** que importam
+      esse binding. Medido por mutação: com o `en` fora do `eagerResources`, o Rollup
+      **tree-shaka o re-export não usado** e os bytes saem igual (415.412 B **com** o
+      re-export). Os 10 arquivos ficaram **intocados** — e isso importa além do churn: as três
+      guardas do §7.9 importam `en` **do barril**, e apagá-lo as teria feito ver metade dos
+      idiomas._
+      _**⚠️ O BLOQUEADOR, E A LIÇÃO Nº 1 DUAS VEZES SEGUIDAS.** A primeira entrega tinha o
+      chunk de entrada 9,6 kB menor e **o service worker precacheando o chunk do `en`** —
+      `globPatterns: ['**/*.{js,...}']` o pegava. Medido contra o baseline **verdadeiro** do
+      HEAD: precache **15 entries (887,15 KiB) → 16 entries (887,79 KiB)**, ou seja a fatia
+      fazia o install baixar **0,64 KiB a MAIS**. Verde em todos os testes. ⚠️ **E o revisor
+      chegou à conclusão certa pelo número errado:** ele comparou contra um "antes" que ele
+      reconstruiu, e esse "antes" já continha os 660 B do carregador da fatia — então ele viu
+      empate onde havia regressão. Foi a repetição da medição pelo orquestrador, contra o
+      baseline de verdade, que deu a gravidade. Conserto: `globIgnores: ['assets/en-*.js']`._
+      _**⚠️ E A GUARDA DO CONSERTO ERA OCA — achado do orquestrador, e é a mesma classe um
+      nível acima.** A primeira guarda afirmava que a string `globIgnores: ['assets/en-*.js']`
+      estava no `vite.config.ts`. Mas a propriedade é *"o `en` não está no manifest de
+      precache"*, e ela quebra **sem aquela string mudar um byte**: o glob está amarrado a um
+      nome que o **Rollup** escolheu. Mutante realista (`chunkFileNames:
+      'assets/chunk-[name]-[hash].js'`, `globIgnores` intacto): o chunk virou
+      `chunk-en-DQfkl5UE.js`, o precache voltou a **16 entries (887,85 KiB)** e a suíte deu
+      **619 passed — ZERO acusadores**. A guarda mudou de lugar para o `bundle-guard.test.ts`,
+      que **já roda um build real** no `beforeAll` (o `sw.js` estava sendo gerado ali de
+      graça), e identifica o chunk **por conteúdo, não por nome**. Depois: **0 → 1 acusador**,
+      com o vermelho nomeando o arquivo que vazou. A de texto ficou, rebatizada para
+      `DECLARES the intent…`, e os dois docblocks apontam um para o outro._
+      _**Os outros quatro achados, todos corrigidos com acusador novo:** (1) `ensureCatalog`
+      mentia no nome — sempre carregava o inglês e o registrava sob o locale recebido, uma
+      armadilha de **zero acusadores** no dia do terceiro idioma; virou `ensureEnCatalog` e o
+      `if` do `changeLocale` tem **2** acusadores. (2) Corrida de toque duplo no seletor: a
+      carga em voo do `en` vencia a escolha posterior de `pt`, deixando tela, `<select>` e
+      preferência gravada em desacordo — conserto "quem pediu por último manda", **1**
+      acusador. (3) A profundidade do `eagerResourcesCopy` era indistinguível da cópia rasa
+      (**0** acusadores); ganhou dono, e a rasa agora dá **5**. (4) O caminho de boot com
+      `import()` rejeitado não era percorrido por ninguém; ganhou teste._
+      _**O bug que o executor achou e a spec não previa:** `addResourceBundle` escreve
+      **dentro** do objeto passado em `resources`, e esse objeto era um só, exportado do
+      `shared` — uma instância do i18next contaminava as outras, e `hasResourceBundle('en')`
+      respondia `true` numa instância recém-criada. A memoização estaria guardando catálogo
+      alheio._
+      _**Complexidade (o dono pediu):** o `i18n.ts` dobrou (64 → 124 linhas canônicas) com três
+      assuntos que não conversam. Dividido em `i18n/lazy-catalog.ts` (**55**), e o `i18n.ts`
+      voltou a **87**. ⚠️ **Na ordem certa** — os acusadores primeiro, a extração depois
+      (lição nº 15 do MVP 2: extrair helper sem acusador o faz **parecer** coberto)._
+      _**Gates:** `test` · `typecheck` · `lint` · `prettier --check` · `build` limpos.
+      Entrada **416.107 B** (era 424.995 — **−8.888 B**), teto **450.000 não relaxado**, folga
+      **33.893**. Chunk do `en`: **9.585 B**, fora do `index.html` **e** fora do precache.
+      Precache **878,47 KiB** (era 887,15 — **−8,68 KiB**). `packages/ui` e `packages/backend`
+      intocados._
+      _**Dívidas registradas, não consertadas:** o chunk do **editor** (**453.606 B**) também
+      está no precache — pré-existente, maior que tudo isto junto, e misturá-lo aqui tornaria a
+      medição desta fatia ilegível; fica para fatia própria. E o **terceiro** nível do
+      `eagerResourcesCopy` continua compartilhado (com `deep: true` a cópia também vaza), hoje
+      inalcançável porque ninguém chama assim._
+
 ### Bloco G — Registro de leitura
 
 - [ ] **30** — Domínio `ReadingLog` + UseCases `markRead` e `unmarkRead` (hard delete).

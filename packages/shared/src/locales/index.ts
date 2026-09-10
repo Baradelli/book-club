@@ -5,7 +5,6 @@
 // pelo app e por qualquer outro consumidor futuro — e porque a paridade de
 // chaves precisa de um teste, que mora aqui.
 
-import { en } from './en';
 import { pt } from './pt';
 
 export { en } from './en';
@@ -24,10 +23,23 @@ export const DEFAULT_LOCALE: Locale = 'pt';
  */
 export const FALLBACK_LOCALE: Locale = 'pt';
 
-/** No formato que o `i18next.init` espera. */
-export const resources = {
+/**
+ * Os catálogos **EAGER** — os que o `i18next.init` recebe, e portanto os que
+ * vão no chunk de entrada do PWA.
+ *
+ * ⚠️ **O nome diz "eager" porque `en` NÃO está aqui (Tarefa 29a, decisão C).**
+ * Ele custava 9.583 B no chunk de entrada de todo mundo, inclusive de quem
+ * nunca vai vê-lo: agora chega por `import('@clube/shared/locales/en')` quando
+ * (e só quando) alguém escolhe inglês. Chamar isto de `resources` com um só
+ * locale dentro seria a prosa que mente — quem lesse concluiria que o app tem
+ * um idioma.
+ *
+ * `en` continua exportado por este barril (é dele que os testes de paridade
+ * leem) e por um subpath próprio (é dele que o `import()` carrega). O
+ * re-export é tree-shaken: medido, ele não custa byte nenhum.
+ */
+export const eagerResources = {
   pt: { translation: pt },
-  en: { translation: en },
 };
 
 export type TranslationCatalog = typeof pt;

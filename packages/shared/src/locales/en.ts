@@ -1,7 +1,14 @@
-import { pt } from './pt';
+import type { pt } from './pt';
 
 /**
  * Catálogo **en** — o segundo locale.
+ *
+ * ⚠️ **`import type`, e não `import` (Tarefa 29a, regra 2).** Este arquivo é o
+ * alvo de um `import()` dinâmico (`@clube/shared/locales/en`) e por isso vira
+ * um CHUNK próprio: um import de valor de `./pt` faria esse chunk arrastar o
+ * catálogo português inteiro junto, e quem trocasse de idioma baixaria os dois.
+ * Aqui o `pt` só é usado como TIPO, então o `import type` diz isso ao bundler
+ * antes de ele ter opinião.
  *
  * O tipo é `typeof pt` de propósito: é o compilador reprovando chave a mais ou
  * a menos, ANTES do teste de paridade. Chave faltando não quebra nada em

@@ -65,6 +65,51 @@ describe('service worker config', () => {
     expect(config).toContain("navigateFallback: '/index.html'");
   });
 
+  it('⚠️ DECLARES the intent of keeping the en catalog out of the precache (task 29a)', () => {
+    /*
+      ⚠️ **ESTA NÃO É A GUARDA — ela é a DECLARAÇÃO DE INTENÇÃO no config.** A
+      guarda de verdade é `bundle-guard.test.ts > keeps the en catalog OUT of
+      the service worker PRECACHE`, que lê o `sw.js` EMITIDO e identifica o
+      chunk do `en` por CONTEÚDO.
+
+      A diferença é medida, e é a razão de as duas existirem: esta afirma que
+      a string `'assets/en-*.js'` está escrita aqui, e a propriedade que
+      importa não mora no texto — o glob está acoplado a um nome de arquivo
+      que o Rollup escolheu. Com o `globIgnores` intacto e um
+      `chunkFileNames: 'assets/chunk-[name]-[hash].js'` no `rollupOptions`, o
+      precache voltava a 16 entradas / 887,85 KiB e **esta asserção continuava
+      verde**. Ela sobrevive porque é barata e porque documenta a decisão no
+      lugar onde alguém vai mexer; não porque cobre alguma coisa sozinha.
+    */
+    /*
+      ⚠️ **O BLOQUEADOR DA RODADA DE CORREÇÃO DA 29a, e ele é o motivo de esta
+      asserção existir.** Tirar o `en` do chunk de entrada não basta: o
+      `globPatterns: ['**\/*.{js,...}']` do Workbox varre o `dist/` inteiro e
+      põe TODO `.js` emitido no manifesto de precache. Medido no build:
+
+        antes da fatia (HEAD 613b7e4)   precache  15 entries (887.15 KiB)
+        com o chunk do `en` precacheado precache  16 entries (887.79 KiB)
+
+      Ou seja: o install passava a baixar **+0,64 KiB**, e o objetivo escrito
+      na spec ("quem abre o app em português para de baixar o catálogo em
+      inglês") continuava sem ser entregue — o download só tinha mudado de
+      momento, do primeiro paint para o segundo plano. A fatia ficava líquida
+      NEGATIVA em bytes transferidos.
+
+      ⚠️ **A consequência, que é decisão e não descuido: trocar para inglês
+      OFFLINE não funciona.** O `import()` rejeita, e a decisão G já manda cair
+      no `pt` sem tela de erro. É o preço combinado: o segundo idioma é
+      sob demanda, e "sob demanda" pressupõe rede.
+
+      ⚠️ E o que esta asserção NÃO cobre, de propósito: o chunk do EDITOR
+      (453.606 B) também está no precache. É pré-existente, é maior que tudo
+      isto junto, e entra em fatia própria — misturá-lo aqui tornaria a
+      medição desta ilegível.
+    */
+    expect(config).toContain('globIgnores');
+    expect(config).toContain("'assets/en-*.js'");
+  });
+
   it('caches no API response in this slice (decision D)', () => {
     // Offline é a Tarefa 21. Cachear resposta de API agora criaria dado velho
     // invisível — e o `runtimeCaching` é o único jeito de fazer isso pelo

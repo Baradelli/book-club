@@ -1,16 +1,28 @@
 import type { StorageLike } from '@clube/shared/client';
 import {
   DEFAULT_LOCALE,
+  eagerResources,
   FALLBACK_LOCALE,
   isLocale,
   type Locale,
-  resources,
   type TranslationCatalog,
 } from '@clube/shared/locales';
 import i18next, { type i18n as I18nInstance } from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
 import { browserStorage } from './env';
+import {
+  changeLocale,
+  type EnCatalogImport,
+  registerCatalogLoader,
+} from './i18n/lazy-catalog';
+
+/**
+ * O carregador preguiçoso do `en` mora em `./i18n/lazy-catalog` — reexportado
+ * aqui porque `App.tsx` e os testes falam com o i18n por UMA porta só, e
+ * mover o arquivo não pode virar churn em quem só troca de idioma.
+ */
+export { changeLocale, type EnCatalogImport } from './i18n/lazy-catalog';
 
 /**
  * i18n do app. Os catálogos vivem em `@clube/shared/locales` — back e front
@@ -85,18 +97,67 @@ function browserLanguages(): readonly string[] {
   return navigator.languages ?? [navigator.language];
 }
 
+/**
+ * ⚠️ **CADA INSTÂNCIA RECEBE A SUA CÓPIA, DE DOIS NÍVEIS, e os dois são
+ * medidos.**
+ *
+ * O `addResourceBundle` escreve DENTRO do objeto que o `init` recebeu em
+ * `resources` — e `eagerResources` é um só, exportado por
+ * `@clube/shared/locales`. Sem cópia nenhuma (**7 acusadores**), a primeira
+ * instância que carregasse o `en` deixava o catálogo lá dentro e toda
+ * instância criada depois já nascia com ele: o `hasResourceBundle` da regra 8
+ * passava a responder "já tenho" para um catálogo que aquela instância nunca
+ * baixou.
+ *
+ * O SEGUNDO nível (`{ ...namespaces }`) é carga útil e tinha ficado sem dono:
+ * medido na rodada de correção, a cópia rasa de um nível dava **zero**
+ * acusadores, porque o `addResourceBundle` grava `data[lng][ns] = pack` e o
+ * objeto por locale seria compartilhado. Hoje dá **5**, e o dono é
+ * `does NOT leak a bundle WRITTEN OVER pt into the next instance`.
+ *
+ * ⚠️ **O TERCEIRO nível continua compartilhado — dívida registrada, não
+ * consertada:** o objeto de tradução em si é o mesmo `pt` em todas as
+ * instâncias, e um `addResourceBundle(..., { deep: true, overwrite: true })`
+ * mergiria DENTRO dele e vazaria igual. É inalcançável hoje: o único chamador
+ * é o carregador do `en`, que grava um namespace inexistente e sem `deep`.
+ */
+function eagerResourcesCopy(): Record<
+  string,
+  { translation: TranslationCatalog }
+> {
+  const copy: Record<string, { translation: TranslationCatalog }> = {};
+  for (const [locale, namespaces] of Object.entries(eagerResources)) {
+    copy[locale] = { ...namespaces };
+  }
+  return copy;
+}
+
 export function createI18n(
   storage: StorageLike = browserStorage,
+  importEn?: EnCatalogImport,
 ): I18nInstance {
   const instance = i18next.createInstance();
+  const initialLocale = pickInitialLocale(
+    readStoredLocale(storage),
+    browserLanguages(),
+  );
+
+  if (importEn !== undefined) registerCatalogLoader(instance, importEn);
+
   void instance.use(initReactI18next).init({
-    resources,
-    lng: pickInitialLocale(readStoredLocale(storage), browserLanguages()),
+    resources: eagerResourcesCopy(),
+    lng: initialLocale,
     fallbackLng: FALLBACK_LOCALE,
     interpolation: { escapeValue: false },
     // Chaves são `a.b.c`; nada de plural por namespace nesta fatia.
     defaultNS: 'translation',
   });
+
+  // Quem já abre em inglês (escolha guardada ou navegador) também precisa do
+  // catálogo — só o seletor deixaria essa pessoa em português para sempre,
+  // sem nada acusando (decisão E).
+  void changeLocale(instance, initialLocale);
+
   return instance;
 }
 

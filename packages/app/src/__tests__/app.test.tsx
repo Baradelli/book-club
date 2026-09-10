@@ -1,5 +1,11 @@
 import { type StorageLike, TOKEN_STORAGE_KEY } from '@clube/shared/client';
-import { act, render, screen } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -100,6 +106,34 @@ describe('App', () => {
     expect(screen.queryByText('Idioma')).not.toBeNull();
     expect(screen.queryByText('Tema')).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Sair' })).not.toBeNull();
+  });
+
+  it('⚠️ loads the en catalog when the picker switches language (rule 7)', async () => {
+    /*
+      O SEGUNDO GATILHO da decisão E da Tarefa 29a, e o que prova a FIAÇÃO: o
+      catálogo `en` não vem mais no chunk de entrada, então trocar de idioma
+      só traduz a tela se o seletor pedir o `import()` antes de mudar a
+      língua. O mutante que volta ao `i18n.changeLanguage(next)` cru deixa o
+      cabeçalho inteiro em português — e nada mais na suíte acusa isso, porque
+      nenhum outro teste de tela troca de idioma.
+
+      As frases são literais escolhidas à mão, e não `en.app.name`: o valor
+      esperado não pode vir do mesmo lugar que o obtido (§7.8).
+    */
+    respondWith(200, { token: 'token-renovado' });
+    await renderApp(memoryStorage({ [TOKEN_STORAGE_KEY]: 'token-da-sessao' }));
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Idioma'), {
+        target: { value: 'en' },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Book Club')).not.toBeNull();
+    });
+    expect(screen.queryByText('Clube do Livro')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sign out' })).not.toBeNull();
   });
 
   it('hides the sign-out button when there is no session', async () => {

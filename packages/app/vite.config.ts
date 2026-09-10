@@ -89,6 +89,18 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
+        // ⚠️ O CHUNK DO `en` FICA FORA DO PRECACHE (Tarefa 29a).
+        //
+        // Sem isto, tirar o `en` do chunk de entrada não economiza byte
+        // nenhum de rede: o `globPatterns` acima varre todo `.js` do `dist/`,
+        // e o install baixava o catálogo do mesmo jeito — medido, o precache
+        // ia de 15 entradas / 887,15 KiB (antes da fatia) para 16 / 887,79
+        // KiB. O download só mudava de momento.
+        //
+        // O preço, combinado: trocar para inglês SEM REDE não funciona, e cai
+        // no `pt` pela decisão G (sem tela de erro). O acusador é
+        // `src/__tests__/service-worker-config.test.ts`.
+        globIgnores: ['assets/en-*.js'],
         navigateFallback: '/index.html',
         // Decisão D: offline é a Tarefa 21. O SW NÃO cacheia `/api` e o
         // navigateFallback NÃO engole chamada de API — devolver o index.html

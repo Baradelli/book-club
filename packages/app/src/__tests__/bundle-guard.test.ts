@@ -70,6 +70,36 @@ const outDir = join(tmpdir(), 'clube-bundle-guard');
 const EDITOR_MARKERS = /prosemirror|tiptap/iu;
 
 /**
+ * AS FRASES QUE DENUNCIAM O CATÁLOGO `en` (Tarefa 29a, regras 15 e 16).
+ *
+ * São **valores** do `en.ts`, escolhidos por leitura, e cada uma é exclusiva
+ * dele — o `pt` diz outra coisa no mesmo lugar, e nenhuma tela as escreve à
+ * mão (`CLAUDE.md`: nenhum texto solto). Frase de catálogo sobrevive à
+ * minificação inteira: não é identificador, é conteúdo.
+ *
+ * | chave | `en` (aqui) | `pt` |
+ * |---|---|---|
+ * | `app.name` | `Book Club` | `Clube do Livro` |
+ * | `errors.network` | `No connection to the server…` | `Sem conexão com o servidor…` |
+ *
+ * Duas, e não uma, porque uma frase é uma string que alguém reescreve num
+ * conserto de tradução; as duas caírem juntas é bem menos provável. Se uma
+ * delas mudar no catálogo, ATUALIZE a lista — não apague a asserção.
+ */
+const EN_CATALOG_MARKERS = [
+  'Book Club',
+  'No connection to the server. Check your internet.',
+] as const;
+
+function withEnCatalog(assets: readonly Asset[]): string[] {
+  return assets
+    .filter((asset) =>
+      EN_CATALOG_MARKERS.some((phrase) => asset.code.includes(phrase)),
+    )
+    .map((asset) => asset.name);
+}
+
+/**
  * O TETO DO QUE A PESSOA BAIXA PARA VER O LOGIN.
  *
  * Medido nesta fatia: **357.489 B** antes do editor entrar, e o mesmo número
@@ -99,6 +129,8 @@ let scripts: Asset[] = [];
 /** Os `.js` que o `index.html` manda buscar no primeiro carregamento. */
 let entryScripts: Asset[] = [];
 let indexHtml = '';
+/** O `sw.js` emitido — é nele que mora o manifesto de precache do Workbox. */
+let serviceWorker = '';
 
 /** `assets/index-abc.js` → `index-abc.js`; ignora o que não é `.js` local. */
 function scriptFileName(reference: string): string | undefined {
@@ -189,6 +221,7 @@ beforeAll(async () => {
     }));
 
   indexHtml = readFileSync(join(outDir, 'index.html'), 'utf8');
+  serviceWorker = readFileSync(join(outDir, 'sw.js'), 'utf8');
   const eager = new Set(eagerScriptNames(indexHtml));
   entryScripts = scripts.filter((asset) => eager.has(asset.name));
 }, 300_000);
@@ -271,6 +304,97 @@ describe('the app bundle (rule 21)', () => {
     for (const name of withEditor) {
       expect(indexHtml).not.toContain(name);
     }
+  });
+
+  it('⚠️ ships no en CATALOG in the FIRST LOAD (rule 16)', () => {
+    /*
+      ⚠️ Falhou? Alguém pôs o `en` de volta em `eagerResources`, ou apontou o
+      `import()` para o BARRIL (`@clube/shared/locales`) em vez do subpath
+      `@clube/shared/locales/en`. As duas desfazem a fatia SEM ERRO NENHUM: o
+      Rollup vê o binding usado e traz o catálogo para a entrada, e todo mundo
+      que lê em português volta a baixar 9,5 kB de inglês.
+
+      É a guarda do tipo "só pode melhorar" (decisão H), o mesmo padrão que o
+      MVP 2 usou para as strings cravadas em `ui`: pina o fato e deixa a
+      asserção só poder cair.
+    */
+    expect(withEnCatalog(entryScripts)).toEqual([]);
+  });
+
+  it('⚠️ puts the en catalog in a chunk of its OWN, which the first load does not fetch (rule 15)', () => {
+    /*
+      A terceira asserção do par, pelo mesmo motivo do chunk do editor: sem
+      ela, APAGAR o catálogo `en` (ou trocar as frases acima) deixaria a
+      asserção de cima verde por omissão — "não está na entrada" seria verdade
+      porque ele não está em lugar nenhum, e ninguém saberia que o segundo
+      idioma do app deixou de ser entregue.
+    */
+    const lazyScripts = scripts.filter(
+      (asset) => !entryScripts.includes(asset),
+    );
+    const withCatalog = withEnCatalog(lazyScripts);
+
+    expect(withCatalog).toHaveLength(1);
+    // E é o catálogo INTEIRO que está lá, não um módulo de fachada com uma
+    // frase dentro: o `en.ts` tem ~9,5 kB de conteúdo.
+    expect(
+      totalBytes(
+        lazyScripts.filter((asset) => withCatalog.includes(asset.name)),
+      ),
+    ).toBeGreaterThan(5_000);
+
+    // E o `index.html` não o pede — nem por `src`, nem por `modulepreload`.
+    for (const name of withCatalog) expect(indexHtml).not.toContain(name);
+  });
+
+  it('⚠️ keeps the en catalog OUT of the service worker PRECACHE (task 29a)', () => {
+    /*
+      ⚠️ **ESTA É A GUARDA DO PRECACHE; a de `service-worker-config.test.ts` é
+      a declaração de intenção.** As duas existem, e a distinção decide qual
+      delas você conserta quando uma ficar vermelha.
+
+      A de lá afirma que a string `'assets/en-*.js'` está escrita no
+      `vite.config.ts`. É barata e documenta a decisão — mas a propriedade que
+      importa NÃO mora no texto do config: o glob está acoplado a um nome de
+      arquivo que **o Rollup escolheu**, e nada pina esse nome. Medido na
+      rodada de correção, com o `globIgnores` intacto e um
+      `chunkFileNames: 'assets/chunk-[name]-[hash].js'` acrescentado ao
+      `rollupOptions` — a linha que qualquer fatia futura de performance pode
+      escrever:
+
+        dist/assets/chunk-en-DQfkl5UE.js       9.55 kB
+        precache  16 entries (887.85 KiB)      ← o bloqueador de volta, inteiro
+        suíte do app: 619 passed               ← ZERO acusadores
+
+      Ou seja: o glob continuava lá, verdinho, e tinha deixado de casar.
+      Guarda verde não é guarda (lição nº 1 do MVP 1).
+
+      Por isso esta olha o ARTEFATO EMITIDO — o `sw.js` que este mesmo
+      `beforeAll` já gera de graça — e identifica o chunk do `en` **por
+      conteúdo** (as frases exclusivas do catálogo), nunca por nome. O nome
+      pode mudar à vontade.
+    */
+    const lazyScripts = scripts.filter(
+      (asset) => !entryScripts.includes(asset),
+    );
+    const withCatalog = withEnCatalog(lazyScripts);
+
+    // O chunk existe e é UM (o mesmo par das regras 15/16): sem esta linha, um
+    // build que não emitisse o catálogo deixaria o `not.toContain` abaixo
+    // verde por omissão.
+    expect(withCatalog).toHaveLength(1);
+
+    // ⚠️ O LADO POSITIVO, e ele é o que impede a asserção de baixo de passar
+    // com um `sw.js` vazio, sem manifesto, ou lido do lugar errado: o precache
+    // LISTA o chunk de entrada, que é justamente o que ele deve trazer.
+    expect(
+      entryScripts.filter((asset) => serviceWorker.includes(asset.name)),
+    ).toHaveLength(entryScripts.length);
+
+    // E não lista o do `en`: quem lê em português não baixa inglês nem no
+    // install, em segundo plano. O preço combinado é a decisão G — trocar de
+    // idioma OFFLINE cai no `pt`, sem tela de erro.
+    for (const name of withCatalog) expect(serviceWorker).not.toContain(name);
   });
 
   it('stays under a ceiling for the WHOLE build, editor chunk included', () => {
