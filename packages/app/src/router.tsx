@@ -8,6 +8,7 @@ import {
   RequireAuth,
 } from './auth/require-auth';
 import { AcceptInvitePage } from './pages/accept-invite';
+import { AcervoPage } from './pages/acervo';
 import { BookPage } from './pages/book';
 import { BookFormPage } from './pages/book-form';
 import { DAY_NOTE_PATH, DayNotePage } from './pages/day-note';
@@ -17,17 +18,16 @@ import {
   FreeNotePage,
 } from './pages/free-note';
 import { HighlightFormPage } from './pages/highlight-form';
-import { HighlightsPage } from './pages/highlights';
 import { HomePage } from './pages/home';
 import { LoginPage } from './pages/login';
 import { NotFoundPage } from './pages/not-found';
 import {
+  ACERVO_PATH,
   BOOK_EDIT_PATH,
   BOOK_NEW_PATH,
   BOOK_PATH,
   HIGHLIGHT_NEW_PATH,
   HIGHLIGHT_PATH,
-  HIGHLIGHTS_PATH,
 } from './pages/paths';
 
 /**
@@ -107,23 +107,39 @@ export function AppRoutes() {
         <Route path={BOOK_NEW_PATH} element={<BookFormPage />} />
         <Route path={BOOK_EDIT_PATH} element={<BookFormPage />} />
         {/*
-          OS GRIFOS DO LIVRO (Tarefa 25) — a coleção e as duas rotas do MESMO
-          formulário (decisões A e B).
+          O ACERVO DO LIVRO (Tarefa 28) — anotações **e** grifos num lugar só.
 
-          As três dividem o prefixo `/books/:bookId/highlights`, e não há
+          ⚠️ **ELE SUBSTITUI A ROTA DE LISTA DE GRIFOS** (`/books/:bookId/
+          highlights`, Tarefa 25 — decisão A da 28): as duas abas da tela do
+          livro eram inconsistentes ("Anotações" listava ali mesmo, "Grifos"
+          navegava), e uma lista dos dois tem de ser UM lugar. A tela e a rota
+          antigas foram apagadas; as duas rotas de FORMULÁRIO de grifo ficam.
+
+          ⚠️ **SEGMENTO PRÓPRIO, IRMÃO DE `days` E DE `notes`**, e não um
+          sufixo de `/highlights`: uma terceira rota naquele prefixo entraria na
+          disputa do ranking com `/highlights/:highlightId`. → o docblock de
+          `ACERVO_PATH` em `pages/paths.ts`.
+
+          Protegida pelo `RequireAuth` como todo conteúdo de clube.
+        */}
+        <Route path={ACERVO_PATH} element={<AcervoPage />} />
+        {/*
+          AS DUAS ROTAS DO MESMO FORMULÁRIO DE GRIFO (Tarefa 25, decisões A e
+          B).
+
+          Elas dividem o prefixo `/books/:bookId/highlights`, e não há
           ambiguidade: o react-router prefere a rota MAIS ESPECÍFICA,
           independente da ordem de declaração, e `new` é segmento ESTÁTICO —
           os ids são `randomUUID()`, então "new" nunca é um `highlightId` de
           verdade. É o mesmo desenho das duas rotas da anotação avulsa.
 
-          ⚠️ **O ENDEREÇO DA EDIÇÃO CARREGA O LIVRO**, e a spec pedia
+          ⚠️ **O ENDEREÇO DA EDIÇÃO CARREGA O LIVRO**, e a spec da 25 pedia
           `/highlights/:highlightId`: a Tarefa 24 mediu que **não existe**
           `GET /highlights/:highlightId`, e o `clubId` do corte de tenant vem
-          do LIVRO. → o docblock de `HIGHLIGHTS_PATH` em `pages/paths.ts`.
+          do LIVRO. → o docblock de `HIGHLIGHT_PATH` em `pages/paths.ts`.
 
           Protegidas pelo `RequireAuth` como todo conteúdo de clube.
         */}
-        <Route path={HIGHLIGHTS_PATH} element={<HighlightsPage />} />
         <Route path={HIGHLIGHT_NEW_PATH} element={<HighlightFormPage />} />
         <Route path={HIGHLIGHT_PATH} element={<HighlightFormPage />} />
       </Route>

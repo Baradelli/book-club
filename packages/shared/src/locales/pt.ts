@@ -178,17 +178,18 @@ export const pt = {
         mês.
       */
       bookUnavailable: 'Não foi possível abrir este livro agora.',
-      tabs: {
-        notes: 'Anotações',
-        /*
-          ⚠️ A ABA DEIXOU DE SER DESABILITADA na Tarefa 25, e a chave
-          `highlightsSoon` ("Os grifos chegam no MVP 2") morreu com ela: a
-          frase deixou de ser verdade no instante em que a tela passou a
-          existir, e uma explicação que mente é pior que nenhuma. Agora a aba
-          é um LINK para a coleção do livro.
-        */
-        highlights: 'Grifos',
-      },
+      /*
+        ⚠️ **AS DUAS ABAS MORRERAM NA TAREFA 28, e o que fica é UM link**
+        (decisão B). A chave `tabs` tinha `notes` ("Anotações") e `highlights`
+        ("Grifos"), e as duas eram INCONSISTENTES entre si: a primeira listava
+        na própria tela do livro e a segunda navegava. Agora a tela do livro é
+        o que ela é — o PLANO —, e o acervo (anotações **e** grifos) é um lugar
+        só, a um link de distância.
+
+        A frase fala do que há do outro lado, e não de "aba": quem toca sai
+        desta tela.
+      */
+      acervoLink: 'Ver o acervo do livro',
       plan: {
         /* Nomeia a lista para o leitor de tela ("lista, 30 itens"). */
         label: 'Dias do plano de leitura',
@@ -221,90 +222,125 @@ export const pt = {
             'Um administrador do clube cadastra o plano, com o tema de cada dia.',
         },
       },
-      /*
-        O ACERVO DO LIVRO (Tarefa 19) — a aba "Anotações" deixando de ser um
-        rótulo.
+    },
+    /*
+      O ACERVO DO LIVRO (Tarefa 28) — anotações **e** grifos num lugar só.
 
-        ⚠️ **O FILTRO É NAVEGAÇÃO, NÃO PERMISSÃO** (`docs/adr/0002-*.md`).
-        Nenhuma frase daqui pode sugerir que exista anotação que o clube não vê:
-        nada de "só você", "privada", "visível para". O filtro é uma forma de
-        OLHAR o mesmo acervo — e é por isso que o terceiro chip fala de quem
-        escreveu, nunca de quem pode ler.
-      */
-      notes: {
-        /* Nomeia a lista para o leitor de tela ("lista, 5 itens"). */
-        label: 'Anotações deste livro',
-        loading: 'Carregando as anotações…',
-        /* REGRA 16: criar é EXPLÍCITO. Abrir uma tela não cria linha no banco. */
-        new: 'Nova anotação',
-        filters: {
+      ⚠️ **O FILTRO É NAVEGAÇÃO, NÃO PERMISSÃO** (`docs/adr/0002-*.md`).
+      Nenhuma frase daqui pode sugerir que exista anotação ou grifo que o clube
+      não vê: nada de "só você", "privada", "visível para". As quatro dimensões
+      olham o MESMO acervo — pessoa, tipo, leitura e cor são formas de OLHAR.
+
+      ⚠️ **E O GRIFO NÃO É UM TIPO DE ANOTAÇÃO** (ADR 0004): ele é entidade
+      própria, e o vocabulário tem de deixar isso claro sem o leitor adivinhar.
+      Daí `kind.highlight` ao lado de `kind.plan`/`kind.free`, e não um terceiro
+      "tipo de anotação".
+
+      ⚠️ **`kind` TEM UM DONO SÓ, e ele serve o chip E a linha.** As três
+      palavras aparecem duas vezes na tela (o chip do filtro por tipo e o rótulo
+      de cada linha), e duas chaves seriam duas verdades sobre a mesma coisa —
+      a lição nº 3 do MVP 1 aplicada a três palavras.
+
+      ⚠️ **NENHUM `all` REPETE O TEXTO DE OUTRO GRUPO, e é medido pela própria
+      suíte:** com três grupos de chips na mesma tela, dois "Tudo" fariam
+      `getByRole('button', { name: 'Tudo' })` achar dois botões — e, antes disso,
+      fariam a pessoa ver dois chips com o mesmo nome e comportamento diferente.
+      O `all` de cada dimensão fala da dimensão dele.
+    */
+    acervo: {
+      /** O nome da TELA. O título do livro entra como contexto, abaixo. */
+      title: 'Acervo',
+      loading: 'Carregando o acervo…',
+      retry: 'Tentar de novo',
+      /* Livro de outro clube, livro arquivado, ou id inexistente: para quem
+         não é membro os três são a mesma resposta (`CLAUDE.md`: 404). */
+      bookUnavailable: 'Não foi possível abrir este livro agora.',
+      unavailable: 'Não foi possível carregar o acervo agora.',
+      /* Nomeia a lista para o leitor de tela ("lista, 12 itens"). */
+      label: 'Anotações e grifos deste livro',
+      /* Criar é EXPLÍCITO, e são DOIS destinos: o grifo não é uma anotação. */
+      newNote: 'Nova anotação',
+      newHighlight: 'Novo grifo',
+      kind: {
+        plan: 'Do dia',
+        free: 'Avulsa',
+        highlight: 'Grifo',
+      },
+      filters: {
+        person: {
           /* Nomeia o grupo de chips para quem navega por leitor de tela. */
-          label: 'Como olhar o acervo',
-          all: 'Tudo',
+          label: 'De quem é o acervo',
+          all: 'De todo mundo',
           mine: 'Minhas',
           /*
-            ⚠️ **O COMPLEMENTO DE "MINHAS" — E ELE VIROU O MODO DEGRADADO.**
-
-            Até a Tarefa 26a nenhuma rota listava os membros do clube com nome,
-            então "De Maria" era impossível e este chip era o filtro por pessoa
-            inteiro. Agora a rota existe (`GET /clubs/:clubId/members`) e a
-            Tarefa 27 monta um chip por membro ativo — este aqui é o que a tela
-            mostra quando **não sabe as pessoas**: `GET /members` que falhou, ou
-            o `/me` que ainda não chegou (e sem saber qual delas sou eu, um chip
-            por pessoa me daria um chip meu ao lado de "Minhas").
-
-            ⚠️ A prosa anterior deste bloco dizia que a frase "não é 'De outras
-            pessoas'" porque o radical `tras` da varredura anti-culpa casa
-            dentro de "ou-TRAS" — e o valor logo abaixo **é** "De outras
-            pessoas", ou seja, o comentário contradizia a linha que ele
-            explicava. O que aconteceu de fato está registrado em
-            `locales/__tests__/guilt-terms.ts`: o radical foi ESTREITADO para
-            `atras` + `' tras'` (com espaço) justamente porque uma guarda que
-            veta palavra inocente passa a mandar no texto do produto. A guarda
-            hoje não casa "outras", e a palavra pôde voltar.
+            O complemento de "Minhas" — o modo DEGRADADO (o mesmo da Tarefa 27):
+            é o que a tela mostra quando não sabe as pessoas, ou não sabe qual
+            delas sou eu.
           */
           others: 'De outras pessoas',
-          /*
-            ⚠️ **O CHIP QUE FINALMENTE DIZ O NOME** (Tarefa 27) — a lacuna que o
-            MVP 1 registrou três vezes e a pergunta 1 do `docs/ACEITE-MVP.md`.
-
-            É NAVEGAÇÃO, não permissão (ADR 0002): "De Maria" diz de quem é o
-            acervo que você está olhando, e nunca que a Maria escondeu algo de
-            alguém. E nunca um contador ao lado do nome — "incentivo por
-            presença, não por comparação" (§1 do plano).
-          */
+          /* É NAVEGAÇÃO, não permissão: diz de quem é o acervo que você está
+             olhando, nunca que essa pessoa escondeu algo. */
           person: 'De {{name}}',
-          /*
-            Decisão C da Tarefa 26a: `User.name` é anulável e o backend **não
-            inventa fallback** (um `?? 'Alguém'` no servidor seria texto de
-            interface decidido no lugar errado, e em qual idioma?). Quem escolhe
-            a palavra é a tela, com `t()` — e ela fala de NOME, nunca de quem a
-            pessoa é ou do que ela deixou de fazer.
-          */
+          /* `User.name` é anulável e o backend não inventa fallback (decisão C
+             da Tarefa 26a): quem escolhe a palavra é a tela. */
           unnamed: 'De alguém sem nome',
         },
+        type: {
+          label: 'O que mostrar',
+          all: 'Tudo',
+        },
+        color: {
+          /*
+            ⚠️ O grupo de cor só EXISTE quando o tipo pode incluir grifo
+            (decisão E): um chip de cor com o tipo em "Avulsa" é um filtro que
+            garante zero resultados, e mostrar um controle que só pode esvaziar
+            a lista é pior que esconder.
+          */
+          label: 'Cor do grifo',
+          all: 'Todas as cores',
+        },
+        reading: {
+          /*
+            ⚠️ É um `<select>` NATIVO, e o rótulo é VISÍVEL (decisão D): o plano
+            real tem trinta dias, e trinta chips num celular é um filtro que
+            ninguém usa. Um `aria-label` solto num `<select>` sem rótulo deixa
+            quem vê a tela sem saber o que aquela caixa recorta.
+          */
+          label: 'Leitura do dia',
+          all: 'Todas as leituras',
+        },
+      },
+      item: {
+        /* Só aparece quando o grifo TEM página — a ausência é silenciosa. */
+        page: 'Página {{number}}',
         author: {
-          /* REGRA 2: autoria é "você × outra pessoa", e o `me` do contexto
-             é quem separa os dois. */
+          /* Autoria é "você × a pessoa", e o `me` separa os dois. */
           you: 'Você',
+          /* O genérico, para quando a tela não conhece as pessoas. */
           other: 'Alguém do clube',
         },
-        /* REGRA 3: os dois tipos convivem na lista, identificados. */
-        kind: {
-          plan: 'Do dia',
-          free: 'Avulsa',
-        },
-        empty: {
-          /*
-            REGRA 7: acervo vazio NÃO cobra. A frase fala do livro e do que dá
-            para fazer — nunca do que a pessoa deixou de escrever.
-          */
-          title: 'Nenhuma anotação por aqui ainda.',
-          description: 'Toque em "Nova anotação" para escrever a primeira.',
-          /* O recorte do filtro sem nada dentro: é navegação, não ausência. */
-          filtered: 'Nada por aqui com este filtro.',
-        },
-        unavailable: 'Não foi possível carregar as anotações agora.',
+        /* As duas ações do grifo existem SÓ na linha de quem está olhando. */
+        edit: 'Corrigir este grifo',
+        archive: 'Arquivar este grifo',
+      },
+      empty: {
+        /* Acervo vazio NÃO cobra: a frase fala do que dá para fazer, nunca do
+           que a pessoa deixou de escrever. */
+        title: 'Nada por aqui ainda.',
+        description:
+          'Toque em "Nova anotação" ou em "Novo grifo" para começar o acervo.',
+        /* O recorte do filtro sem nada dentro: é navegação, não ausência —
+           "escreva a primeira" seria mentira embaixo de um filtro. */
+        filtered: 'Nada por aqui com este filtro.',
+      },
+      archive: {
+        /* Arquivar pede confirmação, e cancelar não chama a API. */
+        title: 'Arquivar este grifo?',
+        description: 'Ele sai da lista do clube. O trecho não é apagado.',
+        confirm: 'Arquivar',
+        cancel: 'Cancelar',
+        close: 'Fechar',
+        failed: 'Não foi possível arquivar agora.',
       },
     },
     /*
@@ -558,74 +594,33 @@ export const pt = {
       },
     },
     /*
-      A COLEÇÃO DE GRIFOS DO LIVRO (Tarefa 25) — a primeira vez que o dono vê
-      um grifo na tela.
+      ⚠️ **O QUE SOBROU DA TELA DE GRIFOS (Tarefa 25): OS NOMES DAS CORES.**
 
-      ⚠️ **O FILTRO POR COR É NAVEGAÇÃO, NÃO PERMISSÃO**
-      (`docs/adr/0002-visibilidade-total-no-clube.md`). Nenhuma frase daqui
-      pode sugerir que exista grifo que o clube não vê: nada de "só você",
-      "privado", "visível para". As seis opções olham o MESMO acervo.
+      A tela morreu na Tarefa 28 — o acervo (`pages.acervo`) lista anotações e
+      grifos num lugar só, e a rota `/books/:bookId/highlights` deu lugar a
+      `/books/:bookId/acervo` (decisão A). Todas as outras chaves deste bloco
+      foram para lá.
 
-      ⚠️ **E A COR NUNCA É O ÚNICO PORTADOR DE INFORMAÇÃO** (regra 4): cada
-      cor tem NOME, e é o nome que o leitor de tela fala. Os nomes ficam em
-      `colors`, e o mapa hex → chave vive em `pages/highlight-colors.tsx` com
-      o tipo da paleta de `@clube/shared` — uma cor nova na paleta reprova no
-      `tsc` em vez de aparecer sem nome.
+      ⚠️ **ESTAS FICARAM AQUI, E O ENDEREÇO É A RAZÃO:** o mapa hex → chave vive
+      em `packages/app/src/pages/highlight-colors.tsx`, um módulo NEUTRO que o
+      acervo **e** o formulário de grifo importam (a lição medida da Tarefa 17
+      sobre o `router-link.tsx`), e ele é escopo fechado desta fatia. Renomear a
+      chave obrigaria a tocá-lo por nada — o valor não mudou de dono, só a tela
+      que o mostrava.
+
+      ⚠️ **E A COR NUNCA É O ÚNICO PORTADOR DE INFORMAÇÃO**: cada cor tem NOME,
+      e é o nome que o leitor de tela fala. O `Record<HighlightColor, MessageKey>`
+      daquele módulo amarra as duas pontas no COMPILADOR — uma cor nova na
+      paleta de `@clube/shared` deixa o mapa incompleto e reprova no `tsc`, em
+      vez de aparecer na tela como uma bolinha sem nome.
     */
     highlights: {
-      /** O nome da TELA. O título do livro entra como contexto, abaixo. */
-      title: 'Grifos',
-      loading: 'Carregando os grifos…',
-      retry: 'Tentar de novo',
-      /* Livro de outro clube, livro arquivado, ou id inexistente: para quem
-         não é membro os três são a mesma resposta (`CLAUDE.md`: 404). */
-      bookUnavailable: 'Não foi possível abrir este livro agora.',
-      unavailable: 'Não foi possível carregar os grifos agora.',
-      /* REGRA 19: registrar é um BOTÃO. Abrir uma tela não grava nada. */
-      new: 'Novo grifo',
-      /* Nomeia a lista para o leitor de tela ("lista, 12 itens"). */
-      label: 'Grifos deste livro',
-      filters: {
-        /* Nomeia o grupo de chips para quem navega por leitor de tela. */
-        label: 'Como olhar o acervo',
-        /* O estado "todas" da regra 7 — o acervo inteiro, sem recorte. */
-        all: 'Todas as cores',
-      },
       colors: {
         yellow: 'Amarelo',
         green: 'Verde',
         orange: 'Laranja',
         blue: 'Azul',
         pink: 'Rosa',
-      },
-      item: {
-        /* REGRA 5: só aparece quando o grifo TEM página. */
-        page: 'Página {{number}}',
-        author: {
-          /* REGRA 4: autoria é "você × outra pessoa", e o `me` separa os dois. */
-          you: 'Você',
-          other: 'Alguém do clube',
-        },
-        /* REGRA 9: as duas ações existem SÓ no grifo de quem está olhando. */
-        edit: 'Corrigir este grifo',
-        archive: 'Arquivar este grifo',
-      },
-      empty: {
-        /* REGRA 8: acervo vazio NÃO cobra. A frase fala do que dá para fazer. */
-        title: 'Nenhum grifo por aqui ainda.',
-        description: 'Toque em "Novo grifo" para registrar o primeiro.',
-        /* O recorte do filtro sem nada dentro: é navegação, não ausência —
-           "registre o primeiro" seria mentira embaixo de um filtro. */
-        filtered: 'Nada por aqui com esta cor.',
-      },
-      archive: {
-        /* REGRA 10: arquivar pede confirmação, e cancelar não chama a API. */
-        title: 'Arquivar este grifo?',
-        description: 'Ele sai da lista do clube. O trecho não é apagado.',
-        confirm: 'Arquivar',
-        cancel: 'Cancelar',
-        close: 'Fechar',
-        failed: 'Não foi possível arquivar agora.',
       },
     },
     /*
@@ -646,7 +641,16 @@ export const pt = {
       highlightUnavailable: 'Não foi possível abrir este grifo agora.',
       /* Autoria, não privacidade: o trecho está na coleção, para todo mundo. */
       notYours: 'Só quem escreveu corrige o próprio grifo.',
-      backToList: 'Ver os grifos do livro',
+      /*
+        ⚠️ **A FRASE MUDOU NA TAREFA 28, porque o DESTINO mudou.** Ela dizia
+        "Ver os grifos do livro" e apontava para `/books/:bookId/highlights` —
+        uma rota que deixou de existir (decisão A: o acervo a substitui). O
+        formulário volta para o acervo, que tem anotações **e** grifos, e uma
+        frase que promete só os grifos mentiria sobre onde a pessoa vai cair.
+        É a mesma disciplina da chave `tabs.highlightsSoon`, que morreu na
+        Tarefa 25 no instante em que deixou de ser verdade.
+      */
+      backToList: 'Ver o acervo do livro',
       fields: {
         quote: 'Trecho grifado',
         quoteHint: 'Copie o trecho como ele está no livro.',

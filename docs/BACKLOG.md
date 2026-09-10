@@ -1363,8 +1363,108 @@ Sem grifos em tela própria (MVP 2), sem marcar "li", sem feed e sem notificaç�
       _**Gates:** 408 · 195 · 1287 · 552; `typecheck`, `lint`, `prettier --check .` e o build
       limpos. Entrada **418.114 B** (agora em bytes de verdade). `packages/backend` e `prisma/`
       **intocados**; os **367** de integração **não** rodados._
-- [ ] **28** — Tela de acervo do livro: anotações + grifos num só lugar, com o filtro.
-      → _a detalhar_
+- [x] **28** — Tela de acervo do livro: anotações + grifos num só lugar, com o filtro.
+      → `tasks/28-tela-de-acervo.md`
+      _**O ACERVO EXISTE, E A TELA DO LIVRO VOLTOU A SER O PLANO.** Uma lista com as anotações
+      do dia, as avulsas e os grifos, ordenada por `createdAt` desc e **intercalada**, com as
+      **quatro** dimensões de filtro; a tela de grifos foi **absorvida** e a de livro
+      **encolheu de 486 para 247 linhas**. **408 shared + 195 ui** (intocado) **+ 1287
+      backend** (intocado) **+ 558 app** (era 552)._
+      _**⚠️ ESTA É A ÚNICA FATIA DO MVP 2 QUE APAGA CÓDIGO DE UMA TELA MADURA**, e a pergunta da
+      auditoria não foi "o novo funciona?" e sim "**o que perdeu o dono no caminho?**". O
+      revisor comparou **nome por nome** as **78** asserções que existiam (49 no `book.test.tsx`
+      + 29 no `highlights.test.tsx`) contra as **81** de hoje, mutou as **cinco** propriedades
+      mais caras e mutou **todas** as funções exportadas do módulo novo. **Nenhuma propriedade
+      de produto ficou sem dono.** Asserções: 378 → **406**. O único nome que sumiu sem
+      equivalente é o da regra 13 da 27 (`nobody stops being "you"…`), e é porque **o estado
+      deixou de existir**: o acervo não renderiza a lista antes do `/me` chegar, e essa garantia
+      mais forte tem acusador próprio (`nada é pedido`)._
+      _**⚠️ O ACHADO ALTO: eu escrevi "impossível" sem medir, e o §7.10 proíbe exatamente
+      isso.** O executor registrou que generalizar a decisão E (esconder o controle que só pode
+      esvaziar a lista) para o `<select>` de leitura **tornaria a regra 11 impossível**. O
+      revisor **aplicou** a generalização e a suíte ficou **557/557 verde**, por dois motivos
+      medidos: o teste da regra 11 já põe o tipo no **neutro**, e a exclusão mútua já valia para
+      a **cor** sem impedir nada. Custo real: **+8 linhas, 3 pontos de edição**. Sem isso, a
+      sequência ficava sem dono: a pessoa toca "Avulsa", o `<select>` continua oferecendo os 30
+      dias do plano, ela escolhe um, e a lista vai a zero. **Verificado por mutação do
+      orquestrador: 0 → 1 acusador**, e a frase falsa foi corrigida no código com o porquê._
+      _**Dois trechos que sobreviviam a 557 testes, e a saída foi diferente em cada um** — é a
+      distinção que o §7.10 pede: (a) o `colorApplies ? color : null` no recorte era **código
+      morto** (o `setColor(null)` do `onSelect` já garantia a invariante), e o docblock afirmava
+      "um dono só" e **escrevia o segundo** — foi **apagado**, e agora são duas regras com um
+      dono cada (o render decide se o controle **EXISTE**, o `onSelect` decide se a escolha
+      **SOBREVIVE**); (b) o ramo `myId === null` do `matchesAuthor` é **inalcançável** nesta
+      tela e **ficou**, porque o módulo se declara reusável pela Tarefa 29 e uma segunda
+      chamadora que renderize com `me` nulo herdaria a lista partida ao contrário — mas o
+      docblock passou a dizer as três coisas que faltavam: a medição, **por que** é inalcançável,
+      e **onde a propriedade é provada**._
+      _**A lição nº 3 apareceu pela TERCEIRA vez nesta sessão, e a fatia a tinha criado:** ela
+      duplicou `nameOfWriter` + `MembersState` entre o `book.tsx` e o `acervo.tsx` — dois corpos
+      **byte-idênticos** —, que é exatamente a "duas verdades sobre o mesmo nome" que a decisão
+      G proíbe e que a Tarefa 27 existiu para fechar. Subiram para `pages/club-names.ts` (23
+      linhas). **E ficou estritamente melhor, medido:** antes eram necessárias **duas** mutações
+      (uma por cópia) para obter os 3 acusadores; agora **uma** mutação do dono único atinge os
+      dois lados — uma correção não pode mais esquecer a outra tela._
+      _**⚠️ A COSTURA QUE EU MANDEI CORTAR ERA A ERRADA, e o executor discordou de ONDE ela
+      deveria morar — com medição, e ele estava certo.** Eu apontei o `highlightRow` (que ele
+      havia nomeado como "~90 linhas"; são **63** pelo contador canônico) e disse que o
+      construtor de `FilterGroup[]` era "função pura e já é o assunto do `acervo-entries.ts`".
+      **Não é pura:** o `FilterOption.start` é um `ReactNode` — o chip de pessoa carrega um
+      `<PersonAvatar>` e cada chip de cor uma `<ColorSwatch>` —, então construir os grupos
+      **exige JSX**, e a **única** propriedade que o `acervo-entries.ts` promete é não saber o
+      que é React. Foi para um `acervo-filters.tsx` novo (165 linhas), e no `acervo-entries.ts`
+      ficaram só as **constantes de vocabulário** que os dois lados comparam — essas sim puras,
+      e é por isso que comparação e construção nunca discordam. A costura certa era o
+      `collection()`: **146 → 98** linhas, e é lá dentro que o campo de busca da 29 entra._
+      _**Complexidade — e o acervo DEIXOU de ser a maior tela do app:** `acervo.tsx` **514**
+      (nasceu com 703, foi a 610 com a primeira extração e a 514 com a segunda) ·
+      `acervo-filters.tsx` **165** · `acervo-entries.ts` **113** · `club-names.ts` **23** ·
+      `book.tsx` **247** (era 486). O maior arquivo do app continua sendo o `free-note.tsx`
+      (**565**), que nenhuma fatia do MVP 2 tocou. A costura registrada e **não** cortada é o
+      card de grifo (63 linhas, 4 dependências), e nenhuma fatia planejada mexe nele._
+      _**Dois desvios que tocaram arquivo que a spec proibia — os dois obrigatórios, medidos:**
+      (a) o `highlight-form.tsx` navegava para `highlightsPath` em **4** lugares; apagar a rota
+      deixaria os quatro caindo no `NotFoundPage`. (b) O `free-note.tsx` navegava para o
+      `bookPath` ao arquivar: com o acervo fora daquela tela, o teste `sends DELETE on confirm,
+      and the note is GONE from the collection` **perde o acusador inteiro** — o revisor mutou e
+      confirmou (1 acusador). E **o arquivamento de grifo entrou sem estar nas 18 regras**,
+      porque `grep -n "archive|api.delete"` no `highlight-form.tsx` devolve **vazio**: não
+      migrá-lo apagaria do produto a **única** forma de arquivar um grifo._
+      _**A fidelidade da coluna nula, agora na tela:** escolher uma **leitura** exclui a avulsa e
+      o grifo (nenhum dos dois tem `planItemId`), e escolher uma **cor** exclui as anotações —
+      esta segunda foi desvio do executor, porque "sem isso o AND não é AND". As duas com
+      acusador (3 e 4), e o teste **diz o porquê** (o `planItemId` nulo, a 4ª aparição do §7.1)
+      em vez de só assertar o resultado. O AND foi medido cláusula por cláusula: tipo 4 · cor 4
+      · leitura 3 · pessoa 6._
+      _**O achado que o executor pegou em si mesmo, e que é a forma mais pura do §7.9:** ao
+      reescrever o teste para o acervo unificado ele **perdeu o bloco do estado vazio**, e a
+      mutação de privacidade no `title` daquele estado deu **0 acusadores no DOM** — a varredura
+      existia, a lista de termos estava certa, e **o estado não era renderizado por ninguém**. O
+      bloco voltou, e o revisor confirmou plantando privacidade **e** cobrança em **sete**
+      estados, um por chave de catálogo: vazio **5** · filtrado **4** · falha do acervo **3** ·
+      404 do livro **1** · sheet de arquivar **1** · falha do `/me` **5** · carregando **2**._
+      _**Um teste vacuoso, achado por mutação:** `never lets the COLOUR be the only carrier`
+      percorria `highlightRows()` **sem precondição de comprimento** — com o rótulo do tipo
+      mutado para `''` a lista ficava vazia, o laço não rodava e **o teste passava**. Nenhuma
+      propriedade se perdia (o mutante morria em dois outros lugares), mas o teste que
+      **promete** a regra 4 da 25 não provava nada. Com `toHaveLength(5)`: 2 → **3** acusadores._
+      _**O bundle: +288 B nesta rodada e +740 B na fatia**, contra uma projeção de ~4,2 kB —
+      porque a fatia **substituiu** uma tela em vez de somar (linhas líquidas: +610 +110 −381
+      −232 = **+107**). Entrada **419.142 B**, **0 marcas** de TipTap, teto **450.000 não
+      relaxado**, folga **30.858 B**. Para a Tarefa 29 (um `<input>`, ~2 chaves × 2 locales e
+      uma cláusula no `filterEntries`): ordem de 1 a 2 kB. Sobra com muita margem._
+      _**Dívidas registradas:** **12 testes** comparam posicionalmente embora a ordem não seja o
+      assunto deles — mantidos, porque aqui a ordem **é** regra de produto (regra 1),
+      determinística e pinada em teste próprio, e a precondição de índices está pinada; **o
+      risco é da 29**: se ela trocar a ordem por ranking de relevância, os 12 ficam vermelhos
+      por um motivo alheio aos nomes deles · um dos quatro destinos do `highlight-form.tsx` não
+      tem acusador de destino (pré-existente; o compilador é o acusador de rota morta) · "sem
+      requisição nova" é nomeado só para a dimensão pessoa (mesmo efeito, mesmo mecanismo) ·
+      `FilterChip` sem `renderLink`/`disabled` (esta fatia deixou de ter chamador para a
+      lacuna)._
+      _**Gates:** 408 · 195 · 1287 · 558; `typecheck`, `lint`, `prettier --check .` e o build
+      limpos. `packages/ui` e `packages/backend` **intocados** (`git status` sem entradas);
+      os **367** de integração **não** rodados._
 - [ ] **29** — Busca simples por texto no acervo do clube. → _a detalhar_
 
 ## Definição de "MVP 2 pronto"

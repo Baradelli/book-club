@@ -20,10 +20,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import { useAuth } from '../auth/auth-context';
 import { useActiveClub } from '../club/active-club';
-import { bookPath } from './book';
 import { Notice, Screen } from './chrome';
 import { messageFor, resolveApiError } from './form-errors';
 import { TEXT_INPUT_CLASS } from './form-styles';
+import { acervoPath } from './paths';
 
 /**
  * A ANOTAÇÃO AVULSA (Tarefa 19) — a ideia que veio da página 112, com título e
@@ -597,8 +597,20 @@ function ExistingFreeNote({
       );
       archivedRef.current = true;
       setConfirming(false);
-      // `replace`: a nota arquivada não é destino de "voltar".
-      navigate(bookPath(bookId), { replace: true });
+      /*
+        `replace`: a nota arquivada não é destino de "voltar".
+
+        ⚠️ **O DESTINO MUDOU NA TAREFA 28: é o ACERVO, não a tela do livro** — e
+        é a REGRA 20 desta tela que exige isso. Ela diz que a nota arquivada sai
+        da coleção **e que a tela volta a PERGUNTAR** (não guarda cópia), e a
+        coleção era uma seção do `book.tsx` até a Tarefa 27. Com o acervo em tela
+        própria, mandar a pessoa para o `bookPath` a deixaria olhando o PLANO —
+        sem ver que a nota saiu, e sem nenhuma requisição de listagem para
+        provar. Medido: com `bookPath`, o teste `sends DELETE on confirm, and the
+        note is GONE from the collection (rules 19, 20)` perde o acusador
+        inteiro.
+      */
+      navigate(acervoPath(bookId), { replace: true });
     } catch (error: unknown) {
       setArchiveError(error);
       setConfirming(false);

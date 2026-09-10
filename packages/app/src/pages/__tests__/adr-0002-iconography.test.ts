@@ -118,7 +118,7 @@ function mentions(code: string, term: string): boolean {
 }
 
 describe('no privacy iconography anywhere in @clube/app (ADR 0002)', () => {
-  it('reads the whole app source, the two highlight screens included', () => {
+  it('reads the whole app source, the collection and the highlight form included', () => {
     /*
       Sem isto tudo abaixo é asserção vazia (§7.4): um `sourceRoot` errado
       devolve zero arquivos e as varreduras ficam verdes provando nada. E os
@@ -130,7 +130,8 @@ describe('no privacy iconography anywhere in @clube/app (ADR 0002)', () => {
 
     expect(scanned.length).toBeGreaterThan(15);
     for (const file of [
-      'highlights.tsx',
+      'acervo.tsx',
+      'acervo-entries.ts',
       'highlight-form.tsx',
       'highlight-fields.tsx',
       'highlight-colors.tsx',
@@ -156,9 +157,7 @@ describe('no privacy iconography anywhere in @clube/app (ADR 0002)', () => {
     */
     expect(files.some(({ code }) => code.includes('useActiveClub'))).toBe(true);
     expect(
-      files.some(({ code }) =>
-        code.includes('pages.highlights.empty.filtered'),
-      ),
+      files.some(({ code }) => code.includes('pages.acervo.empty.filtered')),
     ).toBe(true);
   });
 

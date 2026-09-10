@@ -47,11 +47,11 @@ export function bookEditPath(bookId: string): string {
 }
 
 /**
- * OS GRIFOS DO LIVRO (Tarefa 25) — a coleção e o formulário.
+ * O FORMULÁRIO DO GRIFO (Tarefa 25) — registrar e corrigir.
  *
- * ⚠️ **OS TRÊS ENDEREÇOS CARREGAM O LIVRO, E A SPEC PEDIA `/highlights/:id`
- * PARA A EDIÇÃO.** É a MESMA medição que o `FREE_NOTE_PATH` registrou na Tarefa
- * 19, e a Tarefa 24 a confirmou por escrito: **não existe
+ * ⚠️ **OS DOIS ENDEREÇOS CARREGAM O LIVRO, E A SPEC DA 25 PEDIA
+ * `/highlights/:id` PARA A EDIÇÃO.** É a MESMA medição que o `FREE_NOTE_PATH`
+ * registrou na Tarefa 19, e a Tarefa 24 a confirmou por escrito: **não existe
  * `GET /highlights/:highlightId`** ("Nenhuma tela pede um grifo por id", o
  * escopo enxuto da 24). A única leitura de grifo da API é
  * `GET /clubs/:clubId/highlights`, e o `clubId` **não está** no endereço de um
@@ -63,27 +63,52 @@ export function bookEditPath(bookId: string): string {
  * react-router, independente da ordem em que as rotas são declaradas — os ids
  * são `randomUUID()`, então "new" nunca é um `highlightId` de verdade.
  *
- * Eles moram AQUI, e não na tela da coleção, pelo motivo do docblock deste
- * arquivo: a coleção linka para o formulário e o formulário volta para a
- * coleção. Com as constantes num módulo sem dependência, as duas telas não
- * importam uma da outra e o ciclo que a auditoria da Tarefa 20 mediu não
- * existe.
+ * ⚠️ **A ROTA DE LISTA DE GRIFOS (`/books/:bookId/highlights`) MORREU NA TAREFA
+ * 28**, e a `ACERVO_PATH` abaixo é quem a substitui (decisão A): as duas abas da
+ * tela do livro eram inconsistentes — "Anotações" listava ali mesmo e "Grifos"
+ * navegava —, e uma lista dos dois tem de ser um lugar. As duas rotas de
+ * FORMULÁRIO ficam, e é para o acervo que elas voltam depois de salvar.
+ *
+ * Eles moram AQUI, e não na tela do acervo, pelo motivo do docblock deste
+ * arquivo: o acervo linka para o formulário e o formulário volta para o acervo.
+ * Com as constantes num módulo sem dependência, as duas telas não importam uma
+ * da outra e o ciclo que a auditoria da Tarefa 20 mediu não existe.
  */
-export const HIGHLIGHTS_PATH = '/books/:bookId/highlights';
 export const HIGHLIGHT_NEW_PATH = '/books/:bookId/highlights/new';
 export const HIGHLIGHT_PATH = '/books/:bookId/highlights/:highlightId';
 
 /** `encodeURIComponent` pelo mesmo motivo dos de cima: id com `/`. */
-export function highlightsPath(bookId: string): string {
-  return `/books/${encodeURIComponent(bookId)}/highlights`;
-}
-
 export function highlightNewPath(bookId: string): string {
   return `/books/${encodeURIComponent(bookId)}/highlights/new`;
 }
 
 export function highlightPath(bookId: string, highlightId: string): string {
   return `/books/${encodeURIComponent(bookId)}/highlights/${encodeURIComponent(highlightId)}`;
+}
+
+/**
+ * O ACERVO DO LIVRO (Tarefa 28) — anotações **e** grifos num lugar só.
+ *
+ * ⚠️ **SEGMENTO PRÓPRIO, IRMÃO DE `days` E DE `notes` — nunca um sufixo de
+ * `/highlights`.** As duas rotas do FORMULÁRIO de grifo continuam existindo
+ * (`/highlights/new` e `/highlights/:highlightId`), e um endereço de acervo
+ * dentro daquele prefixo entraria na disputa do ranking do react-router com o
+ * `:highlightId`: `/books/b/highlights/acervo` é, para o roteador, um candidato
+ * legítimo a "o grifo de id `acervo`". `new` sobrevive a isso por ser um
+ * segmento estático de UMA rota declarada; uma TERCEIRA rota no mesmo prefixo
+ * seria uma ambiguidade nova sem necessidade nenhuma.
+ *
+ * ⚠️ **E O NOME DO SEGMENTO É PORTUGUÊS, ao contrário do resto.** `CLAUDE.md`
+ * manda rotas em inglês, e esta é a exceção que a spec da Tarefa 28 fixa
+ * (`/books/:bookId/acervo`): "acervo" é o nome que o produto usa para a coisa
+ * — não há palavra inglesa curta com o mesmo sentido ("collection" já é o nome
+ * de outra coisa no vocabulário do Prisma), e o endereço é o que a pessoa vê e
+ * compartilha. O CÓDIGO continua em inglês.
+ */
+export const ACERVO_PATH = '/books/:bookId/acervo';
+
+export function acervoPath(bookId: string): string {
+  return `/books/${encodeURIComponent(bookId)}/acervo`;
 }
 
 /**

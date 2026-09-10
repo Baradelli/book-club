@@ -251,6 +251,22 @@ function freeNoteResponder(setup: FreeNoteSetup): Responder {
   return replyByUrl(
     [
       ['/auth/refresh', { status: 200, body: { token: 'token-renovado' } }],
+      /*
+        ⚠️ **AS DUAS LINHAS DO ACERVO (Tarefa 28), e elas não são decoração.**
+        Arquivar esta anotação devolve a pessoa ao ACERVO (`/books/:id/acervo`),
+        e aquela tela carrega as anotações **e** os grifos num `Promise.all` —
+        meio acervo é uma lista incompleta em silêncio, então ela trata a falha
+        de qualquer um dos dois como falha da seção. Sem a linha de
+        `/highlights`, o fallback 500 faria a tela mostrar "não foi possível
+        carregar o acervo" e o teste do arquivamento ficaria vermelho por um
+        motivo que não tem nada a ver com o que ele prova.
+
+        ⚠️ E `/members` vem ANTES de `/me`, que é o falso verde medido na Tarefa
+        27: o `replyByUrl` casa por SUBSTRING, e `/clubs/c-casal/members`
+        **contém** `/me`.
+      */
+      ['/members', { status: 200, body: [] }],
+      ['/highlights', { status: 200, body: [] }],
       ['/me', setup.me ?? meReply({ clubs: [CASAL] })],
       [
         `/books/${BOOK_ID}/notes`,
@@ -891,11 +907,18 @@ describe('⚠️ ARCHIVING ASKS FIRST (rules 18, 19, 20)', () => {
     expect(write.method).toBe('DELETE');
     expect(write.url).toBe(`https://api.teste/notes/${NOTE_ID}`);
 
-    // Voltou para o livro, e o acervo foi perguntado outra vez.
-    expect(locationText()).toBe(`/books/${BOOK_ID}`);
+    /*
+      ⚠️ **VOLTOU PARA O ACERVO, e o acervo foi PERGUNTADO outra vez.** O
+      destino mudou na Tarefa 28 — era `/books/:bookId`, e a coleção era uma
+      seção daquela tela até a Tarefa 27. Com o acervo em tela própria, é para
+      lá que a nota arquivada devolve a pessoa, e é o que mantém esta regra
+      decidível: a segunda listagem é uma requisição de verdade, e o que ela
+      devolve é o que aparece.
+    */
+    expect(locationText()).toBe(`/books/${BOOK_ID}/acervo`);
     expect(listCalls).toBeGreaterThan(1);
     expect(readableText()).not.toContain('A ideia da pagina 112');
-    expect(screen.queryByText(pt.pages.book.notes.empty.title)).not.toBeNull();
+    expect(screen.queryByText(pt.pages.acervo.empty.title)).not.toBeNull();
     expectNoGuilt();
     expectNoPrivacyTalk();
   });

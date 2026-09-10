@@ -37,7 +37,7 @@ import {
   problemsOf,
   textOrAbsent,
 } from './highlight-fields';
-import { highlightsPath } from './paths';
+import { acervoPath } from './paths';
 
 /**
  * O FORMULÁRIO DO GRIFO (Tarefa 25) — registrar e corrigir.
@@ -260,7 +260,7 @@ function NewHighlight({ bookId }: { bookId: string }) {
       );
       // `replace`: o "voltar" do celular tem de devolver a pessoa à coleção, e
       // não a um formulário de registro que já virou grifo.
-      navigate(highlightsPath(bookId), { replace: true });
+      navigate(acervoPath(bookId), { replace: true });
     } catch (caught: unknown) {
       setError(caught);
       setSubmitting(false);
@@ -353,8 +353,15 @@ function ExistingHighlight({
     /**
      * DUAS requisições, e nenhuma rota nova: o livro (que dá o `clubId` e faz
      * o corte de tenant) e o acervo do clube filtrado por `bookId`. Não existe
-     * `GET /highlights/:highlightId` — → o docblock de `HIGHLIGHTS_PATH` em
+     * `GET /highlights/:highlightId` — → o docblock de `HIGHLIGHT_PATH` em
      * `paths.ts`.
+     *
+     * ⚠️ **O PONTEIRO FOI CORRIGIDO NA TAREFA 28: era `HIGHLIGHTS_PATH`, e
+     * aquela constante DEIXOU DE EXISTIR** (a rota de lista de grifos deu lugar
+     * ao acervo, decisão A). É o §7.4 na forma por NOME: um ponteiro de
+     * documentação envelhece sozinho, e o próximo leitor procura uma constante
+     * que não está lá, não acha nada e conclui que a medição foi desfeita. A
+     * medição continua de pé — ela só mudou de vizinho.
      */
     async function load(): Promise<LoadState> {
       const withPlan = await api.get(
@@ -461,7 +468,7 @@ function ExistingHighlight({
     // REGRA 18: patch vazio NÃO é requisição. É a mesma guarda que absorve o
     // `onChange` espúrio do editor (⚠️ 2 da Tarefa 14).
     if (Object.keys(patch).length === 0) {
-      navigate(highlightsPath(bookId), { replace: true });
+      navigate(acervoPath(bookId), { replace: true });
       return;
     }
 
@@ -474,7 +481,7 @@ function ExistingHighlight({
         patch,
         highlightResponseSchema,
       );
-      navigate(highlightsPath(bookId), { replace: true });
+      navigate(acervoPath(bookId), { replace: true });
     } catch (caught: unknown) {
       // O que a pessoa escreveu NÃO se perde: os campos continuam no estado, e
       // "salvar de novo" tem o que mandar.
@@ -545,7 +552,7 @@ function ExistingHighlight({
       return (
         <Notice
           action={
-            <Link className={TEXT_LINK_CLASS} to={highlightsPath(bookId)}>
+            <Link className={TEXT_LINK_CLASS} to={acervoPath(bookId)}>
               {t('pages.highlightForm.backToList')}
             </Link>
           }

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  ACERVO_PATH,
+  acervoPath,
   HIGHLIGHT_NEW_PATH,
   HIGHLIGHT_PATH,
   highlightNewPath,
   highlightPath,
-  HIGHLIGHTS_PATH,
-  highlightsPath,
 } from '../paths';
 
 /**
@@ -24,10 +24,6 @@ import {
  */
 
 describe('the addresses of the highlights (rules 4, 11, 17, 18)', () => {
-  it('builds the collection of a book', () => {
-    expect(highlightsPath('b-hobbit')).toBe('/books/b-hobbit/highlights');
-  });
-
   it('builds the form of a NEW highlight', () => {
     expect(highlightNewPath('b-hobbit')).toBe('/books/b-hobbit/highlights/new');
   });
@@ -41,7 +37,6 @@ describe('the addresses of the highlights (rules 4, 11, 17, 18)', () => {
   it('escapes an id that would otherwise stop being one segment', () => {
     // Hoje os ids são `randomUUID()` e não há nada a escapar — e é justamente
     // por isso que só um teste consegue provar o escape.
-    expect(highlightsPath('a/b')).toBe('/books/a%2Fb/highlights');
     expect(highlightNewPath('a/b')).toBe('/books/a%2Fb/highlights/new');
     expect(highlightPath('a/b', 'c/d')).toBe('/books/a%2Fb/highlights/c%2Fd');
   });
@@ -58,7 +53,6 @@ describe('the addresses of the highlights (rules 4, 11, 17, 18)', () => {
    * ranking deixaria de existir e "new" viraria um grifo inexistente.
    */
   it('keeps the create route as a STATIC segment, distinct from the edit route', () => {
-    expect(HIGHLIGHTS_PATH).toBe('/books/:bookId/highlights');
     expect(HIGHLIGHT_NEW_PATH).toBe('/books/:bookId/highlights/new');
     expect(HIGHLIGHT_PATH).toBe('/books/:bookId/highlights/:highlightId');
     expect(HIGHLIGHT_NEW_PATH).not.toContain(':highlightId');
@@ -67,5 +61,38 @@ describe('the addresses of the highlights (rules 4, 11, 17, 18)', () => {
     expect(highlightNewPath('b')).toBe(
       HIGHLIGHT_NEW_PATH.replace(':bookId', 'b'),
     );
+  });
+});
+
+/**
+ * O ENDEREÇO DO ACERVO (Tarefa 28) — anotações **e** grifos num lugar só.
+ *
+ * ⚠️ **ELE NÃO É `/books/:bookId/highlights/…` NEM UM SUFIXO DELE, e a razão é
+ * o ranking do react-router.** As duas rotas do formulário de grifo continuam
+ * (`/highlights/new` e `/highlights/:highlightId`), e um endereço de acervo
+ * dentro daquele prefixo entraria na disputa com o `:highlightId` — `acervo`
+ * viraria "o grifo de id `acervo`" dependendo de qual rota o ranking preferisse.
+ * Segmento próprio, irmão de `days` e de `notes`, sem ambiguidade nenhuma.
+ */
+describe('the address of the collection (rules 1, 14 of task 28)', () => {
+  it('builds the collection of a book', () => {
+    expect(acervoPath('b-hobbit')).toBe('/books/b-hobbit/acervo');
+  });
+
+  it('escapes an id that would otherwise stop being one segment', () => {
+    // Hoje os ids são `randomUUID()` e não há nada a escapar — e é justamente
+    // por isso que só um teste consegue provar o escape.
+    expect(acervoPath('a/b')).toBe('/books/a%2Fb/acervo');
+  });
+
+  it('keeps the route pattern and the builder in agreement', () => {
+    expect(ACERVO_PATH).toBe('/books/:bookId/acervo');
+    expect(acervoPath('b')).toBe(ACERVO_PATH.replace(':bookId', 'b'));
+    /*
+      ⚠️ E ele NÃO cai debaixo do prefixo do formulário de grifo: se caísse,
+      `/books/b/highlights/acervo` disputaria o ranking com
+      `/books/:bookId/highlights/:highlightId`.
+    */
+    expect(ACERVO_PATH).not.toContain('/highlights');
   });
 });

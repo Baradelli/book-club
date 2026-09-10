@@ -87,10 +87,9 @@ export const en: typeof pt = {
       loading: 'Loading…',
       retry: 'Try again',
       bookUnavailable: 'We could not open this book right now.',
-      tabs: {
-        notes: 'Notes',
-        highlights: 'Highlights',
-      },
+      /* The two tabs died in task 28 (decision B): the book screen is the
+         PLAN, and the collection is one place, one link away. */
+      acervoLink: 'See the collection of the book',
       plan: {
         label: 'Days of the reading plan',
         today: 'Today',
@@ -104,38 +103,80 @@ export const en: typeof pt = {
             'A club admin registers the plan, with the topic of each day.',
         },
       },
-      notes: {
-        label: 'Notes on this book',
-        loading: 'Loading the notes…',
-        new: 'New note',
-        filters: {
-          label: 'How to look at the collection',
-          all: 'Everything',
+    },
+    /*
+      THE COLLECTION OF THE BOOK (task 28) — notes AND highlights in one place.
+
+      The filter is NAVIGATION, never permission (ADR 0002), and a highlight is
+      an entity of its own, never a kind of note (ADR 0004). No `all` repeats
+      the wording of another group: three chip groups on one screen means two
+      "Everything" chips would be two buttons with the same accessible name.
+    */
+    acervo: {
+      title: 'Collection',
+      loading: 'Loading the collection…',
+      retry: 'Try again',
+      bookUnavailable: 'We could not open this book right now.',
+      unavailable: 'We could not load the collection right now.',
+      label: 'Notes and highlights of this book',
+      newNote: 'New note',
+      newHighlight: 'New highlight',
+      kind: {
+        plan: 'Of the day',
+        free: 'Standalone',
+        highlight: 'Highlight',
+      },
+      filters: {
+        person: {
+          label: 'Whose collection',
+          all: 'Everyone',
           mine: 'Mine',
-          /* The complement of "Mine" — now the DEGRADED mode: what the screen
-             shows when it does not know the people (task 27). */
+          /* The complement of "Mine" — the DEGRADED mode of task 27. */
           others: 'By other people',
-          /* The chip that finally says the name (task 27). Navigation, never
-             permission — and never a counter beside it. */
           person: 'By {{name}}',
-          /* `User.name` is nullable and the backend invents no fallback
-             (decision C of task 26a): the screen picks the word. */
           unnamed: 'By someone with no name',
         },
+        type: {
+          label: 'What to show',
+          all: 'Everything',
+        },
+        color: {
+          /* The group only EXISTS when the type can include a highlight
+             (decision E): a colour chip under "Standalone" is a filter that
+             guarantees no results. */
+          label: 'Highlight colour',
+          all: 'Every colour',
+        },
+        reading: {
+          /* A NATIVE `<select>` with a VISIBLE label (decision D): the real
+             plan has thirty days, and thirty chips on a phone is a filter
+             nobody uses. */
+          label: 'Reading of the day',
+          all: 'Every reading',
+        },
+      },
+      item: {
+        page: 'Page {{number}}',
         author: {
           you: 'You',
           other: 'Someone in the club',
         },
-        kind: {
-          plan: 'Of the day',
-          free: 'Standalone',
-        },
-        empty: {
-          title: 'No notes around here yet.',
-          description: 'Tap "New note" to write the first one.',
-          filtered: 'Nothing here with this filter.',
-        },
-        unavailable: 'We could not load the notes right now.',
+        edit: 'Correct this highlight',
+        archive: 'Archive this highlight',
+      },
+      empty: {
+        title: 'Nothing here yet.',
+        description:
+          'Tap "New note" or "New highlight" to start the collection.',
+        filtered: 'Nothing here with this filter.',
+      },
+      archive: {
+        title: 'Archive this highlight?',
+        description: 'It leaves the list of the club. The quote is not erased.',
+        confirm: 'Archive',
+        cancel: 'Cancel',
+        close: 'Close',
+        failed: 'We could not archive it right now.',
       },
     },
     bookForm: {
@@ -255,46 +296,18 @@ export const en: typeof pt = {
         retry: 'Save again',
       },
     },
+    /* All that is left of the highlights screen (task 25): the colour names.
+       The screen died in task 28 — the collection (`pages.acervo`) lists notes
+       and highlights in one place. These keys stay because the hex -> key map
+       lives in `pages/highlight-colors.tsx`, a neutral module the collection
+       AND the highlight form import. */
     highlights: {
-      title: 'Highlights',
-      loading: 'Loading the highlights…',
-      retry: 'Try again',
-      bookUnavailable: 'We could not open this book right now.',
-      unavailable: 'We could not load the highlights right now.',
-      new: 'New highlight',
-      label: 'Highlights of this book',
-      filters: {
-        label: 'How to look at the collection',
-        all: 'Every colour',
-      },
       colors: {
         yellow: 'Yellow',
         green: 'Green',
         orange: 'Orange',
         blue: 'Blue',
         pink: 'Pink',
-      },
-      item: {
-        page: 'Page {{number}}',
-        author: {
-          you: 'You',
-          other: 'Someone in the club',
-        },
-        edit: 'Correct this highlight',
-        archive: 'Archive this highlight',
-      },
-      empty: {
-        title: 'No highlights here yet.',
-        description: 'Tap "New highlight" to record the first one.',
-        filtered: 'Nothing here in this colour.',
-      },
-      archive: {
-        title: 'Archive this highlight?',
-        description: 'It leaves the list of the club. The quote is not erased.',
-        confirm: 'Archive',
-        cancel: 'Cancel',
-        close: 'Close',
-        failed: 'We could not archive it right now.',
       },
     },
     highlightForm: {
@@ -306,7 +319,9 @@ export const en: typeof pt = {
       bookUnavailable: 'We could not open this book right now.',
       highlightUnavailable: 'We could not open this highlight right now.',
       notYours: 'Only the person who wrote a highlight corrects it.',
-      backToList: 'See the highlights of the book',
+      /* The wording changed in task 28 because the DESTINATION changed: the
+         form now goes back to the collection, which has notes AND highlights. */
+      backToList: 'See the collection of the book',
       fields: {
         quote: 'Highlighted quote',
         quoteHint: 'Copy the quote as it stands in the book.',

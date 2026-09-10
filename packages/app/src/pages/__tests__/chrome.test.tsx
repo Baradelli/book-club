@@ -238,7 +238,7 @@ describe('⚠️ NO SCREEN KEEPS A LOCAL COPY (rules 1, 2)', () => {
     const scanned = pageFiles();
 
     expect(scanned.length).toBeGreaterThan(10);
-    for (const file of [...MIGRATED_SCREENS, 'highlights.tsx', 'login.tsx']) {
+    for (const file of [...MIGRATED_SCREENS, 'acervo.tsx', 'login.tsx']) {
       expect(scanned).toContain(file);
     }
     // E as exceções são só as duas declaradas, e existem de fato.

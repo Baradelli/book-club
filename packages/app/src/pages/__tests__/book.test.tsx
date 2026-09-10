@@ -4,7 +4,6 @@ import { resolve } from 'node:path';
 import type {
   BookResponse,
   ClubMemberResponse,
-  NoteResponse,
   PlanItemResponse,
 } from '@clube/shared';
 import { localDay, localTimeZone } from '@clube/shared';
@@ -16,11 +15,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../App';
 import type { ClubSummary } from '../../club/active-club';
 import { bookPath } from '../book';
-import {
-  expectNoPrivacyTalk,
-  mentionsPrivacyTerm,
-  PRIVACY_TERMS,
-} from './adr-0002-dom';
+import { mentionsPrivacyTerm, PRIVACY_TERMS } from './adr-0002-dom';
 import {
   DANGER_STYLE,
   expectNoGuilt,
@@ -213,37 +208,6 @@ function plan(): PlanItemResponse[] {
 const WRITERS = [{ planItemId: WRITTEN_ID, userIds: [ZECA, MARCOS] }];
 
 /**
- * ⚠️ **O ACERVO É ESCOLHIDO PARA O FILTRO ERRADO FALHAR** (§7.2), e são quatro
- * propriedades, cada uma matando um mutante:
- *
- * 1. **MINHAS são 3 e DE OUTRA PESSOA são 2** — quantidades DIFERENTES. Um
- *    filtro que não filtra devolve 5, um filtro invertido devolve 2 onde se
- *    espera 3, e nenhum dos dois passa;
- * 2. **as autorias estão INTERCALADAS** (eu, ela, eu, ela, eu), então um
- *    recorte por prefixo ou por sufixo da lista acusa;
- * 3. **títulos e ids em ordem alfabética DECRESCENTE**: uma tela que ordenasse
- *    por qualquer um dos dois acusa (a precondição está pinada logo abaixo);
- * 4. **a nota DO DIA está no meio, e é minha**, então "tipo" não coincide com
- *    "autoria" — um filtro que confundisse os dois passaria num acervo em que
- *    todas as minhas fossem avulsas.
- */
-const NOTE_IDS = ['n-5', 'n-4', 'n-3', 'n-2', 'n-1'];
-const NOTE_TITLES = [
-  'Zangado com o dragao',
-  'Uma ideia da pagina 112',
-  'O capitulo de hoje',
-  'Duas linhas sobre a porta',
-  'A promessa do anao',
-];
-/** Os títulos das minhas (índices 0, 2 e 4) e os das dela (1 e 3). */
-const MY_TITLES = [
-  'Zangado com o dragao',
-  'O capitulo de hoje',
-  'A promessa do anao',
-];
-const HER_TITLES = ['Uma ideia da pagina 112', 'Duas linhas sobre a porta'];
-
-/**
  * ⚠️ **QUEM É O CLUBE — e o fixture é escolhido para o chip errado aparecer**
  * (§7.2). Quatro propriedades, cada uma matando um mutante:
  *
@@ -281,71 +245,9 @@ function members(): ClubMemberResponse[] {
   ];
 }
 
-/** Fixture é factory (§7.7) — e o `doc` é uma árvore MUTÁVEL por dentro. */
-function aNote(overrides: Partial<NoteResponse> = {}): NoteResponse {
-  return {
-    id: 'n-1',
-    clubId: CASAL.id,
-    bookId: BOOK_ID,
-    userId: MARCOS,
-    kind: 'FREE',
-    planItemId: null,
-    title: 'A promessa do anao',
-    reference: null,
-    doc: { type: 'doc' },
-    plainText: 'o trecho que aparece na lista',
-    status: 'ACTIVE',
-    archivedAt: null,
-    createdAt: '2026-09-04T10:00:00.000Z',
-    updatedAt: '2026-09-04T10:00:00.000Z',
-    ...overrides,
-  };
-}
-
-/** O acervo na ordem em que a API o devolve (mais recente primeiro). */
-function notes(): NoteResponse[] {
-  return [
-    aNote({
-      id: 'n-5',
-      userId: MARCOS,
-      title: 'Zangado com o dragao',
-      plainText: 'ele ficou zangado quando a porta se fechou',
-    }),
-    aNote({
-      id: 'n-4',
-      userId: MARIA,
-      title: 'Uma ideia da pagina 112',
-      reference: 'p. 112',
-      plainText: 'a ideia que veio no meio da noite',
-    }),
-    aNote({
-      id: 'n-3',
-      userId: MARCOS,
-      kind: 'PLAN',
-      planItemId: TODAY_ID,
-      title: 'O capitulo de hoje',
-      plainText: 'o carneiro assado que abre a leitura',
-    }),
-    aNote({
-      id: 'n-2',
-      userId: MARIA,
-      title: 'Duas linhas sobre a porta',
-      plainText: 'a porta redonda e verde no meio da colina',
-    }),
-    aNote({
-      id: 'n-1',
-      userId: MARCOS,
-      title: 'A promessa do anao',
-      plainText: 'a promessa vale o que custa cumpri-la',
-    }),
-  ];
-}
-
 interface BookSetup {
   /** As respostas de `GET /books/:bookId`, uma por chamada. */
   book?: readonly Reply[];
-  /** O acervo — `GET /clubs/:clubId/notes?bookId=…` (Tarefa 19). */
-  notes?: Reply | Responder;
   /** Quem é o clube — `GET /clubs/:clubId/members` (Tarefa 26a). */
   members?: Reply | Responder;
   /** O `GET /me`, para o estado em que ainda não sei quem sou (regra 13). */
@@ -385,7 +287,7 @@ function bookResponder(setup: BookSetup): Responder {
       ['/me', setup.me ?? meReply({ clubs: [CASAL] })],
       // ⚠️ ANTES do `/clubs/`: o acervo mora em `/clubs/:clubId/notes`, e o
       // fragmento da estante casaria a listagem de anotações primeiro.
-      ['/notes', setup.notes ?? { status: 200, body: [] }],
+      ['/notes', { status: 200, body: [] }],
       /*
         A COLEÇÃO DE GRIFOS (Tarefa 25): a aba "Grifos" deixou de ser
         desabilitada e NAVEGA, então um teste desta suíte chega à tela de
@@ -452,77 +354,6 @@ function linkIn(row: HTMLElement): HTMLElement {
   const link = row.querySelector('a');
   if (link === null) throw new Error('a linha do plano não é um link');
   return link;
-}
-
-/** As linhas do ACERVO — a segunda lista da tela (Tarefa 19). */
-function noteRows(): HTMLElement[] {
-  const list = screen.getByRole('list', { name: pt.pages.book.notes.label });
-  return Array.from(list.querySelectorAll('li'));
-}
-
-/** Os títulos do acervo NA ORDEM DA TELA — a observável do filtro e da ordem. */
-function noteTitles(): Array<string | undefined> {
-  return noteRows().map((row) =>
-    NOTE_TITLES.find((title) => row.textContent?.includes(title)),
-  );
-}
-
-function noteRowOf(title: string): HTMLElement {
-  const row = noteRows().find((item) => item.textContent?.includes(title));
-  if (row === undefined) throw new Error(`nenhuma anotação com "${title}"`);
-  return row;
-}
-
-function chip(label: string): HTMLElement {
-  return screen.getByRole('button', { name: label });
-}
-
-/**
- * O rótulo do chip de uma pessoa, com o nome dentro — Tarefa 27.
- *
- * ⚠️ Ele INTERPOLA a chave do catálogo em vez de escrever "De Maria" à mão, e
- * isso é deliberado nos dois sentidos: o esperado continua vindo do catálogo
- * (como em toda asserção de texto desta suíte) **e** a interpolação que não
- * acontece acusa — a tela mostraria `De {{name}}` e esta função esperaria
- * `De Maria`.
- */
-function personChip(name: string): string {
-  return pt.pages.book.notes.filters.person.replace('{{name}}', name);
-}
-
-/**
- * Os chips do filtro do acervo, na ordem da tela, pelo NOME ACESSÍVEL.
- *
- * ⚠️ **E NÃO PELO `textContent`, por um defeito medido na Tarefa 25** (§7.6.1):
- * ele **cola os nós irmãos sem separador**, e o avatar do chip de pessoa é um
- * `<span aria-hidden>` com a inicial dentro — então o `textContent` do chip da
- * Maria é `"MDe Maria"`. O nome acessível ignora o que é `aria-hidden`, que é
- * justamente o que o leitor de tela faz (o avatar sai do caminho de propósito:
- * o nome está escrito ao lado).
- */
-function chipLabel(button: Element): string {
-  const clone = button.cloneNode(true) as HTMLElement;
-  for (const hidden of Array.from(clone.querySelectorAll('[aria-hidden]'))) {
-    hidden.remove();
-  }
-  return clone.textContent ?? '';
-}
-
-function filterChips(): string[] {
-  const group = screen.getByRole('group', {
-    name: pt.pages.book.notes.filters.label,
-  });
-  return Array.from(group.querySelectorAll('button')).map(chipLabel);
-}
-
-/** Os chips ACESOS. A invariante é que ele tem exatamente um. */
-function pressedChips(): string[] {
-  const group = screen.getByRole('group', {
-    name: pt.pages.book.notes.filters.label,
-  });
-  return Array.from(group.querySelectorAll('button'))
-    .filter((button) => button.getAttribute('aria-pressed') === 'true')
-    .map(chipLabel);
 }
 
 async function press(element: HTMLElement): Promise<void> {
@@ -1006,41 +837,48 @@ describe('tapping a day goes to the note of that day (rule 8)', () => {
   });
 });
 
-describe('⚠️ THE HIGHLIGHTS TAB NAVIGATES NOW (rule 11 of task 25)', () => {
+describe('⚠️ ONE LINK TO THE COLLECTION, IN PLACE OF THE TWO TABS (rule 14 of task 28)', () => {
   /*
-    ⚠️ **ESTE BLOCO SUBSTITUIU O ANTERIOR, E A TROCA É O PONTO.** Da Tarefa 17
-    à 24 a aba de Grifos era um `<button disabled aria-disabled>` com um "chega
-    no MVP 2" ao lado, e havia um teste provando isso. A tela existe desde a
-    Tarefa 25: a asserção antiga deixou de descrever a verdade, então ela foi
-    TROCADA pela que descreve a verdade nova — não apagada nem afrouxada.
+    ⚠️ **ESTE BLOCO SUBSTITUIU O ANTERIOR DUAS VEZES, E A TROCA É O PONTO.** Da
+    Tarefa 17 à 24 a aba de Grifos era um `<button disabled aria-disabled>` com
+    um "chega no MVP 2" ao lado; a Tarefa 25 a fez navegar; a Tarefa 28 apagou as
+    DUAS abas (decisão B). Cada asserção que deixou de descrever a verdade foi
+    TROCADA pela que descreve a verdade nova — nenhuma foi apagada nem
+    afrouxada.
+
+    ⚠️ **E O MOTIVO DE NÃO HAVER MAIS ABA:** as duas eram inconsistentes entre
+    si — "Anotações" listava NESTA tela e "Grifos" navegava —, e uma lista dos
+    dois tem de ser UM lugar. Com o acervo do outro lado, o que sobra aqui é uma
+    SAÍDA, e saída é link.
   */
-  it('has the notes tab active and the highlights tab as a real link', async () => {
+  it('has ONE link to the collection, and no tab left', async () => {
     await renderBook();
 
     await waitFor(() => {
       expect(planRows()).toHaveLength(3);
     });
 
-    const notes = screen.getByRole('button', {
-      name: pt.pages.book.tabs.notes,
+    const link = screen.getByRole('link', {
+      name: pt.pages.book.acervoLink,
     });
-    // `aria-pressed`, e não `aria-checked`: o chip é um botão de dois estados,
-    // não um controle de formulário (regra 25 da Tarefa 13).
-    expect(notes.getAttribute('aria-pressed')).toBe('true');
+    // A âncora tem endereço de verdade: é o que faz Ctrl+clique e "abrir em
+    // nova aba" funcionarem.
+    expect(link.getAttribute('href')).toBe(`/books/${BOOK_ID}/acervo`);
+    expect(link.hasAttribute('disabled')).toBe(false);
+    expect(link.getAttribute('aria-disabled')).toBeNull();
 
-    const highlights = screen.getByRole('link', {
-      name: pt.pages.book.tabs.highlights,
-    });
-    // Nem `disabled`, nem `aria-disabled`, nem a frase do MVP 2 — que saiu do
-    // catálogo junto com o botão.
-    expect(highlights.hasAttribute('disabled')).toBe(false);
-    expect(highlights.getAttribute('aria-disabled')).toBeNull();
-    expect(highlights.getAttribute('href')).toBe(
-      `/books/${BOOK_ID}/highlights`,
-    );
+    /*
+      ⚠️ **O QUE NÃO ESTÁ AQUI É METADE DO TESTE.** Nenhum chip, nenhum
+      `role="group"`, nenhum `aria-pressed`: o filtro inteiro mudou de tela, e
+      uma aba sobrevivente seria a inconsistência de volta. E não há SEGUNDO
+      link para o acervo — decisão B: **um**.
+      (O `<select>` de idioma do cabeçalho não é chip nem grupo.)
+    */
+    expect(screen.queryAllByRole('group')).toHaveLength(0);
+    expect(document.querySelectorAll('[aria-pressed]')).toHaveLength(0);
     expect(
-      screen.queryByRole('button', { name: pt.pages.book.tabs.highlights }),
-    ).toBeNull();
+      screen.getAllByRole('link', { name: pt.pages.book.acervoLink }),
+    ).toHaveLength(1);
     expectNoGuilt();
   });
 
@@ -1062,19 +900,46 @@ describe('⚠️ THE HIGHLIGHTS TAB NAVIGATES NOW (rule 11 of task 25)', () => {
       expect(planRows()).toHaveLength(3);
     });
 
-    await press(
-      screen.getByRole('link', { name: pt.pages.book.tabs.highlights }),
-    );
+    await press(screen.getByRole('link', { name: pt.pages.book.acervoLink }));
 
-    expect(locationText()).toBe(`/books/${BOOK_ID}/highlights`);
-    // E chegou na tela de grifos de verdade, não numa página não encontrada.
+    expect(locationText()).toBe(`/books/${BOOK_ID}/acervo`);
+    // E chegou na tela do acervo de verdade, não numa página não encontrada.
     expect(
       screen.queryByRole('heading', {
         level: 1,
-        name: pt.pages.highlights.title,
+        name: pt.pages.acervo.title,
       }),
     ).not.toBeNull();
     expectNoGuilt();
+  });
+});
+
+describe('⚠️ NOTHING ON THIS SCREEN SUGGESTS PRIVACY (ADR 0002)', () => {
+  it('would catch the words the ADR forbids, in both languages', () => {
+    /*
+      ⚠️ **O LADO POSITIVO DO PAR (§7.3), e ele fica AQUI de propósito.** A
+      varredura de privacidade roda dentro de `expectNoGuilt()` em todos os
+      estados desta suíte (conserto da Tarefa 25) — mas uma lista esvaziada, ou
+      um matcher invertido, deixaria todas elas verdes para sempre.
+
+      Este teste não é sobre a tela do livro: é sobre a LISTA e o MATCHER, que
+      moram em `@clube/shared/adr-0002`. Ele ficou nesta suíte quando o acervo
+      saiu (Tarefa 28) porque mudar de casa um teste que não mudou de assunto é
+      como uma propriedade perde o dono — e é a única cópia dele no app.
+    */
+    const planted = [
+      'Só você vê esta anotação',
+      'Anotação privada',
+      'Visível para: você',
+      'Only you can see this note',
+    ];
+
+    for (const phrase of planted) {
+      const normalized = withoutDiacritics(phrase);
+      expect(
+        PRIVACY_TERMS.some((term) => mentionsPrivacyTerm(normalized, term)),
+      ).toBe(true);
+    }
   });
 });
 
@@ -1290,812 +1155,6 @@ describe('⚠️ THE SHELF OF THE HOME LINKS HERE, AND THE CLICK DOES NOT RELOAD
   });
 });
 
-/*
-  ⚠️ **O ACERVO — AS REGRAS 1 A 8 DA TAREFA 19.**
-
-  A aba "Anotações" deixa de ser um rótulo: ela mostra o que o clube escreveu
-  sobre este livro, filtrável por autoria. O filtro é NAVEGAÇÃO — dentro do
-  clube não existe conteúdo privado (ADR 0002) —, e é por isso que cada estado
-  novo passa também pelo `expectNoPrivacyTalk`.
-*/
-describe('the fixture of the collection is hostile to the wrong filters (§7.2)', () => {
-  it('has different counts per author, interleaved, and out of alphabetical order', () => {
-    const collection = notes();
-
-    expect(collection.map((note) => note.id)).toEqual(NOTE_IDS);
-    expect(collection.map((note) => note.title)).toEqual(NOTE_TITLES);
-
-    // ⚠️ QUANTIDADES DIFERENTES: com 3 e 2, "não filtra" (5) e "filtra ao
-    // contrário" (2 onde se espera 3) ficam vermelhos. Com 2 e 2, o segundo
-    // passaria.
-    expect(collection.filter((note) => note.userId === MARCOS)).toHaveLength(3);
-    expect(collection.filter((note) => note.userId === MARIA)).toHaveLength(2);
-
-    // INTERCALADAS: um recorte por prefixo ou por sufixo da lista acusa.
-    expect(collection.map((note) => note.userId === MARCOS)).toEqual([
-      true,
-      false,
-      true,
-      false,
-      true,
-    ]);
-
-    // Ordenar por título ou por id daria OUTRA ordem que não a da API.
-    expect([...NOTE_TITLES].sort()).not.toEqual(NOTE_TITLES);
-    expect([...NOTE_IDS].sort()).not.toEqual(NOTE_IDS);
-
-    // E a nota DO DIA é MINHA: assim "tipo" não coincide com "autoria", e um
-    // filtro que confundisse os dois não passa por acidente.
-    const ofTheDay = collection.find((note) => note.kind === 'PLAN');
-    expect(ofTheDay?.userId).toBe(MARCOS);
-    expect(ofTheDay?.planItemId).toBe(TODAY_ID);
-    expect(MY_TITLES).toContain(ofTheDay?.title);
-  });
-
-  it('has a club whose members break the wrong chip lists (§7.2, task 27)', () => {
-    const club = members();
-
-    // EU estou na lista: sem me excluir, "Minhas" e "De Marcos" seriam dois
-    // chips para o mesmo recorte.
-    expect(club.some((member) => member.userId === MARCOS)).toBe(true);
-    // A JOANA saiu e TEM nome: é o par da regra 11 (nenhum chip, e o nome
-    // resolvendo a autoria).
-    expect(club.find((member) => member.userId === JOANA)?.status).toBe(
-      'ARCHIVED',
-    );
-    // TRÊS pessoas ativas: o clube não é um casal, e é aí que "o complemento de
-    // minhas" para de ser informação completa.
-    expect(club.filter((member) => member.status === 'ACTIVE')).toHaveLength(3);
-    // E a ZECA não escreveu nada — o chip cujo recorte vem vazio.
-    expect(notes().some((note) => note.userId === ZECA)).toBe(false);
-
-    /*
-      ⚠️ **A PRECONDIÇÃO PINADA** (§7.2): a ordem dos `id` é o OPOSTO da ordem
-      dos nomes, então um `sort` por `userId` nos chips acusa. Sem esta linha,
-      um id renomeado devolve a coincidência em silêncio.
-    */
-    expect(ZECA < MARIA).toBe(true);
-  });
-});
-
-describe('the collection of the book, in the Notes tab (rules 1, 2, 3)', () => {
-  it('lists the notes OF THE BOOK, in the order the API returned (rule 1)', async () => {
-    const calls = await renderBook({ notes: { status: 200, body: notes() } });
-
-    await waitFor(() => {
-      expect(noteRows()).toHaveLength(5);
-    });
-    // A tela NÃO reordena: o `listNotes` já devolve mais recente primeiro, e
-    // duas ordens seriam duas verdades.
-    expect(noteTitles()).toEqual(NOTE_TITLES);
-
-    // UMA requisição, ao clube DO LIVRO (`book.clubId`, não o clube ativo do
-    // cabeçalho) e filtrada pelo livro desta tela.
-    expect(requestsTo(calls, '/notes').map((call) => call.url)).toEqual([
-      `https://api.teste/clubs/${CASAL.id}/notes?bookId=${BOOK_ID}`,
-    ]);
-    expectNoGuilt();
-    expectNoPrivacyTalk();
-  });
-
-  it('shows the title, the authorship and an excerpt of the plainText (rule 2)', async () => {
-    await renderBook({ notes: { status: 200, body: notes() } });
-
-    await waitFor(() => {
-      expect(noteRows()).toHaveLength(5);
-    });
-
-    /*
-      ⚠️ AS DUAS AUTORIAS, e é o par que morde: uma tela que trocasse os dois
-      lados da comparação com o `me.id` continuaria mostrando as duas frases —
-      só que nas linhas erradas.
-    */
-    const mine = noteRowOf('A promessa do anao');
-    expect(mine.textContent).toContain(pt.pages.book.notes.author.you);
-    expect(mine.textContent).not.toContain(pt.pages.book.notes.author.other);
-    expect(mine.textContent).toContain('a promessa vale o que custa');
-
-    /*
-      ⚠️ **AQUI ERA "Alguém do clube", E AGORA É O NOME DELA** (Tarefa 27,
-      regra 11): a Tarefa 26a entregou a rota, e esta linha é onde ela é
-      cobrada na lista. O genérico continua existindo — para quando não há
-      membro conhecido —, e tem teste próprio nos dois estados degradados.
-    */
-    const hers = noteRowOf('Uma ideia da pagina 112');
-    expect(hers.textContent).toContain('Maria');
-    expect(hers.textContent).not.toContain(pt.pages.book.notes.author.other);
-    expect(hers.textContent).toContain('a ideia que veio no meio da noite');
-
-    // DECISÃO F: o trecho vem do `plainText`, então o `doc` não é renderizado
-    // na lista — nem o JSON dele vaza para a tela.
-    expect(readableText()).not.toContain('"type":"doc"');
-    expectNoGuilt();
-    expectNoPrivacyTalk();
-  });
-
-  it('says which note is of the DAY and which is standalone (rule 3)', async () => {
-    await renderBook({ notes: { status: 200, body: notes() } });
-
-    await waitFor(() => {
-      expect(noteRows()).toHaveLength(5);
-    });
-    // Os dois tipos convivem na mesma lista (decisão C), identificados.
-    expect(noteRowOf('O capitulo de hoje').textContent).toContain(
-      pt.pages.book.notes.kind.plan,
-    );
-    expect(noteRowOf('A promessa do anao').textContent).toContain(
-      pt.pages.book.notes.kind.free,
-    );
-    expect(noteRowOf('A promessa do anao').textContent).not.toContain(
-      pt.pages.book.notes.kind.plan,
-    );
-    expectNoGuilt();
-  });
-});
-
-describe('⚠️ THE FILTER CHANGES THE LIST, AND IT IS DONE ON THE CLIENT (rules 4, 5)', () => {
-  it('cuts the collection by authorship without asking the server again', async () => {
-    const calls = await renderBook({ notes: { status: 200, body: notes() } });
-
-    await waitFor(() => {
-      expect(noteRows()).toHaveLength(5);
-    });
-    expect(requestsTo(calls, '/notes')).toHaveLength(1);
-
-    // `aria-pressed`, e não `aria-checked`: o chip é um botão de dois estados
-    // (regra 25 da Tarefa 13).
-    expect(
-      chip(pt.pages.book.notes.filters.all).getAttribute('aria-pressed'),
-    ).toBe('true');
-    expect(
-      chip(pt.pages.book.notes.filters.mine).getAttribute('aria-pressed'),
-    ).toBe('false');
-
-    await press(chip(pt.pages.book.notes.filters.mine));
-    // ⚠️ TRÊS, e são as MINHAS — na ordem da API. Um filtro que devolvesse a
-    // lista inteira daria cinco; um invertido daria duas.
-    expect(noteTitles()).toEqual(MY_TITLES);
-    expect(
-      chip(pt.pages.book.notes.filters.mine).getAttribute('aria-pressed'),
-    ).toBe('true');
-    expect(
-      chip(pt.pages.book.notes.filters.all).getAttribute('aria-pressed'),
-    ).toBe('false');
-    expectNoGuilt();
-    expectNoPrivacyTalk();
-
-    /*
-      ⚠️ **AQUI ERA "De outras pessoas", E AGORA É O NOME DELA** (Tarefa 27).
-      O chip do complemento só existe no modo degradado — `GET /members` que
-      falhou, ou o `/me` que ainda não chegou —, e os dois têm teste próprio no
-      bloco das regras 10 a 14.
-    */
-    await press(chip(personChip('Maria')));
-    expect(noteTitles()).toEqual(HER_TITLES);
-    expectNoGuilt();
-    expectNoPrivacyTalk();
-
-    await press(chip(pt.pages.book.notes.filters.all));
-    expect(noteTitles()).toEqual(NOTE_TITLES);
-
-    /*
-      ⚠️ **REGRA 5: NENHUMA REQUISIÇÃO NOVA.** O `listNotes` aceita `authorId`,
-      e usá-lo faria cada toque num chip virar uma ida ao servidor — "minhas"
-      não é um pedido novo, é um recorte do mesmo acervo. Sem esta asserção, a
-      implementação que refaz a busca passaria em todas as de cima.
-    */
-    expect(requestsTo(calls, '/notes')).toHaveLength(1);
-  });
-});
-
-describe('⚠️ NOTHING ON THIS SCREEN SUGGESTS PRIVACY (rule 6, ADR 0002)', () => {
-  it('keeps the vocabulary of restricted visibility out of every cut of the collection', async () => {
-    /*
-      O ADR 0002 em uma frase: dentro do clube não existe conteúdo privado, e o
-      filtro é NAVEGAÇÃO. Um cadeado — ou um "só você vê" — ensinaria uma regra
-      que o sistema não tem, e quem acreditasse nele escreveria pensando que
-      ninguém vai ler.
-    */
-    await renderBook({ notes: { status: 200, body: notes() } });
-
-    await waitFor(() => {
-      expect(noteRows()).toHaveLength(5);
-    });
-    expectNoPrivacyTalk();
-
-    for (const label of [
-      pt.pages.book.notes.filters.mine,
-      // O chip por PESSOA entra no laço: é o recorte novo da Tarefa 27, e é
-      // justamente aquele em que alguém escreveria "só ela vê".
-      personChip('Maria'),
-      pt.pages.book.notes.filters.all,
-    ]) {
-      await press(chip(label));
-      expectNoPrivacyTalk();
-    }
-  });
-
-  it('would catch the words the ADR forbids, in both languages', () => {
-    /*
-      ⚠️ O LADO POSITIVO DO PAR (§7.3): uma lista esvaziada — ou um matcher
-      invertido — deixaria o teste acima verde para sempre.
-    */
-    const planted = [
-      'Só você vê esta anotação',
-      'Anotação privada',
-      'Visível para: você',
-      'Only you can see this note',
-    ];
-
-    for (const phrase of planted) {
-      const normalized = withoutDiacritics(phrase);
-      expect(
-        PRIVACY_TERMS.some((term) => mentionsPrivacyTerm(normalized, term)),
-      ).toBe(true);
-    }
-  });
-});
-
-describe('⚠️ THE CHIP FINALLY SAYS THE NAME (rules 10 to 14 of task 27)', () => {
-  it('⚠️ draws one chip per ACTIVE member, with the name and the avatar, in ONE named group', async () => {
-    /*
-      ⚠️ **É AQUI QUE A TAREFA 26a É COBRADA**: o filtro deixa de dizer "De
-      outras pessoas" e passa a dizer **De Maria** — a lacuna que o MVP 1
-      registrou três vezes e que é a pergunta 1 do `docs/ACEITE-MVP.md`.
-
-      E o `role="group"` com nome acessível é METADE DA MEDIÇÃO DA REGRA 8: o
-      gêmeo deste teste está em `highlights.test.tsx`, e mudar a marcação do
-      `FilterBar` tem de deixar as DUAS suítes vermelhas. Se acusasse numa só,
-      uma das telas não estaria usando o componente compartilhado.
-    */
-    const calls = await renderBook({ notes: { status: 200, body: notes() } });
-
-    await waitFor(() => {
-      expect(noteRows()).toHaveLength(5);
-    });
-    await waitFor(() => {
-      expect(filterChips()).toHaveLength(4);
-    });
-
-    /*
-      ⚠️ QUATRO CHIPS, E O QUE **NÃO** ESTÁ AQUI É METADE DO TESTE:
-
-      - nenhum "De Marcos" — EU sou o chip "Minhas" (regra 13), e dois chips
-        para o mesmo recorte é o defeito que o fixture existe para pegar;
-      - nenhum "De Joana" — ela saiu do clube (regra 11, decisão A da 26a);
-      - nenhum "De outras pessoas" — o complemento morreu no modo com nome, e
-        ele só volta degradado (regra 14).
-    */
-    expect(filterChips()).toEqual([
-      pt.pages.book.notes.filters.all,
-      pt.pages.book.notes.filters.mine,
-      personChip('Maria'),
-      personChip('Zeca'),
-    ]);
-    expect(screen.getAllByRole('group')).toHaveLength(1);
-    expect(
-      screen.queryByRole('button', {
-        name: pt.pages.book.notes.filters.others,
-      }),
-    ).toBeNull();
-    expect(screen.queryByRole('button', { name: personChip('Marcos') })).toBe(
-      null,
-    );
-    expect(screen.queryByRole('button', { name: personChip('Joana') })).toBe(
-      null,
-    );
-
-    /*
-      DECISÃO D: o `PersonAvatar` no slot `start` do `FilterChip`. ⚠️ O slot
-      **já tinha dois chamadores** com `ColorSwatch` (as duas telas de grifo,
-      Tarefas 24/25) — a afirmação de que ele "nunca teve chamador" era falsa e
-      está corrigida; o que é novo é o AVATAR nele. A inicial é a de VERDADE, e
-      não a primeira letra de um UUID: é isso que a Tarefa 26a comprou.
-    */
-    const maria = chip(personChip('Maria'));
-    expect(maria.querySelector('[aria-hidden="true"]')?.textContent).toBe('M');
-
-    // UMA requisição, ao clube DO LIVRO (`book.clubId`, não o clube ativo do
-    // cabeçalho — é o dono do livro que manda).
-    expect(requestsTo(calls, '/members').map((call) => call.url)).toEqual([
-      `https://api.teste/clubs/${CASAL.id}/members`,
-    ]);
-    expectNoGuilt();
-  });
-
-  it('cuts the collection by the person of the chip, without asking the server again (rule 10)', async () => {
-    const calls = await renderBook({ notes: { status: 200, body: notes() } });
-
-    await waitFor(() => {
-      expect(filterChips()).toHaveLength(4);
-    });
-
-    await press(chip(personChip('Maria')));
-    // As DUAS dela, na ordem da API. Um filtro invertido daria três.
-    expect(noteTitles()).toEqual(HER_TITLES);
-
-    await press(chip(pt.pages.book.notes.filters.mine));
-    // ⚠️ E "Minhas" continua sendo O MEU (regra 13): três, e não as da Maria.
-    expect(noteTitles()).toEqual(MY_TITLES);
-
-    // O recorte é no CLIENTE (regra 5 da Tarefa 19): o `listNotes` aceita
-    // `authorId`, e usá-lo faria cada toque num chip virar uma ida ao servidor.
-    expect(requestsTo(calls, '/notes')).toHaveLength(1);
-    expect(requestsTo(calls, '/members')).toHaveLength(1);
-    expectNoGuilt();
-  });
-
-  it('⚠️ says the FILTER came back empty for the person who wrote nothing', async () => {
-    // O par que faltava: o chip existe (ela é membro ativo) e o recorte vem
-    // vazio — e o vazio do FILTRO tem frase própria, nunca "escreva a primeira".
-    await renderBook({ notes: { status: 200, body: notes() } });
-
-    await waitFor(() => {
-      expect(filterChips()).toHaveLength(4);
-    });
-
-    await press(chip(personChip('Zeca')));
-
-    expect(
-      screen.queryByText(pt.pages.book.notes.empty.filtered),
-    ).not.toBeNull();
-    expect(screen.queryByText(pt.pages.book.notes.empty.title)).toBeNull();
-    expectNoGuilt();
-  });
-
-  it('⚠️ keeps resolving the name of WHO LEFT the club, on the note they wrote (rule 11)', async () => {
-    /*
-      ⚠️ **OS DOIS LADOS, E É O QUE A DECISÃO A DA TAREFA 26a COMPRA.** Sair do
-      clube arquiva o `Membership` e **não** apaga o que a pessoa escreveu — "o
-      acervo do clube continua íntegro, **com autoria**" (ADR 0002). Então a
-      rota devolve os arquivados, e eles existem EXCLUSIVAMENTE para isto: o
-      nome de quem escreveu e saiu. Chip, não; nome, sim.
-    */
-    await renderBook({
-      notes: {
-        status: 200,
-        body: [
-          aNote({
-            id: 'n-9',
-            userId: JOANA,
-            title: 'A carta que ficou',
-            plainText: 'o que ela escreveu antes de sair',
-          }),
-        ],
-      },
-    });
-
-    await waitFor(() => {
-      expect(noteRows()).toHaveLength(1);
-    });
-
-    const row = noteRowOf('A carta que ficou');
-    expect(row.textContent).toContain('Joana');
-    // E não o genérico: a anotação dela deixou de ser "de alguém".
-    expect(row.textContent).not.toContain(pt.pages.book.notes.author.other);
-    // O outro lado: nenhum chip para quem saiu.
-    expect(
-      screen.queryByRole('button', { name: personChip('Joana') }),
-    ).toBeNull();
-    expectNoGuilt();
-  });
-
-  it('⚠️ falls back to a CATALOG phrase for a member with no name — never "null" (rule 12)', async () => {
-    /*
-      Decisão C da Tarefa 26a: `User.name` é `String?`, o aceite de convite não
-      exige nome, e o backend **não inventa fallback** — um `?? 'Alguém'` no
-      servidor seria texto de interface em inglês ou português, decidido no
-      lugar errado. Quem escolhe a palavra é a TELA, com `t()`.
-    */
-    await renderBook({
-      notes: { status: 200, body: notes() },
-      members: {
-        status: 200,
-        body: [
-          { userId: MARCOS, name: 'Marcos', role: 'OWNER', status: 'ACTIVE' },
-          { userId: MARIA, name: null, role: 'MEMBER', status: 'ACTIVE' },
-        ] satisfies ClubMemberResponse[],
-      },
-    });
-
-    await waitFor(() => {
-      expect(filterChips()).toHaveLength(3);
-    });
-
-    expect(filterChips()).toEqual([
-      pt.pages.book.notes.filters.all,
-      pt.pages.book.notes.filters.mine,
-      pt.pages.book.notes.filters.unnamed,
-    ]);
-    // Nem "null", nem "undefined", nem um chip vazio — em texto OU em atributo.
-    expect(readableText()).not.toContain('null');
-    expect(readableText()).not.toContain('undefined');
-
-    // E o recorte dela funciona igual: o chip sem nome não é chip quebrado.
-    await press(chip(pt.pages.book.notes.filters.unnamed));
-    expect(noteTitles()).toEqual(HER_TITLES);
-    // Na LISTA, quem não tem nome volta ao genérico do catálogo — que é a
-    // frase certa ali ("Alguém do clube escreveu isto").
-    expect(noteRowOf('Uma ideia da pagina 112').textContent).toContain(
-      pt.pages.book.notes.author.other,
-    );
-    expectNoGuilt();
-  });
-
-  it('⚠️ DEGRADES to the filter of task 19 when GET /members fails (rule 14)', async () => {
-    /*
-      ⚠️ **O ACERVO É O CONTEÚDO; O FILTRO É NAVEGAÇÃO.** Uma falha em quem são
-      as pessoas não pode apagar o filtro nem derrubar a tela: ela volta para o
-      que a Tarefa 19 entregou — `Tudo · Minhas · De outras pessoas` —, que num
-      clube de duas pessoas é informação completa e em qualquer clube continua
-      sendo um recorte honesto.
-    */
-    await renderBook({
-      notes: { status: 200, body: notes() },
-      members: { status: 500, body: { error: 'Internal Server Error' } },
-    });
-
-    await waitFor(() => {
-      expect(noteRows()).toHaveLength(5);
-    });
-
-    expect(filterChips()).toEqual([
-      pt.pages.book.notes.filters.all,
-      pt.pages.book.notes.filters.mine,
-      pt.pages.book.notes.filters.others,
-    ]);
-    // A tela inteira de pé: o plano, o acervo e o recorte que ainda dá.
-    expect(bookScreenIsUp()).toBe(true);
-    expect(planRows()).toHaveLength(3);
-
-    await press(chip(pt.pages.book.notes.filters.others));
-    expect(noteTitles()).toEqual(HER_TITLES);
-    // Sem os nomes, a autoria volta ao genérico — nunca a um id nem a "null".
-    expect(noteRowOf('Uma ideia da pagina 112').textContent).toContain(
-      pt.pages.book.notes.author.other,
-    );
-    expect(readableText()).not.toContain(MARIA);
-    /*
-      REGRA 16 — NENHUMA STRING DA API NA TELA, texto **e** atributos. A falha
-      dos membros não vira frase nenhuma: o filtro degrada em silêncio, porque
-      ninguém deveria ler um erro de servidor por causa de um chip. O
-      `readableText()` varre os atributos que carregam texto também (§7.6.1).
-    */
-    expect(readableText()).not.toContain('Internal Server Error');
-    expectNoGuilt();
-  });
-
-  it('⚠️ a member whose userId is literally "mine" does not hijack the "Minhas" chip', async () => {
-    /*
-      ⚠️ **O FIXTURE É PRODUZÍVEL PELO CONTRATO EM QUE A TELA CONFIA, e é isso
-      que muda a decisão.** A primeira versão desta fatia deixou o prefixo
-      `author:` sem teste, com a prosa dizendo que o cenário "não é produzível
-      pela API" — e a auditoria mostrou que a fronteira que a tela valida é o
-      `clubMemberResponseSchema`, que declara `userId: z.string()` **sem
-      `.uuid()`**. Ou seja: o cliente aceita este corpo, e é o cliente que
-      decide o que a tela vê (§6.8).
-
-      Sem o prefixo, o `value` do chip dela seria exatamente `'mine'`: o chip
-      "Minhas" e o dela viram O MESMO chip, o `aria-pressed` acende nos dois, e
-      o recorte de um dos dois desaparece — em silêncio.
-
-      Continua verdade que o BACKEND não produz este id (ele gera
-      `randomUUID()`), e é por isso que a defesa é estrutural. O que deixou de
-      ser verdade é que ela não podia ter dono.
-    */
-    await renderBook({
-      notes: { status: 200, body: notes() },
-      members: {
-        status: 200,
-        body: [
-          { userId: MARCOS, name: 'Marcos', role: 'OWNER', status: 'ACTIVE' },
-          // Um `userId` que colide com o valor do chip fixo.
-          { userId: 'mine', name: 'Mina', role: 'MEMBER', status: 'ACTIVE' },
-        ] satisfies ClubMemberResponse[],
-      },
-    });
-
-    await waitFor(() => {
-      expect(filterChips()).toHaveLength(3);
-    });
-
-    // Três chips DISTINTOS: o dela não engoliu o "Minhas".
-    expect(filterChips()).toEqual([
-      pt.pages.book.notes.filters.all,
-      pt.pages.book.notes.filters.mine,
-      personChip('Mina'),
-    ]);
-
-    await press(chip(pt.pages.book.notes.filters.mine));
-    // "Minhas" continua sendo O MEU recorte, e só um chip acende.
-    expect(noteTitles()).toEqual(MY_TITLES);
-    expect(pressedChips()).toEqual([pt.pages.book.notes.filters.mine]);
-
-    await press(chip(personChip('Mina')));
-    // E o dela é o dela: ninguém escreveu com esse id, então o recorte é vazio.
-    expect(
-      screen.queryByText(pt.pages.book.notes.empty.filtered),
-    ).not.toBeNull();
-    expect(pressedChips()).toEqual([personChip('Mina')]);
-    expectNoGuilt();
-  });
-
-  it('⚠️ ALWAYS exactly one chip pressed — the chip that dies mid-session does not leave an invisible cut', async () => {
-    /*
-      ⚠️ **A TRANSIÇÃO REAL, E ELA É DECIDÍVEL EM JSDOM** (§7.10): o `Responder`
-      do harness devolve `Reply | Promise<Reply>`, então uma resposta de
-      `/members` **resolvida à mão** produz exatamente a sequência que o
-      docblock da tela nomeava e nenhum teste provava:
-
-      `/members` demora → os chips são os três da Tarefa 19 → toco "De outras
-      pessoas" → os membros chegam → **aquele chip morre**. Sem a derivação
-      (`options.some(...) ? scope : ALL_SCOPE`), o `scope` continua `'others'`:
-      a lista fica recortada por um critério que **nenhum chip aceso explica**.
-
-      O mesmo vale para quem sai do clube no meio da sessão — o chip dela
-      desaparece na recarga e o recorte ficaria de pé sozinho.
-    */
-    let releaseMembers = (): void => {
-      throw new Error('o gatilho dos membros não foi montado');
-    };
-    const membersArrived = new Promise<Reply>((resolve) => {
-      releaseMembers = () => {
-        resolve({ status: 200, body: members() });
-      };
-    });
-
-    await renderBook({
-      notes: { status: 200, body: notes() },
-      members: () => membersArrived,
-    });
-
-    await waitFor(() => {
-      expect(noteRows()).toHaveLength(5);
-    });
-    // Enquanto os membros não chegam, o filtro é o da Tarefa 19.
-    expect(filterChips()).toEqual([
-      pt.pages.book.notes.filters.all,
-      pt.pages.book.notes.filters.mine,
-      pt.pages.book.notes.filters.others,
-    ]);
-
-    await press(chip(pt.pages.book.notes.filters.others));
-    expect(pressedChips()).toEqual([pt.pages.book.notes.filters.others]);
-    expect(noteTitles()).toEqual(HER_TITLES);
-
-    // E AGORA os membros chegam, e o chip escolhido deixa de existir.
-    await act(async () => {
-      releaseMembers();
-      await membersArrived;
-    });
-
-    await waitFor(() => {
-      expect(filterChips()).toHaveLength(4);
-    });
-    // ⚠️ EXATAMENTE UM chip aceso, e o recorte é o que ele diz: o acervo
-    // inteiro. Sem a derivação, seriam ZERO acesos e a lista mostraria duas.
-    expect(pressedChips()).toEqual([pt.pages.book.notes.filters.all]);
-    expect(noteTitles()).toEqual(NOTE_TITLES);
-    expectNoGuilt();
-  });
-
-  it('⚠️ nobody stops being "you" while I still do not know who I am (rule 13)', async () => {
-    /*
-      ⚠️ **A ARMADILHA NOMEADA DA TAREFA 18**: o `me` é `null` fora do `ready`,
-      e tratar isso como "não sou ninguém" faz `note.userId === me?.id`
-      responder `false` para TODO MUNDO — em silêncio, com a tela funcionando.
-
-      Aqui ela tem uma segunda cara, e é nova: com os membros carregados e o
-      `me` desconhecido, "um chip por membro ativo" me daria um chip **meu**,
-      ao lado de um "Minhas" que mostra tudo. Então o filtro degrada — saber
-      quem são as pessoas não basta; é preciso saber qual delas sou eu.
-    */
-    await renderBook({
-      notes: { status: 200, body: notes() },
-      me: { status: 500, body: { error: 'Internal Server Error' } },
-    });
-
-    await waitFor(() => {
-      expect(noteRows()).toHaveLength(5);
-    });
-
-    expect(filterChips()).toEqual([
-      pt.pages.book.notes.filters.all,
-      pt.pages.book.notes.filters.mine,
-      pt.pages.book.notes.filters.others,
-    ]);
-    expect(screen.queryByRole('button', { name: personChip('Maria') })).toBe(
-      null,
-    );
-    // E o acervo aparece INTEIRO: mostrar tudo é a resposta honesta para
-    // "ainda não sei quem é você" — nunca uma lista partida ao contrário.
-    await press(chip(pt.pages.book.notes.filters.mine));
-    expect(noteTitles()).toEqual(NOTE_TITLES);
-    expectNoGuilt();
-  });
-});
-
-describe('an empty collection charges nobody (rule 7)', () => {
-  it('says the book has no notes yet, and offers no filter for nothing', async () => {
-    await renderBook({ notes: { status: 200, body: [] } });
-
-    await waitFor(() => {
-      expect(
-        screen.queryByText(pt.pages.book.notes.empty.title),
-      ).not.toBeNull();
-    });
-    expect(
-      screen.queryByText(pt.pages.book.notes.empty.description),
-    ).not.toBeNull();
-    expect(
-      screen.queryByRole('list', { name: pt.pages.book.notes.label }),
-    ).toBeNull();
-    // Filtrar o vazio é oferecer uma escolha que não muda nada.
-    expect(
-      screen.queryByRole('button', { name: pt.pages.book.notes.filters.mine }),
-    ).toBeNull();
-    // E o livro continua na tela: acervo vazio não é erro de livro.
-    expect(planRows()).toHaveLength(3);
-    expectNoGuilt();
-    expectNoPrivacyTalk();
-  });
-
-  it('says the FILTER came back empty, not that the book did', async () => {
-    /*
-      A frase "escreva a primeira" seria mentira embaixo de um recorte que só
-      escondeu o que já existe — e é o tipo de frase que vira cobrança sem
-      querer.
-    */
-    await renderBook({
-      notes: { status: 200, body: [aNote({ id: 'n-1', userId: MARCOS })] },
-    });
-
-    await waitFor(() => {
-      expect(noteRows()).toHaveLength(1);
-    });
-
-    // O chip de quem NÃO escreveu esta anotação — a Maria, agora pelo nome.
-    await press(chip(personChip('Maria')));
-    expect(
-      screen.queryByText(pt.pages.book.notes.empty.filtered),
-    ).not.toBeNull();
-    expect(screen.queryByText(pt.pages.book.notes.empty.title)).toBeNull();
-    expectNoGuilt();
-    expectNoPrivacyTalk();
-  });
-
-  it('has its own words when the collection fails to load, and the retry REDOES it', async () => {
-    let attempts = 0;
-    const calls = await renderBook({
-      notes: () => {
-        attempts += 1;
-        return attempts === 1
-          ? { status: 0, offline: true }
-          : { status: 200, body: notes() };
-      },
-    });
-
-    await waitFor(() => {
-      expect(
-        screen.queryByText(pt.pages.book.notes.unavailable),
-      ).not.toBeNull();
-    });
-    // O plano continua de pé: falhar no acervo não apaga o livro.
-    expect(planRows()).toHaveLength(3);
-    expectNoGuilt();
-
-    await press(screen.getByRole('button', { name: pt.pages.book.retry }));
-
-    await waitFor(() => {
-      expect(noteRows()).toHaveLength(5);
-    });
-    expect(requestsTo(calls, '/notes')).toHaveLength(2);
-    expectNoGuilt();
-    expectNoPrivacyTalk();
-  });
-
-  it('⚠️ the retry of the collection ALSO redoes the members, and the names come back', async () => {
-    /*
-      ⚠️ **O GATILHO DO "TENTAR DE NOVO" COBRE AS DUAS CARGAS DA SEÇÃO**, e a
-      medição é a razão: sem esta asserção, tirar o `notesAttempt` das
-      dependências do efeito dos membros dava **0 acusadores** — as duas
-      asserções sobre `/members` desta suíte só existiam em cenários sem
-      retry. E o custo do defeito é visível: uma falha passageira nos nomes
-      deixava o filtro degradado até alguém recarregar o app, com o único botão
-      de "tentar de novo" da seção ali do lado sem efeito sobre ele.
-
-      O cenário é o REAL: a rede caiu, e ela cai para as duas requisições.
-    */
-    let notesAttempts = 0;
-    let membersAttempts = 0;
-    const calls = await renderBook({
-      notes: () => {
-        notesAttempts += 1;
-        return notesAttempts === 1
-          ? { status: 0, offline: true }
-          : { status: 200, body: notes() };
-      },
-      members: () => {
-        membersAttempts += 1;
-        return membersAttempts === 1
-          ? { status: 0, offline: true }
-          : { status: 200, body: members() };
-      },
-    });
-
-    await waitFor(() => {
-      expect(
-        screen.queryByText(pt.pages.book.notes.unavailable),
-      ).not.toBeNull();
-    });
-    expect(requestsTo(calls, '/members')).toHaveLength(1);
-
-    await press(screen.getByRole('button', { name: pt.pages.book.retry }));
-
-    await waitFor(() => {
-      expect(noteRows()).toHaveLength(5);
-    });
-    // DUAS, e é o ponto: o mesmo botão refaz o acervo e quem são as pessoas.
-    expect(requestsTo(calls, '/members')).toHaveLength(2);
-    await waitFor(() => {
-      expect(filterChips()).toHaveLength(4);
-    });
-    // E os nomes VOLTAM — no chip e na autoria da linha.
-    expect(filterChips()).toContain(personChip('Maria'));
-    expect(noteRowOf('Uma ideia da pagina 112').textContent).toContain('Maria');
-    expectNoGuilt();
-  });
-});
-
-describe('tapping a note goes to the screen that can open it (rule 8)', () => {
-  it('sends the day note to the day, and every standalone note to the standalone screen', async () => {
-    await renderBook({ notes: { status: 200, body: notes() } });
-
-    await waitFor(() => {
-      expect(noteRows()).toHaveLength(5);
-    });
-
-    // A MINHA avulsa: a tela de correção.
-    expect(linkIn(noteRowOf('A promessa do anao')).getAttribute('href')).toBe(
-      `/books/${BOOK_ID}/notes/n-1`,
-    );
-    /*
-      ⚠️ A DO DIA VAI PARA A TELA DO DIA, mesmo sendo minha — e é regra de
-      backend, não gosto: o `editNote` RECUSA nota do dia (Tarefa 09), que só se
-      escreve pelo `upsertPlanNote`. Uma tela que a mandasse para a edição
-      avulsa daria 400 em todo salvamento.
-    */
-    expect(linkIn(noteRowOf('O capitulo de hoje')).getAttribute('href')).toBe(
-      `/books/${BOOK_ID}/days/${TODAY_ID}`,
-    );
-    // A de OUTRA PESSOA abre a MESMA tela da avulsa, que decide leitura ×
-    // correção pela autoria (regra 17) — não um endereço diferente.
-    expect(
-      linkIn(noteRowOf('Duas linhas sobre a porta')).getAttribute('href'),
-    ).toBe(`/books/${BOOK_ID}/notes/n-2`);
-    expectNoPrivacyTalk();
-  });
-
-  it('opens the NEW standalone note from an explicit button', async () => {
-    /*
-      REGRA 16 do lado da escrita: criar é um BOTÃO. E ele existe mesmo com o
-      acervo vazio — escrever não depende de conseguir ler a lista.
-    */
-    const calls = await renderBook({ notes: { status: 200, body: [] } });
-
-    await waitFor(() => {
-      expect(planRows()).toHaveLength(3);
-    });
-
-    await press(screen.getByRole('button', { name: pt.pages.book.notes.new }));
-
-    expect(locationText()).toBe(`/books/${BOOK_ID}/notes/new`);
-    // Abrir a tela de criação NÃO cria linha no banco (regra 16): nenhuma
-    // requisição foi para `POST /books/:bookId/notes`.
-    expect(requestsTo(calls, `/books/${BOOK_ID}/notes`)).toEqual([]);
-  });
-});
-
 describe('the source of the book screen (rules 5, 15, 16)', () => {
   it('keeps the danger colour out of the SOURCE FILE, not only out of the states rendered here', () => {
     /*
@@ -2112,33 +1171,40 @@ describe('the source of the book screen (rules 5, 15, 16)', () => {
     expect(source).toContain('pages.book.plan.today');
   });
 
-  it('⚠️ builds the filter with the SHARED FilterBar, and the only chip left by hand is the TAB (rule 7 of task 27)', () => {
+  it('⚠️ keeps NO filter of its own — the whole filter moved to the acervo (rule 13 of task 28)', () => {
+    /*
+      ⚠️ **A ASSERÇÃO NEGATIVA É A QUE VALE, e ela substitui a da Tarefa 27.**
+      Lá o teste dizia "usa o `FilterBar` compartilhado e sobra exatamente UM
+      `FilterChip` à mão — a aba"; aqui não sobra nenhum dos dois. Uma tela que
+      encolhesse o acervo e deixasse a barra de filtro ao lado teria um controle
+      que não recorta nada, e o `role="group"` órfão continuaria na fala do
+      leitor de tela.
+
+      ⚠️ **E ISSO FECHA A LACUNA DE `renderLink` que vivia registrada desde a
+      Tarefa 25**: as classes de chip escritas à mão (`HIGHLIGHTS_TAB_CLASS`)
+      existiam porque o `FilterChipProps` não aceita `renderLink` e a aba tinha
+      de navegar. Sem aba, não há chamador — a lacuna deixou de ter custo nesta
+      tela, e continua registrada em `packages/ui` para quem precisar dela.
+    */
     const source = stripComments(bookSource());
 
-    expect(source).toContain('FilterBar');
-    /*
-      ⚠️ **A FRONTEIRA ACESSÍVEL DO GRUPO É DO COMPONENTE AGORA** (decisão C):
-      escrevê-la nas duas casas é o jeito silencioso de a segunda sair de
-      sincronia — foi o que aconteceu com as duas varreduras anti-culpa da
-      Tarefa 17, e com as duas listas de `GUILT_TERMS` até a 19.
-    */
+    expect(source).not.toContain('FilterBar');
+    expect(source).not.toContain('FilterChip');
     expect(source).not.toContain('role="group"');
+    // E nenhum resto do acervo: a segunda listagem e o recorte por autoria.
+    expect(source).not.toContain('notesResponseSchema');
+    expect(source).not.toContain('pages.book.notes');
 
     /*
-      ⚠️ **E SOBRA EXATAMENTE UM `FilterChip` À MÃO — A ABA "Anotações".** É a
-      forma "exatamente 1 linha vermelha" da Tarefa 25: um segundo chip
-      composto à mão acusa, e a asserção não é "zero", que seria uma asserção
-      que não descreve a verdade (e cujo conserto natural é apagar o teste).
-
-      A aba não é filtro, é NAVEGAÇÃO: a irmã dela ("Grifos") é um `Link` do
-      roteador, porque âncora crua recarrega o PWA inteiro (lição medida da
-      Tarefa 16) — e o `FilterChipProps` não aceita `renderLink`. A lacuna está
-      registrada desde a Tarefa 25 e continua registrada: pôr as duas abas no
-      `FilterBar` exigiria `renderLink` no `packages/ui`, que está fora desta
-      fatia.
+      O lado positivo do par (§7.4 escrito como varredura de fonte): o que
+      SOBROU é o link para o acervo, pelo `Link` do roteador, e a resolução do
+      NOME de quem escreveu — que é a regra 15 e a única razão de o
+      `GET /members` ter ficado nesta tela.
     */
-    expect([...source.matchAll(/<FilterChip\b/gu)]).toHaveLength(1);
-    expect(source).toContain('pages.book.tabs.notes');
+    expect(source).toContain('pages.book.acervoLink');
+    expect(source).toContain('acervoPath');
+    expect(source).toContain('clubMembersResponseSchema');
+    expect(source).toContain('pages.book.plan.writerNamed');
   });
 
   it('imports no editor, so the bundle stays without TipTap (rule 16)', () => {
@@ -2169,52 +1235,33 @@ describe('the source of the book screen (rules 5, 15, 16)', () => {
     expect(en.pages.book.plan.empty.title).not.toBe(
       pt.pages.book.plan.empty.title,
     );
-    // A chave `tabs.highlightsSoon` morreu na Tarefa 25 (a aba deixou de ser
-    // desabilitada), e o par que sobra é o rótulo da aba.
-    expect(en.pages.book.tabs.highlights).not.toBe(
-      pt.pages.book.tabs.highlights,
-    );
 
-    // As chaves da Tarefa 19, no mesmo par: existir nas duas e estar
-    // TRADUZIDA nas duas.
-    expect(Object.keys(en.pages.book.notes)).toEqual(
-      Object.keys(pt.pages.book.notes),
-    );
-    expect(en.pages.book.notes.filters.others).not.toBe(
-      pt.pages.book.notes.filters.others,
-    );
-    expect(en.pages.book.notes.empty.description).not.toBe(
-      pt.pages.book.notes.empty.description,
-    );
-    expect(en.pages.book.notes.kind.plan).not.toBe(
-      pt.pages.book.notes.kind.plan,
-    );
+    /*
+      ⚠️ **AS CHAVES QUE MORRERAM, E A LINHAGEM DELAS.** `tabs.highlightsSoon`
+      ("os grifos chegam no MVP 2") morreu na Tarefa 25, quando deixou de ser
+      verdade; `tabs.notes`/`tabs.highlights` e o bloco `notes` inteiro morreram
+      na Tarefa 28, quando o acervo saiu desta tela (as chaves dele estão em
+      `pages.acervo`, com par próprio em `acervo.test.tsx`). O que sobra do lado
+      da navegação é UM link, e é ele que este par confere.
+    */
+    expect(en.pages.book.acervoLink).not.toBe(pt.pages.book.acervoLink);
+    expect(pt.pages.book).not.toHaveProperty('tabs');
+    expect(pt.pages.book).not.toHaveProperty('notes');
 
-    // As chaves da Tarefa 27 — o chip por pessoa e o fallback de quem não pôs
-    // nome —, no mesmo par: existir nas duas e estar TRADUZIDA nas duas.
-    expect(Object.keys(en.pages.book.notes.filters)).toEqual(
-      Object.keys(pt.pages.book.notes.filters),
-    );
-    expect(en.pages.book.notes.filters.person).not.toBe(
-      pt.pages.book.notes.filters.person,
-    );
-    expect(en.pages.book.notes.filters.unnamed).not.toBe(
-      pt.pages.book.notes.filters.unnamed,
-    );
-    // A chave nomeada da sobreposição do plano, no mesmo par.
+    // A chave nomeada da sobreposição do plano, no mesmo par — ela é a regra 15
+    // desta fatia, e é a que NÃO podia sair junto com o acervo.
     expect(Object.keys(en.pages.book.plan)).toEqual(
       Object.keys(pt.pages.book.plan),
     );
     expect(en.pages.book.plan.writerNamed).not.toBe(
       pt.pages.book.plan.writerNamed,
     );
+    expect(en.pages.book.plan.writer).not.toBe(pt.pages.book.plan.writer);
 
     // ⚠️ E o `{{name}}` sobrevive à tradução: um `en` que perdesse o
-    // interpolador mostraria o rótulo sem o nome de ninguém — o defeito que
-    // esta fatia existe para consertar, de volta pelo outro idioma.
+    // interpolador mostraria o rótulo sem o nome de ninguém — o defeito que a
+    // Tarefa 27 consertou, de volta pelo outro idioma.
     for (const label of [
-      pt.pages.book.notes.filters.person,
-      en.pages.book.notes.filters.person,
       pt.pages.book.plan.writerNamed,
       en.pages.book.plan.writerNamed,
     ]) {

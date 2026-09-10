@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../App';
 import type { ClubSummary } from '../../club/active-club';
-import { highlightNewPath, highlightPath, highlightsPath } from '../paths';
+import { acervoPath, highlightNewPath, highlightPath } from '../paths';
 import { expectNoPrivacyTalk } from './adr-0002-dom';
 import {
   expectNoGuilt,
@@ -565,7 +565,7 @@ describe('⚠️ THE CREATION SENDS ONLY THE FIELDS THAT WERE FILLED (rules 15, 
     expect(JSON.stringify(write.body)).not.toContain('ACTIVE');
 
     // E a pessoa volta para a coleção, onde o grifo novo aparece.
-    expect(locationText()).toBe(highlightsPath(BOOK_ID));
+    expect(locationText()).toBe(acervoPath(BOOK_ID));
     expectNoGuilt();
     expectNoPrivacyTalk();
   });
@@ -720,7 +720,7 @@ describe('the correction sends ONLY what changed (rule 18)', () => {
     expect(write.method).toBe('PATCH');
     expect(write.url).toBe(`https://api.teste/highlights/${HIGHLIGHT_ID}`);
     expect(bodyKeys(write)).toEqual(['quote']);
-    expect(locationText()).toBe(highlightsPath(BOOK_ID));
+    expect(locationText()).toBe(acervoPath(BOOK_ID));
   });
 
   it('sends { color } when only the pen changed', async () => {
@@ -873,7 +873,7 @@ describe('⚠️ THE HIGHLIGHT OF ANOTHER PERSON HAS NO AFFORDANCE AT ALL (rule 
     const back = screen.getByRole('link', {
       name: pt.pages.highlightForm.backToList,
     });
-    expect(back.getAttribute('href')).toBe(highlightsPath(BOOK_ID));
+    expect(back.getAttribute('href')).toBe(acervoPath(BOOK_ID));
     expect(patches(calls)).toHaveLength(0);
     expectNoGuilt();
     expectNoPrivacyTalk();
