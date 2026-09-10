@@ -1695,8 +1695,80 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
 
 ### Bloco G — Registro de leitura
 
-- [ ] **30** — Domínio `ReadingLog` + UseCases `markRead` e `unmarkRead` (hard delete).
-      → _a detalhar_
+- [x] **30** — Domínio `ReadingLog` + UseCases `markRead` e `unmarkRead` (hard delete).
+      → `tasks/30-usecase-reading-log.md`
+      _**O BLOCO G COMEÇA PELO DOMÍNIO**, como o `CLAUDE.md` manda — sem persistência, sem
+      rota, sem tela. Entregue: a entidade `ReadingLog` (seis campos), o port
+      `ReadingLogRepository` **mínimo** (`save` · `byPlanItemAndUser` · `delete`), o fake com
+      suíte própria, e os dois UseCases com TDD estrito. **415 shared** (intocado) **+ 195 ui**
+      (intocado) **+ 1377 backend** (era 1307, **+70**) **+ 620 app** (intocado). Chunk de
+      entrada **416.107 B**, inalterado — a fatia não atravessa a fronteira do PWA. Integração
+      **não rodada**: não toca repositório nem rota (baseline 387)._
+      _**A decisão que molda as Tarefas 31, 32 e 37: o log ancora no `planItemId`, não numa
+      data de calendário.** "Li" quer dizer "li o trecho do dia X do plano". A alternativa
+      (`bookId` + data) não sabe expressar o caso real — quem lê no domingo o capítulo de
+      sexta marcaria o domingo, e o dia de sexta ficaria eternamente sem dono. Consequência
+      desejada: `markRead` **não faz aritmética de data nenhuma**._
+      _**⚠️ O ACHADO ALTO ERA DA SPEC, NÃO DA IMPLEMENTAÇÃO — e o orquestrador o mediu de
+      novo por conta própria.** A decisão E da spec afirmava que ninguém alcança a leitura de
+      outra pessoa porque a busca é por `(planItemId, actorUserId)`, logo o log alheio é
+      *"inalcançável — estrutural, não um `if`"*. **Verdade da assinatura do port; FALSO do
+      UseCase:** o `bookForActor` devolve um `Book` com `createdById` em escopo. O mutante do
+      §7.5 (`byPlanItemAndUser(actor) ?? byPlanItemAndUser(book.createdById)`) passou em
+      **1377/1377 — ZERO acusadores** —, com os três testes de autoria (`never lets Marcos…`,
+      `never lets the OWNER…`, `ignores a logId smuggled…`) **todos verdes** enquanto o
+      UseCase alcançava o log alheio. É a assinatura do envenenamento com fallback: ele se
+      comporta normalmente sempre que o ator TEM log, que é a precondição dos três. Conserto:
+      `byPlanItemAndUserCalls === 1` nos três — **0 → 4 acusadores**, medido pelo
+      orquestrador. **A lição é sobre a spec:** escrever "estrutural" é afirmação forte e
+      precisa da mesma medição que qualquer outra._
+      _**⚠️ E os 6 acusadores que o executor tinha medido eram do FAKE.** Mutar
+      `byPlanItemAndUser` no fake prova que o fake guarda o par; não prova que o UseCase o
+      usa. §7.9 aplicado a esta fatia: a guarda estava no lugar fácil de escrever, não no
+      lugar onde a propriedade é decidível._
+      _**O mesmo mutante no `markRead` dava 1 acusador — por COINCIDÊNCIA DE FIXTURE.** No
+      caminho feliz do `markRead` o ator não tem log, o `??` dispara e o contador anda; no do
+      `unmarkRead` o ator tem log, o `??` curto-circuita e ninguém vê. Fechado com a asserção
+      no caminho **idempotente**, que não depende da coincidência: **1 → 2**._
+      _**A 5ª aparição do §7.8, e desta vez limpa nas duas metades.** Três mutantes de relógio:
+      duas leituras → **1** acusador (o da contagem); leitura não contada via `Date.now()` →
+      **1**; uma leitura contada com valor errado → **2** (contagem **e** igualdade). O
+      esperado vem de constante (`clock.at(1)`, derivado de `CLOCK_BASE_ISO`), não do código
+      sob teste. ⚠️ O `at(1)` e não o `at(0)` da spec: o contador incrementa **antes** de
+      construir, então `at(0)` é o instante anterior a qualquer leitura._
+      _**Os outros achados, todos com acusador novo:** a afirmação de que o `delete` do Prisma
+      levanta **`P2025`** estava escrita como **fato em três arquivos** e **nunca foi medida
+      contra o banco** — lição nº 17, cuja última aparição viajou por quatro arquivos antes de
+      alguém medir; agora está num dono só, **rotulada como NÃO MEDIDA**, com a Tarefa 32
+      encarregada de confirmar no teste de contrato (a metade `deleteMany` idempotente **tem**
+      precedente medido em `prisma-reading-plan-item-repository.ts`). E três testes da decisão
+      E sobreviviam a um UseCase **no-op** (16/20); com as correções o arquivo inteiro acusa
+      (**20/20**)._
+      _**O que sobreviveu à mutação, e é onde não se mexe:** a idempotência do `markRead` está
+      provada como **propriedade** e não como implementação (o mutante que salva sempre e
+      engole o `P2002` dá **3** acusadores via `saveCalls`); o fake é fiel nas duas direções do
+      upsert por id (**2** e **6**), aterrado no `upsert({where:{id}})` que o
+      `prisma-highlight-repository.ts` já usa; e os seis campos da entidade têm acusador de
+      **runtime** — com o campo a mais **opcional** o `typecheck` fica verde, e quem guarda é
+      o `Object.keys` sobre a linha montada._
+      _**⚠️ O `CLAUDE.md` foi corrigido nesta fatia (decisão do dono).** A regra de datas
+      apontava para um helper **`dayRange` em `backend/src/domain/` que nunca existiu**. A
+      conta já tinha dois donos — `localDay` em `shared` (19 testes) e o `calendar-day-mapper`
+      no repositório — e um *range* de instantes só faz falta para consultar coluna de
+      instante por dia, o que nenhuma consulta do projeto faz. Regra que aponta para arquivo
+      inexistente faz o próximo agente inventar um terceiro nome para a mesma conta._
+      _**Dívidas registradas, não consertadas:** (a) o preâmbulo `planItems.byId` →
+      `PlanItemNotFoundError` → `bookForActor` está agora **verbatim em três** lugares
+      (`upsert-plan-note`, `mark-read`, `unmark-read`) e **já tem acusador próprio** (1, o
+      mesmo teste nos três), então a extração de um `planItemForActor` é segura pela lição
+      nº 15 — mas ela é da **Tarefa 32**, quando as rotas mostrarem se o retorno certo é o par
+      `{ planItem, book }`. (b) O contador dos três testes de autoria prova **alcance**
+      ("consultou por uma chave que não é o ator"), não exclusão: nenhum fixture tem o criador
+      do livro com log no dia. (c) `grep -rn "dayRange" packages/backend/src` **não é mais
+      vazio** — são 2 ocorrências de **prosa** dizendo "não há `dayRange`", zero em código;
+      quem repetir a sonda na Tarefa 37 não deve concluir que o helper nasceu._
+      _**Gates:** `test` · `typecheck` · `lint` · `prettier --check` · `build` limpos.
+      `shared`, `ui`, `app` e `prisma/` **intocados** (`git status` vazio)._
 - [ ] **31** — UseCase `computeBookProgress` (por pessoa e do clube, puro — **TDD pesado**).
       → _a detalhar_
 - [ ] **32** — Repo Prisma + rotas + progresso na tela do livro. → _a detalhar_

@@ -119,8 +119,21 @@ Meta: **nunca ter medo de refatorar.** Não perseguir 100% de cobertura de UI.
 - **i18n no frontend (react-i18next).** Nenhum texto solto nas telas — tudo via `t('chave')`.
   Chaves **semânticas em inglês** (`books.todayReading`). `pt` default, `en` segundo locale.
 - Datas: o banco guarda UTC. "Que dia é hoje" SEMPRE se calcula no `timezone` do Settings,
-  nunca na hora do servidor. Todo cálculo "instante ↔ dia do calendário" passa pelo helper
-  `dayRange` em `backend/src/domain/`, nunca espalhado pelo código.
+  nunca na hora do servidor. Todo cálculo "instante ↔ dia do calendário" passa por **um** dos
+  dois helpers abaixo, nunca espalhado pelo código:
+  - **`localDay(instant, timeZone)`** em `packages/shared/src/local-day.ts` — instante → dia
+    de calendário (`"YYYY-MM-DD"`), com `Intl`. É o que compara com `ReadingPlanItem.date`.
+  - **`calendarDayToDate` / `dateToCalendarDay`** em
+    `backend/src/repositories/calendar-day-mapper.ts` — a tradução para a coluna `@db.Date`,
+    sempre em UTC. Proibidos ali, para sempre: `getFullYear`/`getMonth`/`getDate`,
+    `toLocaleDateString`, `toDateString` e `new Date(...)` sem `Z`.
+
+  ⚠️ Esta regra dizia **`dayRange` em `backend/src/domain/`** até a Tarefa 30. Medido: esse
+  helper **nunca existiu** — a conta que ele nomeava já tinha os dois donos acima, e um
+  *range* de instantes só faz falta para consultar coluna de **instante** por dia, o que
+  nenhuma consulta do projeto faz. Uma regra que aponta para um arquivo inexistente é pior
+  que nenhuma: ela faz o próximo agente procurar, não achar, e inventar um terceiro nome
+  para a mesma conta (lição nº 3). Corrigida pelo dono na rodada de decisões do MVP 3.
 - O texto da nota é **ProseMirror JSON** (`doc`), nunca HTML. `plainText` é **derivado no
   backend** a partir do `doc` — nunca entra no input da API. → `docs/adr/0001-*.md`.
 - Soft delete: tabelas de UI usam `status` (`ACTIVE`/`ARCHIVED`) + `archivedAt`. Hard delete

@@ -12,6 +12,7 @@ import type { Highlight } from '../domain/highlight';
 import type { Invite } from '../domain/invite';
 import { normalizeEmail } from '../domain/normalize-email';
 import type { Note, NoteDoc } from '../domain/note';
+import type { ReadingLog } from '../domain/reading-log';
 import type { Settings } from '../domain/settings';
 import { DEFAULT_SETTINGS } from '../domain/settings';
 import type { User } from '../domain/user';
@@ -215,6 +216,40 @@ export function aHighlight(overrides: Partial<Highlight> = {}): Highlight {
     archivedAt: null,
     createdAt: new Date(FIXED_ISO),
     updatedAt: new Date(FIXED_ISO),
+    ...overrides,
+  };
+}
+
+/**
+ * O registro de "eu li o trecho de hoje". O id deriva da chave natural
+ * `unique(planItemId, userId)` — a mesma estratégia do `aMembership` e do
+ * `aNote` do dia —, para a mesma chave sempre gerar o mesmo id. Quem precisa de
+ * dois ids para a mesma chave (o teste do índice único) passa `id` explícito.
+ *
+ * O `planItemId` padrão vem do `aPlanItem()`, cuja data é `'2026-10-01'` —
+ * **notoriamente não-hoje**, e é o corolário de fixture do
+ * `docs/CONVENCOES-CODIGO.md` §7.8. Nada nesta fatia deriva de "hoje": o log
+ * ancora no dia do PLANO, não numa data de calendário, e por isso marcar
+ * leitura não faz aritmética de data nenhuma.
+ *
+ * `readAt` é `FIXED_ISO`, como todo instante de fixture do arquivo. Quem prova
+ * "o instante vem do relógio" não usa este valor: usa o
+ * `test-support/advancing-clock.ts`, que CONTA as leituras.
+ *
+ * Sem `status`, sem `archivedAt`, sem `createdAt` e sem `updatedAt` — a
+ * entidade não os tem, e o docblock dela diz por quê.
+ */
+export function aReadingLog(overrides: Partial<ReadingLog> = {}): ReadingLog {
+  const userId = overrides.userId ?? 'user-1';
+  const planItemId = overrides.planItemId ?? aPlanItem().id;
+
+  return {
+    id: `reading-log-${planItemId}-${userId}`,
+    clubId: 'club-1',
+    bookId: 'book-1',
+    userId,
+    planItemId,
+    readAt: new Date(FIXED_ISO),
     ...overrides,
   };
 }

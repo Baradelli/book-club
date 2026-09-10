@@ -152,7 +152,7 @@ Eu abro a leitura de hoje, marco que li — e desmarco se eu tiver me enganado.
     `handle-domain-error.ts` fica **intocado**.
 24. ⚠️ **`packages/shared`, `packages/ui`, `packages/app` e `prisma/` ficam INTOCADOS** —
     `git status` nesses caminhos tem de vir vazio no relatório. Consequência medida a colar:
-    o chunk de entrada continua em **424.995 B** (folga 25.005), porque esta fatia não
+    o chunk de entrada continua em **416.107 B** (folga 33.893, depois da 29a), porque esta fatia não
     atravessa a fronteira do PWA.
 
 ## Arquivos a tocar
@@ -177,27 +177,27 @@ dependência nova nesta fatia** — Luxon inclusive).
 
 ## Definição de pronto
 
-- [ ] A entidade tem os seis campos e **nenhum** instante ou status a mais (1, 2, D).
-- [ ] ⚠️ Corte de tenant **antes** da escrita, provado por `saveCalls === 0` (5) e
+- [x] A entidade tem os seis campos e **nenhum** instante ou status a mais (1, 2, D).
+- [x] ⚠️ Corte de tenant **antes** da escrita, provado por `saveCalls === 0` (5) e
       `deleteCalls === 0` (16).
-- [ ] ⚠️ Idempotência de `markRead` provada por **mesmo id + `created: false` + `saveCalls`**
+- [x] ⚠️ Idempotência de `markRead` provada por **mesmo id + `created: false` + `saveCalls`**
       (9), não só pela igualdade do resultado.
-- [ ] ⚠️ `readAt` de **uma** leitura de relógio, provado por **contagem** com o
+- [x] ⚠️ `readAt` de **uma** leitura de relógio, provado por **contagem** com o
       `advancing-clock`, com a precondição de que duas leituras diferem (10).
-- [ ] `unmarkRead` idempotente **e** sem chamada ao repositório quando não há o que apagar
+- [x] `unmarkRead` idempotente **e** sem chamada ao repositório quando não há o que apagar
       (14); o log alheio continua lá, assertado sobre o estado (15).
-- [ ] ⚠️ Fake fiel nas **duas** direções do índice único (17) e enumeração invertida com teste
+- [x] ⚠️ Fake fiel nas **duas** direções do índice único (17) e enumeração invertida com teste
       pelo nome (18); suíte própria do fake (21).
-- [ ] Nenhuma classe de erro nova; `NOT_YET_MAPPED` vazio; `handle-domain-error.ts` intocado
+- [x] Nenhuma classe de erro nova; `NOT_YET_MAPPED` vazio; `handle-domain-error.ts` intocado
       (23).
-- [ ] `pnpm -r test`, `pnpm -r typecheck`, `pnpm lint`, `pnpm prettier --check .`,
+- [x] `pnpm -r test`, `pnpm -r typecheck`, `pnpm lint`, `pnpm prettier --check .`,
       `pnpm --filter @clube/app build` limpos, com as **contagens por pacote coladas**
-      (baseline: 413 · 195 · 1307 · 603).
-- [ ] `pnpm -r test:integration` **NÃO precisa rodar** — esta fatia não toca repositório nem
+      (baseline **depois da 29a**: 415 · 195 · 1307 · 620).
+- [x] `pnpm -r test:integration` **NÃO precisa rodar** — esta fatia não toca repositório nem
       rota. Diga isso no relatório em vez de repetir o número de outro (**387** é o baseline).
-- [ ] ⚠️ `git status -- packages/shared packages/ui packages/app packages/backend/prisma`
+- [x] ⚠️ `git status -- packages/shared packages/ui packages/app packages/backend/prisma`
       **vazio**, colado no relatório (24).
-- [ ] **Linhas de código coladas** (contador canônico, o do docblock de
+- [x] **Linhas de código coladas** (contador canônico, o do docblock de
       `packages/app/src/pages/acervo.tsx`) de cada arquivo novo.
-- [ ] ⚠️ O **vermelho colado** das regras 5, 9, 10, 14, 15 e 17 — a mensagem de falha real,
+- [x] ⚠️ O **vermelho colado** das regras 5, 9, 10, 14, 15 e 17 — a mensagem de falha real,
       antes da implementação.
