@@ -49,7 +49,8 @@ Leia sob demanda:
 | `docs/adr/*.md` | uma decisão, com alternativas e consequências | tutorial |
 | `docs/EDITOR.md` | spec de uma peça específica | opcional |
 | `docs/ACEITE-MVP.md` | o roteiro e as perguntas de fechamento de cada MVP; as respostas do dono | detalhe de fatia |
-| `docs/PROMPT-MVP-2.md` | o prompt que põe uma IA orquestradora para executar o MVP 2 inteiro | spec de tarefa |
+| `docs/PROMPT-MVP-2.md` | o prompt que pôs uma IA orquestradora para executar o MVP 2 inteiro | spec de tarefa |
+| `docs/PROMPT-MVP-3.md` | o mesmo, para o MVP 3 — e ele carrega as **20 lições medidas** dos MVPs 1 e 2 | spec de tarefa |
 | `docs/COMO-TESTAR.md` | como subir, entrar e provocar cada tela | o que decide se o MVP fecha |
 | `docs/WORKFLOW.md` | processo de colaboração | processo técnico |
 | `docs/SETUP.md` | passo a passo de ambiente | parte do TDD |
