@@ -4,7 +4,7 @@ import type {
   HighlightPatch,
   HighlightRepository,
 } from '../ports/highlight-repository';
-import { matches } from './sql-equality';
+import { matches, matchesText } from './sql-equality';
 
 export class HighlightRepositoryFake implements HighlightRepository {
   private store = new Map<string, Highlight>();
@@ -111,6 +111,20 @@ export class HighlightRepositoryFake implements HighlightRepository {
           matches(filter.authorId, highlight.userId) &&
           matches(filter.color, highlight.color) &&
           matches(filter.page, highlight.page) &&
+          /*
+            ⚠️ **AS DUAS COLUNAS DE CONTEÚDO, numa chamada só** — decisão A da
+            Tarefa 29. O `matchesText` é variádico exatamente para o "OU" ser
+            **desta** linha: escrever
+            `matchesText(t, quote) || matchesText(t, commentText)` daria `true`
+            nos dois lados quando `t === undefined`, ou seja, uma disjunção que
+            não pode falhar, escrita como se pudesse.
+
+            A fidelidade (case-insensitive **sim**, accent-insensitive **NÃO**)
+            e o porquê de o curinga não se emular aqui estão no docblock do
+            `sql-equality.ts` — é uma regra do Postgres, num arquivo só, para os
+            dois fakes.
+          */
+          matchesText(filter.text, highlight.quote, highlight.commentText) &&
           // `status` ausente no filtro = os dois status, como no `NoteFilter`.
           matches(filter.status, highlight.status),
       )

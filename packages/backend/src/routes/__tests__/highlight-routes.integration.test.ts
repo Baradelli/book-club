@@ -45,9 +45,26 @@ const NAV_BOOK_ID = prefixedId('t24r', 'navbook');
 /** Livro do clube alheio: o alvo dos 404 de tenant. */
 const OTHER_CLUB_BOOK_ID = prefixedId('t24r', 'otherbook');
 
+/**
+ * ⚠️ Livro EXCLUSIVO do bloco da BUSCA (Tarefa 29), e pelo mesmo motivo medido
+ * do `NAV_BOOK_ID`: a listagem é do CLUBE inteiro, então um bloco de filtro
+ * ancorado num livro que outro teste também usa fica vermelho **por
+ * contaminação**, não por bug.
+ *
+ * A tag do id é `t29` — é a fatia que o criou, e é o que deixa achar (e apagar)
+ * sobra de uma execução interrompida.
+ */
+const SEARCH_BOOK_ID = prefixedId('t29', 'hl-searchbook');
+
 const membershipIds: string[] = [];
 const userIds: string[] = [MARIA_ID, MARCOS_ID, OUTSIDER_ID];
-const bookIds = [BOOK_ID, FILTER_BOOK_ID, NAV_BOOK_ID, OTHER_CLUB_BOOK_ID];
+const bookIds = [
+  BOOK_ID,
+  FILTER_BOOK_ID,
+  NAV_BOOK_ID,
+  SEARCH_BOOK_ID,
+  OTHER_CLUB_BOOK_ID,
+];
 
 interface HighlightBody {
   id: string;
@@ -192,6 +209,7 @@ describe('highlight routes', () => {
     await seedBook(BOOK_ID, CLUB_ID, MARIA_ID, 'O Hobbit');
     await seedBook(FILTER_BOOK_ID, CLUB_ID, MARIA_ID, 'As Duas Torres');
     await seedBook(NAV_BOOK_ID, CLUB_ID, MARIA_ID, 'O Retorno do Rei');
+    await seedBook(SEARCH_BOOK_ID, CLUB_ID, MARIA_ID, 'O Silmarillion');
     await seedBook(
       OTHER_CLUB_BOOK_ID,
       OTHER_CLUB_ID,
@@ -1347,6 +1365,247 @@ describe('highlight routes', () => {
       expect((await deleteHighlight(doomed.id)).statusCode).toBe(200);
 
       expect(await idsOf(`?bookId=${NAV_BOOK_ID}`)).not.toContain(doomed.id);
+    });
+  });
+
+  /**
+   * ⚠️ **A BUSCA POR TEXTO PONTA A PONTA (Tarefa 29, regra 6) — e ela é a
+   * CHAMADORA que faltava.**
+   *
+   * O `?text=` atravessa borda → UseCase → repositório → Postgres, e o que só
+   * aqui é observável é o **encadeamento**: um `text` que o
+   * `listHighlightsQuerySchema` não declarasse seria **stripado em silêncio**
+   * pelo `z.object` (§6.3) e a listagem responderia 200 com o acervo inteiro —
+   * verde no unitário, verde no contrato, e a busca "funcionando" sem buscar.
+   *
+   * ⚠️ Livro EXCLUSIVO (`SEARCH_BOOK_ID`): a listagem é do clube inteiro, e o
+   * `NAV_BOOK_ID` já tem grifos de outro bloco. Ancorar aqui seria uma corrida
+   * contra a ordem de execução — a contaminação que esta fatia da 24 mediu.
+   */
+  describe('the text search (task 29, rule 6)', () => {
+    let inQuote: string;
+    let inComment: string;
+    let inNeither: string;
+    let accented: string;
+    let withPercent: string;
+
+    beforeAll(async () => {
+      inQuote = (
+        await createHighlight(
+          { quote: 'a esmeralda de Feanor' },
+          mariaToken,
+          SEARCH_BOOK_ID,
+        )
+      ).id;
+      inComment = (
+        await createHighlight(
+          {
+            quote: 'as duas arvores',
+            // O comentário é `commentDoc`, e o `commentText` que o `ILIKE`
+            // compara é DERIVADO dele no backend (ADR 0001) — o teste manda o
+            // documento, nunca o texto. É por isso que este caso prova a
+            // decisão A de ponta a ponta: nada aqui escreve `commentText`.
+            commentDoc: aPlainComment('me lembrou a esmeralda dela'),
+          },
+          marcosToken,
+          SEARCH_BOOK_ID,
+        )
+      ).id;
+      inNeither = (
+        await createHighlight(
+          { quote: 'o silmaril perdido', reference: 'Cap. esmeralda' },
+          mariaToken,
+          SEARCH_BOOK_ID,
+        )
+      ).id;
+      accented = (
+        await createHighlight(
+          { quote: 'Chorei no coração do livro' },
+          mariaToken,
+          SEARCH_BOOK_ID,
+        )
+      ).id;
+      withPercent = (
+        await createHighlight(
+          { quote: '100% garantido pelo Valar' },
+          mariaToken,
+          SEARCH_BOOK_ID,
+        )
+      ).id;
+    });
+
+    /**
+     * Ordena antes de comparar: a ordem NÃO é o assunto deste bloco (ela tem
+     * teste dedicado no bloco da listagem), e depender dela quebraria estes
+     * testes por um motivo que não tem a ver com o nome deles. → §7.2.
+     */
+    async function idsOfSearch(
+      query: string,
+      token = mariaToken,
+      clubId = CLUB_ID,
+    ): Promise<string[]> {
+      const response = await listHighlights(query, token, clubId);
+      expect(response.statusCode).toBe(200);
+      return response
+        .json<HighlightBody[]>()
+        .map((row) => row.id)
+        .sort();
+    }
+
+    async function searchIds(text: string): Promise<string[]> {
+      return await idsOfSearch(
+        `?bookId=${SEARCH_BOOK_ID}&text=${encodeURIComponent(text)}`,
+      );
+    }
+
+    /**
+     * ⚠️ **DECISÃO A ponta a ponta: casa o `quote` OU o `commentText`**, e a
+     * `reference` fica **fora** — o grifo `inNeither` tem o termo justamente na
+     * `reference`, de propósito. Uma busca que casasse metadado devolveria o
+     * clube inteiro para "capítulo".
+     */
+    it('matches the quote or the commentText, never the reference', async () => {
+      expect(await searchIds('esmeralda')).toEqual([inQuote, inComment].sort());
+      // A precondição que dá dente à asserção: os cinco estão na listagem sem
+      // o filtro.
+      expect(await idsOfSearch(`?bookId=${SEARCH_BOOK_ID}`)).toEqual(
+        [inQuote, inComment, inNeither, accented, withPercent].sort(),
+      );
+    });
+
+    // Case-insensitive de ponta a ponta: a caixa da query não importa.
+    it.each(['ESMERALDA', 'EsMeRaLdA'])(
+      'matches case-insensitively when the query is %s',
+      async (text) => {
+        expect(await searchIds(text)).toEqual([inQuote, inComment].sort());
+      },
+    );
+
+    /**
+     * ⚠️ **REGRA 3 NA BORDA: `?text=coracao` devolve VAZIO para `'coração'`.**
+     *
+     * `ILIKE` é accent-**SENSITIVE**, e isto é **decisão fechada** — a decisão
+     * do MVP 2 diz `ILIKE`, e o irmão deste teste no lado da nota está verde
+     * desde a **Tarefa 11**. Não conserte: o conserto é a extensão `unaccent` +
+     * índice funcional + ADR, é **fatia própria**, e está **registrado como
+     * pergunta do dono** na spec da Tarefa 29.
+     *
+     * A precondição está junto: COM o acento, o grifo é achado — senão um
+     * `text` stripado pela borda daria "vazio" nas duas metades e o teste
+     * passaria provando nada.
+     */
+    it('is accent-sensitive: coracao finds nothing, coração finds the highlight', async () => {
+      await expect(searchIds('coracao')).resolves.toEqual([]);
+      expect(await searchIds('coração')).toEqual([accented]);
+    });
+
+    /**
+     * ⚠️ **`?text=` VAZIO É 200 COM O ACERVO, não 400.**
+     *
+     * É a URL que um campo de busca esvaziado monta com naturalidade, e é o
+     * `z.string()` **sem `.min(1)`** da borda mais o `optionalText` do UseCase
+     * que a fazem devolver a lista. Um `.min(1)` copiado do `bookId` ao lado
+     * seria 400 numa tela que funcionava.
+     */
+    it.each([
+      ['empty', ''],
+      ['blank', '   '],
+      ['a tab', '\t'],
+    ])(
+      'answers 200 with the whole collection for a %s text',
+      async (_label, text) => {
+        expect(await searchIds(text)).toEqual(
+          [inQuote, inComment, inNeither, accented, withPercent].sort(),
+        );
+      },
+    );
+
+    // O `trim` é do UseCase, e é ponta a ponta que se vê: `' esmeralda '` não
+    // acharia nada num `ILIKE '% esmeralda %'`.
+    it('trims the text of the query string', async () => {
+      expect(await searchIds('  esmeralda  ')).toEqual(
+        [inQuote, inComment].sort(),
+      );
+    });
+
+    /**
+     * ⚠️ **REGRA 5 NA BORDA: `%` é literal**, e quem o escapa é o
+     * `toLikePattern` de `repositories/like-pattern.ts` — **uma** função para os
+     * dois repositórios (decisão B).
+     *
+     * Sem o escape, `?text=100%25` (o `%` percent-encoded) casaria `100` e
+     * traria o acervo. Com ele, casa só quem tem `100%` de verdade.
+     */
+    it('treats a percent in the query as a literal character', async () => {
+      expect(await searchIds('100%')).toEqual([withPercent]);
+      // E o `%` no fim não vira "qualquer coisa": `garantido%` não existe.
+      await expect(searchIds('garantido%')).resolves.toEqual([]);
+    });
+
+    // O `text` entra em AND com os outros filtros de navegação.
+    it('combines the text with the other filters, with AND', async () => {
+      const response = await listHighlights(
+        `?bookId=${SEARCH_BOOK_ID}&authorId=${MARCOS_ID}&text=esmeralda`,
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json<HighlightBody[]>().map((row) => row.id)).toEqual([
+        inComment,
+      ]);
+    });
+
+    // E o corte de tenant vale para a busca: o outsider não pesquisa o acervo
+    // de um clube em que não é membro (404, não 403 — não vazamos existência).
+    it('answers 404 when an outsider searches the collection of another club', async () => {
+      const response = await listHighlights(
+        '?text=esmeralda',
+        outsiderToken,
+        CLUB_ID,
+      );
+
+      expect(response.statusCode).toBe(404);
+    });
+
+    /**
+     * ⚠️ **A BUSCA SEM `bookId` — E ESTA É A FORMA QUE A TELA USA (achado
+     * MÉDIO 3 da auditoria).**
+     *
+     * Todos os outros testes deste bloco ancoram em `?bookId=SEARCH_BOOK_ID`, e
+     * todos os fixtures deles são do MESMO clube: com o `bookId` no filtro, um
+     * `clubId` perdido no `where` do repositório é **invisível** aqui — a
+     * propriedade tinha **um** dono só (o teste de contrato), e o fixture que a
+     * mata vivia **dentro** daquele único teste. Quem "simplificasse" o teste
+     * apagaria a guarda inteira.
+     *
+     * E a forma que faltava é justamente a que a **tela** usa: a busca é do
+     * CLUBE, sem livro nenhum no filtro — o `pages/busca.tsx` manda só
+     * `{ text }`.
+     *
+     * ⚠️ **O FIXTURE É UM GRIFO DE OUTRO CLUBE QUE CASA O TERMO**, criado pelo
+     * outsider no livro dele (ele é `OWNER` do `OTHER_CLUB_ID`): é o que faz o
+     * mutante "tira o `clubId` do `where`" ficar vermelho AQUI, e não só no
+     * contrato. Sem ele, o teste passaria com o vazamento.
+     */
+    it('searches the whole CLUB when no bookId is given, and never crosses the tenant', async () => {
+      const alheio = await createHighlight(
+        { quote: 'a esmeralda de outro clube' },
+        outsiderToken,
+        OTHER_CLUB_BOOK_ID,
+      );
+
+      // A busca da Maria, do jeito que a tela faz: só o termo.
+      const mine = await idsOfSearch('?text=esmeralda');
+
+      // Os dois do clube dela voltam, de livros DIFERENTES do `SEARCH_BOOK_ID`
+      // (o `?bookId=` está fora de propósito)...
+      expect(mine).toEqual([inQuote, inComment].sort());
+      // ...e o grifo do OUTRO clube, que casa o termo, **não** volta.
+      expect(mine).not.toContain(alheio.id);
+      // A precondição que dá dente à asserção: ele existe, e quem é do clube
+      // dele o acha pela mesma busca.
+      expect(
+        await idsOfSearch('?text=esmeralda', outsiderToken, OTHER_CLUB_ID),
+      ).toEqual([alheio.id]);
     });
   });
 

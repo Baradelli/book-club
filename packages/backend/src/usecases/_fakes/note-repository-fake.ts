@@ -4,7 +4,7 @@ import type {
   NotePatch,
   NoteRepository,
 } from '../ports/note-repository';
-import { matches } from './sql-equality';
+import { matches, matchesText } from './sql-equality';
 
 export class NoteRepositoryFake implements NoteRepository {
   private store = new Map<string, Note>();
@@ -332,25 +332,4 @@ export class NoteRepositoryFake implements NoteRepository {
       archivedAt: note.archivedAt === null ? null : new Date(note.archivedAt),
     };
   }
-}
-
-/**
- * A busca do `NoteFilter.text`: o `ILIKE '%...%'` do Postgres, com as duas
- * fidelidades que importam.
- *
- * 1. **Case-insensitive sim.** `toLowerCase` e não `toLocaleLowerCase`: a
- *    dobra de caixa do JS por locale depende do ICU do processo, e o banco não
- *    tem o locale do Node.
- * 2. **Accent-insensitive NÃO.** `'coração' ILIKE '%coracao%'` é **falso** no
- *    Postgres. Normalizar acento aqui (`NFD` + tirar diacríticos) seria
- *    infidelidade na direção PERMISSIVA: o teste passaria verde e a busca real
- *    não acharia nada — a classe de bug do ADR 0007. Busca sem acento exige a
- *    extensão `unaccent`, e é Tarefa 29, com migration e ADR.
- *
- * Só o `plainText` é comparado. `title` e `reference` ficam FORA por decisão
- * fechada do MVP 2 ("busca é `ILIKE` no `plainText`/`commentText`").
- */
-function matchesText(text: string | undefined, plainText: string): boolean {
-  if (text === undefined) return true;
-  return plainText.toLowerCase().includes(text.toLowerCase());
 }

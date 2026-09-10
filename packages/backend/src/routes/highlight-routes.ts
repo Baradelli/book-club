@@ -259,13 +259,29 @@ export const highlightRoutes: FastifyPluginAsyncZod<{
    * grifos da página 45** — o Prisma trunca o parâmetro. → `HIGHLIGHT_PAGE_MAX`
    * em `@clube/shared`.
    *
+   * ⚠️ **E ELA É A ROTA DA BUSCA (Tarefa 29).** O `?text=` chegou ao
+   * `listHighlightsQuerySchema` e atravessa por este mesmo `...req.query` —
+   * **nenhuma rota nova**. Três coisas, todas decisão fechada:
+   *
+   * - o `text` casa `quote` **OU** `commentText` (decisão A da Tarefa 29): o
+   *   `quote` é o conteúdo do grifo (ADR 0004), e uma busca que o ignorasse não
+   *   acharia a frase que a pessoa grifou. Registrado como pergunta do dono;
+   * - `?text=` (vazio) é **200 com o acervo**, não 400: o schema é
+   *   `z.string()` sem `.min(1)`, e quem normaliza é o `optionalText` do
+   *   `listHighlights`;
+   * - `ILIKE` é accent-**SENSITIVE**, então `?text=coracao` **não** acha
+   *   `'coração'`. Não é pendência: `unaccent` exige DDL + índice + ADR e é
+   *   fatia própria — pergunta do dono na spec da Tarefa 29
+   *   (`docs/tasks/29-busca-por-texto.md`).
+   *
    * Sem 403: ler o acervo do clube não exige papel — `MEMBER` lê tudo.
    */
   app.get(
     '/clubs/:clubId/highlights',
     {
       schema: {
-        summary: 'Lista os grifos do clube, com os filtros de navegação',
+        summary:
+          'Lista os grifos do clube, com os filtros de navegação e a busca por texto',
         params: clubIdParamsSchema,
         querystring: listHighlightsQuerySchema,
         response: {

@@ -11,6 +11,7 @@ import { AcceptInvitePage } from './pages/accept-invite';
 import { AcervoPage } from './pages/acervo';
 import { BookPage } from './pages/book';
 import { BookFormPage } from './pages/book-form';
+import { BuscaPage } from './pages/busca';
 import { DAY_NOTE_PATH, DayNotePage } from './pages/day-note';
 import {
   FREE_NOTE_NEW_PATH,
@@ -28,6 +29,7 @@ import {
   BOOK_PATH,
   HIGHLIGHT_NEW_PATH,
   HIGHLIGHT_PATH,
+  SEARCH_PATH,
 } from './pages/paths';
 
 /**
@@ -142,6 +144,22 @@ export function AppRoutes() {
         */}
         <Route path={HIGHLIGHT_NEW_PATH} element={<HighlightFormPage />} />
         <Route path={HIGHLIGHT_PATH} element={<HighlightFormPage />} />
+        {/*
+          A BUSCA NO ACERVO DO CLUBE (Tarefa 29) — a última fatia do MVP 2.
+
+          ⚠️ **ENDEREÇO DE PRIMEIRO NÍVEL, e sem `:clubId`**: o clube é o ATIVO
+          do cabeçalho, como na home — um `clubId` no caminho criaria dois donos
+          de "em qual clube estou" (o seletor e a URL). → o docblock de
+          `SEARCH_PATH` em `pages/paths.ts`.
+
+          Não disputa ranking com nada: `/busca` é um segmento estático de
+          primeiro nível, e as outras rotas do grupo protegido começam com
+          `/books/` ou `/highlights/`.
+
+          Protegida pelo `RequireAuth` como todo conteúdo de clube — a busca lê o
+          acervo, e o backend faz o corte de tenant contra o `Membership`.
+        */}
+        <Route path={SEARCH_PATH} element={<BuscaPage />} />
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />

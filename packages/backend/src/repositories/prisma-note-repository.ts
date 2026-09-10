@@ -7,6 +7,7 @@ import type {
   NotePatch,
   NoteRepository,
 } from '../usecases/ports/note-repository';
+import { toLikePattern } from './like-pattern';
 
 /**
  * Teto de linhas do `find`. **Válvula de segurança, não paginação.**
@@ -139,29 +140,6 @@ function toUpdateData(patch: NotePatch): Prisma.NoteUpdateInput {
   return data;
 }
 
-/**
- * O `text` do filtro como um padrão de `LIKE` que casa **substring literal**.
- *
- * `%` e `_` dentro do parâmetro de um `LIKE`/`ILIKE` são CURINGA, e o
- * `Prisma.contains` passa o valor como parâmetro — medido no Postgres 16 deste
- * projeto: `'axb' ILIKE '%a_b%'` é verdadeiro, e `'100% garantido' ILIKE
- * '%100%%'` também. Sem escape, quem digitasse `p. 100%` receberia toda nota
- * que contém `p. 100`, em silêncio: nada na tela anuncia sintaxe de padrão.
- *
- * Um `replace` só, e é por isso que a ordem funciona: um `replace` único nunca
- * revisita o que inseriu, então a `\` que ele escapa não é re-escapada.
- *
- * O Postgres honra `\` como escape default de `LIKE`/`ILIKE` sem cláusula
- * `ESCAPE`, que é exatamente o SQL que o Prisma gera.
- *
- * **O fake não muda**: depois do escape o contrato do port é "substring
- * literal, case-insensitive, accent-sensitive" — o que ele já faz. Emular
- * curinga no fake seria modelar um detalhe de uma camada abaixo do port.
- */
-function toLikePattern(text: string): string {
-  return text.replace(/[\\%_]/g, '\\$&');
-}
-
 export class PrismaNoteRepository implements NoteRepository {
   constructor(private prisma: PrismaClient) {}
 
@@ -245,8 +223,19 @@ export class PrismaNoteRepository implements NoteRepository {
           : {
               plainText: {
                 contains: toLikePattern(filter.text),
-                // É isto que faz `ILIKE` em vez de `LIKE`. Acento continua
-                // significativo: busca sem acento é a Tarefa 29 (`unaccent`).
+                /*
+                  É isto que faz `ILIKE` em vez de `LIKE`. **Acento continua
+                  significativo**, e é DECISÃO, não pendência: a decisão fechada
+                  do MVP 2 diz `ILIKE`, e `ILIKE` é accent-sensitive
+                  (`'coração' ILIKE '%coracao%'` é falso). O teste de contrato
+                  `matches case but not accent` a pina desde a Tarefa 11, e o
+                  fake a reproduz de propósito
+                  (`usecases/_fakes/sql-equality.ts`).
+
+                  Ligar a extensão `unaccent` (DDL no banco + índice funcional +
+                  ADR) é **fatia própria**, e está registrado como pergunta do
+                  dono na spec da Tarefa 29. Não "conserte" aqui.
+                */
                 mode: 'insensitive',
               },
             }),

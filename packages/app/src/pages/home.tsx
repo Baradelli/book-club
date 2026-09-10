@@ -16,14 +16,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/auth-context';
 import { useActiveClub } from '../club/active-club';
 import { listItemRouterLink } from '../router-link';
-import { Notice, Screen } from './chrome';
+import { Notice, Screen, TEXT_LINK_CLASS } from './chrome';
 import { dayNotePath } from './day-note';
 import {
   messageFor,
   resolveApiError,
   type StatusMessages,
 } from './form-errors';
-import { bookNewPath, bookPath, isClubAdmin } from './paths';
+import { bookNewPath, bookPath, isClubAdmin, searchPath } from './paths';
 
 /**
  * A HOME — a tela que abre o app.
@@ -445,6 +445,29 @@ export function HomePage() {
           <h2 className="text-sm font-semibold text-muted">
             {t('pages.home.shelf.heading')}
           </h2>
+          {/*
+            ⚠️ **A ENTRADA DA BUSCA (Tarefa 29), e ela mora AQUI porque a busca
+            é do CLUBE.**
+
+            A home é a tela de clube; o acervo é de livro. Um campo de busca no
+            acervo seria por livro — que é o que as quatro dimensões de recorte
+            da Tarefa 28 já fazem melhor, no cliente. A pergunta desta entrada é
+            "onde está esta palavra", atravessando todos os livros.
+
+            ⚠️ **E ELA SÓ EXISTE NESTE RAMO, com a estante NÃO vazia** — de
+            propósito: num clube sem livro nenhum não há acervo para buscar, e um
+            link que só pode levar a "nada com esta palavra" é a mesma armadilha
+            do controle que só esvazia a lista (decisão E da Tarefa 28). O ramo
+            de zero livros tem estado próprio e continua sem a entrada.
+
+            `Link` do roteador, nunca âncora crua: `<a href>` é navegação de
+            DOCUMENTO e recarrega o PWA inteiro (a lição medida da Tarefa 16).
+          */}
+          <div className="flex">
+            <Link className={TEXT_LINK_CLASS} to={searchPath()}>
+              {t('pages.busca.entry')}
+            </Link>
+          </div>
           {/*
             ⚠️ **A ESTANTE LINKA PARA A TELA DO LIVRO** — decisão A da Tarefa
             17, e é o que faz esta lista deixar de ser decorativa. Enquanto a

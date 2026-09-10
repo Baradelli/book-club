@@ -344,6 +344,86 @@ export const pt = {
       },
     },
     /*
+      A BUSCA NO ACERVO DO CLUBE (Tarefa 29) — a última fatia do MVP 2.
+
+      ⚠️ **ESTE BLOCO É PEQUENO DE PROPÓSITO, e o que falta nele é decisão.**
+      As três palavras de TIPO ("Do dia", "Avulsa", "Grifo"), o par de AUTORIA
+      ("Você" · "Alguém do clube"), a "Página {{number}}" e o "Corrigir este
+      grifo" **não** se repetem aqui: a tela de busca usa as chaves de
+      `pages.acervo.item.*` e `pages.acervo.kind.*`. É a lição nº 3 do MVP 1
+      aplicada exatamente como o bloco do acervo já a aplica internamente —
+      aquele vocabulário é do MODELO de entrada (o `type` de
+      `pages/acervo-entries.ts`), não de uma tela, e duas chaves seriam duas
+      verdades sobre as mesmas palavras. O nome das cores vem do
+      `COLOR_LABEL_KEYS`, pelo mesmo motivo.
+
+      ⚠️ **E NENHUMA FRASE DAQUI COBRA NEM CONTA.** Não existe "12 resultados"
+      (a `COUNTER_SHAPE` da varredura anti-culpa proíbe a forma, por decisão de
+      produto: "incentivo por presença, não por comparação"), e o estado sem
+      resultado fala da PALAVRA — "tente outra" —, nunca de quem escreveu pouco.
+      Os dois estados vazios são frases DIFERENTES: "ainda não me disseram o que
+      procurar" e "procurei e não achei" nunca são o mesmo texto.
+    */
+    busca: {
+      /** O nome da TELA. */
+      title: 'Busca',
+      /** A entrada, na home: é de lá que se chega (a busca é do CLUBE). */
+      entry: 'Buscar no acervo do clube',
+      field: {
+        /* Rótulo VISÍVEL: um `aria-label` solto deixa quem vê a tela sem saber
+           o que aquele campo procura. */
+        label: 'O que você procura',
+        placeholder: 'Uma palavra do que o clube escreveu',
+      },
+      /*
+        ⚠️ **DUAS FRASES DE ESPERA, E NÃO UMA — conserto medido da auditoria.**
+
+        Elas eram a MESMA chave, e o defeito era duplo. O visível: com o `/me`
+        ainda no ar a tela dizia "Procurando…" quando **nada** havia sido
+        pedido — mentira sobre o que o app está fazendo. E o invisível, que é
+        pior: um estado que fala pela frase do outro é um estado que a varredura
+        de DOM **não consegue distinguir**, então uma cobrança plantada no
+        `loading` da busca passava com o teste do `/me` verde (§7.9 — a guarda
+        tem de morar onde a propriedade é decidível). Duas frases, dois estados,
+        duas asserções.
+      */
+      /** A espera do CLUBE: o `/me` ainda não chegou. Nada foi pedido. */
+      clubLoading: 'Carregando…',
+      /** A espera da BUSCA: o termo saiu e as duas listagens estão no ar. */
+      loading: 'Procurando…',
+      retry: 'Tentar de novo',
+      /* Qualquer falha da busca — as duas listagens são uma coisa só: meia
+         busca seria uma lista incompleta em silêncio. */
+      unavailable: 'Não foi possível buscar agora.',
+      /* Nomeia a lista para o leitor de tela ("lista, 4 itens"). */
+      label: 'Resultados da busca',
+      start: {
+        /* O estado INICIAL, e ele fala do que fazer — nunca do que a pessoa
+           deixou de registrar. */
+        title: 'Escreva uma palavra.',
+        description:
+          'A busca procura em tudo o que o clube escreveu, em qualquer livro.',
+      },
+      empty: {
+        /* DISTINTO do inicial: aqui houve busca. E a frase fala da palavra. */
+        title: 'Nada com esta palavra.',
+        description: 'Tente outra palavra, ou escreva-a com o acento que usou.',
+      },
+      item: {
+        /* De qual livro é o resultado — é o campo que distingue esta tela do
+           acervo de um livro. A frase neutra entra quando a estante não
+           chegou: o `bookId` cru teria cara de informação e não é de ninguém. */
+        unknownBook: 'Livro do clube',
+      },
+      noClubs: {
+        /* Sem clube não há acervo para buscar. A frase não promete botão que
+           não existe: criar clube é super-admin, e entrar é pelo link de
+           convite (ADR 0003). */
+        title: 'Você ainda não está em um clube.',
+        description: 'Quando entrar em um, a busca procura no acervo dele.',
+      },
+    },
+    /*
       O CADASTRO DO LIVRO E DO PLANO (Tarefa 20) — a tela que aposenta o
       Swagger.
 

@@ -28,13 +28,17 @@ import {
   type AcervoEntry,
   ALL_SCOPE,
   colorFromChipValue,
+  COMMENT_EXCERPT_LENGTH,
   EVERY_READING,
   EVERY_TYPE,
+  excerptOf,
   filterEntries,
   type HighlightEntry,
   keyOf,
   mergeEntries,
+  NOTE_EXCERPT_LENGTH,
   type NoteEntry,
+  QUOTE_EXCERPT_LENGTH,
   typeCanCarryReading,
   typeCanIncludeHighlight,
   typeFromChipValue,
@@ -204,24 +208,6 @@ type AcervoState =
   | { status: 'failed' };
 
 const ACERVO_LOADING: AcervoState = { status: 'loading' };
-
-/**
- * Quantos caracteres cabem numa linha de lista sem virar parágrafo.
- *
- * O trecho ganha mais que o comentário porque ele É o conteúdo do grifo — o
- * comentário na lista é prévia (decisão I). Os três são derivados: o `quote` é
- * o que a pessoa digitou, e `commentText`/`plainText` são derivados no backend
- * a partir do documento (ADR 0001) exatamente para isto — montar N documentos
- * ProseMirror numa lista seria caro e ilegível.
- */
-const QUOTE_EXCERPT_LENGTH = 200;
-const COMMENT_EXCERPT_LENGTH = 120;
-const NOTE_EXCERPT_LENGTH = 120;
-
-function excerptOf(text: string, max: number): string {
-  const clean = text.trim().replace(/\s+/gu, ' ');
-  return clean.length <= max ? clean : `${clean.slice(0, max)}…`;
-}
 
 /**
  * Para onde uma anotação leva.

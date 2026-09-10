@@ -13,6 +13,7 @@ import type {
   HighlightPatch,
   HighlightRepository,
 } from '../usecases/ports/highlight-repository';
+import { toLikePattern } from './like-pattern';
 
 /**
  * Teto de linhas do `find`. **Válvula de segurança, não paginação.**
@@ -216,10 +217,10 @@ export class PrismaHighlightRepository implements HighlightRepository {
    * `status` ausente devolve OS DOIS, como no `NoteFilter`: a regra de produto
    * ("só os ACTIVE") vive no `listHighlights`.
    *
-   * ⚠️ **Tudo é igualdade, e é o que faz a coluna nula ficar de fora.** No
-   * Postgres `WHERE "page" = 45` contra `NULL` é **falso**, então pedir uma
-   * página não traz o grifo sem página — a fidelidade do §7.1 que o fake
-   * reproduz, e que só aqui é decidível contra o banco.
+   * ⚠️ **Todo filtro é igualdade menos o `text`, e é o que faz a coluna nula
+   * ficar de fora.** No Postgres `WHERE "page" = 45` contra `NULL` é **falso**,
+   * então pedir uma página não traz o grifo sem página — a fidelidade do §7.1
+   * que o fake reproduz, e que só aqui é decidível contra o banco.
    */
   async find(filter: HighlightFilter): Promise<Highlight[]> {
     const records = await this.prisma.highlight.findMany({
@@ -235,6 +236,49 @@ export class PrismaHighlightRepository implements HighlightRepository {
         color: filter.color,
         page: filter.page,
         status: filter.status,
+        ...(filter.text === undefined
+          ? {}
+          : {
+              /*
+                ⚠️ **A BUSCA (Tarefa 29) — `quote` OU `commentText`, e o `OR`
+                continua em AND com tudo acima.** No Prisma as chaves de
+                primeiro nível do `where` são AND entre si, e o `OR` é UM grupo:
+                `clubId AND … AND (quote ILIKE … OR commentText ILIKE …)`. Um
+                `OR` que subisse para o topo levaria o corte de tenant embora.
+
+                **Duas colunas e não uma** (decisão A): o `quote` é o conteúdo
+                do grifo (ADR 0004, "o trecho grifado") e uma busca que o
+                ignorasse não acharia a frase que a pessoa grifou. Registrado
+                como pergunta do dono; se ele discordar, é uma cláusula a
+                remover.
+
+                O `toLikePattern` é o escape de `%`/`_`/`\` —
+                `./like-pattern.ts`, **uma** função para os dois repositórios
+                (decisão B; a saída medida da Tarefa 23 para o caso gêmeo foi
+                extrair, não copiar).
+
+                `mode: 'insensitive'` é o que faz `ILIKE` em vez de `LIKE`.
+                ⚠️ **Acento continua significativo, e é DECISÃO**: a decisão
+                fechada do MVP 2 diz `ILIKE`, e `ILIKE` é accent-sensitive. O
+                teste de contrato `matches case but not accent in the quote and
+                in the comment` a pina contra o banco. `unaccent` é fatia
+                própria e está registrado como pergunta do dono.
+              */
+              OR: [
+                {
+                  quote: {
+                    contains: toLikePattern(filter.text),
+                    mode: 'insensitive' as const,
+                  },
+                },
+                {
+                  commentText: {
+                    contains: toLikePattern(filter.text),
+                    mode: 'insensitive' as const,
+                  },
+                },
+              ],
+            }),
       },
       // Válvula de segurança, e o `orderBy` é obrigatório junto dela — TOTAL,
       // com o `id` desempatando, que é a mesma ordem do `listHighlights`.

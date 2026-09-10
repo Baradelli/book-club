@@ -179,6 +179,51 @@ export const en: typeof pt = {
         failed: 'We could not archive it right now.',
       },
     },
+    /*
+      THE SEARCH OVER THE COLLECTION OF THE CLUB (task 29).
+
+      ⚠️ Small on purpose: the TYPE words, the authorship pair, the page label
+      and "correct this highlight" live in `pages.acervo.*` and are REUSED — that
+      vocabulary belongs to the entry MODEL, not to a screen, and two keys would
+      be two truths about the same words.
+
+      ⚠️ And nothing here counts or blames: there is no "12 results" (the
+      anti-guilt scan forbids the shape, by product decision), and the
+      no-results phrase talks about the WORD, never about who wrote little.
+    */
+    busca: {
+      title: 'Search',
+      entry: 'Search the collection of the club',
+      field: {
+        label: 'What are you looking for',
+        placeholder: 'A word from what the club wrote',
+      },
+      /* Two waiting phrases, not one: the shell wait ("nothing was asked yet")
+         and the search wait. They were the same key, and a state that speaks
+         with the other one's phrase is a state the DOM scan cannot tell apart. */
+      clubLoading: 'Loading…',
+      loading: 'Searching…',
+      retry: 'Try again',
+      unavailable: 'We could not search right now.',
+      label: 'Search results',
+      start: {
+        title: 'Type a word.',
+        description:
+          'The search looks through everything the club wrote, in every book.',
+      },
+      empty: {
+        title: 'Nothing with this word.',
+        description:
+          'Try another word, or write it with the accent you actually used.',
+      },
+      item: {
+        unknownBook: 'A book of the club',
+      },
+      noClubs: {
+        title: 'You are not in a club yet.',
+        description: 'Once you join one, the search looks through it.',
+      },
+    },
     bookForm: {
       newTitle: 'New book',
       editTitle: 'Edit the book',

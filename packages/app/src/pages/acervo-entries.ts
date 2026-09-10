@@ -131,6 +131,58 @@ export function colorOf(entry: AcervoEntry): HighlightColor | null {
 }
 
 /**
+ * QUANTOS CARACTERES DE PRÉVIA CABEM NUMA LINHA DE LISTA sem ela virar
+ * parágrafo — e o `excerptOf` que os aplica.
+ *
+ * ⚠️ **ELES DESCERAM PARA CÁ NA TAREFA 29, e é a lição nº 3 do MVP 1 pela
+ * quarta vez nesta sessão.** O `excerptOf` era **byte-idêntico** no
+ * `acervo.tsx` e no `busca.tsx`, com as três constantes ao lado — a mesma
+ * classe do `matches` dos fakes (Tarefa 23) e do `toLikePattern` dos
+ * repositórios (Tarefa 29). Duas telas mostram a MESMA prévia do MESMO acervo:
+ * se uma cortar em 120 e a outra em 130, a mesma anotação fica diferente em
+ * dois lugares, e ninguém vê o defeito olhando **uma** tela.
+ *
+ * ⚠️ **E ELES CABEM AQUI, ao contrário do `noteTarget`.** São puros e não
+ * importam nada: o invariante deste módulo ("ele não importa tela nenhuma",
+ * que é o que o mantém livre do ciclo medido na Tarefa 20) fica intacto. O
+ * `noteTarget` das duas telas **não** desceu justamente por isso — ele precisa
+ * de `dayNotePath` e `freeNotePath`, que moram em duas TELAS, e trazê-los para
+ * cá poria dois `.tsx` no grafo do módulo que existe para não saber o que é
+ * React. O docblock do `noteTarget` no `busca.tsx` tem a medição.
+ *
+ * O trecho ganha mais que o comentário porque ele **É** o conteúdo do grifo; o
+ * comentário na lista é prévia. Os três valores são derivados: o `quote` é o
+ * que a pessoa digitou, e `commentText`/`plainText` são derivados no backend a
+ * partir do documento (ADR 0001) exatamente para isto — montar N documentos
+ * ProseMirror numa lista seria caro e ilegível.
+ */
+export const QUOTE_EXCERPT_LENGTH = 200;
+export const COMMENT_EXCERPT_LENGTH = 120;
+export const NOTE_EXCERPT_LENGTH = 120;
+
+/**
+ * O texto colapsado numa linha e cortado no teto, com reticências.
+ *
+ * ⚠️ **O `replace(/\s+/gu, ' ')` NÃO é cosmético**: o `plainText` e o
+ * `commentText` são derivados de um documento ProseMirror, então eles carregam
+ * as quebras de linha entre parágrafos. Sem o colapso, uma prévia de duas
+ * linhas empurra a linha da lista para baixo e a lista deixa de ser varrível
+ * com o polegar.
+ *
+ * ⚠️ **E O CORTE TEM ACUSADOR DESDE A TAREFA 29** — antes dela não tinha, nos
+ * DOIS chamadores: mutar este corpo para `return text` dava **0 acusadores** em
+ * `acervo.test.tsx` (55) **e** em `busca.test.tsx` (44), porque nenhum fixture
+ * das duas telas tinha texto mais longo que o teto nem espaço nas pontas.
+ * Extrair um helper sem acusador para um módulo compartilhado é a forma do §7.4
+ * (parece coberto porque tem dono); o acusador está em
+ * `busca.test.tsx`, `⚠️ truncates a long preview at the ceiling…`.
+ */
+export function excerptOf(text: string, max: number): string {
+  const clean = text.trim().replace(/\s+/gu, ' ');
+  return clean.length <= max ? clean : `${clean.slice(0, max)}…`;
+}
+
+/**
  * REGRA 1 — UMA LISTA, `createdAt` DECRESCENTE, OS DOIS TIPOS INTERCALADOS.
  *
  * ⚠️ **"CONCATENAR AS DUAS LISTAGENS" É A IMPLEMENTAÇÃO ERRADA MAIS PROVÁVEL**,

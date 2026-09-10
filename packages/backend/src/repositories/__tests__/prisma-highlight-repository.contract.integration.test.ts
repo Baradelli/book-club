@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { InvalidHighlightError, InvalidNoteError } from '../../domain/errors';
 import type { Highlight } from '../../domain/highlight';
 import type { NoteDoc } from '../../domain/note';
-import { required } from '../../test-support/builders';
+import { aDoc, required } from '../../test-support/builders';
 import { PrismaHighlightRepository } from '../prisma-highlight-repository';
 import { prefixedEmail, prefixedId, prisma, removeFixtures } from './_db';
 
@@ -746,6 +746,292 @@ describe('PrismaHighlightRepository (contract)', () => {
       await expect(
         repo.find({ clubId: prefixedId('t24', 'hl-club-ghost') }),
       ).resolves.toEqual([]);
+    });
+
+    /**
+     * ⚠️ **A BUSCA POR TEXTO (Tarefa 29) — contra o Postgres, que é o único
+     * lugar onde metade destas propriedades é decidível.**
+     *
+     * O fake afirma "substring case-insensitive, accent-sensitive, curinga
+     * literal". Duas dessas três **não têm como falhar em memória**: para uma
+     * `String.includes`, `%` e `_` já são literais, então o bug do escape é
+     * invisível no unitário. É aqui que ele aparece.
+     */
+    describe('the text filter (task 29, rules 2, 3 and 5)', () => {
+      /**
+       * Fixture com as DUAS colunas de conteúdo escritas explicitamente.
+       *
+       * ⚠️ O `commentText` é DERIVADO do `commentDoc` no backend (ADR 0001), e é
+       * ele — não o documento — a coluna que o `ILIKE` compara. O fixture
+       * escreve os dois em ACORDO de propósito: com as duas pontas em
+       * desacordo, o teste afirmaria uma regra que a produção não tem (§7.1).
+       */
+      function aSearchableRow(
+        prefix: string,
+        quote: string,
+        comment: string,
+        overrides: Partial<Highlight> = {},
+      ): Highlight {
+        return aHighlightRow(prefix, {
+          quote,
+          commentDoc: aDoc(comment),
+          commentText: comment,
+          ...overrides,
+        });
+      }
+
+      async function idsOfText(text: string): Promise<string[]> {
+        return (await repo.find({ clubId: CLUB_ID, text }))
+          .map((row) => row.id)
+          .sort();
+      }
+
+      /**
+       * ⚠️ **REGRA 2 — casa `quote` OU `commentText`, com os QUATRO casos.**
+       *
+       * É a **decisão A** da Tarefa 29 provada contra o banco, e o desenho que
+       * ela recusa é o literal da decisão fechada do MVP 2 ("`ILIKE` no
+       * `plainText`/`commentText`"), que não menciona o `quote`. O `quote` é o
+       * **conteúdo** do grifo (ADR 0004, "o trecho grifado"), e uma busca que o
+       * ignore não acha *a frase que a pessoa grifou*. **Registrado como
+       * pergunta do dono.**
+       *
+       * ⚠️ E o `OR` do `where` **continua em AND com o `clubId`**: o grifo do
+       * outro clube abaixo casa o termo de propósito. Um `OR` que subisse para o
+       * topo do `where` levaria o corte de tenant embora — e o teste ficaria
+       * verde nos três primeiros casos.
+       */
+      it('matches the quote or the commentText, and the OR stays in AND with the tenant cut', async () => {
+        const inQuote = await repo.save(
+          aSearchableRow('find-text-q', 'a esmeralda do anel', 'sem o termo'),
+        );
+        const inComment = await repo.save(
+          aSearchableRow('find-text-c', 'um trecho', 'a esmeralda do vale'),
+        );
+        const inBoth = await repo.save(
+          aSearchableRow('find-text-b', 'a esmeralda', 'a esmeralda de novo'),
+        );
+        await repo.save(
+          aSearchableRow('find-text-n', 'um trecho', 'sem o termo'),
+        );
+        // O de FORA do clube, com o termo nas duas colunas: é ele que denuncia
+        // um `OR` que tivesse subido para o topo do `where`.
+        await repo.save(
+          aSearchableRow(
+            'find-text-x',
+            'a esmeralda alheia',
+            'a esmeralda de outro clube',
+            { clubId: OTHER_CLUB_ID, bookId: FOREIGN_BOOK_ID },
+          ),
+        );
+
+        expect(await idsOfText('esmeralda')).toEqual(
+          [inQuote.id, inComment.id, inBoth.id].sort(),
+        );
+        // A precondição que dá dente à asserção: os CINCO estão no banco, e o
+        // de outro clube é achado por quem é dele.
+        expect(await repo.find({ clubId: CLUB_ID })).toHaveLength(4);
+        expect(
+          await repo.find({ clubId: OTHER_CLUB_ID, text: 'esmeralda' }),
+        ).toHaveLength(1);
+      });
+
+      // Regra 2, o outro lado: "em nenhuma das duas" é vazio, e não o acervo.
+      it('matches nothing when the term is in neither content column', async () => {
+        await repo.save(
+          aSearchableRow('find-text-none', 'um trecho', 'um comentário'),
+        );
+
+        await expect(idsOfText('esmeralda')).resolves.toEqual([]);
+      });
+
+      /**
+       * ⚠️ **REGRA 2, O LIMITE: a busca NÃO casa a `reference`.**
+       *
+       * A decisão fechada nomeia os campos de **conteúdo**, e a `reference`
+       * ("Cap. 12", "p. 112") é metadado — casá-la faria uma busca por
+       * "capítulo" devolver o clube inteiro. É o irmão do
+       * `never matches the title or the reference, only the plainText` do lado
+       * da nota.
+       */
+      it('never matches the reference, only the quote and the commentText', async () => {
+        await repo.save(
+          aHighlightRow('find-text-ref', {
+            quote: 'um trecho',
+            commentDoc: aDoc('um comentário'),
+            commentText: 'um comentário',
+            reference: 'Cap. esmeralda',
+          }),
+        );
+
+        await expect(idsOfText('esmeralda')).resolves.toEqual([]);
+      });
+
+      /**
+       * ⚠️ **REGRA 3 — `ILIKE` é case-insensitive e accent-SENSITIVE, nas DUAS
+       * colunas.**
+       *
+       * É a **3ª aparição da tabela do §7.1**, e a linha dela diz exatamente
+       * isto: `'coração' ILIKE '%coracao%'` é **falso**. O fake reproduz a
+       * fidelidade; aqui é a confirmação no banco.
+       *
+       * ⚠️ **ISTO É DECISÃO FECHADA, NÃO UM BUG A CONSERTAR.** A decisão do
+       * MVP 2 diz `ILIKE`, e o irmão deste teste no lado da nota (`matches case
+       * but not accent`) pina a propriedade desde a **Tarefa 11**. Se um dia o
+       * Postgres deste projeto ganhar `unaccent` no caminho do `contains`, é
+       * este teste que acusa — e a mudança exige DDL, índice funcional e ADR:
+       * **fatia própria**, registrada como pergunta do dono na spec da
+       * Tarefa 29.
+       *
+       * As duas colunas estão aqui porque a decisão A cria espaço para a
+       * fidelidade valer numa só: um `mode: 'insensitive'` esquecido no
+       * `commentText` (ou um `unaccent` posto numa coluna só) ficaria verde num
+       * teste que olhasse apenas o `quote`.
+       */
+      it('matches case but not accent, in the quote and in the comment', async () => {
+        const inQuote = await repo.save(
+          aSearchableRow(
+            'find-accent-q',
+            'Chorei no CORAÇÃO do livro',
+            'sem o termo',
+          ),
+        );
+        const inComment = await repo.save(
+          aSearchableRow(
+            'find-accent-c',
+            'um trecho',
+            'me pegou no CORAÇÃO mesmo',
+          ),
+        );
+
+        // Com o acento, e em caixa trocada: acha os dois.
+        expect(await idsOfText('coração')).toEqual(
+          [inQuote.id, inComment.id].sort(),
+        );
+        // ⚠️ SEM o acento: **vazio**. Nas duas colunas.
+        await expect(idsOfText('coracao')).resolves.toEqual([]);
+      });
+
+      /**
+       * ⚠️ A PRÉ-CONDIÇÃO DA REGRA 5, e sem ela o teste seguinte não prova
+       * nada: se o Postgres não tratasse `_` e `%` como curinga dentro do
+       * parâmetro, "escapou" e "não escapou" dariam o mesmo resultado.
+       *
+       * É a mesma medição que o lado da nota faz desde a Tarefa 11 — repetida
+       * aqui porque é ela que dá sentido a ESTE arquivo, e um teste de contrato
+       * não depende do que outro arquivo deixou provado.
+       */
+      it('states the precondition: % and _ are wildcards inside an ILIKE parameter', async () => {
+        const rows = await prisma.$queryRaw<
+          { underscore: boolean; percent: boolean }[]
+        >`
+          SELECT 'axb' ILIKE '%a_b%'            AS underscore,
+                 '100% garantido' ILIKE '%100%%' AS percent
+        `;
+
+        expect(required(rows[0])).toEqual({ underscore: true, percent: true });
+      });
+
+      /**
+       * ⚠️ **REGRA 5 — `%` e `_` são LITERAIS, e é o `toLikePattern` de
+       * `repositories/like-pattern.ts` que os escapa: UMA função, importada
+       * pelos dois repositórios (decisão B).**
+       *
+       * Este é o teste que o fake **não consegue** dar: para uma
+       * `String.includes` `%` e `_` já são literais, então o bug é invisível em
+       * memória. Sem o escape, quem digitasse `p. 100%` receberia todo grifo
+       * que contém `p. 100`, em silêncio — nada na tela anuncia sintaxe de
+       * padrão.
+       *
+       * ⚠️ E ele cobre as DUAS colunas: um escape aplicado só no `quote`
+       * deixaria o `commentText` interpretando curinga, e a busca do comentário
+       * casaria coisa que ninguém pediu.
+       */
+      it('treats % and _ in the text query as literal characters, in both columns', async () => {
+        const literalInQuote = await repo.save(
+          aSearchableRow('find-lit-q', 'o a_b do plano', 'sem o termo'),
+        );
+        const literalInComment = await repo.save(
+          aSearchableRow('find-lit-c', 'um trecho', 'o a_b do comentário'),
+        );
+        const nearMissQuote = await repo.save(
+          aSearchableRow('find-lit-nq', 'o axb do plano', 'sem o termo'),
+        );
+        const nearMissComment = await repo.save(
+          aSearchableRow('find-lit-nc', 'um trecho', 'o axb do comentário'),
+        );
+        const percent = await repo.save(
+          aSearchableRow('find-lit-pct', '100% garantido', 'sem o termo'),
+        );
+        await repo.save(
+          aSearchableRow('find-lit-100', 'p. 100 e 5', 'sem o termo'),
+        );
+
+        // `_` não é curinga: `a_b` acha `a_b` nas duas colunas e NÃO acha `axb`.
+        expect(await idsOfText('a_b')).toEqual(
+          [literalInQuote.id, literalInComment.id].sort(),
+        );
+        // `%` não é curinga: `p. 100%` não acha `p. 100 e 5`...
+        await expect(idsOfText('p. 100%')).resolves.toEqual([]);
+        // ...e `100%` acha quem tem `100%` de verdade no texto.
+        expect(await idsOfText('100%')).toEqual([percent.id]);
+        // A precondição: os `axb` estão lá e são achados sem curinga.
+        expect(await idsOfText('axb')).toEqual(
+          [nearMissQuote.id, nearMissComment.id].sort(),
+        );
+        expect(await repo.find({ clubId: CLUB_ID })).toHaveLength(6);
+      });
+
+      /**
+       * Regra 5 — a `\` também é literal. É o caractere de escape do próprio
+       * `LIKE`, então um escape que não se protegesse deixaria `\%` passar como
+       * "por-cento literal" em vez de "barra seguida de curinga".
+       */
+      it('treats a backslash in the text query as a literal character', async () => {
+        const withBackslash = await repo.save(
+          aSearchableRow('find-bs', 'o caminho c:\\temp', 'sem o termo'),
+        );
+        await repo.save(
+          aSearchableRow('find-nobs', 'o caminho c:temp', 'sem o termo'),
+        );
+
+        expect(await idsOfText('c:\\temp')).toEqual([withBackslash.id]);
+        // E uma `\` sozinha não estoura o `LIKE` nem casa tudo.
+        expect(await idsOfText('\\')).toEqual([withBackslash.id]);
+      });
+
+      // O `text` entra em AND com os outros filtros, e o `OR` das duas colunas
+      // é UM grupo dentro desse AND — não um `OR` que engole o resto.
+      it('combines the text with every other filter, with AND', async () => {
+        const target = await repo.save(
+          aSearchableRow('find-text-and', 'a esmeralda do anel', 'comentário'),
+        );
+        await repo.save(
+          aSearchableRow('find-text-and-other', 'a esmeralda alheia', 'outro', {
+            userId: OTHER_AUTHOR_ID,
+            page: 62,
+            color: '#22c55e',
+          }),
+        );
+
+        await expect(
+          repo.find({
+            clubId: CLUB_ID,
+            bookId: BOOK_ID,
+            authorId: AUTHOR_ID,
+            color: '#facc15',
+            page: 45,
+            status: 'ACTIVE',
+            text: 'esmeralda',
+          }),
+        ).resolves.toEqual([target]);
+
+        // Um filtro trocado e o resultado é vazio — prova que é AND, e que o
+        // `OR` do texto não substitui nada.
+        await expect(
+          repo.find({ clubId: CLUB_ID, page: 62, text: 'esmeralda do anel' }),
+        ).resolves.toEqual([]);
+      });
     });
 
     /**

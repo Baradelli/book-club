@@ -120,8 +120,8 @@ export const editHighlightSchema = z
   .strict();
 
 /**
- * Os quatro filtros de navegação do acervo, todos opcionais. O `clubId` **não**
- * está aqui: vem da rota, e é o corte de tenant.
+ * Os quatro filtros de navegação do acervo **mais a busca por texto**, todos
+ * opcionais. O `clubId` **não** está aqui: vem da rota, e é o corte de tenant.
  *
  * **Sem `.strict()`**, ao contrário dos dois corpos de escrita — o precedente
  * do `listNotesQuerySchema`: uma query string ganha parâmetro alheio por
@@ -139,9 +139,8 @@ export const editHighlightSchema = z
  * seria um 500: fora do int32 o Prisma **lança**; fração ele **trunca**, e
  * devolveria os grifos de outra página. → `HIGHLIGHT_PAGE_MAX`.
  *
- * Sem `text`: a busca de grifo é a Tarefa 29, e é ela a chamadora. Sem
- * `includeArchived`: não há tela de arquivados (MVP 4), e flag sem chamador é
- * especulação — o `listHighlights` corta `status: 'ACTIVE'` no repositório.
+ * Sem `includeArchived`: não há tela de arquivados (MVP 4), e flag sem chamador
+ * é especulação — o `listHighlights` corta `status: 'ACTIVE'` no repositório.
  */
 export const listHighlightsQuerySchema = z.object({
   bookId: z.string().min(1).optional(),
@@ -149,6 +148,25 @@ export const listHighlightsQuerySchema = z.object({
   authorId: z.string().min(1).optional(),
   color: highlightColor.optional(),
   page: z.coerce.number().int().min(1).max(HIGHLIGHT_PAGE_MAX).optional(),
+  /**
+   * A BUSCA (Tarefa 29): `ILIKE` no `quote` **ou** no `commentText`
+   * (decisão A). Vazio ou só espaços = **não filtra**.
+   *
+   * ⚠️ **`z.string()` puro, SEM `.min(1)`** — e é o precedente exato do `text`
+   * do `listNotesQuerySchema`, não desatenção. Um `.min(1)` aqui faria
+   * `?text=` (a URL que um campo de busca esvaziado monta com naturalidade)
+   * virar **400**, quando a resposta certa é o acervo inteiro: quem NORMALIZA é
+   * o `listHighlights`, pelo `optionalText`, e ele já trata `''` e `'   '` como
+   * "não filtra". Dois donos da mesma regra é como as duas divergem na primeira
+   * correção — e aqui a divergência seria um 400 numa tela que funcionava.
+   *
+   * ⚠️ **E a borda NÃO dá `trim` nem normaliza acento.** O trim é do UseCase
+   * (uma regra, um dono), e o acento é **decisão fechada**: `ILIKE` é
+   * accent-sensitive, então `?text=coracao` **não** acha `'coração'`. Está
+   * pinado por integração desde a Tarefa 11 no lado da nota. `unaccent` é fatia
+   * própria — registrada como pergunta do dono na spec da Tarefa 29.
+   */
+  text: z.string().optional(),
 });
 
 export const highlightIdParamsSchema = z.object({

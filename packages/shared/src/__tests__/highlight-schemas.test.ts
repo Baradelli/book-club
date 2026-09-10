@@ -405,6 +405,85 @@ describe('listHighlightsQuerySchema', () => {
     );
   });
 
+  /**
+   * ⚠️ **REGRA 6 DA TAREFA 29 — a borda ganha `text`, e ele é `z.string()`
+   * PURO.**
+   *
+   * É o precedente exato do `text` do `listNotesQuerySchema`. As três
+   * propriedades abaixo são o contrato inteiro, e cada uma mata um mutante
+   * diferente.
+   */
+  describe('the text of the search (task 29, rule 6)', () => {
+    it('parses the text alongside the four navigation filters', () => {
+      expect(
+        listHighlightsQuerySchema.parse({
+          bookId: 'livro-1',
+          authorId: 'maria',
+          color: '#ec4899',
+          page: '45',
+          text: 'coração',
+        }),
+      ).toEqual({
+        bookId: 'livro-1',
+        authorId: 'maria',
+        color: '#ec4899',
+        page: 45,
+        text: 'coração',
+      });
+    });
+
+    /**
+     * ⚠️ **`?text=` É 200, NÃO 400** — e é o mutante que um `.min(1)` copiado
+     * do `bookId`/`authorId` ao lado introduziria sem que nada mais acusasse.
+     *
+     * `?text=` é a URL que um campo de busca esvaziado monta com naturalidade,
+     * e a resposta certa é o acervo inteiro: quem normaliza é o
+     * `listHighlights`, pelo `optionalText`, que já trata `''` e `'   '` como
+     * "não filtra". Dois donos da mesma regra é como as duas divergem — e aqui
+     * a divergência seria um 400 numa tela que funcionava.
+     */
+    it.each([
+      ['empty', ''],
+      ['blank', '   '],
+    ])('accepts a %s text instead of refusing it', (_label, text) => {
+      const parsed = listHighlightsQuerySchema.safeParse({ text });
+
+      expect(parsed.success).toBe(true);
+      // E o valor atravessa CRU: o `trim` é do UseCase, um dono só.
+      expect(parsed.success && parsed.data.text).toBe(text);
+    });
+
+    /**
+     * ⚠️ **A BORDA NÃO DÁ `trim` NEM NORMALIZA ACENTO**, e as duas metades são
+     * decisão:
+     *
+     * - o `trim` é do `listHighlights` (o mesmo `optionalText` do `listNotes`) —
+     *   um `.trim()` aqui criaria dois donos da mesma regra;
+     * - o acento é **decisão fechada**: `ILIKE` é accent-**sensitive**, então
+     *   `?text=coracao` **não** acha `'coração'`. Se a borda dobrasse acento, a
+     *   busca mentiria sobre o que o banco faz. `unaccent` é fatia própria, e
+     *   está registrado como pergunta do dono.
+     */
+    it('hands the text over untouched — no trim, no accent folding', () => {
+      expect(
+        listHighlightsQuerySchema.parse({ text: '  coração  ' }).text,
+      ).toBe('  coração  ');
+      expect(listHighlightsQuerySchema.parse({ text: 'coracao' }).text).toBe(
+        'coracao',
+      );
+    });
+
+    // E o curinga atravessa LITERAL: quem o escapa é o repositório Prisma
+    // (`toLikePattern`), não a borda — a borda que "limpasse" `%` mudaria o que
+    // a pessoa digitou.
+    it('hands a wildcard character over untouched, for the repository to escape', () => {
+      expect(listHighlightsQuerySchema.parse({ text: 'p. 100%' }).text).toBe(
+        'p. 100%',
+      );
+      expect(listHighlightsQuerySchema.parse({ text: 'a_b' }).text).toBe('a_b');
+    });
+  });
+
   it('accepts the int32 ceiling itself', () => {
     expect(
       listHighlightsQuerySchema.parse({ page: String(HIGHLIGHT_PAGE_MAX) })

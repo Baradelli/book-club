@@ -7,15 +7,9 @@ import type { Highlight } from '../../domain/highlight';
  * O filtro do acervo de grifos. Mesmo formato do `NoteFilter`: o `clubId` é
  * obrigatório porque é o corte de tenant, e todo o resto é opcional.
  *
- * **Tudo é igualdade** — o `NoteFilter` inteiro também é, tirando o `text`. Sem
+ * **Tudo é igualdade menos o `text`** — exatamente como no `NoteFilter`. Sem
  * faixa de página (`pageFrom`/`pageTo`): é aditiva e ninguém pediu (decisão C
  * da Tarefa 23).
- *
- * **Sem `text`.** A busca de grifo é a Tarefa 29, e é ela a chamadora — campo de
- * filtro sem chamador é especulação (`docs/WORKFLOW.md`). Ela ainda tem uma
- * pergunta de produto a fechar: se o `text` casa `quote` **ou** `commentText`
- * (a decisão fechada do MVP 2 nomeia só os campos derivados, e uma busca de
- * grifos que ignore o `quote` não acha *a frase que a pessoa grifou*).
  */
 export interface HighlightFilter {
   /** OBRIGATÓRIO. É o corte de tenant, sempre em AND com o resto. */
@@ -82,6 +76,50 @@ export interface HighlightFilter {
    * e o motivo é o truncamento — **não** um erro que o banco levantaria.
    */
   page?: number;
+  /**
+   * A BUSCA POR TEXTO (Tarefa 29) — **o único filtro que não é igualdade**, e o
+   * contrato é palavra por palavra o do `NoteFilter.text`.
+   *
+   * `ILIKE '%…%'`: **substring case-insensitive**. Três coisas fazem parte do
+   * contrato e nenhuma é óbvia:
+   *
+   * 1. ⚠️ **Casa `quote` OU `commentText`** (decisão A da Tarefa 29). A decisão
+   *    fechada do MVP 2 nomeia os campos **derivados** de cada entidade e
+   *    **não** menciona o `quote` — mas o `quote` é o **conteúdo** do grifo (o
+   *    ADR 0004 o chama de "o trecho grifado"; o comentário é o que a pessoa
+   *    achou dele), e uma busca de grifos que o ignore não acha *a frase que a
+   *    pessoa grifou*, que é o caso de uso inteiro ("qual era aquela frase do
+   *    capítulo 3?"). Lemos a decisão fechada como sendo sobre o **mecanismo**
+   *    (`ILIKE`, nada de vetor), não como lista exaustiva de colunas.
+   *    **Registrado como pergunta do dono** na spec da Tarefa 29: se ele
+   *    discordar, é **uma cláusula** a remover.
+   * 2. ⚠️ **`%`, `_` e `\` são caracteres LITERAIS.** Quem os escapa é o
+   *    repositório Prisma, pelo `toLikePattern` de
+   *    `repositories/like-pattern.ts` — **uma** função para os dois
+   *    repositórios. Medido na Tarefa 11: sem escapar,
+   *    `'axb' ILIKE '%a_b%'` é **verdadeiro**, e quem digitasse `p. 100%`
+   *    receberia todo grifo que contém `p. 100`, em silêncio.
+   * 3. ⚠️ **Accent-SENSITIVE**, e é **decisão fechada, não pendência**:
+   *    `'coração' ILIKE '%coracao%'` é **falso** no Postgres. O fake reproduz
+   *    isso de propósito e o teste de contrato o pina contra o banco. Busca sem
+   *    acento exige a extensão `unaccent` + índice funcional + ADR: **fatia
+   *    própria**, registrada como pergunta do dono.
+   *
+   * **Quem NORMALIZA é o UseCase**, não o repositório: `''`/só-espaços = não
+   * filtra, e o resto chega sem as pontas — o mesmo `optionalText` do
+   * `listNotes`. Um repositório que recebesse `'   '` filtraria por três
+   * espaços e devolveria vazio.
+   *
+   * ⚠️ **O ENDEREÇO DAS DUAS PERGUNTAS DO DONO, e ele é UM só**: a seção *"As
+   * duas perguntas do dono"* de `docs/tasks/29-busca-por-texto.md`. É de lá que
+   * elas vão para a linha 29 do `docs/BACKLOG.md` e para a seção do MVP 2 do
+   * `docs/ACEITE-MVP.md` — **no fechamento do MVP**, pelo ritual que aquele
+   * arquivo descreve ("este arquivo é do dono"). Todo docblock desta fatia que
+   * diz "pergunta do dono" aponta para a **spec**, e não para os dois destinos,
+   * de propósito: ponteiro para onde a frase ainda não está é a dívida do §7.4 —
+   * o próximo leitor confere, não acha nada, e conclui que já foi resolvido.
+   */
+  text?: string;
   /** Ausente = os dois status. */
   status?: GeneralStatus;
 }

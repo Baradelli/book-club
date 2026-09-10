@@ -19,12 +19,16 @@
 | Entrar e sair | `/login` |
 | Aceitar convite e definir a própria senha | `/convite/:code` |
 | A home: nome do clube, estante, atalho da leitura de hoje | `/` |
-| **A tela do livro**: o plano dia a dia, hoje destacado, quem escreveu | `/books/:id` |
+| **A tela do livro**: o plano dia a dia, hoje destacado, **quem escreveu, pelo NOME** | `/books/:id` |
 | **Escrever a anotação do dia**, com autosave e o editor completo | pelo atalho de hoje |
 | **Ler o que a outra pessoa escreveu** naquele mesmo dia | a mesma tela |
 | **Escrever a anotação do dia SEM conexão** — o texto fica guardado e sobe sozinho | a mesma tela (§6.1) |
 | **Cadastrar o livro do mês e o plano**, com o gerador de dias | `/clubs/:id/books/new` (§5.1) |
-| **Anotação avulsa** (título e referência próprios) e o acervo filtrável | aba Anotações do livro |
+| **Anotação avulsa** (título e referência próprios) | pelo acervo (§6.2) |
+| **MVP 2 — Registrar um GRIFO**: trecho, cor da caneta, página e comentário no editor | `/books/:id/highlights/new` (§5.2) |
+| **MVP 2 — O acervo do livro**: anotações **e** grifos num lugar, filtrável por pessoa, tipo, leitura e cor | `/books/:id/acervo` (§6.2) |
+| **MVP 2 — O filtro diz o NOME** (`Tudo · Minhas · De Maria`), com avatar | a mesma tela |
+| **MVP 2 — Buscar por texto** no acervo do clube inteiro, em qualquer livro | `/busca`, pela home (§6.3) |
 | O estado "nenhum clube ainda" | `/` com um usuário sem membership |
 | Seletor de clube | `/` com **2+** clubes |
 | Tema claro/escuro e idioma pt/en | cabeçalho |
@@ -37,23 +41,38 @@
   (HTTPS ou `localhost`), e `http://192.168.0.83:5173` não é nenhum dos dois — o navegador
   não vai oferecer "instalar". Isso **não afeta** o teste de escrita sem conexão do §6.1: o
   rascunho e a fila vivem no IndexedDB, que funciona em `http` normalmente.
-- **O filtro por PESSOA.** Ele é `Tudo · Minhas · De outras pessoas`, e não `de <nome>`:
-  nenhuma rota lista os membros do clube com nome (é a pergunta 1 do `docs/ACEITE-MVP.md`).
-
-- **Menções `@`/`[[` e colar imagem no editor** → ficaram de fora da Tarefa 18 de propósito:
-  não existe endpoint de upload no backend, e não há tela de busca de anotação para as menções
-  apontarem. As duas são "capability-gated" por prop — ligar depois é passar a prop.
+- ⚠️ **BUSCAR SEM ACENTO.** Procurar `coracao` **não** acha "coração", e procurar `coração`
+  não acha "coracao". A busca é `ILIKE` do Postgres: ela ignora **maiúscula** e respeita
+  **acento** — é decisão fechada do MVP 2 e está pinada por teste contra o banco. Ligar a
+  busca sem acento exige uma extensão do Postgres, um índice novo e um ADR; é fatia própria, e
+  **é a pergunta 1 do MVP 2** no `docs/ACEITE-MVP.md`. Se isso te incomodar no celular, diga —
+  é o principal candidato do MVP 3.
+- ⚠️ **Menções `@`/`[[` e colar imagem no editor** → ficaram de fora de propósito: não existe
+  endpoint de upload no backend. As duas são "capability-gated" por prop — ligar depois é
+  passar a prop. (A busca de anotação para as menções apontarem **agora existe** — o §6.3 —,
+  mas ligar a menção ao acervo é fatia própria.)
+- ⚠️ **A barra do editor está só em PORTUGUÊS.** Trocar o idioma para inglês traduz o app
+  inteiro **menos** os rótulos dos botões do editor ("Negrito", "Citação", "Grifo amarelo") e
+  os do menu `/`. São **33 textos** cravados em `packages/ui`, medidos, e há um teste que
+  impede o número de **crescer**. O conserto é conhecido e não é caro — mas ele depende da
+  **pergunta 7 do MVP 1** ("manter o inglês?"): se a resposta for "não", o certo é apagar o
+  segundo catálogo, e traduzir agora seria trabalho na direção oposta.
 - ⚠️ **ABRIR O APP DO ZERO SEM CONEXÃO** (o "cold start" no metrô) → **ainda não**, e esta é a
   confusão mais provável. A Tarefa 21 fez a **escrita** sobreviver à queda da rede; a
-  **leitura** (`/me`, o livro, as anotações) continua indo ao servidor, então abrir o app com
-  o avião ligado mostra erro de carregamento. A premissa da fatia é o app **já aberto** (ou
-  reaberto com rede) e a rede caindo **enquanto você escreve**. Cache de leitura é MVP 2 —
-  teste como está no §6.1, não no túnel.
+  **leitura** (`/me`, o livro, as anotações, os grifos) continua indo ao servidor, então abrir
+  o app com o avião ligado mostra erro de carregamento. A premissa é o app **já aberto** (ou
+  reaberto com rede) e a rede caindo **enquanto você escreve**. ⚠️ **E isto NÃO entrou no
+  MVP 2**: é a **pergunta 5** do MVP 1, que continua sem resposta, e o MVP 2 seguiu sem ela
+  porque a regra do fechamento é não decidir no seu lugar. Teste como está no §6.1, não no
+  túnel.
 - **Criar anotação avulsa sem conexão** → de fora de propósito: o `POST` de criação não é
   idempotente e o backend não tem chave de idempotência, então reenviar às cegas criaria nota
-  duplicada. A tela avulsa continua exigindo conexão para **criar**.
+  duplicada. Criar **grifo** sem conexão também não — a fila se provou numa tela (a do dia)
+  antes de ser fiada nas outras.
+- **Arquivar grifo ou anotação sem conexão** → o mesmo motivo.
 - **Criar clube e convidar pela interface** → MVP 4 (Tarefas 42/43). Por API (§5).
-- Grifos, marcar "li", feed, notificação → MVPs 2 e 3.
+- **Desarquivar** qualquer coisa → MVP 4. Arquivado é invisível, inclusive para quem escreveu.
+- Marcar "li", feed, notificação → MVP 3.
 
 ---
 
@@ -247,6 +266,42 @@ Coisas que valem provocar:
 
 ---
 
+## 5.2. Registrar um grifo do livro de papel (MVP 2, Tarefas 22–25)
+
+É a fatia que o MVP 2 existe para entregar: você grifou uma frase **no livro de papel**, com
+uma caneta de cor, e quer registrar isso — o trecho, a cor, a página e o que você achou.
+
+**O caminho:** tela do livro → **"Ver o acervo do livro"** → **"Novo grifo"**.
+(Ou direto em `/books/:bookId/highlights/new`.)
+
+1. **Trecho grifado** — obrigatório. É uma caixa de texto de várias linhas de propósito: uma
+   frase de livro costuma ter duas. Você **digita** (ou cola) — não existe OCR de foto de
+   página, e isso é decisão registrada, não esquecimento.
+2. **Cor da caneta** — obrigatória, cinco cores fixas. Elas são **as mesmas** do grifo do
+   editor, de propósito: os valores ficam espelhados para não parecer bug. Cada cor tem
+   **nome** ao lado da bolinha — cor nunca é a única informação, para quem não distingue as
+   cinco.
+3. **Página** — opcional. Aceita inteiro de 1 para cima; `0`, negativo e `45,5` são recusados
+   **na tela**, antes de enviar.
+4. **Comentário** — opcional, e é **o editor completo** (o mesmo da anotação): negrito, lista,
+   citação, o menu `/`. Ele carrega só quando você abre o formulário.
+
+| Provoque | Deve acontecer |
+|---|---|
+| Salvar com o trecho em branco | o campo é marcado, a frase aparece, e **nada é enviado** |
+| Salvar sem escolher cor | mesma coisa |
+| Página `0`, `-3` ou `45,5` | recusada na tela, com frase própria |
+| Salvar sem tocar no comentário | grifo criado **sem** comentário — e a linha dele no acervo não mostra área de comentário nenhuma |
+| Abrir um grifo seu, não mudar nada, salvar | **nenhuma requisição** é feita |
+| Abrir o grifo **dela** | abre em leitura: **nenhum** botão de corrigir, **nenhum** de arquivar |
+| Arquivar o seu grifo | pede confirmação; **cancelar não chama a API**; confirmar tira da lista e ele **não volta** ao recarregar |
+
+⚠️ **O grifo não depende de você ter escrito anotação naquele dia.** Foi essa a razão de ele
+ser uma coisa própria e não um bloco dentro da anotação — está no `docs/adr/0004-*.md`.
+
+---
+
+
 ## 6. Testar a home
 
 Recarregue **http://localhost:5173**. Agora deve aparecer:
@@ -296,6 +351,71 @@ primeira **não** é enviada — a fila é por pessoa, de propósito (o autor da
 
 ---
 
+## 6.2. O acervo do livro: anotações e grifos num lugar (MVP 2, Tarefas 27–28)
+
+**O caminho:** tela do livro → **"Ver o acervo do livro"** (`/books/:bookId/acervo`).
+
+A tela do livro voltou a ser **só o plano** — 30 dias, hoje destacado, quem escreveu em cada
+dia. O acervo é onde mora **o que o clube escreveu**: as anotações do dia, as avulsas e os
+grifos, **numa lista só**, mais recente primeiro, com o tipo dito em cada linha.
+
+**O filtro tem quatro dimensões**, e as quatro combinam (é "e", não "ou"):
+
+| Dimensão | Como aparece | O que esperar |
+|---|---|---|
+| **Pessoa** | `Tudo · Minhas · De Maria · De Zeca` — com o avatar de cada uma | ⚠️ **é aqui que o MVP 2 fecha a pergunta 1 do MVP 1**: antes dizia "De outras pessoas" |
+| **Tipo** | `Tudo · Do dia · Avulsa · Grifo` | recorta de verdade; grifo **não** é um tipo de anotação |
+| **Cor** | as cinco cores, com nome | ⚠️ o grupo **desaparece** quando o tipo é "Do dia" ou "Avulsa" — um filtro de cor ali só poderia esvaziar a lista |
+| **Leitura** | um **seletor** com os dias do plano | ⚠️ escolher um dia **exclui** as avulsas e os grifos, porque nenhum dos dois pertence a um dia. É o comportamento certo, não um bug. E o seletor **desaparece** quando o tipo é "Avulsa" ou "Grifo", pelo mesmo motivo da cor |
+
+| Provoque | Deve acontecer |
+|---|---|
+| Filtrar por pessoa, tipo, cor e leitura ao mesmo tempo | a lista some (é "e", não "ou") — e o estado diz **"nada com este filtro"**, que é diferente de **"nada ainda"** |
+| Acervo vazio × filtro sem resultado | **duas frases diferentes**. Se as duas forem iguais, é bug |
+| Trocar o tipo com uma cor escolhida | a cor é **descartada** — não fica um recorte invisível |
+| Convidar uma terceira pessoa e ela sair do clube depois | ela **deixa** de ser um chip do filtro, mas o **nome** dela continua aparecendo nas anotações que ela deixou. É o ADR 0002: o que ela escreveu é do clube |
+| Tocar numa linha sua | abre a tela certa: do dia, avulsa ou o formulário do grifo |
+| Tocar numa linha dela | abre em leitura, sem botão de editar |
+| Desligar a rede e recarregar | erro de carregamento com "tentar de novo" — e repetir **refaz as três** requisições |
+
+⚠️ **Não existe contador de resultados**, e é de propósito: "12 anotações" convida a comparar
+quem escreveu mais, e o princípio do projeto é **incentivo por presença, não por comparação**.
+Se você quiser o número, é uma decisão sua — diga, porque hoje existe um teste que **proíbe**
+qualquer contador na tela.
+
+---
+
+## 6.3. Buscar por texto no clube inteiro (MVP 2, Tarefa 29)
+
+**O caminho:** home → **"Buscar no acervo"** (`/busca`). O link só aparece quando a estante
+tem livro.
+
+A diferença em relação ao §6.2: o acervo é **de um livro** e recorta o que já está na tela; a
+busca é **do clube inteiro** e pergunta ao servidor. Cada resultado diz **de qual livro** é —
+sem isso, "página 112" seria ambíguo.
+
+| Provoque | Deve acontecer |
+|---|---|
+| Abrir a tela e não digitar nada | um convite para escrever, **sem** cobrança — e **nenhuma requisição** ao servidor |
+| Digitar **uma** letra | nada é pedido (uma letra casaria quase tudo) |
+| Digitar duas letras e esperar | duas requisições (anotações e grifos), **uma vez** — não uma por tecla |
+| Digitar rápido, apagar, digitar de novo | ele **espera você parar**; não dispara a cada tecla |
+| Buscar uma palavra do **comentário de um grifo** | acha |
+| Buscar uma palavra do **trecho grifado** | acha ⚠️ — e isso é a **pergunta 2** do MVP 2: a decisão fechada não mencionava o trecho, e eu decidi casar os dois, porque uma busca de grifos que não acha a frase grifada não serve para nada |
+| Buscar `CORAÇÃO` tendo escrito `coração` | acha (maiúscula é ignorada) |
+| Buscar `coracao` tendo escrito `coração` | ⚠️ **não acha** — ver a ressalva do §1 e a pergunta 1 |
+| Buscar `%` ou `_` | são tratados como letras, não como curinga |
+| Buscar algo que não existe | frase própria, **diferente** da do estado inicial |
+| Buscar e tocar num resultado | abre a tela certa, no **livro daquele resultado** |
+
+⚠️ **O que a busca não te conta:** ela traz no máximo **500 anotações e 500 grifos** por
+consulta, e **não avisa** se cortou. Para o clube de duas pessoas isso são cerca de **oito
+meses** de registro completo — e o corte só morde se a palavra casar todos eles. Está
+registrado como dívida com esse número; o conserto honesto é o servidor dizer que truncou, e
+isso é mudança de contrato da API, fatia própria.
+
+---
+
 ## 7. Testar o aceite de convite
 
 Este é o fluxo que a sua esposa vai viver, e vale testar **numa janela anônima** (para não
@@ -327,6 +447,9 @@ estrangeiras):
 ```bash
 docker exec -i clube_db psql -U clube -d clube <<'SQL'
 BEGIN;
+-- O Highlight vem primeiro entre os de conteúdo: as três FKs dele (Club, Book,
+-- User) são ON DELETE RESTRICT, então o Book não sai antes dos grifos dele.
+DELETE FROM "Highlight";
 DELETE FROM "Note";
 DELETE FROM "ReadingPlanItem";
 DELETE FROM "Book";
@@ -339,7 +462,7 @@ SQL
 ```
 
 Isso **preserva** o super-admin do seed (a tabela `User` não é tocada) e apaga clubes,
-membros, convites, livros, planos e anotações. Se você criou usuários pelo aceite de convite e
+membros, convites, livros, planos, anotações **e grifos**. Se você criou usuários pelo aceite de convite e
 quiser removê-los também, apague-os por e-mail **depois** do bloco acima.
 
 ---

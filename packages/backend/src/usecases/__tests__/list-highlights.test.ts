@@ -770,6 +770,116 @@ describe('ListHighlights', () => {
   });
 
   /**
+   * ⚠️ **REGRA 4 DA TAREFA 29 — a busca por texto, e quem NORMALIZA é o
+   * UseCase.**
+   *
+   * É o **mesmo** `optionalText` do `listNotes` (e do livro, e do item do
+   * plano), e é decisão: `''`/só-espaços **não filtram**, e o resto vai sem as
+   * pontas. Passar `'   '` adiante filtraria por três espaços e devolveria
+   * vazio — um campo de busca em que apertar espaço esconde o acervo é pior que
+   * nenhum.
+   *
+   * ⚠️ **E QUEM PROVA ISSO É O `findFilters`, NUNCA O RESULTADO** (§7.3): nos
+   * cenários abaixo o acervo é pequeno, então "não mandou o `text`" e "mandou
+   * `'   '` e o repositório o ignorou" devolveriam o **mesmo** array. Só o
+   * filtro capturado separa os dois.
+   */
+  describe('the text filter (task 29, rule 4)', () => {
+    function aQuoted(id: string, quote: string): Highlight {
+      return aClubHighlight({ id, quote });
+    }
+
+    it.each([
+      ['empty', ''],
+      ['blank', '   '],
+      ['tab and newline', '\t\n'],
+    ])('ignores a %s text instead of filtering by it', async (_label, text) => {
+      await highlights.save(aQuoted('grifo-1', 'a esmeralda do anel'));
+
+      const found = await useCase.execute(validInput({ text }));
+
+      expect(ids(found)).toEqual(['grifo-1']);
+      expect(highlights.findFilters).toStrictEqual([
+        { clubId: CLUB_ID, status: 'ACTIVE' },
+      ]);
+    });
+
+    // E o texto de verdade chega SEM as pontas: quem digita num campo de busca
+    // deixa espaço, e `' esmeralda '` não acha nada no `ILIKE`.
+    it('trims the text before handing it to the repository', async () => {
+      await highlights.save(aQuoted('grifo-1', 'a esmeralda do anel'));
+
+      const found = await useCase.execute(
+        validInput({ text: '  esmeralda  ' }),
+      );
+
+      expect(ids(found)).toEqual(['grifo-1']);
+      expect(highlights.findFilters).toStrictEqual([
+        { clubId: CLUB_ID, text: 'esmeralda', status: 'ACTIVE' },
+      ]);
+    });
+
+    // O `text` entra no MESMO `HighlightFilter` dos outros, e sem chave à toa —
+    // o `toStrictEqual` é o que pega um `text: undefined` declarado no objeto.
+    it('passes the text alongside every other filter, in a single HighlightFilter', async () => {
+      await useCase.execute(
+        validInput({
+          bookId: BOOK_ID,
+          authorId: MEMBER_ID,
+          color: YELLOW,
+          page: PAGE,
+          text: 'esmeralda',
+        }),
+      );
+
+      expect(highlights.findCalls).toBe(1);
+      expect(highlights.findFilters).toStrictEqual([
+        {
+          clubId: CLUB_ID,
+          bookId: BOOK_ID,
+          authorId: MEMBER_ID,
+          color: YELLOW,
+          page: PAGE,
+          text: 'esmeralda',
+          status: 'ACTIVE',
+        },
+      ]);
+    });
+
+    // E o resultado é a interseção de verdade: o `text` recorta, e recorta
+    // pelas DUAS colunas de conteúdo (decisão A) — quem prova cada coluna é o
+    // teste do fake; aqui o assunto é o UseCase mandar o filtro adiante.
+    it('returns only the highlights whose quote or comment carries the term', async () => {
+      await highlights.save(aQuoted('com-o-termo', 'a esmeralda do anel'));
+      await highlights.save(aQuoted('sem-o-termo', 'nada a ver'));
+
+      const found = await useCase.execute(validInput({ text: 'esmeralda' }));
+
+      expect(ids(found)).toEqual(['com-o-termo']);
+    });
+
+    // O corte de tenant vale para a busca como para tudo: o `clubId` entra em
+    // AND com o `text`, e o grifo gêmeo do outro clube casa o termo de
+    // propósito.
+    it('never crosses clubs through the text filter', async () => {
+      await highlights.save(
+        aClubHighlight({
+          id: 'grifo-de-outro-clube',
+          clubId: OTHER_CLUB_ID,
+          quote: 'a esmeralda do anel',
+        }),
+      );
+      await highlights.save(
+        aQuoted('grifo-deste-clube', 'a esmeralda do anel'),
+      );
+
+      const found = await useCase.execute(validInput({ text: 'esmeralda' }));
+
+      expect(ids(found)).toEqual(['grifo-deste-clube']);
+    });
+  });
+
+  /**
    * Estado acidental entre chamadas seria bug de produção invisível: a Tarefa 24
    * compõe o UseCase uma vez e reusa por request. Aqui o vazamento mais
    * perigoso é o acervo de um clube aparecendo no outro.

@@ -1465,13 +1465,147 @@ Sem grifos em tela própria (MVP 2), sem marcar "li", sem feed e sem notificaç�
       _**Gates:** 408 · 195 · 1287 · 558; `typecheck`, `lint`, `prettier --check .` e o build
       limpos. `packages/ui` e `packages/backend` **intocados** (`git status` sem entradas);
       os **367** de integração **não** rodados._
-- [ ] **29** — Busca simples por texto no acervo do clube. → _a detalhar_
+- [x] **29** — Busca simples por texto no acervo do clube. → `tasks/29-busca-por-texto.md`
+      _**A ÚLTIMA FATIA, e ela é a CHAMADORA que o filtro `text` do `listNotes` nunca teve** —
+      ele existia, funcionava e estava coberto por integração **desde a Tarefa 10**, e nenhuma
+      tela jamais o chamou. Entregue: `HighlightFilter.text` (port, fake, UseCase, Prisma,
+      borda, integração), o escape do `LIKE` extraído para **um** arquivo, e a tela `/busca` —
+      do **clube inteiro**, em qualquer livro, dizendo de qual livro é cada resultado.
+      **413 shared + 195 ui** (intocado) **+ 1307 backend + 603 app**; **integração 387**._
+      _**⚠️ O ACHADO ALTO tinha causa raiz mais funda que a falta do teste: uma FRASE servia
+      DOIS estados.** `pages.busca.loading` era usada pela espera do **clube** e pela espera da
+      **busca** — então (a) a tela dizia "Procurando…" com o `/me` no ar, quando **nada** havia
+      sido pedido (não há nem campo em tela), e (b) **a varredura de DOM não consegue separar
+      dois estados que falam com a mesma frase** (§7.9 na letra). Medido: `return null` no ramo
+      de `loading` dava **0 acusadores em 600**, e uma cobrança plantada ali também. Consertado
+      com **duas** chaves (`clubLoading` × `loading`), cada teste afirmando a sua e **negando a
+      do outro**. **Verificado por mutação do orquestrador na forma mais fina possível:** com a
+      frase **intacta** e a cobrança num nó **IRMÃO** — o único arranjo em que só a varredura
+      pode acusar — dá **1 acusador** (`expected … not to contain 'deixou'`). Era 0._
+      _**⚠️ E a extração de um helper achou um buraco maior que a duplicação:** o `excerptOf`
+      estava byte-idêntico nas duas telas e **não tinha acusador em NENHUMA** — mutá-lo para
+      `return text` (matando truncamento, colapso de `\s+` e `trim`) dava **0 em `acervo.test`
+      (55) e 0 em `busca.test` (44)**, porque nenhum fixture tinha texto acima do teto nem
+      espaço nas pontas. **Extrair um helper sem acusador para um módulo compartilhado é a
+      forma do §7.4: ele passa a PARECER coberto porque tem dono.** O executor pôs o acusador
+      **primeiro** (sem pinar o número do teto, que seria a identidade do §7.8) e só então
+      extraiu: cópias 2 → 1, acusadores 0 → 1._
+      _**O `noteTarget` NÃO desceu, e a discordância vem com medição — eu estava errado.** Eu
+      disse que "a única diferença entre as duas versões é o parâmetro". A diferença que decide
+      é a **aresta de import**: `paths.ts` seria **ciclo de verdade** (o `free-note.tsx` **já
+      importa** `paths.ts`, e os dois lados têm `const` de **módulo** — exatamente a forma que a
+      auditoria da Tarefa 20 mediu e precificou: derruba a rota **no import**, tela branca, e
+      qual lado é o frágil depende da ordem alfabética dos imports do `router.tsx`); e
+      `acervo-entries.ts` **quebraria a promessa que o próprio docblock dele faz** ("não importa
+      nenhuma tela, e é isso que o mantém livre do ciclo"). A duplicação **está guardada nos
+      dois lados** (3 e 1 acusadores), então não pode divergir em silêncio. **Dívida registrada
+      com o conserto nomeado:** mover `dayNotePath`/`freeNotePath` para o `paths.ts` com as
+      telas reexportando — o **precedente já está no próprio `paths.ts`** (o `book.tsx`
+      reexporta `BOOK_PATH`) — e aí o `noteTarget` cabe sem ciclo. ~10 linhas e três imports,
+      para quem reabrir o `free-note.tsx`._
+      _**O corte de tenant da busca: o meu medo não se confirmou, e o dono é forte.** O revisor
+      provou a semântica pelo **SQL gerado**: a forma correta emite
+      `WHERE ("clubId" = $1 AND (quote ILIKE $2 OR commentText ILIKE $3))`, e a variante que põe
+      o `clubId` **dentro de cada ramo** do `OR` **passa e deve passar** (é equivalente). O dono
+      carrega o tenant **no título** do teste, no docblock e num fixture que existe só para
+      matá-lo. ⚠️ **Mas a rota nunca buscava sem `bookId` — que é como a TELA busca:** o
+      `searchIds()` mandava sempre `?bookId=`, então um `clubId` perdido no `where` era
+      **invisível** ali (0 acusadores na rota). Consertado com um teste de clube inteiro **sem
+      `bookId`**, com fixture de grifo de outro clube que casa o termo: 0 → **1** na rota, mais
+      2 no contrato._
+      _**O par positivo que faltava** (§7.3, "meio contador"): o lado negativo tinha dois donos
+      (0 e 1 caractere não pedem), o positivo **nenhum** — `MIN_TERM_LENGTH` 2→3 dava **0
+      acusadores em 600**, e subir o mínimo deixaria a tela parada para quem digitou uma palavra
+      de duas letras. Teste de fronteira com termo de **exatamente dois** caracteres (com
+      `'esmeralda'` um mínimo de 3, 4 ou 5 passaria igual): 0 → **1**._
+      _**Decisões, e as duas primeiras são perguntas do dono registradas:** a busca casa
+      **`quote` OU `commentText`** nos grifos — a decisão fechada nomeia só os campos derivados,
+      mas o `quote` é o **conteúdo** (ADR 0004), e o revisor mediu que só-`commentText` deixaria
+      o **grifo sem comentário INALCANÇÁVEL** pela busca, em dois passos: sem comentário o
+      `commentText` é string **vazia** (não nulo), e `'' ILIKE '%x%'` é **false** no Postgres ·
+      **`unaccent` fora de escopo** (a decisão fechada diz `ILIKE`, que é accent-sensitive, e
+      está pinado contra o banco desde a 11; ligar exige DDL + índice funcional + ADR) · busca
+      **do servidor**, não do cliente (substring em JS não é `ILIKE`) · tela **própria**, porque
+      a home é de clube e o acervo é de livro · **sem contador de resultados** (a forma que a
+      varredura anti-culpa proíbe, por decisão de produto — se o dono quiser o número, é ele que
+      relaxa a guarda) · debounce de **400 ms**, provado por **contagem** com timers falsos e
+      **debounce, não throttle** (399 → 1 acusador; 401 → **24**)._
+      _**O escape do `LIKE` virou UM arquivo** (`repositories/like-pattern.ts`, 3 linhas), e a
+      extração **não custou nada**: o mutante "descarte cego de nulos" continua dando **3 no
+      grifo e 33 na nota** — número por número igual ao registro da Tarefa 23. O `matchesText`
+      mudou-se para o `sql-equality.ts` e o arquivo **não** foi renomeado, de propósito: o §7.1
+      cita aquele endereço nominalmente, e renomear envelheceria o ponteiro do documento._
+      _**Uma atribuição causal a mais, corrigida:** o executor creditou 11 acusadores ao
+      `matchesText` **variádico**. O revisor mediu que a disjunção (`m(t,a) || m(t,b)`) dá
+      **0 acusadores de diferença** — os 11 vêm de **a segunda coluna existir**, e seriam os
+      mesmos com qualquer das duas escritas. O argumento dele contra a disjunção continua
+      **factualmente certo** (com `t === undefined` ela dá `true || true`, "uma disjunção que
+      não pode falhar escrita como se pudesse"), mas o variádico é escolha de **legibilidade**,
+      não propriedade testável. Ele aceitou: *"apresentei uma medição como se fosse dela"._
+      _**⚠️ E o fechamento do MVP: o revisor mediu que DOIS pedaços da frase de aceite não têm
+      dono**, e os dois viraram pergunta do dono (3 e 4 do `ACEITE-MVP`): (1) *"em qualquer
+      listagem eu filtro… por texto"* é **falso** — o acervo filtra por quatro dimensões e
+      **não** tem campo de texto; a busca filtra por texto e **não** tem as outras quatro; as
+      cinco **nunca coexistem**. A boa notícia é que a segunda metade ficou **barata** (o `text`
+      já existe em todas as camadas dos **dois** recursos). (2) *"por capítulo"* **não existe
+      para grifo** em lugar nenhum: o `readingKeyOf` devolve `null` para `HIGHLIGHT`, o capítulo
+      de um grifo mora na `reference`, e há teste que **pina** que a busca não a toca. A segunda
+      é lacuna de produto que **ninguém tinha nomeado** até a auditoria da última fatia._
+      _**Dívidas registradas:** a aritmética do teto de 500 vale para a anotação do plano
+      (~8 meses); para **grifo** é **~3 meses** para quem grifa 5 trechos por dia, e essa
+      correção está no docblock · a tela **não avisa** quando corta em 500, e o conserto honesto
+      é o **servidor** dizer que truncou (mudança de contrato, §6.8) · o `noteTarget` duplicado,
+      com o conserto nomeado acima._
+      _**Gates:** 413 · 195 · 1307 · 603 e **387** de integração; `typecheck`, `lint`,
+      `prettier --check .` e o build limpos. Entrada **424.995 B** — a extração do `excerptOf`
+      devolveu **mais** do que as duas chaves novas custaram (−61 B) —, **0 marcas** de TipTap,
+      teto **450.000 não relaxado**, folga **25.005 B**. Banco em **0** por consulta a `t2%`,
+      super-admin intacto. `packages/ui` **intocado**._
 
 ## Definição de "MVP 2 pronto"
+
+> **As nove tarefas estão entregues e verdes (22, 23, 24, 25, 26, 26a, 27, 28, 29). O MVP 2
+> está em ACEITE** — o roteiro, as **sete** perguntas e o veredito moram em
+> `docs/ACEITE-MVP.md`. As respostas do dono viram decisões fechadas aqui antes de o MVP 3 ser
+> detalhado. **Quem fecha é o dono, não a IA.**
+>
+> Contagens: **413** `shared` · **195** `ui` · **1307** `backend` unitários · **603** `app`,
+> mais **387** de integração. Chunk de entrada em **424.995 B** (teto 450.000, folga 25.005),
+> com **0 marcas** de TipTap.
 
 Eu registro tudo que grifei — trecho, cor, página e meu comentário — e vejo a coleção de
 grifos do livro filtrada por cor e por pessoa. E em qualquer listagem eu filtro por pessoa,
 por tipo de anotação (do dia × avulsa), por capítulo e por texto.
+
+⚠️ **DOIS PEDAÇOS DESSA FRASE NÃO ESTÃO CUMPRIDOS, e foram MEDIDOS na auditoria da última
+fatia** — não descobertos por leitura otimista no fim. Estão registrados como as perguntas
+**3** e **4** do MVP 2 no `docs/ACEITE-MVP.md`, e **não** foram implementados por conta
+própria porque mudam o que o app é:
+
+1. **"em QUALQUER listagem eu filtro… por texto" é falso.** Existem duas telas de listagem e
+   cada uma tem metade do filtro: o **acervo do livro** recorta por pessoa, tipo, leitura e cor
+   e **não** tem campo de texto; a **busca do clube** recorta por texto e **não** tem as outras
+   quatro. As cinco dimensões **nunca coexistem**. Cada metade tem razão medida (o acervo
+   recorta no cliente o que já carregou; a busca pergunta ao servidor porque o acervo do clube
+   não está em tela nenhuma), mas a frase, como escrita, promete o que não existe. **A saída
+   ficou barata:** o filtro `text` já existe em **todas** as camadas dos **dois** recursos —
+   port, fake, UseCase, repositório Prisma, borda e integração —, então um campo de texto no
+   acervo é fatia curta de tela.
+2. **"por capítulo" não existe para GRIFO em lugar nenhum.** O filtro por leitura alcança só a
+   anotação do dia: o `readingKeyOf` devolve `null` para `HIGHLIGHT`, porque o ADR 0004 decidiu
+   (bem) que o grifo não depende de um dia do plano. O capítulo de um grifo mora na
+   `reference` ("Cap. 12"), e **nem o filtro nem a busca a tocam** — há teste de contrato que
+   **pina** que a busca não a casa. "Os grifos do capítulo 3" não tem como ser pedido.
+   É lacuna de produto que **ninguém havia nomeado** em nove fatias.
+
+**O que o MVP 2 entregou além da frase:** a rota de membros do clube (**26a**, inserida), que
+fechou a **pergunta 1 do MVP 1** — o filtro diz o nome e o avatar diz quem escreveu. E a
+**Tarefa 26 não custou uma linha de código**: o escopo dela já estava entregue pelas Tarefas
+10 e 11, medido nas quatro camadas antes de qualquer executor ser despachado.
+
+⚠️ **O que continua FORA, e é decisão pendente do MVP 1:** abrir o app **sem rede** (cache de
+leitura) — a **pergunta 5** do MVP 1, sem resposta. A regra do fechamento era não entrar sem
+ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
 
 ---
 

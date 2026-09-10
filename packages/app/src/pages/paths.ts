@@ -112,6 +112,40 @@ export function acervoPath(bookId: string): string {
 }
 
 /**
+ * A BUSCA NO ACERVO DO CLUBE (Tarefa 29) — decisão D.
+ *
+ * ⚠️ **TELA PRÓPRIA, E NÃO UM CAMPO NO ACERVO DO LIVRO.** O acervo é de
+ * **livro** (`/books/:bookId/acervo`), e um campo de busca lá seria uma busca
+ * dentro daquele livro — que é o que as quatro dimensões de recorte da Tarefa 28
+ * já fazem melhor, no cliente e sem ida ao servidor. O `BACKLOG` diz "acervo do
+ * **clube**", e é isso que não existia: a pergunta desta tela é *"onde está esta
+ * palavra"*, atravessando **todos** os livros.
+ *
+ * ⚠️ **SEM `:clubId` NO ENDEREÇO, ao contrário de `/clubs/:clubId/books/new`.**
+ * O clube é o **ativo do cabeçalho** (`useActiveClub`), como na home: quem troca
+ * de clube no seletor espera que a busca acompanhe, e um `clubId` no caminho
+ * criaria dois donos de "em qual clube estou" — o seletor e a URL — que
+ * divergem no primeiro toque. O preço é que o endereço não é compartilhável
+ * entre clubes; a home tem exatamente o mesmo preço, pela mesma razão.
+ *
+ * ⚠️ **E O SEGMENTO É PORTUGUÊS**, como o `/acervo` da Tarefa 28 e pela mesma
+ * razão: `CLAUDE.md` manda rotas em inglês, e a exceção declarada é o nome que o
+ * **produto** usa para a coisa — é o endereço que a pessoa vê e compartilha. O
+ * CÓDIGO continua em inglês (`SEARCH_PATH`, `searchPath`, `BuscaPage` é o único
+ * nome de componente que segue o arquivo).
+ *
+ * Ele mora AQUI, e não na tela da busca, pelo motivo do docblock deste arquivo:
+ * a home linka para a busca, e a busca linka para as telas de anotação e de
+ * grifo. Com as constantes num módulo sem dependência, nenhuma das telas importa
+ * a outra e o ciclo que a auditoria da Tarefa 20 mediu não existe.
+ */
+export const SEARCH_PATH = '/busca';
+
+export function searchPath(): string {
+  return SEARCH_PATH;
+}
+
+/**
  * REGRA 1 (Tarefa 20) — QUEM ADMINISTRA **AQUELE** CLUBE.
  *
  * O papel vem do `/me`, **por clube**, e é por isso que esta função recebe o

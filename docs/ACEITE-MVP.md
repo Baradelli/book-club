@@ -224,8 +224,278 @@ _(a preencher)_
 
 ---
 
-# MVP 2 — a preparar
+# MVP 2 — em aceite
 
-A seção de aceite do MVP 2 nasce **no fechamento do MVP 1**, a partir das respostas acima. O
-escopo previsto (`docs/BACKLOG.md`): grifos como entidade própria, o filtro completo, a tela de
-acervo e a busca por texto.
+**Estado:** as **nove** tarefas do MVP 2 estão entregues e verdes — 22, 23, 24, 25, 26, **26a**
+(inserida), 27, 28 e 29. Contagens: **413** em `shared` · **195** em `ui` · **1307** no
+`backend` unitários · **600** no `app`, mais **386** de integração. Falta o seu aceite.
+
+**A definição, do `docs/BACKLOG.md`:** *"Eu registro tudo que grifei — trecho, cor, página e meu
+comentário — e vejo a coleção de grifos do livro filtrada por cor e por pessoa. E em qualquer
+listagem eu filtro por pessoa, por tipo de anotação (do dia × avulsa), por capítulo e por
+texto."*
+
+⚠️ **Dois pedaços dessa frase NÃO estão cumpridos, e estão medidos** — são as perguntas **3** e
+**4** abaixo. Eu não os escondi na entrega e não os implementei por conta própria: são decisão
+sua.
+
+## O que mudou desde o MVP 1, em uma linha cada
+
+- **O grifo existe** — entidade própria, com tabela, rotas e tela: trecho, cor da caneta,
+  página e comentário no mesmo editor.
+- **O acervo do livro existe** — anotações e grifos numa lista só, filtrável por pessoa, tipo,
+  leitura e cor. E a tela do livro voltou a ser **só o plano**.
+- **O filtro diz o NOME** (`Tudo · Minhas · De Maria`), com avatar — era a **pergunta 1 do
+  MVP 1**, e ela está fechada.
+- **A busca por texto existe**, no clube inteiro, em qualquer livro.
+
+---
+
+## A. O roteiro de aceite
+
+Marque o que funcionou. O que falhar, escreva **o que você viu**, não o que acha que é.
+
+### A.1 — O circuito do MVP 2, no celular (o teste que decide)
+
+Abra pelo IP da máquina (`pnpm dev:app -- --host`) e faça **nesta ordem**:
+
+- [ ] Pego o livro que estou lendo de papel, grifo uma frase, e **registro** no app: trecho,
+      cor, página e um comentário → `COMO-TESTAR.md` §5.2.
+- [ ] O grifo aparece no **acervo do livro**, com a cor e a página → §6.2.
+- [ ] Registro um grifo **sem comentário** e ele fica coerente na lista (sem área de comentário
+      vazia).
+- [ ] Ela registra um grifo dela; eu recarrego e vejo **o nome dela** na linha.
+- [ ] No acervo, o filtro **`De <nome dela>`** mostra só o que ela escreveu — anotação **e**
+      grifo.
+- [ ] Filtro por **cor** funciona, e o grupo de cor **desaparece** quando eu escolho "Do dia"
+      ou "Avulsa".
+- [ ] Filtro por **leitura** mostra só as anotações daquele dia — e as avulsas e os grifos
+      **saem**, porque não pertencem a um dia.
+- [ ] **Busco uma palavra** que eu escrevi num grifo de outro livro, e a busca acha, dizendo de
+      qual livro é → §6.3.
+
+> Os quatro últimos itens são o produto do MVP 2. Se funcionarem no celular, a fase fez o que
+> foi feita para fazer.
+
+### A.2 — O que eu preciso que você provoque (é onde eu erraria)
+
+- [ ] **Acervo vazio × filtro sem resultado.** As duas frases têm de ser **diferentes**. Se
+      forem iguais, é bug.
+- [ ] **Trocar o tipo com uma cor escolhida** — a cor tem de ser descartada, não ficar um
+      recorte invisível.
+- [ ] **Arquivar um grifo:** pede confirmação, cancelar **não** faz nada, confirmar tira da
+      lista e ele **não volta** ao recarregar.
+- [ ] **O grifo dela** não tem botão de corrigir nem de arquivar. Em lugar nenhum.
+- [ ] **Buscar uma letra só** — nada deve ser pedido ao servidor (não há como você ver isso na
+      tela; se a busca parecer "travada" com uma letra, é isso, e é de propósito).
+- [ ] **Desligar a rede** no acervo e no `/busca`: erro com "tentar de novo", e repetir tem de
+      **funcionar**.
+
+### A.3 — O que eu preciso que você olhe (não é bug, é gosto)
+
+- [ ] **As cinco cores no celular.** Elas são as mesmas do grifo do editor, de propósito. Dá
+      para distinguir as cinco na lista? O nome ao lado da bolinha ajuda ou atrapalha?
+- [ ] **O acervo com 30 dias de anotação + grifos.** A lista fica longa; os filtros dão conta,
+      ou falta alguma coisa?
+- [ ] **O seletor de leitura** (o campo com os dias do plano). Ele é um `<select>` do sistema, e
+      não chips, porque 30 chips não caberiam. No seu celular ele é usável?
+- [ ] **Qualquer frase estranha, errada ou em inglês.** Em especial mensagem de programador
+      (`Bad Request`, `Unexpected…`, uma chave como `errors.algo`). **Isso é bug** — me diga o
+      texto exato e a tela.
+
+### A.4 — O que continua valendo do MVP 1
+
+O roteiro do MVP 1 (seção anterior) **não** foi substituído: o editor, o autosave, a escrita sem
+conexão e o convite continuam sendo o que eles eram. Se você ainda não rodou aquele roteiro,
+rode-o primeiro — um defeito lá é mais grave que qualquer coisa daqui.
+
+---
+
+## B. As perguntas — o que só você decide
+
+Responda na linha **Resposta:** de cada uma. "Concordo" já basta quando a recomendação servir.
+
+### 1. A busca deve achar "coracao" quando você escreveu "coração"?
+
+**Como está:** **não acha.** A busca ignora **maiúscula** e respeita **acento**: `coracao` não
+encontra "coração", e o contrário também não.
+
+**Por quê:** é a decisão fechada do MVP 2 ("busca é `ILIKE` no `plainText`/`commentText`"), e
+`ILIKE` do Postgres é exatamente assim. Está pinado por teste **contra o banco** desde a
+Tarefa 11, e a 29 acrescentou o mesmo pino no lado do grifo, nas duas colunas. Confirmado por
+consulta na auditoria: `'coração' ILIKE '%coracao%'` é **falso**; `'CORAÇÃO' ILIKE '%coração%'`
+é **verdadeiro**.
+
+**O que muda:** ligar a extensão `unaccent` do Postgres. São três coisas, e nenhuma é pequena:
+um comando de banco que o Prisma **não** gera sozinho (e o `CLAUDE.md` proíbe SQL de migration
+escrito à mão), um **índice funcional** para a busca não virar varredura de tabela, e um **ADR**,
+porque muda uma decisão fechada. **É fatia própria.**
+
+**Alternativas piores:** normalizar no cliente não funciona (o acervo do clube não está na
+tela); guardar uma coluna "sem acento" espelhada resolve sem extensão, mas cria uma segunda
+cópia de todo texto do clube para manter em dia em toda escrita.
+
+**Contra mudar:** quem digita em teclado português escreve o acento naturalmente, e o teclado do
+celular sugere. **A favor:** quem busca com pressa não escreve — e a busca vazia parece "não
+existe" e não "escrevi diferente". Hoje a tela mitiga isso na frase do estado sem resultado,
+que é honesta mas é remendo de texto.
+
+**Recomendação:** **fatia própria no MVP 3**, se a busca virar hábito. Se você usar a busca
+muito no celular, ela sobe de prioridade.
+
+**Resposta:**
+
+### 2. A busca de grifo deve casar o trecho grifado, ou só o comentário?
+
+**Como está:** **casa os dois** — o trecho grifado (`quote`) **ou** o comentário. A referência
+("Cap. 12") fica de fora, de propósito.
+
+**Por quê, e é uma decisão que eu tomei no seu lugar:** a decisão fechada do MVP 2 nomeia os
+campos **derivados** de cada coisa e **não menciona o trecho**. Mas o trecho **é** o conteúdo do
+grifo — o ADR 0004 o chama de "o trecho grifado", e o comentário é o que você achou dele. Uma
+busca de grifos que ignore o trecho **não acha a frase que você grifou**, que é o caso de uso
+inteiro. Li a decisão fechada como sendo sobre o **mecanismo** (`ILIKE`, nada de vetor), não uma
+lista exaustiva de campos.
+
+**E o custo de fazer o contrário está medido:** com só o comentário, um grifo **sem comentário**
+fica **inalcançável pela busca** — para sempre. A auditoria provou em dois passos: um grifo sem
+comentário guarda string **vazia** (não nulo), e `'' ILIKE '%qualquer%'` é falso no Postgres. E
+grifo sem comentário é caso legítimo e comum.
+
+**Recomendação:** **manter os dois.** Se você discordar, o conserto é pequeno e localizado: uma
+cláusula a remover.
+
+**Resposta:**
+
+### 3. ⚠️ "Em qualquer listagem eu filtro… por texto" não é verdade. Qual das duas metades você quer?
+
+**Como está:** existem **duas** telas de listagem, e cada uma tem metade do filtro:
+
+- o **acervo do livro** (`/books/:id/acervo`) filtra por **pessoa, tipo, leitura e cor** — e
+  **não** tem campo de texto;
+- a **busca** (`/busca`) filtra por **texto** no clube inteiro — e **não** tem os outros quatro.
+
+Ou seja: as quatro dimensões e o texto **nunca coexistem** numa listagem, e a frase de aceite do
+MVP 2 promete que sim.
+
+**Por quê:** cada metade foi decidida por um motivo defensável — o acervo recorta no cliente o
+que já está carregado (dois pedidos, zero por toque de chip), e a busca pergunta ao servidor
+porque o acervo do **clube** não está em tela nenhuma. Juntar as duas exigiria escolher: ou a
+busca ganha os quatro filtros (e passa a recortar no cliente o que o servidor já filtrou), ou o
+acervo ganha um campo de texto (e aí ele filtra por texto **só naquele livro**).
+
+**O bom da notícia:** a segunda opção ficou **barata**. O filtro `text` já existe em **todas** as
+camadas dos **dois** recursos — port, fake, UseCase, repositório Prisma, borda e integração —,
+e o acervo já tem o lugar para o campo. É uma fatia curta de tela.
+
+**Recomendação:** **um campo de texto no acervo do livro**, e a busca do clube continua como
+está. Motivo: "achar o que escrevemos neste livro" é o caso frequente, e "achar em qualquer
+livro" é o raro — e é assim que as duas telas param de competir.
+
+**Resposta:**
+
+### 4. ⚠️ "Por capítulo" não existe para grifo, em lugar nenhum
+
+**Como está:** o filtro por **leitura** (o dia do plano) alcança **só a anotação do dia**. O
+grifo não pertence a um dia do plano — ele pertence a uma **página** e, se você escreveu, a uma
+**referência** livre ("Cap. 12"). E **nada** filtra nem busca por essa referência: há um teste
+que **pina** que a busca não a toca.
+
+Então "os grifos do capítulo 3" não tem como ser pedido hoje.
+
+**Por quê:** foi decisão do ADR 0004 o grifo não depender de um dia de leitura — e ela é boa (é
+o que permite registrar um grifo num dia em que você não escreveu nada). O efeito colateral é
+que o eixo "capítulo" existe para anotação e **não** existe para grifo, e ninguém tinha nomeado
+isso até a auditoria da última fatia.
+
+**As alternativas:**
+- **(a)** deixar como está, e o capítulo do grifo continua sendo texto livre que você lê na
+  linha;
+- **(b)** a **busca** passar a casar a referência também — barato, mas faz uma busca por
+  "capítulo" devolver o clube inteiro (foi por isso que eu a deixei de fora);
+- **(c)** um filtro por **faixa de página** no acervo (`p. 40–60`) — o campo `page` já está no
+  banco e a rota já aceita filtro por página exata; a faixa é aditiva;
+- **(d)** o grifo ganhar vínculo opcional com o dia do plano — o ADR 0004 já registra que o
+  campo seria aditivo, mas é modelo novo e migration.
+
+**Recomendação:** **(c)**, se e quando você sentir falta. É a única que fala a língua do grifo
+(página), em vez de forçar o vocabulário da anotação (dia de leitura) sobre ele.
+
+**Resposta:**
+
+### 5. Você quer o número de resultados na tela?
+
+**Como está:** **não existe contador** em lugar nenhum — nem "12 anotações", nem "3 resultados".
+
+**Por quê:** o princípio do projeto é **incentivo por presença, não por comparação** (§1 do
+plano), e um número ao lado de um nome convida a comparar quem escreveu mais. Hoje existe um
+**teste que proíbe** qualquer forma de contador na tela, e ele já pegou tentativas.
+
+**O custo de não ter:** a busca traz no máximo 500 anotações e 500 grifos por consulta e **não
+avisa** se cortou — sem contador, não há como dizer "mostrando 500 de muitos". Para o clube de
+duas pessoas isso é cerca de **oito meses** de anotação do dia; para **grifo**, se você grifa 5
+trechos por dia, é **~3 meses**. O conserto honesto não é o contador: é o **servidor** dizer que
+truncou, e isso é mudança de contrato da API.
+
+**Recomendação:** **manter sem contador.** Se você quiser o número, é uma decisão sua e eu
+relaxo a guarda — mas diga explicitamente, porque hoje ela está lá de propósito.
+
+**Resposta:**
+
+### 6. A barra do editor está só em português. Isso conserta agora ou espera você?
+
+**Como está:** trocar o idioma para inglês traduz o app inteiro **menos** os rótulos dos botões
+do editor ("Negrito", "Citação", "Grifo amarelo") e os do menu `/`. São **33 textos** cravados
+em `packages/ui`, medidos, e existe um teste que impede esse número de **crescer**.
+
+**Por quê não consertei:** o conserto é conhecido e não é caro (o editor recebe os rótulos por
+prop, como os outros componentes já fazem). Mas ele depende da **pergunta 7 do MVP 1**, que
+continua sem resposta: *"manter o inglês?"*. Se a resposta for **não**, o certo é **apagar** o
+segundo catálogo — e as 32 entradas novas que esse conserto criaria seriam trabalho na direção
+oposta à sua decisão.
+
+**Recomendação:** responda a pergunta 7 do MVP 1 primeiro. Se o inglês fica, esta é uma fatia
+curta; se sai, o conserto é deletar.
+
+**Resposta:**
+
+### 7. Alguma coisa que você esperava do MVP 2 e não está aqui?
+
+Foi a pergunta mais útil do aceite do MVP 1. Depois de usar os grifos e o acervo de verdade — o
+que falta?
+
+**Resposta:**
+
+---
+
+## C. As perguntas do MVP 1 que continuam sem resposta
+
+Elas **afetaram** o MVP 2 e eu segui com o padrão conservador, sem decidir no seu lugar:
+
+- **Pergunta 1** (filtro por pessoa e o nome de quem escreveu) — **FECHADA pelo MVP 2**: a
+  Tarefa 26a criou a rota e a 27 pôs o nome no chip e no avatar.
+- **Pergunta 5** (abrir o app sem rede — cache de leitura) — **continua aberta, e o MVP 2 não a
+  fez.** A regra do fechamento era: se não houver resposta, não entrar. A escrita sobrevive à
+  falta de rede; a leitura, não. ⚠️ **Isto é hoje a coisa mais valiosa que está de fora**, e a
+  recomendação do MVP 1 continua valendo: se vocês leem em transporte público, ela vem antes de
+  qualquer coisa do MVP 3.
+- **Pergunta 2** (entra mais gente no clube?) — o MVP 2 assumiu **"duas hoje, mais amanhã"**:
+  nada na estrutura assume duas (o filtro por pessoa é por membro, com nome), e o texto de
+  interface continua simples enquanto forem duas.
+- **Perguntas 3, 4, 6, 7 e 8** — sem resposta, e nenhuma bloqueou o MVP 2. A **7** virou a
+  pergunta **6** desta seção.
+
+---
+
+## D. Considerações do dono
+
+> Texto livre. O que te incomodou, o que te surpreendeu, o que você mudaria.
+
+_(a preencher)_
+
+---
+
+## E. Veredito
+
+- [ ] **MVP 2 fechado** — data: ____
+- [ ] Pendências que entram no MVP 3: ____

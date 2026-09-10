@@ -649,6 +649,232 @@ describe('HighlightRepositoryFake', () => {
       expect(ids(found)).toEqual(['sem-pagina']);
     });
 
+    /**
+     * ⚠️ **REGRA 2 DA TAREFA 29 — o `text` casa `quote` OU `commentText`, e os
+     * QUATRO casos estão aqui.**
+     *
+     * A decisão fechada do MVP 2 nomeia os campos **derivados** de cada
+     * entidade e **não** menciona o `quote` — mas o `quote` é o **conteúdo** do
+     * grifo (o ADR 0004 o chama de "o trecho grifado"; o comentário é o que a
+     * pessoa achou dele), e uma busca que o ignore não acha *a frase que a
+     * pessoa grifou*, que é o caso de uso inteiro ("qual era aquela frase do
+     * capítulo 3?"). É a **decisão A** da Tarefa 29, e está **registrada como
+     * pergunta do dono** na spec da Tarefa 29: se ele discordar, é uma coluna
+     * a remover na chamada do `matchesText`.
+     *
+     * Os quatro casos existem porque cada um mata um mutante diferente:
+     * "só o `quote`" (o mais provável, porque é a coluna que a decisão fechada
+     * não nomeia), "só o `commentText`" (o desenho literal da decisão fechada),
+     * "nos dois" (que sozinho não distingue nada) e "em nenhum" — sem o último,
+     * um `find` que devolvesse tudo passaria nos três primeiros.
+     */
+    describe('the text filter (task 29, rules 1 to 3)', () => {
+      /** O termo mora SÓ no trecho grifado. */
+      const IN_QUOTE = 'esmeralda';
+      /** O termo mora SÓ no comentário. */
+      const IN_COMMENT = 'penumbra';
+
+      /**
+       * ⚠️ Fixture com as duas colunas escritas EXPLICITAMENTE, e o comentário
+       * pelo `aDoc` — nunca um `commentText` cravado à mão: ele é DERIVADO do
+       * `commentDoc` no backend (ADR 0001), e um fixture com as duas pontas em
+       * desacordo afirmaria uma regra que a produção não tem (§7.1).
+       */
+      function aSearchable(
+        id: string,
+        quote: string,
+        comment: string,
+      ): Highlight {
+        return aClubHighlight({ id, quote, commentDoc: aDoc(comment) });
+      }
+
+      beforeEach(async () => {
+        await highlights.save(
+          aSearchable('so-no-trecho', `a ${IN_QUOTE} do anel`, 'sem o termo'),
+        );
+        await highlights.save(
+          aSearchable(
+            'so-no-comentario',
+            'um trecho qualquer',
+            `a ${IN_COMMENT} do vale`,
+          ),
+        );
+        await highlights.save(
+          aSearchable(
+            'nos-dois',
+            `a ${IN_QUOTE} do anel`,
+            `a ${IN_QUOTE} outra vez`,
+          ),
+        );
+        await highlights.save(
+          aSearchable('em-nenhum', 'um trecho qualquer', 'sem o termo'),
+        );
+      });
+
+      it('matches the quote, which the closed decision does not name', async () => {
+        const found = await highlights.find({
+          clubId: CLUB_ID,
+          text: IN_QUOTE,
+        });
+
+        expect(ids(found).sort()).toEqual(['nos-dois', 'so-no-trecho']);
+      });
+
+      it('matches the commentText', async () => {
+        const found = await highlights.find({
+          clubId: CLUB_ID,
+          text: IN_COMMENT,
+        });
+
+        expect(ids(found)).toEqual(['so-no-comentario']);
+      });
+
+      // "Em nenhum dos dois" — sem este lado, um `find` que ignorasse o `text`
+      // passaria nos dois testes acima.
+      it('matches neither column when the term is in neither', async () => {
+        await expect(
+          highlights.find({ clubId: CLUB_ID, text: 'inexistente' }),
+        ).resolves.toEqual([]);
+      });
+
+      // O quarto caso, e ele é a precondição dos três: os quatro grifos estão
+      // lá, e `text` ausente não recorta nada.
+      it('does not filter at all when the text is absent', async () => {
+        const found = await highlights.find({ clubId: CLUB_ID });
+
+        expect(ids(found)).toHaveLength(4);
+      });
+
+      // Regra 1 — `ILIKE` compara sem olhar caixa, e a caixa pode divergir dos
+      // DOIS lados: na consulta e no texto gravado.
+      it.each(['ESMERALDA', 'esmeralda', 'EsMeRaLdA'])(
+        'matches the quote case-insensitively when the query is %s',
+        async (text) => {
+          const found = await highlights.find({ clubId: CLUB_ID, text });
+
+          expect(ids(found).sort()).toEqual(['nos-dois', 'so-no-trecho']);
+        },
+      );
+
+      it('matches a lowercase query against an uppercase quote', async () => {
+        await highlights.save(
+          aSearchable('grito', 'A ESMERALDA GRITADA', 'sem o termo'),
+        );
+
+        const found = await highlights.find({
+          clubId: CLUB_ID,
+          text: 'esmeralda',
+        });
+
+        expect(ids(found).sort()).toEqual([
+          'grito',
+          'nos-dois',
+          'so-no-trecho',
+        ]);
+      });
+
+      /**
+       * ⚠️ **REGRA 3 — ACCENT-SENSITIVE, e é a 3ª aparição da tabela do §7.1.**
+       *
+       * `'coração' ILIKE '%coracao%'` é **falso** no Postgres. Um fake que
+       * normalizasse acento seria infiel na direção **PERMISSIVA**: este teste
+       * ficaria verde e a busca real não acharia nada.
+       *
+       * ⚠️ **E ISTO É DECISÃO FECHADA, NÃO PENDÊNCIA.** A decisão do MVP 2 diz
+       * `ILIKE`, e o irmão deste teste contra o **Postgres** existe desde a
+       * Tarefa 11 no lado da nota (`matches case but not accent`) e desde a
+       * Tarefa 29 no lado do grifo. Busca sem acento exige a extensão
+       * `unaccent` + índice funcional + ADR, é **fatia própria**, e está
+       * **registrada como pergunta do dono** na spec da Tarefa 29. Não
+       * conserte aqui.
+       */
+      it.each([
+        ['coracao', 'coração'],
+        ['coração', 'coracao'],
+      ])(
+        'does not match the query %s against the stored %s, just like ILIKE',
+        async (text, stored) => {
+          await highlights.save(
+            aSearchable('acento', `o ${stored} do anao`, 'sem o termo'),
+          );
+
+          await expect(
+            highlights.find({ clubId: CLUB_ID, text }),
+          ).resolves.toEqual([]);
+        },
+      );
+
+      // Regra 3, o lado POSITIVO: a caixa continua sendo dobrada NO caractere
+      // acentuado (`Ç` acha `ç`). Sem ele, um fake que só comparasse ASCII
+      // passaria no de cima por acidente.
+      it('matches an accented word when the query carries the same accent', async () => {
+        await highlights.save(
+          aSearchable('acento', 'o coração do anao', 'sem o termo'),
+        );
+
+        const found = await highlights.find({
+          clubId: CLUB_ID,
+          text: 'CORAÇÃO',
+        });
+
+        expect(ids(found)).toEqual(['acento']);
+      });
+
+      // E o mesmo acento no COMENTÁRIO, senão a fidelidade valeria para uma
+      // coluna só — que é exatamente o defeito que a decisão A cria espaço para.
+      it('is accent-sensitive in the commentText too, not only in the quote', async () => {
+        await highlights.save(
+          aSearchable(
+            'acento-comentario',
+            'um trecho qualquer',
+            'o coração dela',
+          ),
+        );
+
+        await expect(
+          highlights.find({ clubId: CLUB_ID, text: 'coracao' }),
+        ).resolves.toEqual([]);
+        // A precondição que dá dente à asserção: COM o acento, ele é achado.
+        expect(
+          ids(await highlights.find({ clubId: CLUB_ID, text: 'coração' })),
+        ).toEqual(['acento-comentario']);
+      });
+
+      /**
+       * ⚠️ **REGRA 1 — `%`, `_` e `\` são LITERAIS no contrato do port**, e este
+       * é o lado do fake.
+       *
+       * Aqui a propriedade é trivial (para uma `String.includes` eles já são
+       * literais) e é justamente por isso que ela **não** se prova aqui: o bug
+       * é invisível em memória. Quem a prova é o **teste de contrato** contra o
+       * Postgres, onde `%` e `_` são curinga de verdade
+       * (`prisma-highlight-repository.contract.integration.test.ts`,
+       * `treats % and _ in the text query as literal characters`) — e é o
+       * `toLikePattern` de `repositories/like-pattern.ts` que os escapa, uma vez
+       * para os dois repositórios.
+       *
+       * Este teste existe para o contrato do port ficar **afirmado nos dois
+       * lados**: um fake que passasse a interpretar curinga divergiria do
+       * Postgres escapado, e a divergência ficaria verde (§7.10 — a afirmação
+       * de indecidibilidade vem com o endereço da prova).
+       */
+      it('treats % and _ in the text as literal characters, like the escaped ILIKE does', async () => {
+        await highlights.save(
+          aSearchable('curinga', 'o a_b e o 100% do plano', 'sem o termo'),
+        );
+        await highlights.save(
+          aSearchable('quase', 'o axb e o 100 do plano', 'sem o termo'),
+        );
+
+        expect(
+          ids(await highlights.find({ clubId: CLUB_ID, text: 'a_b' })),
+        ).toEqual(['curinga']);
+        expect(
+          ids(await highlights.find({ clubId: CLUB_ID, text: '100%' })),
+        ).toEqual(['curinga']);
+      });
+    });
+
     // Cada grifo erra em UM filtro só, então cada filtro que deixasse de ser
     // aplicado traria um grifo a mais.
     it('combines every filter with AND', async () => {
@@ -667,7 +893,22 @@ describe('HighlightRepositoryFake', () => {
       await highlights.save(
         aClubHighlight({ id: 'wrong-page', page: OTHER_PAGE }),
       );
-      await highlights.save(aClubHighlight({ id: 'the-one' }));
+      // ⚠️ O `text` entra no AND como qualquer outro filtro: este grifo tem o
+      // termo em nenhuma das duas colunas de conteúdo.
+      await highlights.save(
+        aClubHighlight({
+          id: 'wrong-text',
+          quote: 'nada a ver',
+          commentDoc: aDoc('nada a ver também'),
+        }),
+      );
+      await highlights.save(
+        aClubHighlight({
+          id: 'the-one',
+          quote: 'a esmeralda do anel',
+          commentDoc: aDoc('vale o que custa'),
+        }),
+      );
 
       const found = await highlights.find({
         clubId: CLUB_ID,
@@ -675,6 +916,7 @@ describe('HighlightRepositoryFake', () => {
         authorId: AUTHOR_ID,
         color: YELLOW,
         page: PAGE,
+        text: 'esmeralda',
       });
 
       expect(ids(found)).toEqual(['the-one']);

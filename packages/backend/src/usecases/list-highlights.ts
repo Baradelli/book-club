@@ -1,6 +1,7 @@
 import type { HighlightColor } from '@clube/shared';
 
 import type { Highlight } from '../domain/highlight';
+import { optionalText } from '../domain/optional-text';
 import type { AssertMembership } from './assert-membership';
 import type { HighlightRepository } from './ports/highlight-repository';
 
@@ -25,6 +26,14 @@ export interface ListHighlightsInput {
    * aditiva e ninguém pediu.
    */
   page?: number;
+  /**
+   * A BUSCA POR TEXTO (Tarefa 29): `ILIKE` no `quote` **ou** no `commentText`
+   * (decisão A). Vazio ou só espaços = **não filtra**.
+   *
+   * O contrato inteiro — as duas colunas, os curingas literais e o acento
+   * significativo — está no `HighlightFilter.text` do port.
+   */
+  text?: string;
 }
 
 export type ListHighlightsOutput = Highlight[];
@@ -61,6 +70,19 @@ export class ListHighlights {
       clubId: input.clubId,
     });
 
+    /*
+      O MESMO `optionalText` do `listNotes` (e do livro, e do item do plano):
+      `''`/espaços viram `null`, o resto vem sem as pontas. A normalização é
+      DAQUI e não do repositório — mandar `'   '` adiante filtraria por três
+      espaços, e um campo de busca em que apertar espaço esconde o acervo é pior
+      que nenhum.
+
+      ⚠️ E quem prova que o `text` chega **decidido** é o `findFilters` do fake,
+      não o resultado (§7.3): num acervo pequeno, "não mandou o `text`" e
+      "mandou `'   '` e o repositório o ignorou" devolvem o MESMO array.
+    */
+    const text = optionalText(input.text);
+
     const found = await this.highlights.find({
       // Primeiro e não-negociável: o corte de tenant. Todo o resto entra em AND
       // com ele, e nenhum filtro o substitui.
@@ -73,6 +95,9 @@ export class ListHighlights {
       ...(input.authorId === undefined ? {} : { authorId: input.authorId }),
       ...(input.color === undefined ? {} : { color: input.color }),
       ...(input.page === undefined ? {} : { page: input.page }),
+      // `text === null` é "não filtra" — a saída do `optionalText`, e a chave
+      // fica OMITIDA como as outras.
+      ...(text === null ? {} : { text }),
       // Arquivado é invisível, inclusive para o autor: não há tela de
       // arquivados (é MVP 4), e não há flag para pedi-los — flag sem chamador é
       // especulação. O corte é do REPOSITÓRIO de propósito: filtrar depois
