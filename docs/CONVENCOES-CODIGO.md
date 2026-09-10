@@ -231,6 +231,29 @@ só `Unexpected response body`.
 
 ---
 
+### 6.9 Crescer um port põe o `typecheck` no vermelho em arquivos ALHEIOS — e isso restringe a ordem das unidades
+
+Medido na Tarefa 26a: acrescentar **um** método (`findByClub`) ao `MembershipRepository` e
+rodar `pnpm -r typecheck` **sem** implementá-lo no repositório Prisma dá **16 erros em 9
+arquivos** — `TS2420` na classe que deixou de satisfazer a interface, e `TS2345` em **sete
+arquivos de rota que não têm nada a ver com a fatia** (`book`, `club`, `highlight`, `invite`,
+`me`, `note`, `public`), porque cada um passa a instância a um UseCase que espera o port.
+
+A consequência é de **processo**, e é o que interessa: a regra "ao fim de cada unidade o disco
+fica consistente e **verde**" é **incompatível** com "primeiro o port + o fake, depois o
+UseCase, depois o Prisma". Quem cresce um port entrega o **port e a implementação Prisma na
+mesma unidade** (ou o Prisma primeiro), senão o repositório fica vermelho por duas ou três
+unidades e o TDD perde o sinal — um vermelho de compilação em sete arquivos alheios esconde
+exatamente o vermelho de teste que a unidade deveria estar mostrando.
+
+O TDD **não** se perde por isso: ele continua dentro da unidade (o teste de contrato vem
+primeiro, com o vermelho `TypeError: repo.findByClub is not a function` confirmado, e só então
+a implementação). O que muda é a granularidade das unidades, não a ordem teste→código.
+
+⚠️ **E o fake não substitui a implementação real nessa conta.** O fake satisfazer a interface
+não conserta o `TS2420` da classe Prisma: são duas implementações do mesmo port, e a que as
+rotas usam é a de produção.
+
 ## 7. Convenções de fake e de teste
 
 Registradas aqui, e não em docstring de arquivo de teste, porque **é isso que as torna

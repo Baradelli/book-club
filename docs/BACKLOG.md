@@ -1126,22 +1126,133 @@ Sem grifos em tela própria (MVP 2), sem marcar "li", sem feed e sem notificaç�
       _**Nenhum gate foi rodado para esta linha** — não houve mudança. As contagens do momento
       em que ela foi conferida são as da Tarefa 25: 391 · 182 · 1266 · 536, e 359 de
       integração._
-- [ ] **26a** — `GET /clubs/:clubId/members` (id, nome, papel, status), com o corte de tenant
-      de sempre. **Fatia INSERIDA pelo orquestrador do MVP 2**, antes da 27. → _a detalhar_
-      _**Por que ela existe:** a 27 pede filtro **por pessoa**, e ele **não é implementável**
-      sem esta rota — a lacuna está medida e registrada três vezes no MVP 1 (linhas 17, 18 e
-      19). Medido de novo agora: o `MembershipRepository` tem só `save · byUserAndClub ·
-      findByUser`, **não existe `findByClub`**; o `/me` traz só os **meus** clubes; e as notas
-      e a sobreposição de autoria trazem `userId`, nunca nome. Por isso o filtro entregue na
-      19 é `Tudo · Minhas · De outras pessoas` e a nota alheia aparece como "Alguém do clube".
-      Resolve **duas** coisas de uma vez: o chip `de <nome>` e o avatar passar a dizer quem
-      escreveu. É a pergunta 1 do `docs/ACEITE-MVP.md`, cuja recomendação era exatamente
-      "fazer no início do MVP 2"._
-      _**Ela antecipa parte da linha 41 (MVP 4)**, que lista `/clubs/:clubId/members` junto das
-      rotas `/admin/*`. A 41 continua com os UseCases de gerência (`changeMemberRole`,
-      `removeMember`); só a **leitura** da lista vem para cá._
-      _⚠️ **Medido:** `User.name` é **anulável** no schema (`name String?`), então a resposta
-      carrega `name: string | null` e a tela precisa de fallback — não dá para supor nome._
+- [x] **26a** — `GET /clubs/:clubId/members` (id, nome, papel, status), com o corte de tenant
+      de sempre. **Fatia INSERIDA pelo orquestrador do MVP 2**, antes da 27.
+      → `tasks/26a-rota-membros-do-clube.md`
+      _**O CLUBE GANHOU NOMES.** Entregue: `MembershipRepository.findByClub`, o UseCase
+      `listClubMembers`, o repositório Prisma com contrato, os schemas Zod em `shared`, a rota
+      e o teste de integração do corte de tenant. **404 shared** (era 391) **+ 182 ui**
+      (intocado) **+ 1287 backend** (era 1266) **+ 536 app** (intocado); **integração 367**
+      (era 359). Nenhuma migration — o `Membership` já tinha tudo._
+      _**Por que ela existe:** a 27 pede filtro **por pessoa**, e a lacuna estava medida e
+      registrada **três vezes** no MVP 1 (linhas 17, 18 e 19) — é a **pergunta 1** do
+      `ACEITE-MVP.md`, cuja recomendação era "fazer no início do MVP 2". Medido de novo antes
+      de escrever a spec: o `MembershipRepository` tinha só `save · byUserAndClub · findByUser`._
+      _**⚠️ A DECISÃO QUE O ADR 0002 DECIDE, e a consequência de produto que ninguém tinha
+      escrito: a rota devolve `ACTIVE` E `ARCHIVED`.** A última linha do ADR é *"sair do clube
+      arquiva o `Membership`, mas **não** apaga o que a pessoa escreveu: o acervo do clube
+      continua íntegro, **com autoria**"* — e autoria sem nome é anonimato, que é exatamente a
+      lacuna desta fatia. Medido: filtrar só `ACTIVE` no UseCase dá **1** acusador, no fake dá
+      **2** (a direção **restritiva** do §7.1 — a que costuma ficar verde — tem acusador nos
+      dois lados aqui). **A frase para a Tarefa 27:** o chip do filtro por pessoa se monta **só
+      com `status === 'ACTIVE'`**; os `ARCHIVED` existem **exclusivamente** para resolver o
+      nome de quem escreveu e saiu. E a consequência: **todo membro passa a ver quem saiu, pelo
+      nome**. É o que o ADR quer, mas significa que "sair do clube" não é "apagar-se dele" — se
+      um dia isso for pedido, é feature nova, não reinterpretação do `ARCHIVED`._
+      _**⚠️ O ACHADO ALTO era de SEIS rotas, não de uma — e um TESTE pinava a mentira.** O
+      docblock da rota afirmava que *"o Fastify nunca casa o `:clubId` vazio"*. **Casa:**
+      `GET /clubs//members` responde **400** (medido com sonda de boot **sem banco** — um
+      `Proxy` que lança em qualquer acesso ao prisma, e que **nunca disparou**, provando de
+      brinde que o 400 é da validação, antes do handler), e o OpenAPI declarava só 200/401/404.
+      A regra 11 proíbe declarar status que o handler não produz; **o inverso mente igual** — a
+      tela que lê o contrato não sabe do 400, e o front chega lá no dia em que nenhum clube
+      estiver selecionado. O executor varreu o OpenAPI inteiro em vez de conferir as duas rotas
+      que eu apontei e achou **seis** mentindo (`GET /clubs/:clubId/members`, `GET /books/:bookId`,
+      `GET /books/:bookId/writers`, `DELETE /books/:bookId`, `DELETE /notes/:noteId`,
+      `DELETE /highlights/:highlightId`) — e as três que acertavam só acertavam **por acidente**
+      (têm `querystring`, então já declaravam 400 por outro motivo). **E `book-routes.integration.test.ts`
+      tinha um teste chamado `declares exactly the statuses each handler can send` PINANDO a
+      lista errada**, com o comentário "nenhum dos dois UseCases lança `InvalidBookError` — então
+      não declaram 400": as duas premissas verdadeiras, a conclusão falsa (o 400 é da
+      **validação**, não do UseCase). A afirmação não estava só num docblock — **estava pinada em
+      asserção, o que a fazia parecer conferida**. É a pior forma da lição nº 5._
+      _**A saída foi uma VARREDURA, não seis comentários corrigidos** (§7.9: a guarda mora onde
+      a propriedade é decidível e não depende de alguém lembrar dela na rota nº 7). O
+      `server-guards.integration.test.ts` percorre **todo** o OpenAPI, injeta o param vazio em
+      cada rota que tem param e exige **"400 respondido → 400 declarado"**, com
+      **anti-vacuidade pinada** (`toBeGreaterThanOrEqual(6)`) — sem ela, o dia em que nenhuma
+      rota responder 400 o `toEqual([])` fica verde sem medir nada (§7.4). **Verificado por
+      mutação do orquestrador: apagar o `400` da rota de membros faz a varredura acusar E
+      NOMEAR a rota** (`expected [ 'GET /clubs/{clubId}/members' ] to deeply equal []`). O
+      `app.swagger()` antes/depois: só as **6** operações mudaram, e só ganhando `400`; as
+      outras **18** saíram byte-idênticas._
+      _**⚠️ O SEGUNDO ALTO: a precondição da ordem pinava LITERAIS, não o fixture** — a Tarefa
+      16 pela metade. Os **ids** estavam pinados; os **nomes** não. Medido: trocar
+      `'ana maria'` por `'Zilda'` no fixture deixava o teste `pins the preconditions that make
+      this fixture discriminate` **VERDE** (ele comparava literais), e com aquele fixture o
+      mutante `localeCompare` — que tem 1 acusador — **sobrevivia a 1286/1286**. Consertado
+      extraindo os nomes para constantes usadas **no `seedMember` e nas precondições**, mais um
+      pino novo (sem homônimas não há empate para desempatar). Agora a mutação do nome **falha**
+      (`expected 1 to be less than 0`)._
+      _**A ordem é o fixture mais forte que este projeto já produziu para ordenação** (avaliação
+      do revisor): as **quatro** alternativas morrem — sem `sort` **7→2**, nulos na frente **3**,
+      `localeCompare` **1**, sem desempate por `userId` **1** —, e o desempate não sobrevive por
+      estabilidade acidental do `sort`, porque o fake entrega as homônimas na ordem **inversa**
+      da esperada. Ele mata o mutante sem `sort` **até com o fake enumerando naturalmente**._
+      _**Cinco testes cujo assunto não era a ordem dependiam dela** (§7.2, corolário): os três
+      `gives the OWNER/ADMIN/MEMBER…`, o do membro que saiu e o do nome nulo, todos com `toEqual`
+      posicional sobre coleção de 2. Trocados por `toHaveLength` + `arrayContaining`, e o mutante
+      "sem `sort`" caiu de **7 para 2** acusadores — os dois dedicados. Com verificação de
+      não-regressão: o mutante do espalhamento do `User` continua com **8**._
+      _**E a justificativa do fake estava errada sobre a própria medição:** o docblock dizia que
+      "se este método devolvesse na ordem natural, um UseCase sem `sort` passaria verde". Medido
+      (mutação **dupla**): **3 acusadores**. Quem mata o mutante é o **fixture**, não a inversão
+      — a inversão é seguro contra o fixture **futuro**, que pode nascer já na ordem esperada.
+      Reescrito com a medição colada._
+      _**A dívida que saiu de graça, e o executor não a deixou sair pela metade:** o
+      `findByUser` do fake não enumerava invertido enquanto o `findByClub` novo enumerava — a
+      armadilha do §7.2 existia em **metade** do port. Medi que o conserto custa **0 acusadores
+      em 1286**, então decidi pagar. **E o executor discordou de "custa zero e acabou", com
+      razão:** 0 acusadores significa fidelidade **afirmada em docblock e não em teste** — a que
+      o próximo refactor apaga —, e o §7.2 exige "testes dedicados, **um por método**". Ele
+      acrescentou o do `findByUser` (clubes escolhidos para inserção, inversa e alfabética serem
+      três ordens diferentes): **0 → 1** acusador. A convenção passa a valer nos dois métodos,
+      agora com quem a defenda._
+      _**As duas sondas que provam que o `response` é fronteira e não decoração:** (P1) mutilar
+      o UseCase para espalhar o `User` no objeto devolvido dá **8** acusadores, com um teste
+      dedicado à regra 7; (P2) remover o `200: clubMembersResponseSchema` faz o **servidor não
+      subir**, com a mensagem da guarda de boot — e o unitário fica **1286/1286**, ou seja a
+      guarda de boot é o **único** acusador, e é decidível **sem banco** (`buildServer()` +
+      `ready()` não conecta). Três barreiras até um e-mail chegar à resposta: construção campo a
+      campo (8 acusadores), o `response` schema, e o boot guard._
+      _**Decisões:** **sem e-mail** na resposta (a tela precisa de **nome** para atribuir
+      autoria; expor o e-mail de todo membro a todo membro é PII além da necessidade, e nenhuma
+      tela pediu — se a gerência do MVP 4 precisar, entra lá com decisão do dono) · `name`
+      **anulável sem fallback** no backend (`User.name` é `String?` e o aceite não exige nome;
+      um `?? 'Alguém'` seria texto de interface **no servidor**, e em que idioma?) · leitura
+      **não exige papel** (é atribuição, não administração) · ordem por **code point**, não
+      `localeCompare` (escolher locale no backend exigiria decidir **de quem**) · **sem
+      `toResponse`**, e é medido: renomear `name` **já** é pego pelo `tsc` (`TS2345`), e a
+      direção do campo extra tem 8 acusadores — a identidade protegeria o que já está protegido
+      dos dois lados · **um `byId` por membro** (laço), o precedente exato do `getMe`; o `byIds`
+      nasce **com** chamador se um clube passar de dezenas._
+      _**⚠️ Gerou o §6.9 do `CONVENCOES-CODIGO`, e ele é uma restrição da MINHA instrução:**
+      acrescentar **um** método ao port e rodar `typecheck` sem implementá-lo no Prisma dá **16
+      erros em 9 arquivos** — `TS2420` na classe e `TS2345` em **sete arquivos de rota sem
+      relação nenhuma com a fatia**. Então "ao fim de cada unidade o disco fica verde" é
+      **incompatível** com "port+fake primeiro, Prisma depois": quem cresce um port entrega o
+      port e a implementação Prisma **na mesma unidade**. O TDD não se perde (o contrato veio
+      primeiro, com o vermelho `repo.findByClub is not a function`); muda a granularidade._
+      _**Complexidade:** `list-club-members.ts` tem **51 linhas de código** (o precedente
+      `get-me.ts` tem 41) — o excedente real são **10 linhas** (`compareByName` + `compareByUserId`),
+      que compram **quatro** mutantes com acusador. O "141" do primeiro relatório era contagem
+      de **arquivo**, não de código, e ficou registrado para ninguém repetir "141 contra ~60"._
+      _**A regra 8 é honesta:** `if (!user) throw` **sobrevive a 1286/1286** — a guarda é defesa
+      em profundidade e **não tem acusador possível**, porque a FK `Membership_userId_fkey` é
+      `ON DELETE RESTRICT` **e** `ON UPDATE CASCADE` (conferido no catálogo pelo revisor, não
+      citado de terceiro). O docblock **aponta para a FK**, como o §7.10 manda, em vez de só
+      declarar a indecidibilidade._
+      _**Dívidas registradas:** o `UserRepositoryFake` não tem contador de chamadas, então "um
+      `byId` por membro" está provado pelo **resultado** e não por contagem — o mutante que
+      buscasse o mesmo usuário duas vezes sobreviveria; o contador se justifica quando o `byIds`
+      nascer. E `UserRepository.update` continua com `Partial<User>` (a forma latente do
+      §7.1.1, como o `BookRepository`)._
+      _**Gates:** 404 · 182 · 1287 · 536 unitários e **367** de integração; `typecheck`, `lint`,
+      `prettier --check .` e o build limpos. Chunk de entrada **416.714 B** (+71 B do
+      `export * from './club'` no barril — adiantamento, porque a 27 usa os dois schemas), 0
+      marcas de TipTap. Banco em **0** por consulta ao prefixo `t26a-` **e** a `^t[0-9]{2}-` em
+      todas as tabelas; super-admin do seed intacto. Nenhuma migration, `packages/ui` e
+      `packages/app` **intocados**._
 - [ ] **27** — Componente de filtro compartilhado (pessoa · tipo · leitura · cor) em `ui/`.
       → _a detalhar_
 - [ ] **28** — Tela de acervo do livro: anotações + grifos num só lugar, com o filtro.

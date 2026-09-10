@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   acceptInviteSchema,
+  clubMembersResponseSchema,
   createClubSchema,
   createInviteSchema,
   errorSchema,
@@ -77,6 +78,109 @@ describe('createClubSchema', () => {
     expect(result).toEqual({ name: 'Clube do Casal' });
     expect(result).not.toHaveProperty('userId');
     expect(result).not.toHaveProperty('actorUserId');
+  });
+});
+
+/*
+  Tarefa 26a, regra 7 — a metade do SERIALIZER.
+
+  O `response` schema é fronteira de segurança e não decoração: o
+  `serializerCompiler` do Zod é o que corta campo não declarado, e sem ele o
+  objeto de domínio inteiro vai para a rede — foi provado com `passwordHash`
+  vazando de um `/me` sem schema (§6.1). Estes testes medem o corte no schema;
+  a rota mede a mesma propriedade ponta a ponta.
+*/
+describe('clubMembersResponseSchema', () => {
+  const aMember = {
+    userId: 'user-1',
+    name: 'Maria',
+    role: 'MEMBER',
+    status: 'ACTIVE',
+  };
+
+  it('carries exactly userId, name, role and status', () => {
+    const [parsed] = clubMembersResponseSchema.parse([aMember]);
+
+    expect(Object.keys(parsed ?? {}).sort()).toEqual([
+      'name',
+      'role',
+      'status',
+      'userId',
+    ]);
+  });
+
+  // ⚠️ É ESTE o teste que faz do schema uma fronteira: os três campos abaixo
+  // existem no `User` do domínio, e nenhum deles pode sair na rede.
+  it('strips email, passwordHash and isSuperAdmin', () => {
+    const [parsed] = clubMembersResponseSchema.parse([
+      {
+        ...aMember,
+        email: 'maria@exemplo.com',
+        passwordHash: '$2b$10$hash',
+        isSuperAdmin: true,
+      },
+    ]);
+
+    expect(parsed).toEqual(aMember);
+    expect(parsed).not.toHaveProperty('email');
+    expect(parsed).not.toHaveProperty('passwordHash');
+    expect(parsed).not.toHaveProperty('isSuperAdmin');
+  });
+
+  // Regra 6: o nome anulável atravessa. O backend não inventa fallback.
+  it('accepts a null name', () => {
+    const [parsed] = clubMembersResponseSchema.parse([
+      { ...aMember, name: null },
+    ]);
+
+    expect(parsed?.name).toBeNull();
+  });
+
+  // `null` NÃO é o mesmo que ausente: o campo é obrigatório e anulável, e é o
+  // que impede o backend de deixar de mandá-lo sem o front quebrar em cheio
+  // (§6.8 — campo removido é `ApiError` genérico numa tela que funcionava).
+  it('rejects a member without the name key', () => {
+    const withoutName = {
+      userId: aMember.userId,
+      role: aMember.role,
+      status: aMember.status,
+    };
+
+    expect(clubMembersResponseSchema.safeParse([withoutName]).success).toBe(
+      false,
+    );
+  });
+
+  // Quem SAIU do clube continua na lista, com o status que diz isso: é o que a
+  // tela usa para decidir o que vira chip de filtro. → ADR 0002.
+  it('accepts the ARCHIVED status of someone who left', () => {
+    const [parsed] = clubMembersResponseSchema.parse([
+      { ...aMember, status: 'ARCHIVED' },
+    ]);
+
+    expect(parsed?.status).toBe('ARCHIVED');
+  });
+
+  it.each(['OWNER', 'ADMIN', 'MEMBER'])('accepts the role %s', (role) => {
+    expect(
+      clubMembersResponseSchema.safeParse([{ ...aMember, role }]).success,
+    ).toBe(true);
+  });
+
+  it.each([
+    ['a role outside the enum', { role: 'SUPERVISOR' }],
+    ['a status outside the enum', { status: 'DELETED' }],
+    ['a numeric userId', { userId: 7 }],
+    ['a numeric name', { name: 7 }],
+  ])('rejects %s', (_label, override) => {
+    expect(
+      clubMembersResponseSchema.safeParse([{ ...aMember, ...override }])
+        .success,
+    ).toBe(false);
+  });
+
+  it('accepts an empty list', () => {
+    expect(clubMembersResponseSchema.parse([])).toEqual([]);
   });
 });
 

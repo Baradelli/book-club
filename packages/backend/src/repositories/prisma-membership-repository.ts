@@ -48,6 +48,24 @@ export class PrismaMembershipRepository implements MembershipRepository {
     return records.map(toDomain);
   }
 
+  /**
+   * TODOS os memberships do clube, `ACTIVE` e `ARCHIVED` — Tarefa 26a, regra 10.
+   *
+   * **Sem `where: { status }`**: quem saiu do clube tem de continuar tendo nome
+   * no acervo (ADR 0002), e é o chamador que decide o que fazer com cada
+   * `status`. **Sem `orderBy`** também, porque o port não promete ordem — a
+   * ordem é do `listClubMembers`, onde ela é decidível (§7.2). O índice
+   * `[clubId, status]` é **aplicável** a esta busca pelo prefixo `clubId` — o
+   * que o catálogo prova é a aplicabilidade, não que o planner o **escolha**
+   * (com um punhado de linhas na tabela ele faz seq scan, e está certo).
+   */
+  async findByClub(clubId: string): Promise<Membership[]> {
+    const records = await this.prisma.membership.findMany({
+      where: { clubId },
+    });
+    return records.map(toDomain);
+  }
+
   async byUserAndClub(
     userId: string,
     clubId: string,

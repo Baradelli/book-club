@@ -246,9 +246,13 @@ export const noteRoutes: FastifyPluginAsyncZod<{
    * a linha atualizada (o `status` e o `archivedAt` que o servidor gravou) para
    * não ter de refetch.
    *
-   * Sem 400: não há corpo nem query, e o `archiveNote` não lança
-   * `InvalidNoteError` — declarar um status que o handler não produz faz o
-   * OpenAPI mentir para a tela que o lê.
+   * ⚠️ **400 declarado, e a frase anterior dizia que ele não existia.** O
+   * `archiveNote` de fato não lança `InvalidNoteError`, mas `DELETE /notes/`
+   * responde 400 com `details: [{ path: 'noteId', ... }]` (medido na rodada de
+   * correção da Tarefa 26a): o find-my-way casa o segmento vazio e o
+   * `z.string().min(1)` do param recusa, ANTES do handler. Mentir por omissão
+   * engana a tela igual que declarar status que não sai.
+   * → varredura em `routes/__tests__/server-guards.integration.test.ts`.
    */
   app.delete(
     '/notes/:noteId',
@@ -258,6 +262,7 @@ export const noteRoutes: FastifyPluginAsyncZod<{
         params: noteIdParamsSchema,
         response: {
           200: noteResponseSchema,
+          400: errorSchema,
           401: errorSchema,
           403: errorSchema,
           404: errorSchema,
@@ -322,8 +327,10 @@ export const noteRoutes: FastifyPluginAsyncZod<{
    * inteiro. Os dois chamam a mesma função pura (`groupWritersByPlanItem`), então
    * não há duas verdades sobre quem escreveu.
    *
-   * Sem 400 nem 403, pelo mesmo motivo do `GET /books/:bookId`: sem corpo nem
-   * query, e a leitura não exige papel.
+   * Sem 403, pelo mesmo motivo do `GET /books/:bookId`: a leitura não exige
+   * papel. O **400 está declarado** porque `GET /books//writers` casa e o
+   * `min(1)` do `bookIdParamsSchema` recusa (medido na Tarefa 26a) — não porque
+   * o UseCase lance.
    */
   app.get(
     '/books/:bookId/writers',
@@ -333,6 +340,7 @@ export const noteRoutes: FastifyPluginAsyncZod<{
         params: bookIdParamsSchema,
         response: {
           200: planItemWritersResponseSchema,
+          400: errorSchema,
           401: errorSchema,
           404: errorSchema,
         },

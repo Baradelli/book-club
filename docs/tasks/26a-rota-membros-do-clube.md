@@ -132,23 +132,23 @@ reporte**) · `packages/ui/**` · `packages/app/**` · `src/domain/**` · qualqu
 
 ## Definição de pronto
 
-- [ ] O corte de tenant vem **antes** da consulta, com `findByClubCalls === 0` **e** o lado
+- [x] O corte de tenant vem **antes** da consulta, com `findByClubCalls === 0` **e** o lado
       positivo (1).
-- [ ] `MEMBER` lê a lista, e o teste asserta a **saída real** (2).
-- [ ] ⚠️ O membro que **saiu** aparece, com `status: 'ARCHIVED'` e **com o nome** (5).
-- [ ] `name` `null` atravessa; **nenhum fallback** no backend (6).
-- [ ] ⚠️ A resposta tem **só** os quatro campos, provado com um campo extra no domínio que
+- [x] `MEMBER` lê a lista, e o teste asserta a **saída real** (2).
+- [x] ⚠️ O membro que **saiu** aparece, com `status: 'ARCHIVED'` e **com o nome** (5).
+- [x] `name` `null` atravessa; **nenhum fallback** no backend (6).
+- [x] ⚠️ A resposta tem **só** os quatro campos, provado com um campo extra no domínio que
       **não sai** (7).
-- [ ] A ordem tem fixture que faz a implementação errada **falhar**, com a precondição pinada
+- [x] A ordem tem fixture que faz a implementação errada **falhar**, com a precondição pinada
       (9).
-- [ ] Teste de **contrato** do `findByClub`, com membro arquivado (10).
-- [ ] ⚠️ **404 para membro de outro clube, com a precondição de que a rota atende quem pode**
+- [x] Teste de **contrato** do `findByClub`, com membro arquivado (10).
+- [x] ⚠️ **404 para membro de outro clube, com a precondição de que a rota atende quem pode**
       (12).
-- [ ] `pnpm -r test`, `pnpm -r typecheck`, `pnpm lint`, `pnpm prettier --check .`,
+- [x] `pnpm -r test`, `pnpm -r typecheck`, `pnpm lint`, `pnpm prettier --check .`,
       `pnpm --filter @clube/app build` limpos, contagens coladas.
-- [ ] `pnpm -r test:integration` rodado (esta fatia toca repositório e rota), com a contagem e
+- [x] `pnpm -r test:integration` rodado (esta fatia toca repositório e rota), com a contagem e
       o baseline de **359** declarados, e a **prova por consulta** de que nenhum fixture
       sobrou.
-- [ ] `packages/ui` e `packages/app` **intocados**.
-- [ ] **Linhas de código coladas** dos arquivos novos.
-- [ ] Checklist marcada; a linha 26a do `BACKLOG.md` é do orquestrador.
+- [x] `packages/ui` e `packages/app` **intocados**.
+- [x] **Linhas de código coladas** dos arquivos novos.
+- [x] Checklist marcada; a linha 26a do `BACKLOG.md` é do orquestrador.

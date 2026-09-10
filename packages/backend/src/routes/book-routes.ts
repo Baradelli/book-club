@@ -166,12 +166,17 @@ export const bookRoutes: FastifyPluginAsyncZod<{
       schema: {
         summary: 'Abre o livro com o plano de leitura ordenado',
         params: bookIdParamsSchema,
-        // Sem 400: não há corpo nem query, e `bookId` é param de rota (sempre
-        // presente, então o `min(1)` não reprova) — o `getBookWithPlan` não
-        // lança InvalidBookError. Declarar um status que o handler não produz
-        // faz o OpenAPI mentir para a tela que o lê.
+        // ⚠️ A frase que estava aqui — "`bookId` é param de rota (sempre
+        // presente, então o `min(1)` não reprova)" — é FALSA, e foi corrigida
+        // na rodada de correção da Tarefa 26a: `GET /books/` responde
+        // 400 com `details: [{ path: 'bookId', ... }]`, porque o find-my-way
+        // CASA o segmento vazio e o `z.string().min(1)` recusa. O
+        // `getBookWithPlan` de fato não lança `InvalidBookError` — o 400 vem da
+        // VALIDAÇÃO, antes do handler. Sem 403: a leitura não exige papel.
+        // → varredura em `routes/__tests__/server-guards.integration.test.ts`.
         response: {
           200: bookWithPlanResponseSchema,
+          400: errorSchema,
           401: errorSchema,
           404: errorSchema,
         },
@@ -239,10 +244,12 @@ export const bookRoutes: FastifyPluginAsyncZod<{
       schema: {
         summary: 'Arquiva o livro (soft delete; exige OWNER ou ADMIN)',
         params: bookIdParamsSchema,
-        // Sem 400, pelo mesmo motivo do GET: sem corpo, e o `archiveBook` não
-        // lança InvalidBookError.
+        // 400 declarado pelo mesmo motivo do GET acima: `DELETE /books/` casa e
+        // o `min(1)` do param recusa (medido na Tarefa 26a). O `archiveBook`
+        // não lança `InvalidBookError` — o 400 é da validação, não do UseCase.
         response: {
           200: bookResponseSchema,
+          400: errorSchema,
           401: errorSchema,
           403: errorSchema,
           404: errorSchema,

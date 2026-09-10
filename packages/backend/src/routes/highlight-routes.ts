@@ -207,8 +207,11 @@ export const highlightRoutes: FastifyPluginAsyncZod<{
    * mais REST, mas o front quer a linha atualizada (o `status` e o `archivedAt`
    * que o servidor gravou) para não ter de refetch.
    *
-   * Sem 400: não há corpo nem query, e o `archiveHighlight` não lança
-   * `InvalidHighlightError`.
+   * ⚠️ **400 declarado**, e não porque o `archiveHighlight` lance
+   * `InvalidHighlightError` (ele não lança): `DELETE /highlights/` casa o
+   * segmento vazio e o `min(1)` do `highlightIdParamsSchema` recusa na
+   * VALIDAÇÃO, antes do handler (medido na rodada de correção da Tarefa 26a).
+   * → varredura em `routes/__tests__/server-guards.integration.test.ts`.
    */
   app.delete(
     '/highlights/:highlightId',
@@ -218,6 +221,7 @@ export const highlightRoutes: FastifyPluginAsyncZod<{
         params: highlightIdParamsSchema,
         response: {
           200: highlightResponseSchema,
+          400: errorSchema,
           401: errorSchema,
           403: errorSchema,
           404: errorSchema,

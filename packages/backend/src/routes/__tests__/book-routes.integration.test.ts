@@ -956,10 +956,25 @@ describe('book routes', () => {
     expect(paths).toContain('/books/{bookId}/plan');
   });
 
-  // O OpenAPI não pode PROMETER um status que o handler não produz: a tela da
-  // Tarefa 20 vai gerar o cliente a partir dele. `GET` e `DELETE` de
-  // `/books/:bookId` não têm corpo nem query, e nenhum dos dois UseCases lança
-  // InvalidBookError — então não declaram 400.
+  /*
+    O OpenAPI não pode PROMETER um status que o handler não produz: a tela da
+    Tarefa 20 vai gerar o cliente a partir dele.
+
+    ⚠️ **E não pode OMITIR um que ele produz — foi o que esta asserção pinava.**
+    O comentário aqui dizia que `GET` e `DELETE` de `/books/:bookId` "não têm
+    corpo nem query, e nenhum dos dois UseCases lança InvalidBookError — então
+    não declaram 400". As duas premissas são verdadeiras e a conclusão é
+    **falsa**: medido na rodada de correção da Tarefa 26a, `GET /books/`
+    responde `400 {"error":"Bad Request","details":[{"path":"bookId",...}]}`,
+    porque o find-my-way CASA o segmento vazio e o `z.string().min(1)` do
+    `bookIdParamsSchema` recusa. O 400 vem da **validação**, antes do handler —
+    não do UseCase.
+
+    Este teste é o motivo de a afirmação ter sobrevivido: ela não estava só num
+    docblock, estava **pinada em asserção**, o que a fazia parecer conferida.
+    A varredura que decide a propriedade para TODA rota (e não uma por uma, de
+    memória) está em `server-guards.integration.test.ts`.
+  */
   it('declares exactly the statuses each handler can send', () => {
     const paths = app.swagger().paths ?? {};
     const statusesOf = (path: string, method: string): string[] =>
@@ -982,10 +997,17 @@ describe('book routes', () => {
       '401',
       '404',
     ]);
-    // Sem 400 nos dois abaixo.
-    expect(statusesOf('/books/{bookId}', 'get')).toEqual(['200', '401', '404']);
+    // Os dois abaixo declaram 400 por causa do param VAZIO (`/books/`), não
+    // porque o UseCase lance — ver o bloco acima.
+    expect(statusesOf('/books/{bookId}', 'get')).toEqual([
+      '200',
+      '400',
+      '401',
+      '404',
+    ]);
     expect(statusesOf('/books/{bookId}', 'delete')).toEqual([
       '200',
+      '400',
       '401',
       '403',
       '404',

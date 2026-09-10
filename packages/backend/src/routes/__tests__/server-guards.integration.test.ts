@@ -146,6 +146,102 @@ describe('server guards', () => {
     });
   });
 
+  /*
+    ⚠️ O OpenAPI não pode MENTIR sobre os status que a rota responde — e mentir
+    por OMISSÃO é tão ruim quanto declarar status que o handler não produz.
+
+    Medido na rodada de correção da Tarefa 26a: `GET /clubs//members` com token
+    responde **400** com `details: [{ path: 'clubId', ... }]`, e o
+    `app.swagger()` declarava só 200/401/404. A afirmação que estava escrita em
+    SEIS docblocks — "`bookId`/`clubId` é param de rota, sempre presente, então
+    o `min(1)` não reprova" / "o Fastify nunca casa vazio" — é **falsa**: o
+    find-my-way CASA o segmento vazio (`/clubs//members`, `/books/`), e aí o
+    `z.string().min(1)` do schema de params recusa.
+
+    A tela que lê o contrato chega nesse 400 no dia em que nenhum clube estiver
+    selecionado e o `clubId` sair vazio da URL.
+
+    **A guarda é uma VARREDURA e não seis comentários** (§7.9: guarda de
+    requisito mora onde a propriedade é decidível, e não depende de alguém
+    lembrar de chamá-la na rota nova). Ela percorre o OpenAPI inteiro, então a
+    rota nº 7 nasce coberta.
+
+    E ela é decidível **sem banco**: a validação do Zod roda ANTES do handler,
+    então um `prisma` que lança em qualquer acesso nunca é tocado — é o que o
+    `neverTouchedPrisma` prova de brinde.
+  */
+  describe('the OpenAPI declares every status the route really answers', () => {
+    // Um `prisma` que ACUSA qualquer acesso. Se uma rota da varredura chegasse
+    // ao handler, isto viraria 500 (o Fastify captura), e o `statusCode !== 400`
+    // simplesmente a deixa fora da amostra — nunca um acesso ao banco do dono.
+    function neverTouchedPrisma(): PrismaClient {
+      return new Proxy(
+        {},
+        {
+          get(_target, property) {
+            throw new Error(
+              `server-guards: a rota tocou o prisma (.${String(property)}) — a varredura de status não deve alcançar handler`,
+            );
+          },
+        },
+      ) as PrismaClient;
+    }
+
+    const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const;
+
+    interface OpenApiSpec {
+      paths: Record<
+        string,
+        Record<string, { responses: Record<string, unknown> } | undefined>
+      >;
+    }
+
+    it('declares 400 on every route that refuses an empty path param', async () => {
+      const app = await buildServer({
+        logger: false,
+        prisma: neverTouchedPrisma(),
+      });
+      await app.ready();
+      const auth = {
+        authorization: `Bearer ${app.jwt.sign({ sub: 'guard-sweep' })}`,
+      };
+      const spec = app.swagger() as unknown as OpenApiSpec;
+
+      const answered400: string[] = [];
+      const undeclared400: string[] = [];
+
+      for (const [specPath, operations] of Object.entries(spec.paths)) {
+        // Só rotas com param de rota: é o param que vira segmento VAZIO.
+        if (!specPath.includes('{')) continue;
+        const url = specPath.replace(/\{[^}]+\}/g, '');
+
+        for (const method of HTTP_METHODS) {
+          const operation = operations[method];
+          if (!operation) continue;
+
+          const response = await app.inject({
+            method: method.toUpperCase() as 'GET',
+            url,
+            headers: auth,
+          });
+          if (response.statusCode !== 400) continue;
+
+          const name = `${method.toUpperCase()} ${specPath}`;
+          answered400.push(name);
+          if (!('400' in operation.responses)) undeclared400.push(name);
+        }
+      }
+
+      // A PRECONDIÇÃO, e sem ela a asserção abaixo é vazia (§7.4): se nenhuma
+      // rota respondesse 400, `undeclared400` seria `[]` por vacuidade e a
+      // varredura passaria verde sem ter medido nada.
+      expect(answered400.length).toBeGreaterThanOrEqual(6);
+      expect(undeclared400).toEqual([]);
+
+      await app.close();
+    });
+  });
+
   // Todo erro sai no formato do errorSchema, inclusive os do próprio Fastify.
   describe('every error uses the errorSchema envelope', () => {
     let app: FastifyInstance;
