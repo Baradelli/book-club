@@ -147,18 +147,18 @@ feed devolver o título junto — uma mudança de contrato, não N requisições
 
 ## Definição de pronto
 
-- [ ] Ordem cronológica sem agrupar (1, B); quatro frases **distinguíveis** (3).
-- [ ] Quem · o quê · livro · quando, com "Você" para o ator (2, H).
-- [ ] Toque abre o alvo certo (4); livro desconhecido não quebra (6).
-- [ ] ⚠️ **Nenhum número** (5).
-- [ ] ⚠️ **Feed que falha não derruba a home**, por contagem e estado (7); membros que falham
+- [x] Ordem cronológica sem agrupar (1, B); quatro frases **distinguíveis** (3).
+- [x] Quem · o quê · livro · quando, com "Você" para o ator (2, H).
+- [x] Toque abre o alvo certo (4); livro desconhecido não quebra (6).
+- [x] ⚠️ **Nenhum número** (5).
+- [x] ⚠️ **Feed que falha não derruba a home**, por contagem e estado (7); membros que falham
       não derrubam o feed (8); uma requisição de cada por carga (9).
-- [ ] ⚠️ Varreduras em **todos** os estados novos, sem chamada dupla (10); a de cor alcança
+- [x] ⚠️ Varreduras em **todos** os estados novos, sem chamada dupla (10); a de cor alcança
       arquivo novo (11); catálogo nos **dois** locales, com a contagem colada (12).
-- [ ] ⚠️ **O tempo relativo medido nos dois idiomas** contra a `GUILT_TERMS` (13).
-- [ ] ⚠️ **Chunk em bytes colado**, abaixo de 450.000 (14).
-- [ ] `pnpm -r test`, `typecheck`, `lint` (⚠️ **`pnpm lint` na raiz**), `prettier --check .`,
+- [x] ⚠️ **O tempo relativo medido nos dois idiomas** contra a `GUILT_TERMS` (13).
+- [x] ⚠️ **Chunk em bytes colado**, abaixo de 450.000 (14).
+- [x] `pnpm -r test`, `typecheck`, `lint` (⚠️ **`pnpm lint` na raiz**), `prettier --check .`,
       `build` limpos.
-- [ ] ⚠️ `git status -- packages/backend packages/ui` **vazio** (15); `home.tsx` em linhas,
+- [x] ⚠️ `git status -- packages/backend packages/ui` **vazio** (15); `home.tsx` em linhas,
       antes e depois (16).
-- [ ] ⚠️ O **vermelho colado** das regras 3, 5, 7 e 13.
+- [x] ⚠️ O **vermelho colado** das regras 3, 5, 7 e 13.

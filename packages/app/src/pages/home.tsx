@@ -16,6 +16,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/auth-context';
 import { useActiveClub } from '../club/active-club';
 import { listItemRouterLink } from '../router-link';
+import { ActivityFeed } from './activity-feed';
 import { Notice, Screen, TEXT_LINK_CLASS } from './chrome';
 import { dayNotePath } from './day-note';
 import {
@@ -501,6 +502,33 @@ export function HomePage() {
             ))}
           </List>
         </section>
+
+        {/*
+          ⚠️ **O FEED VEM DEPOIS DA ESTANTE, E SÓ NESTE RAMO** (Tarefa 35).
+
+          A ordem é a do produto: o atalho de hoje é por que a pessoa abriu o
+          app, a estante é o que o clube está lendo, e o feed é o acessório
+          (decisão F). Ele em cima empurraria o gesto de um toque para baixo da
+          dobra num celular.
+
+          ⚠️ **E ELE SÓ MONTA COM A ESTANTE PRONTA E NÃO VAZIA, por duas razões
+          medidas.** A primeira é de conteúdo: é a estante que dá o NOME de cada
+          livro do feed (medição 1 da spec), e um feed montado antes dela diria
+          "Livro do clube" em toda linha por um instante. A segunda é de escopo:
+          num clube sem livro nenhum não existe atividade possível — todo
+          `ActivityEvent` carrega um `bookId` —, então a seção seria uma
+          promessa de estado vazio embaixo de outro estado vazio. Com o feed
+          aqui, as DUAS requisições novas são, por construção, incapazes de
+          atrasar a estante.
+
+          O `books` vai por prop, e não por uma segunda requisição: a home já
+          tem a lista.
+        */}
+        <ActivityFeed
+          books={shelf.books}
+          clubId={activeClub.id}
+          me={activeClubState.me}
+        />
       </>
     );
   }

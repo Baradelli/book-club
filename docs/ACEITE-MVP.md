@@ -561,7 +561,13 @@ essa, sem convidar ninguém a se comparar com a outra pessoa. Se depois de usar 
 falta** do número, ele é aditivo: um campo na rota e uma linha na tela. Relaxar a guarda é a
 parte cara, e é sua.
 
-**Resposta:**
+**Resposta:** ✅ **(a) — só presença, sem agregado.** Respondida na rodada de decisões do
+MVP 3 (11/09/2026), escolhendo entre as três opções acima. **É esta decisão que as Tarefas 31,
+32, 32b e 35 executam**, e a consequência estrutural registrada: a rota **não devolve contagem
+nenhuma**, então o número é irrenderizável por construção — mais forte que a regex, que tem
+furo **medido duas vezes** (`"12 dias lidos"` e `"3 atividades"` passam pela `COUNTER_SHAPE`
+**e** pela `GUILT_TERMS`). ⚠️ **Esta resposta continua aberta a revisão no aceite** — é para
+ver na tela, com o app usado, que ela se confirma.
 
 ### 2. Marcar que li um dia que já passou?
 
@@ -590,5 +596,29 @@ sempre, e o dia em branco é indistinguível de "não li".
 sem criar a lista de auditoria — ela aparece onde você já está, e uma de cada vez. A (c) é a
 que eu evitaria mesmo se você pedir o recurso; a (d) é uma régua arbitrária que vai gerar a
 pergunta "por que ontem sim e anteontem não?".
+
+**Resposta:**
+
+### 3. O feed deve dizer o TEMA do dia, ou basta o livro?
+
+**Como está:** a linha do feed diz o **livro** ("Maria leu um dia de *O Senhor dos Anéis*"),
+nunca o capítulo ("…sobre o Cap. 3").
+
+**Por quê, e é medido:** o `ActivityEvent` guarda **referência, não conteúdo** — ele tem
+`bookId` e `planItemId`, mas **não** o título do dia. A home tem a lista de livros (então o
+nome do livro sai de graça) e **não** tem o plano dos outros livros. Dizer o tema exigiria uma
+requisição por livro do feed, ou **denormalizar o título dentro do evento** — que envelhece no
+dia em que o admin corrigir o plano, e aí o feed mente sobre o passado.
+
+**As alternativas:**
+- **(a)** deixar como está: quem, o quê, em que livro, quando — e o toque leva ao lugar certo;
+- **(b)** a rota do feed devolver o título do dia junto (mudança de contrato, **uma** consulta
+  a mais no servidor, nada de N requisições no celular);
+- **(c)** denormalizar o título dentro do evento — descartada: um evento com título velho é uma
+  tela que mente, e o `ActivityEvent` é log imutável.
+
+**Recomendação: (a), e (b) se você sentir falta.** O feed responde "o clube está vivo?"; o
+capítulo é detalhe que o toque já entrega. Se incomodar, a saída barata é a **(b)** — e ela é
+uma mudança de contrato, não de arquitetura.
 
 **Resposta:**

@@ -128,6 +128,62 @@ describe('catálogos de i18n', () => {
     ['pt', pt],
     ['en', en],
   ])(
+    '⚠️ says the FOUR activity types differently in the feed, in %s (task 35, rule 3)',
+    (_locale, catalog) => {
+      /*
+        ⚠️ **A LIÇÃO Nº 16 DO MVP 2 ESCRITA COMO TESTE: duas coisas que falam a
+        MESMA frase são indistinguíveis pela varredura.** O feed da home tem
+        quatro nascimentos (`ACTIVITY_TYPES`), e se dois deles dissessem a mesma
+        coisa a pessoa não teria como saber se a outra escreveu ou grifou — e
+        nenhuma varredura de DOM acusaria, porque a tela estaria renderizando
+        texto legítimo.
+
+        ⚠️ **E ELA MORA AQUI, NÃO NA TELA (§7.9).** "As quatro frases são
+        distintas" é propriedade de QUATRO VALORES do catálogo: independe de
+        estado, independe de tela, e — o que decide — percorre os DOIS locales.
+        Um teste de tela pina `pt` (o `navigator.language` do jsdom é `en-US`),
+        então duas traduções `en` coladas uma na outra passariam sem uma linha
+        vermelha. É o mesmo motivo, e o mesmo lugar, do par de convite acima.
+
+        O que o catálogo NÃO decide, e por isso continua na tela: que a tela
+        escolha a chave certa para cada tipo. Quatro frases distintas num
+        catálogo que a tela lê por uma chave só ficariam verdes aqui. O acusador
+        daquela metade é `home.test.tsx`.
+      */
+      const feed = catalog.pages.home.feed;
+      const sentences = [
+        feed.planNote,
+        feed.freeNote,
+        feed.highlight,
+        feed.read,
+      ];
+
+      // O par positivo: as quatro existem e falam de alguém e de um livro. Sem
+      // ele, quatro strings vazias seriam "distintas" só no dia em que o
+      // `new Set` mudasse de tamanho (§7.4).
+      for (const sentence of sentences) {
+        expect(sentence).toContain('{{name}}');
+        expect(sentence).toContain('{{book}}');
+      }
+      expect(new Set(sentences).size).toBe(4);
+
+      /*
+        E os DOIS estados sem linha nenhuma também são distintos entre si — a
+        lição das Tarefas 19/25/28, e a decisão G desta fatia: "ainda não há
+        atividade" é constatação, "não foi possível carregar" é falha nossa, e
+        uma frase só para os dois faz a pessoa achar que o clube está parado
+        quando o que caiu foi a rede.
+      */
+      expect(feed.empty).not.toBe(feed.failed);
+      expect(feed.loading).not.toBe(feed.empty);
+      expect(feed.loading).not.toBe(feed.failed);
+    },
+  );
+
+  it.each([
+    ['pt', pt],
+    ['en', en],
+  ])(
     'has every key that apiErrorKey can return, in %s (rules 14 and 17)',
     (_locale, catalog) => {
       const keys = new Set(keyPaths(catalog));

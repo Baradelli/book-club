@@ -2335,6 +2335,82 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       _**Gates:** os cinco limpos, verificados pelo orquestrador. `app`, `ui` e `shared`
       intocados; nenhuma migration._
 
+- [x] **35** — Feed de atividade na home. → `tasks/35-feed-na-home.md`
+      _**O CLUBE FICA VISÍVEL, E SEM VIRAR PLACAR.** Entregue: o feed na home — quem, o quê, em
+      que livro, quando —, com link por tipo, `activity-feed.tsx` (**190** linhas) e a home de
+      **284 → 291**. **480 shared** (era 478) **· 195 ui** (intocado) **· 1548 backend**
+      (intocado) **· 665 app** (era 641). Chunk **421.232 B** (+2.667), folga **28.768**.
+      Integração **não rodada** — a fatia não toca backend._
+      _**⚠️ ESTA ERA A FATIA MAIS PERIGOSA DO MVP PARA O §1 DO PLANO**, porque um feed é, por
+      construção, uma superfície de **comparação**: quem fez mais aparece mais. As três decisões
+      que endereçam isso: a linha é uma **frase**, não uma tabela (tabela com coluna de pessoa
+      convida o olho a varrer aquela coluna e contar); **ordem cronológica pura, sem agrupar**
+      (agrupar por pessoa **é** o placar; por dia cria cabeçalhos que viram régua); e **sem
+      "carregar mais"** (paginação convida a rolar o histórico procurando quem fez mais)._
+      _**⚠️ O ACHADO ALTO, E ELE CONFIRMA A LACUNA QUE O ORQUESTRADOR PREVIU NA PRIMEIRA
+      RESPOSTA DESTE MVP.** As **duas** guardas do projeto deixam passar o placar em prosa —
+      medido pelo orquestrador: `"…O Hobbit 3 atividades"` passa pela `COUNTER_SHAPE` **e** pela
+      `GUILT_TERMS`; só uma asserção de "nenhum dígito" o pega. É a mesma lacuna do
+      `"12 dias lidos"` que motivou a decisão estrutural da Tarefa 31 (tornar a contagem
+      **irrenderizável no contrato**, em vez de confiar na regex). **Agora está medida duas
+      vezes, em dois lugares.**_
+      _**E a guarda nova nasceu com DOIS defeitos, os dois medidos:** (1) ela varria só o
+      `<ul>`, então um contador no **cabeçalho** da seção — o lugar mais visível — embarcava com
+      **662/662 verdes** (reconfirmado pelo orquestrador); (2) ela tinha **falso positivo
+      garantido em produção**: com instantes realistas ("há 2 horas", "há 3 dias") a linha
+      **tem** dígito, e o verde só existia porque o fixture caiu nas três faixas em que o
+      `numeric:'auto'` escreve palavra. O nome (`writes NO NUMBER in the feed`) prometia mais do
+      que a propriedade tinha (§7.9: o nome do teste é parte da guarda). ⚠️ **E um livro
+      chamado `1984` deixava a suíte vermelha sem placar nenhum na tela** — o teste mandando no
+      produto (lição nº 4 do MVP 1)._
+      _**O conserto e o nome novo:** a guarda varre a **`<section>` inteira**, redige os valores
+      que **vêm de dado** (título, autor, "quando") e exige que **o resto** não tenha dígito;
+      o teste passou a se chamar `adds NO NUMBER OF ITS OWN to the feed section — every digit on
+      it comes from data`. ⚠️ **E os valores redigidos são escritos à mão, nunca calculados pelo
+      `formatActivityMoment`** — se fossem, um mutante que grudasse "+3" no formatador sairia
+      junto na redação. Fixture hostil de propósito: livro `'O Hobbit 1984'` e instantes reais
+      em três degraus. Medido nos três lados: livro com dígito **verde**, instante realista
+      **verde**, placar em prosa (na frase **e** no cabeçalho) **vermelho**._
+      _**⚠️ E o executor achou o vermelho pelo motivo errado antes de entregar:** com
+      `getByText(heading)` **exato**, o mutante do cabeçalho quebrava a **query**, não a
+      asserção — o teste acusaria "não achei o elemento" em vez de "entrou um placar". Trocado
+      por um matcher que inclui. Vermelho honesto é o que diz **o que** quebrou._
+      _**A escada de tempo relativo, medida nos dois idiomas:** **1.219 instantes por locale**,
+      **derivados da própria escada** (mutante com degrau falso → 3 acusadores), varridos por
+      `GUILT_TERMS` **e** `COUNTER_SHAPE` → **0 ofensores**. ⚠️ E o risco de ICU reduzido que o
+      orquestrador levantou **não existe**: o `format()` nunca devolve vazio, e o **par
+      positivo** (`toBe('há 2 horas')`) ficaria vermelho alto num Node small-icu, não verde
+      calado — a rede já estava lá. **A escada para na SEMANA** de propósito: mês e ano não são
+      múltiplos fixos de dia, aproximar em 30 dias seria **número errado na tela**, e a conta de
+      calendário tem dono (Luxon, backend-only)._
+      _**As quatro frases são distinguíveis nos DOIS lugares**, e a linha `en` prova que a
+      partição do §7.9 foi aplicada certo: a tela pina `pt` e **nunca veria** duas frases `en`
+      coladas — quem guarda essa metade é o catálogo (1 acusador), e guarda._
+      _**Outro falso verde de SUBSTRING**, a terceira aparição da classe: `requestsTo(calls,
+      '/me')` casava `/clubs/c-casal/members`, e `'/clubs/'` casava **três** endereços
+      (`/books`, `/activity`, `/members`). ⚠️ Uma asserção de contagem passava só porque o
+      `waitFor` resolvia **antes de o feed disparar** — verde que deixou de descrever a verdade.
+      Trocado por igualdade exata de `pathname` e regex ancorada._
+      _**A inversão que a decisão F não decidia virou teste:** o feed só monta com a estante
+      pronta e não vazia — o que é **mais** do que "as duas requisições não bloqueiam a
+      estante". Os motivos são bons (o nome do livro vem da estante; sem livro não há atividade
+      possível), mas existiam **só em prosa**. Agora há dois testes (estante 500 → feed não é
+      pedido; estante vazia → idem), com **2 acusadores** no mutante que monta o feed sempre._
+      _**⚠️ UM DEFEITO DE REGISTRO QUE ERA DO ORQUESTRADOR, não do executor:** três docblocks
+      diziam **"decisão do dono"** apontando para a pergunta 1 do MVP 3, cujo campo
+      `**Resposta:**` estava **vazio** — o dono respondeu na rodada de decisões, e o
+      orquestrador escreveu a pergunta no `ACEITE-MVP.md` e **nunca voltou para preencher a
+      resposta**. É a lição nº 5 do MVP 1 (prosa não é prova) aplicada a quem a cobra. Resposta
+      registrada com data e consequência estrutural; e a **pergunta 3** (o feed deve dizer o
+      tema do dia?) foi escrita na mesma passada._
+      _**Reusou vocabulário em vez de duplicar:** `pages.busca.item.unknownBook` e
+      `pages.acervo.item.author.{you,other}` — precedente explícito do `busca.tsx` (vocabulário
+      do **modelo**, não da tela). Duplicar seria a mesma frase com dois donos._
+      _**Gates:** os cinco limpos, verificados pelo orquestrador. `backend` e `ui` intocados; a
+      guarda da 29a continua de pé (`grep 'assets/en-' dist/sw.js` = **0**)._
+      _**Pergunta do dono registrada:** o feed deve dizer o **tema do dia**? → `ACEITE-MVP.md`,
+      MVP 3, pergunta 3._
+
 ### Bloco I — Push
 
 - [ ] **36** — `Settings` de notificação (backend + tela) + `PushSubscription` (port, fake,

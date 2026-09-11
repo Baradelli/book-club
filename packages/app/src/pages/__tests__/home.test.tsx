@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import type { ActivityEventResponse, ClubMemberResponse } from '@clube/shared';
 import { localDay, localTimeZone } from '@clube/shared';
 import { TOKEN_STORAGE_KEY } from '@clube/shared/client';
 import { pt } from '@clube/shared/locales';
@@ -33,6 +34,7 @@ import {
   renderPage,
   type Reply,
   replyByUrl,
+  requestAt,
   requestsTo,
   type Responder,
   stubFetch,
@@ -128,6 +130,63 @@ function previousMonth(): string {
   return monthShifted(-1);
 }
 
+const ME_ID = 'u-marcos';
+const MARIA = 'u-maria';
+
+/**
+ * Quem é o clube — `GET /clubs/:clubId/members` (a rota da Tarefa 26a).
+ *
+ * ⚠️ A home é o **terceiro** chamador do `nameOfWriter` (o livro e o acervo são
+ * os outros dois), e não a quarta cópia dele: o dono único é o
+ * `pages/club-names.ts`.
+ */
+function clubMembers(): ClubMemberResponse[] {
+  return [
+    { userId: ME_ID, name: 'Marcos', role: 'OWNER', status: 'ACTIVE' },
+    { userId: MARIA, name: 'Maria', role: 'MEMBER', status: 'ACTIVE' },
+  ];
+}
+
+/**
+ * Um evento do feed como a API o devolve — factory com `overrides` (§7.7).
+ *
+ * O CONTRATO REAL, medido em `activityEventResponseSchema`: os OITO campos, com
+ * `planItemId` **anulável, não opcional** (o serializer do Zod exige a chave) e
+ * `createdAt` ISO em string. ⚠️ Ele leva **referência, nunca conteúdo** — não há
+ * nome de quem fez, nem título do dia, nem nome do livro (decisão G da Tarefa
+ * 33). É por isso que a home resolve os dois por conta própria.
+ */
+function anActivity(
+  overrides: Partial<ActivityEventResponse> = {},
+): ActivityEventResponse {
+  return {
+    id: 'a-1',
+    clubId: CASAL.id,
+    userId: MARIA,
+    type: 'HIGHLIGHT',
+    bookId: 'b-hobbit',
+    planItemId: null,
+    subjectId: 'h-1',
+    createdAt: agoMs(0),
+    ...overrides,
+  };
+}
+
+/**
+ * ⚠️ **O `createdAt` É DERIVADO DE AGORA, NUNCA UM LITERAL** — §7.8 aplicado ao
+ * relógio, e é a mesma disciplina do `month` do `aBook()`. Um
+ * `'2026-09-11T10:00:00Z'` escrito à mão diria "há 2 horas" no dia em que este
+ * arquivo nasceu e "há 3 anos" depois: o teste mudaria de assunto sem uma linha
+ * alterada.
+ */
+function agoMs(elapsed: number): string {
+  return new Date(Date.now() - elapsed).toISOString();
+}
+
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
 interface HomeSetup {
   clubs?: readonly ClubSummary[];
   /** As respostas de `GET /clubs/:clubId/books`, uma por chamada. */
@@ -138,6 +197,10 @@ interface HomeSetup {
    */
   book?: Reply | Responder;
   me?: Reply;
+  /** `GET /clubs/:clubId/activity?limit=…` — o feed (Tarefa 35). */
+  activity?: Reply | Responder;
+  /** `GET /clubs/:clubId/members` — o nome de quem aparece no feed. */
+  members?: Reply | Responder;
 }
 
 /**
@@ -164,11 +227,51 @@ function planRequests(calls: readonly RecordedRequest[]): string[] {
 }
 
 /**
+ * ⚠️ **A ESTANTE, E SÓ ELA — e este helper nasceu porque a Tarefa 35 QUEBROU o
+ * `requestsTo(calls, '/clubs/')`.**
+ *
+ * Até aqui, "requisição a `/clubs/`" e "requisição da estante" eram a mesma
+ * coisa. O feed acrescentou `/clubs/:id/activity` e `/clubs/:id/members`, e um
+ * `toHaveLength(1)` sobre o fragmento passou a contar três coisas diferentes —
+ * uma asserção que continua verde e deixou de descrever a verdade. A saída é
+ * trocá-la pela que descreve a verdade nova, nunca afrouxá-la: o endereço da
+ * estante é `/clubs/:clubId/books`, e é ele que este `RegExp` fixa.
+ */
+function shelfRequests(calls: readonly RecordedRequest[]): RecordedRequest[] {
+  return calls.filter((call) => /\/clubs\/[^/]+\/books$/u.test(call.url));
+}
+
+/**
+ * ⚠️ **O `/me`, E NÃO O `/members` — o mesmo falso verde, do outro lado.**
+ *
+ * `requestsTo` casa por SUBSTRING, e `/clubs/c-casal/members` **contém** `/me`.
+ * É a medição que a Tarefa 27 já tinha feito no `busca.test.tsx` (lá, sobre a
+ * ordem das rotas do fixture); aqui ela morde a CONTAGEM.
+ */
+function meRequests(calls: readonly RecordedRequest[]): RecordedRequest[] {
+  return calls.filter((call) => new URL(call.url).pathname === '/me');
+}
+
+function feedRequests(calls: readonly RecordedRequest[]): RecordedRequest[] {
+  return requestsTo(calls, '/activity');
+}
+
+function memberRequests(calls: readonly RecordedRequest[]): RecordedRequest[] {
+  return requestsTo(calls, '/members');
+}
+
+/**
  * O shell autenticado inteiro, endpoint por endpoint.
  *
- * A ORDEM das rotas importa: `/clubs/` (a estante) vem antes de `/books/` (o
- * livro com o plano), porque `.../clubs/c/books` também casaria um fragmento
- * `/books`.
+ * ⚠️ A ORDEM das rotas importa, e cada linha tem um motivo:
+ * - `/activity` e `/members` vêm PRIMEIRO: os dois endereços contêm `/clubs/`,
+ *   e embaixo dele receberiam o corpo da ESTANTE — que o schema recusaria
+ *   (§6.8) e faria o feed cair no ramo de falha por um motivo que não é o do
+ *   teste. Pior: cada um consumiria uma resposta do array `shelf`;
+ * - `/members` vem antes de `/me`, e é um falso verde MEDIDO na Tarefa 27:
+ *   `/clubs/c-casal/members` **contém** `/me`;
+ * - `/clubs/` (a estante) vem antes de `/books/` (o livro com o plano), porque
+ *   `.../clubs/c/books` também casaria um fragmento `/books`.
  */
 function homeResponder(setup: HomeSetup): Responder {
   const shelf = setup.shelf ?? [booksReply([aBook()])];
@@ -177,6 +280,8 @@ function homeResponder(setup: HomeSetup): Responder {
   return replyByUrl(
     [
       ['/auth/refresh', { status: 200, body: { token: 'token-renovado' } }],
+      ['/activity', setup.activity ?? { status: 200, body: [] }],
+      ['/members', setup.members ?? { status: 200, body: clubMembers() }],
       ['/me', setup.me ?? meReply({ clubs: [...(setup.clubs ?? [CASAL])] })],
       [
         '/clubs/',
@@ -829,7 +934,7 @@ describe('⚠️ WITHOUT A READING TODAY, THE HOME CHARGES NOTHING (rule 16)', (
     expectNoGuilt();
   });
 
-  it('keeps the danger colour out of the SOURCE FILE of the home, not only out of the states rendered here', () => {
+  it('keeps the danger colour out of the SOURCE FILES of the home, not only out of the states rendered here', () => {
     /*
       ⚠️ O NOME ANTERIOR ERA "has no danger colour anywhere on the home, in ANY
       state", E ELE MENTIA: este teste não renderiza estado nenhum — ele lê o
@@ -840,20 +945,36 @@ describe('⚠️ WITHOUT A READING TODAY, THE HOME CHARGES NOTHING (rule 16)', (
       com atalho.
 
       O que ESTE teste é: a rede contra a cor voltar por um estado que ninguém
-      pensou em renderizar. Vale porque a home é um arquivo só.
+      pensou em renderizar.
+
+      ⚠️ **E ELE VARRE OS DOIS ARQUIVOS DESDE A TAREFA 35 (regra 11).** A home
+      deixou de ser "um arquivo só" quando o feed foi para
+      `activity-feed.tsx` — e é justamente lá que mora o caminho de ERRO ("não
+      foi possível carregar a atividade"), que é o lugar mais natural do mundo
+      para alguém pintar de vermelho. Esta varredura é **por nome de arquivo**
+      (as do ADR 0002 — termos e desenho — são recursivas e pegariam o arquivo
+      novo de graça), então ela é a que precisa ser estendida à mão: é a forma
+      de "guarda no lugar errado" do §7.9 nascendo de um `split`, e foi
+      exatamente o que a Tarefa 32b mediu no `reading-marks.tsx`.
     */
     // `process.cwd()` e não `import.meta.url`: no ambiente jsdom do vitest a
     // `import.meta.url` não é uma URL `file:`, e o `fileURLToPath` recusa. É o
     // mesmo caminho que o `ui-source-scan.test.ts` usa.
-    const source = stripComments(
-      readFileSync(resolve(process.cwd(), 'src', 'pages', 'home.tsx'), 'utf8'),
-    );
+    function pageSource(file: string): string {
+      return stripComments(
+        readFileSync(resolve(process.cwd(), 'src', 'pages', file), 'utf8'),
+      );
+    }
 
-    expect(source).not.toMatch(DANGER_STYLE);
-    // E o lado positivo do par: o arquivo lido é o certo (um caminho errado
-    // lançaria, mas um arquivo VAZIO passaria calado — a asserção vazia do
-    // §7.4 escrita como varredura de fonte).
-    expect(source).toContain('pages.home.today.write');
+    for (const file of ['home.tsx', 'activity-feed.tsx']) {
+      expect(pageSource(file)).not.toMatch(DANGER_STYLE);
+    }
+
+    // E o lado positivo do par: os arquivos lidos são os certos (um caminho
+    // errado lançaria, mas um arquivo VAZIO passaria calado — a asserção vazia
+    // do §7.4 escrita como varredura de fonte).
+    expect(pageSource('home.tsx')).toContain('pages.home.today.write');
+    expect(pageSource('activity-feed.tsx')).toContain('pages.home.feed.failed');
   });
 });
 
@@ -894,7 +1015,7 @@ describe('the home when the club or the network goes away (rules 17, 18, 19)', (
       expect(screen.queryByText(pt.errors.network)).not.toBeNull();
     });
     expect(homeIsUp()).toBe(true);
-    expect(requestsTo(calls, '/clubs/')).toHaveLength(1);
+    expect(shelfRequests(calls)).toHaveLength(1);
 
     const retry = screen.getByRole('button', { name: pt.pages.home.retry });
     await act(async () => {
@@ -905,7 +1026,7 @@ describe('the home when the club or the network goes away (rules 17, 18, 19)', (
       // ⚠️ A METADE QUE IMPORTA: repetir REFAZ a requisição. Um botão que só
       // limpasse a mensagem deixaria a pessoa olhando uma tela vazia achando
       // que tentou.
-      expect(requestsTo(calls, '/clubs/')).toHaveLength(2);
+      expect(shelfRequests(calls)).toHaveLength(2);
     });
     await waitFor(() => {
       expect(screen.queryByText(pt.errors.network)).toBeNull();
@@ -963,7 +1084,7 @@ describe('the home when the club or the network goes away (rules 17, 18, 19)', (
     });
 
     await waitFor(() => {
-      expect(requestsTo(calls, '/me')).toHaveLength(2);
+      expect(meRequests(calls)).toHaveLength(2);
     });
     await waitFor(() => {
       expect(
@@ -1063,9 +1184,17 @@ describe('switching club is a RACE, and the guard is not decoration', () => {
       await Promise.resolve();
     });
 
-    // A estante de A foi pedida e está no ar.
+    /*
+      A estante de A foi pedida e está no ar.
+
+      ⚠️ `shelfRequests` e não `requestsTo(calls, '/clubs/')`: desde a Tarefa 35
+      aquele fragmento conta TRÊS endereços (`/books`, `/activity`, `/members`),
+      e o `waitFor` resolvia no primeiro instante em que o total era 1 — antes
+      de o feed sair. A asserção continuava verde e tinha deixado de descrever a
+      verdade; é o mesmo diagnóstico do docblock do `shelfRequests`.
+    */
     await waitFor(() => {
-      expect(requestsTo(calls, '/clubs/')).toHaveLength(1);
+      expect(shelfRequests(calls)).toHaveLength(1);
     });
 
     await act(async () => {
@@ -1089,6 +1218,684 @@ describe('switching club is a RACE, and the guard is not decoration', () => {
     });
     // A metade que decide: a estante do clube velho NÃO substituiu a nova.
     expect(screen.queryByText('O livro do clube A')).toBeNull();
+    expectNoGuilt();
+  });
+});
+
+/**
+ * ⚠️ **O FEED DE ATIVIDADE — a fatia mais perigosa do MVP para o §1 do plano.**
+ *
+ * Um feed é, por construção, uma superfície de **comparação**: quem fez mais
+ * aparece mais. `docs/ACEITE-MVP.md` (MVP 3, pergunta 1, respondida pelo dono)
+ * decide que atividade é **presença, não placar**, e é isso que estes testes
+ * cobram — com a `expectNoGuilt` em TODOS os estados novos (regra 10), que já
+ * embute a varredura de privacidade do ADR 0002 e por isso NÃO é chamada duas
+ * vezes.
+ */
+describe('the activity feed of the club (rules 1 to 10)', () => {
+  /** A lista do feed, pelo nome que o leitor de tela ouve. */
+  function feedList(): HTMLElement | null {
+    return screen.queryByRole('list', { name: pt.pages.home.feed.label });
+  }
+
+  function feedLines(): string[] {
+    const list = feedList();
+    if (list === null) return [];
+    return Array.from(list.querySelectorAll('li')).map(
+      (item) => item.textContent ?? '',
+    );
+  }
+
+  function feedHrefs(): Array<string | null> {
+    const list = feedList();
+    if (list === null) return [];
+    return Array.from(list.querySelectorAll('a')).map((link) =>
+      link.getAttribute('href'),
+    );
+  }
+
+  /**
+   * ⚠️ **A SEÇÃO INTEIRA DO FEED — cabeçalho incluído.**
+   *
+   * MEDIDO na rodada de correção: a guarda de dígito varria só o `<ul>`, e um
+   * `"O que aconteceu por aqui 3 atividades"` no `<h2>` — o placar no lugar
+   * mais visível da seção — passava pela `GUILT_TERMS`, pela `COUNTER_SHAPE` e
+   * pela guarda, com **0 acusadores em 662 testes**. O escopo é a `<section>`,
+   * que é a unidade que a decisão A protege.
+   */
+  function feedSection(): HTMLElement {
+    /*
+      ⚠️ **`includes` E NÃO IGUALDADE DE TEXTO, e a diferença foi medida.** Com
+      um `getByText(heading)` exato, o mutante que acrescenta " 3 atividades" ao
+      cabeçalho fica vermelho pelo motivo ERRADO ("Unable to find an element
+      with the text") — o teste acusa a query que quebrou, não o placar que
+      entrou. Com o `includes`, a seção é achada e o dígito cai na varredura,
+      que é o vermelho que descreve o defeito.
+    */
+    const heading = screen.getByText(
+      (_content, element) =>
+        element?.tagName === 'H2' &&
+        (element.textContent ?? '').includes(pt.pages.home.feed.heading),
+    );
+    const section = heading.closest('section');
+    if (section === null) throw new Error('a seção do feed não está na tela');
+    return section;
+  }
+
+  /**
+   * Os pedaços LITERAIS de uma frase do catálogo, sem os buracos de
+   * interpolação — `'{{name}} grifou um trecho de {{book}}'` vira
+   * `['grifou um trecho de']`.
+   *
+   * ⚠️ Ele existe para o valor esperado sair do CATÁLOGO e não de uma cópia
+   * escrita à mão aqui: uma frase corrigida no `pt.ts` que esquecesse este
+   * arquivo deixaria o teste vermelho, que é o que se quer — e uma cópia
+   * deixaria os dois textos divergirem em silêncio (lição nº 3 do MVP 1).
+   */
+  function saidBy(template: string): string {
+    const pieces = template
+      .split(/\{\{\w+\}\}/u)
+      .map((piece) => piece.trim())
+      .filter((piece) => piece !== '');
+    const first = pieces[0];
+    if (first === undefined) throw new Error(`frase sem texto: ${template}`);
+    return first;
+  }
+
+  /** A estante que dá NOME ao livro de cada linha (medição 1 da spec). */
+  function shelfOfTheFeed(): readonly Reply[] {
+    return [
+      booksReply([
+        aBook({ id: 'b-hobbit', title: 'O Hobbit', month: currentMonth() }),
+      ]),
+    ];
+  }
+
+  async function renderFeed(setup: HomeSetup = {}): Promise<RecordedRequest[]> {
+    const calls = await renderHome({ shelf: shelfOfTheFeed(), ...setup });
+    return calls;
+  }
+
+  it('⚠️ keeps the order the API returned, and groups NOBODY (rules 1, 5 and decision B)', async () => {
+    /*
+      ⚠️ **AGRUPAR POR PESSOA *É* O PLACAR** (decisão B). O fixture é escolhido
+      para as duas implementações erradas FALHAREM (§7.2): as duas linhas da
+      Maria estão SEPARADAS pela minha (então agrupar por autor as juntaria), e
+      a ordem da API é do mais recente para trás (então reordenar por
+      `createdAt` crescente a inverteria).
+    */
+    await renderFeed({
+      activity: {
+        status: 200,
+        body: [
+          anActivity({ id: 'a-1', userId: MARIA, type: 'HIGHLIGHT' }),
+          anActivity({
+            id: 'a-2',
+            userId: ME_ID,
+            type: 'FREE_NOTE',
+            subjectId: 'n-2',
+            createdAt: agoMs(DAY),
+          }),
+          anActivity({
+            id: 'a-3',
+            userId: MARIA,
+            type: 'READ',
+            planItemId: 'p-hoje',
+            subjectId: 'log-3',
+            createdAt: agoMs(2 * DAY),
+          }),
+        ],
+      },
+    });
+
+    await waitFor(() => {
+      expect(feedLines()).toHaveLength(3);
+    });
+
+    const lines = feedLines();
+    expect(lines[0]).toContain(saidBy(pt.pages.home.feed.highlight));
+    expect(lines[1]).toContain(saidBy(pt.pages.home.feed.freeNote));
+    expect(lines[2]).toContain(saidBy(pt.pages.home.feed.read));
+    // E as duas da Maria continuam em linhas próprias, separadas pela minha:
+    // uma linha "Maria · 2 atividades" é exatamente o placar que não existe.
+    expect(lines[0]).toContain('Maria');
+    expect(lines[2]).toContain('Maria');
+    expect(lines[1]).toContain(pt.pages.acervo.item.author.you);
+
+    expectNoGuilt();
+  });
+
+  it('⚠️ adds NO NUMBER OF ITS OWN to the feed section — every digit on it comes from data (rule 5)', async () => {
+    /*
+      ⚠️ **O NOME MUDOU PORQUE A PROPRIEDADE MUDOU, e as duas versões anteriores
+      estavam erradas de maneiras opostas.**
+
+      A primeira varria só o `<ul>` e exigia ZERO dígito. Ela tinha um furo e um
+      falso positivo, os dois MEDIDOS na rodada de correção:
+
+      - **furo:** `"O que aconteceu por aqui 3 atividades"` no `<h2>` — o placar
+        no lugar mais visível da seção — dava **0 acusadores em 662 testes**. A
+        `GUILT_TERMS` não tem "atividades", a `COUNTER_SHAPE` não casa "3
+        atividades" (é o furo já medido no MVP 3 com "12 dias lidos"), e o
+        escopo `list.textContent` não chega ao cabeçalho;
+      - **falso positivo garantido em produção:** um livro chamado
+        `"O Hobbit 1984"` ficava VERMELHO sem placar nenhum na tela, e os
+        instantes realistas também ("há 2 horas", "há 3 dias"). O verde só
+        existia porque o fixture caía nas três faixas em que o `numeric:'auto'`
+        escreve palavra. É a lição nº 4 do MVP 1 — o teste mandando no produto —
+        e o §7.9 (o NOME do teste é parte da guarda: aquele prometia mais do que
+        a propriedade tinha).
+
+      A propriedade honesta é: **a tela não acrescenta número nenhum**. Então o
+      escopo é a `<section>` inteira, e o que vem de DADO é redigido antes da
+      varredura — título do livro, rótulo de autor e o "quando".
+
+      ⚠️ **E OS VALORES REDIGIDOS SÃO ESCRITOS À MÃO, nunca calculados pelo
+      código sob teste (§7.8).** Se o "quando" fosse redigido chamando o
+      `formatActivityMoment`, um mutante que grudasse "+3" nele sairia junto na
+      redação e o teste ficaria verde. Aqui os três instantes são escolhidos
+      para cair em três degraus distintos da escada, e as três frases estão
+      escritas abaixo — um texto que a tela produza a MAIS sobrevive à redação.
+    */
+    const BOOK_WITH_A_DIGIT = 'O Hobbit 1984';
+
+    await renderFeed({
+      shelf: [
+        booksReply([
+          aBook({
+            id: 'b-hobbit',
+            title: BOOK_WITH_A_DIGIT,
+            month: currentMonth(),
+          }),
+        ]),
+      ],
+      activity: {
+        status: 200,
+        body: [
+          anActivity({ id: 'a-1', userId: MARIA, createdAt: agoMs(2 * HOUR) }),
+          anActivity({ id: 'a-2', userId: MARIA, createdAt: agoMs(3 * DAY) }),
+          anActivity({ id: 'a-3', userId: ME_ID, createdAt: agoMs(10 * DAY) }),
+        ],
+      },
+    });
+
+    await waitFor(() => {
+      expect(feedLines()).toHaveLength(3);
+    });
+
+    const text = feedSection().textContent ?? '';
+
+    /** O que vem de DADO — e cada um deles TEM dígito ou pode ter. */
+    const fromData = [
+      BOOK_WITH_A_DIGIT,
+      'Maria',
+      pt.pages.acervo.item.author.you,
+      // Os três degraus: hora, dia e semana. Escritos à mão.
+      'há 2 horas',
+      'há 3 dias',
+      'semana passada',
+    ];
+
+    /*
+      A precondição do par (§7.4): cada valor está MESMO na tela. Sem ela, uma
+      seção vazia — ou uma redação que não casasse nada — deixaria a asserção
+      final verde provando nada.
+    */
+    for (const value of fromData) expect(text).toContain(value);
+
+    let mine = text;
+    for (const value of fromData) mine = mine.split(value).join(' ');
+
+    // ⚠️ O que sobrou é o que a TELA escreveu: cabeçalho e frases. Nada disso
+    // pode ter número — nem "3 atividades", nem "+2", nem "12 de 30".
+    expect(mine).not.toMatch(/\d/u);
+
+    expectNoGuilt();
+  });
+
+  it('says WHO, WHAT, in which BOOK and WHEN, with "Você" for the actor (rules 2, 3 and decision H)', async () => {
+    await renderFeed({
+      activity: {
+        status: 200,
+        body: [
+          anActivity({
+            id: 'a-1',
+            userId: MARIA,
+            type: 'HIGHLIGHT',
+            createdAt: agoMs(2 * HOUR),
+          }),
+          anActivity({
+            id: 'a-2',
+            userId: ME_ID,
+            type: 'PLAN_NOTE',
+            planItemId: 'p-hoje',
+            subjectId: 'n-2',
+            createdAt: agoMs(3 * HOUR),
+          }),
+        ],
+      },
+    });
+
+    await waitFor(() => {
+      expect(feedLines()).toHaveLength(2);
+    });
+
+    const [dela, minha] = feedLines();
+    // Quem, o quê, em que livro, e quando.
+    expect(dela).toContain('Maria');
+    expect(dela).toContain(saidBy(pt.pages.home.feed.highlight));
+    expect(dela).toContain('O Hobbit');
+    expect(dela).toContain('há 2 horas');
+    /*
+      ⚠️ **EU SOU "VOCÊ", E NÃO O MEU NOME** (decisão H, e é o comportamento do
+      acervo e da busca, pelo MESMO vocabulário). Uma frase dizendo o próprio
+      nome na terceira pessoa é estranha e, num feed, soa a registro de ponto.
+      As duas metades: a palavra está, e o nome NÃO está.
+    */
+    expect(minha).toContain(pt.pages.acervo.item.author.you);
+    expect(minha).not.toContain('Marcos');
+
+    expectNoGuilt();
+  });
+
+  it('⚠️ gives the FOUR types four DISTINGUISHABLE sentences (rule 3)', async () => {
+    /*
+      ⚠️ **A LIÇÃO Nº 16 DO MVP 2: duas coisas que falam a mesma frase são
+      indistinguíveis pela varredura.** O catálogo garante que as quatro frases
+      são diferentes entre si, nos dois locales (`catalogs.test.ts`, §7.9) — o
+      que ELE não consegue garantir é que a TELA escolha uma chave diferente
+      para cada tipo. Quatro frases distintas lidas por uma chave só ficariam
+      verdes lá e mentiriam aqui.
+
+      A mesma pessoa e o mesmo livro nos quatro, de propósito: senão a
+      distinção poderia vir do nome ou do título, e não do VERBO. É o molde do
+      `tells READING apart from WRITING on the same row` da Tarefa 32b.
+    */
+    await renderFeed({
+      activity: {
+        status: 200,
+        body: [
+          anActivity({
+            id: 'a-1',
+            type: 'PLAN_NOTE',
+            planItemId: 'p-hoje',
+            subjectId: 'n-1',
+          }),
+          anActivity({ id: 'a-2', type: 'FREE_NOTE', subjectId: 'n-2' }),
+          anActivity({ id: 'a-3', type: 'HIGHLIGHT', subjectId: 'h-3' }),
+          anActivity({
+            id: 'a-4',
+            type: 'READ',
+            planItemId: 'p-hoje',
+            subjectId: 'log-4',
+          }),
+        ],
+      },
+    });
+
+    await waitFor(() => {
+      expect(feedLines()).toHaveLength(4);
+    });
+
+    const lines = feedLines();
+    // A metade que decide: as quatro linhas falam coisas DIFERENTES.
+    expect(new Set(lines).size).toBe(4);
+    // E cada uma fala a frase do SEU tipo — sem isto, quatro frases trocadas
+    // entre si também dariam quatro linhas distintas.
+    expect(lines[0]).toContain(saidBy(pt.pages.home.feed.planNote));
+    expect(lines[1]).toContain(saidBy(pt.pages.home.feed.freeNote));
+    expect(lines[2]).toContain(saidBy(pt.pages.home.feed.highlight));
+    expect(lines[3]).toContain(saidBy(pt.pages.home.feed.read));
+
+    expectNoGuilt();
+  });
+
+  it('opens the right target from the line, WITHOUT reloading the PWA (rule 4, decision D)', async () => {
+    /*
+      A LINHA INTEIRA é o link (decisão D): é o padrão do acervo, e um alvo
+      dentro de outro alvo em celular é toque errado garantido.
+
+      A observável do clique é o ENDEREÇO: em jsdom uma âncora crua não navega,
+      então ele só muda se o roteador interceptou. (O mapa tipo → endereço é
+      provado sem tela em `activity-feed.test.ts`, que é onde ele é decidível.)
+    */
+    await renderFeed({
+      activity: {
+        status: 200,
+        body: [
+          anActivity({
+            id: 'a-1',
+            type: 'PLAN_NOTE',
+            planItemId: 'p-hoje',
+            subjectId: 'n-1',
+          }),
+          anActivity({ id: 'a-2', type: 'FREE_NOTE', subjectId: 'n-2' }),
+          anActivity({ id: 'a-3', type: 'HIGHLIGHT', subjectId: 'h-3' }),
+          anActivity({
+            id: 'a-4',
+            type: 'READ',
+            planItemId: 'p-hoje',
+            subjectId: 'log-4',
+          }),
+        ],
+      },
+    });
+
+    await waitFor(() => {
+      expect(feedLines()).toHaveLength(4);
+    });
+
+    expect(feedHrefs()).toEqual([
+      '/books/b-hobbit/days/p-hoje',
+      '/books/b-hobbit/notes/n-2',
+      '/books/b-hobbit/highlights/h-3',
+      '/books/b-hobbit/days/p-hoje',
+    ]);
+    expectNoGuilt();
+
+    const list = feedList();
+    const grifo = list?.querySelectorAll('a')[2];
+    expect(grifo).toBeDefined();
+    await act(async () => {
+      if (grifo !== undefined) fireEvent.click(grifo);
+    });
+
+    expect(locationText()).toBe('/books/b-hobbit/highlights/h-3');
+  });
+
+  it('⚠️ does not break the line of a book the shelf does not know (rule 6)', async () => {
+    /*
+      O livro pode ter sido arquivado, ou ser de um mês que a estante não
+      trouxe. ⚠️ **NUNCA o `bookId` cru como rótulo**: um UUID na linha tem cara
+      de informação e não é de ninguém (a medição do `nameOfWriter`). E nunca
+      tom de erro: o feed não cobra por uma falha nossa.
+    */
+    await renderFeed({
+      activity: {
+        status: 200,
+        body: [anActivity({ id: 'a-1', bookId: 'b-que-nao-esta-na-estante' })],
+      },
+    });
+
+    await waitFor(() => {
+      expect(feedLines()).toHaveLength(1);
+    });
+
+    const [line] = feedLines();
+    expect(line).toContain(pt.pages.busca.item.unknownBook);
+    expect(line).toContain('Maria');
+    // As duas metades negativas: nem o id cru, nem tom de erro.
+    expect(line).not.toContain('b-que-nao-esta-na-estante');
+    expect(readableText()).not.toContain(pt.pages.home.feed.failed);
+    // E a linha continua sendo um link: o livro some do RÓTULO, não do alvo —
+    // o endereço é montado com o `bookId`, que existe mesmo sem título.
+    expect(feedHrefs()).toEqual([
+      '/books/b-que-nao-esta-na-estante/highlights/h-1',
+    ]);
+
+    expectNoGuilt();
+  });
+
+  it('⚠️ a feed that FAILS does not take the home down (rule 7)', async () => {
+    /*
+      ⚠️ **POR CONTAGEM *E* PELO ESTADO RENDERIZADO, não por ausência de erro**
+      (§7.4). "Não estourou" é o que um `expect(...).toBeDefined()` prova, e não
+      é nada: a home podia ter ficado em branco.
+
+      A estante e o atalho de hoje são o PRODUTO da home; o feed é o acessório
+      (decisão F). É o mesmo desenho que o plano já usa — o que falha some, o
+      resto fica.
+    */
+    const calls = await renderFeed({
+      activity: { status: 500, body: { error: 'Boom' } },
+      book: bookWithPlanReply(aBook({ id: 'b-hobbit' }), [
+        aPlanItem({ id: 'p-hoje', bookId: 'b-hobbit', date: today() }),
+      ]),
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText(pt.pages.home.feed.failed)).not.toBeNull();
+    });
+
+    // O ESTADO: a home inteira continua de pé.
+    expect(homeIsUp()).toBe(true);
+    const shelf = screen.queryByRole('list', {
+      name: pt.pages.home.shelf.label,
+    });
+    expect(shelf?.querySelectorAll('li')).toHaveLength(1);
+    expect(
+      screen.queryByRole('link', {
+        name: new RegExp(pt.pages.home.today.write, 'u'),
+      }),
+    ).not.toBeNull();
+
+    // A CONTAGEM: nada foi refeito nem deixou de ser pedido por causa do feed.
+    expect(shelfRequests(calls)).toHaveLength(1);
+    expect(planRequests(calls)).toEqual(['https://api.teste/books/b-hobbit']);
+    expect(feedRequests(calls)).toHaveLength(1);
+
+    /*
+      ⚠️ E A FALHA NÃO FALA PELA FRASE DO VAZIO (decisão G, e a lição das
+      Tarefas 19/25/28): "ainda não há atividade" faria a pessoa achar que o
+      clube está parado quando o que caiu foi a rede.
+    */
+    expect(screen.queryByText(pt.pages.home.feed.empty)).toBeNull();
+    expect(readableText()).not.toContain('Boom');
+    expectNoGuilt();
+  });
+
+  it('⚠️ members that fail do not take the FEED down (rule 8)', async () => {
+    const calls = await renderFeed({
+      members: { status: 500, body: { error: 'Boom' } },
+      activity: {
+        status: 200,
+        body: [anActivity({ id: 'a-1', userId: MARIA })],
+      },
+    });
+
+    await waitFor(() => {
+      expect(feedLines()).toHaveLength(1);
+    });
+
+    // A linha aparece inteira, com a frase NEUTRA de nome — e o livro, que não
+    // depende dos membros, continua nomeado.
+    const [line] = feedLines();
+    expect(line).toContain(pt.pages.acervo.item.author.other);
+    expect(line).toContain('O Hobbit');
+    expect(line).not.toContain('u-maria');
+    // Por contagem: os membros foram pedidos UMA vez, e o feed não foi refeito.
+    expect(memberRequests(calls)).toHaveLength(1);
+    expect(feedRequests(calls)).toHaveLength(1);
+    // E a falha dos nomes é SILENCIOSA: ninguém lê um texto de servidor por
+    // causa de um nome.
+    expect(readableText()).not.toContain(pt.pages.home.feed.failed);
+    expectNoGuilt();
+  });
+
+  it('asks for the feed and for the members ONCE each per load, with an explicit small limit (rules 9, decision I)', async () => {
+    const calls = await renderFeed({
+      activity: {
+        status: 200,
+        body: [anActivity({ id: 'a-1' })],
+      },
+    });
+
+    await waitFor(() => {
+      expect(feedLines()).toHaveLength(1);
+    });
+
+    // O lado positivo junto do `toBe(0)` (§7.3): uma de cada, e nenhuma a mais.
+    expect(feedRequests(calls)).toHaveLength(1);
+    expect(memberRequests(calls)).toHaveLength(1);
+    expect(shelfRequests(calls)).toHaveLength(1);
+
+    const feed = requestAt(feedRequests(calls), 0);
+    const query = new URL(feed.url).searchParams;
+    expect(new URL(feed.url).pathname).toBe('/clubs/c-casal/activity');
+    /*
+      ⚠️ **O LIMITE É EXPLÍCITO E PEQUENO** (decisão I): o padrão do contrato é
+      50, e a home não mostra 50 linhas. Pedir o que a tela mostra é o que
+      impede o feed de virar histórico — e não existe "e mais N", que seria
+      contador.
+    */
+    expect(query.get('limit')).toBe('12');
+    expect(query.get('authorId')).toBeNull();
+    expect(query.get('type')).toBeNull();
+    expectNoGuilt();
+  });
+
+  it('⚠️ asks the feed and the members IN PARALLEL, and neither blocks the shelf (decision F)', async () => {
+    /*
+      Serial seria "o feed e, quando ele voltar, os membros" — e com o feed
+      pendurado no metrô os nomes nunca chegariam. A observável é exatamente
+      essa: com a resposta do feed PRESA, a requisição dos membros já saiu.
+
+      E a estante, que é o produto da home, já está na tela enquanto os dois
+      estão no ar.
+    */
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const calls = await renderFeed({
+      activity: async () => {
+        await held;
+        return { status: 200, body: [anActivity({ id: 'a-1' })] };
+      },
+    });
+
+    await waitFor(() => {
+      expect(memberRequests(calls)).toHaveLength(1);
+    });
+    expect(feedRequests(calls)).toHaveLength(1);
+    // A estante NÃO esperou por nenhum dos dois.
+    expect(
+      screen.queryByRole('list', { name: pt.pages.home.shelf.label }),
+    ).not.toBeNull();
+    // E o feed diz que está carregando, com frase PRÓPRIA — um segundo
+    // "Carregando…" não diria de quê (regra 10, estado "carregando").
+    expect(screen.queryByText(pt.pages.home.feed.loading)).not.toBeNull();
+    expect(feedList()).toBeNull();
+    expectNoGuilt();
+
+    await act(async () => {
+      release?.();
+      await held;
+    });
+
+    await waitFor(() => {
+      expect(feedLines()).toHaveLength(1);
+    });
+    expectNoGuilt();
+  });
+
+  it('⚠️ an empty feed states it, and does NOT charge anybody (rule 10, decision G)', async () => {
+    await renderFeed({ activity: { status: 200, body: [] } });
+
+    await waitFor(() => {
+      expect(screen.queryByText(pt.pages.home.feed.empty)).not.toBeNull();
+    });
+    // "Ainda não há atividade por aqui" é constatação; "ninguém leu ainda" é
+    // cobrança. E o estado vazio não é o de falha.
+    expect(screen.queryByText(pt.pages.home.feed.failed)).toBeNull();
+    expect(feedList()).toBeNull();
+    expect(homeIsUp()).toBe(true);
+    expectNoGuilt();
+  });
+
+  it('⚠️ stays up when the feed AND the members fail together', async () => {
+    /*
+      As duas cargas novas caindo na mesma viagem de metrô. A home continua
+      inteira, o feed diz que não conseguiu carregar — com a frase dele, nunca
+      a do vazio — e nada de servidor aparece na tela.
+    */
+    const calls = await renderFeed({
+      activity: { status: 500, body: { error: 'Boom do feed' } },
+      members: { status: 500, body: { error: 'Boom dos membros' } },
+      book: bookWithPlanReply(aBook({ id: 'b-hobbit' }), [
+        aPlanItem({ id: 'p-hoje', bookId: 'b-hobbit', date: today() }),
+      ]),
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText(pt.pages.home.feed.failed)).not.toBeNull();
+    });
+
+    expect(homeIsUp()).toBe(true);
+    expect(
+      screen.queryByRole('list', { name: pt.pages.home.shelf.label }),
+    ).not.toBeNull();
+    expect(
+      screen.queryByRole('link', {
+        name: new RegExp(pt.pages.home.today.write, 'u'),
+      }),
+    ).not.toBeNull();
+    expect(screen.queryByText(pt.pages.home.feed.empty)).toBeNull();
+    // Uma de cada, mesmo as duas falhando: a falha não vira retentativa muda.
+    expect(feedRequests(calls)).toHaveLength(1);
+    expect(memberRequests(calls)).toHaveLength(1);
+    expect(readableText()).not.toContain('Boom do feed');
+    expect(readableText()).not.toContain('Boom dos membros');
+    expectNoGuilt();
+  });
+
+  it('⚠️ does not ask for the feed when the SHELF is not there (the inversion of decision F)', async () => {
+    /*
+      ⚠️ **ESTE TESTE PINA UM ACOPLAMENTO QUE VAI ALÉM DA DECISÃO F, e é de
+      propósito.** A decisão F decidiu que as duas requisições novas são
+      paralelas entre si e **não bloqueiam** a estante. O que a home implementa é
+      isso MAIS o inverso: sem estante pronta e não vazia, o feed nem é pedido.
+
+      Os dois motivos estão no comentário do `home.tsx`, e os dois são de
+      produto: é a ESTANTE que dá o nome de cada livro (montar antes diria
+      "Livro do clube" em toda linha por um instante), e um clube sem livro não
+      pode ter atividade nenhuma — todo `ActivityEvent` carrega um `bookId`.
+      Sem este teste isso existiria só em prosa, e a prosa não tem acusador.
+    */
+    const failed = await renderHome({
+      shelf: [{ status: 500, body: { error: 'Boom' } }],
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText(pt.errors.serverError)).not.toBeNull();
+    });
+    expect(feedRequests(failed)).toHaveLength(0);
+    expect(memberRequests(failed)).toHaveLength(0);
+    // E o feed não deixa rastro: nem seção, nem frase de falha própria.
+    expect(screen.queryByText(pt.pages.home.feed.heading)).toBeNull();
+    expect(screen.queryByText(pt.pages.home.feed.failed)).toBeNull();
+    expectNoGuilt();
+  });
+
+  it('⚠️ does not ask for the feed of a club with an EMPTY shelf either', async () => {
+    // O outro lado do mesmo acoplamento: sem livro não pode haver atividade —
+    // todo `ActivityEvent` carrega um `bookId` —, então a seção seria um estado
+    // vazio embaixo de outro estado vazio.
+    const calls = await renderHome({ shelf: [booksReply([])] });
+
+    await waitFor(() => {
+      expect(screen.queryByText(pt.pages.home.noBooks.title)).not.toBeNull();
+    });
+    expect(feedRequests(calls)).toHaveLength(0);
+    expect(memberRequests(calls)).toHaveLength(0);
+    expect(screen.queryByText(pt.pages.home.feed.heading)).toBeNull();
+    expectNoGuilt();
+  });
+
+  it('does not ask for activity of a club that does not exist yet (rule 9)', async () => {
+    /*
+      Sem clube ativo não há tenant a perguntar, e um
+      `/clubs/undefined/activity` seria um 404 na PRIMEIRA tela do app. O par
+      negativo da contagem de cima.
+    */
+    const calls = await renderHome({ clubs: [] });
+
+    await waitFor(() => {
+      expect(screen.queryByText(pt.pages.home.noClubs.title)).not.toBeNull();
+    });
+    expect(feedRequests(calls)).toHaveLength(0);
+    expect(memberRequests(calls)).toHaveLength(0);
     expectNoGuilt();
   });
 });

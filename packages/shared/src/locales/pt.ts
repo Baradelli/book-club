@@ -145,6 +145,45 @@ export const pt = {
           'O livro do mês é cadastrado por um administrador do clube, já com o plano de leitura de cada dia.',
       },
       /*
+        ⚠️ **O FEED DE ATIVIDADE (Tarefa 35) — INCENTIVO, NUNCA PLACAR.**
+
+        `docs/ACEITE-MVP.md`, MVP 3, pergunta 1 (respondida pelo dono):
+        atividade é **presença, não placar**. Daí a forma destas quatro frases,
+        e ela é decisão (decisão A da spec): a linha é uma **frase**, não uma
+        tabela com coluna de pessoa — uma coluna convida o olho a varrê-la e
+        contar quem fez mais, e a frase obriga a ler uma coisa de cada vez.
+
+        ⚠️ **AS QUATRO SÃO DISTINGUÍVEIS, e isso é teste** (lição nº 16 do MVP
+        2: duas coisas que falam a mesma frase são indistinguíveis pela
+        varredura). O acusador é o `catalogs.test.ts`, nos DOIS locales.
+
+        ⚠️ **E NENHUMA DELAS CONTA NADA.** Não há "e mais N", não há "3
+        atividades de Maria", não há agrupamento por pessoa — a `COUNTER_SHAPE`
+        proíbe a forma, e o contrato da rota (que não devolve contagem nenhuma)
+        torna o número irrenderizável.
+
+        O livro entra e o TEMA do dia não: o evento não carrega o título do dia
+        (medição 2 da spec) e a home só tem o plano de um livro. A pergunta está
+        registrada em `docs/tasks/35-feed-na-home.md`.
+      */
+      feed: {
+        heading: 'O que aconteceu por aqui',
+        /* Nomeia a lista para o leitor de tela ("lista, 5 itens"). */
+        label: 'Atividade do clube',
+        /* Frase PRÓPRIA: enquanto ela está no ar, a estante já está na tela, e
+           um segundo "Carregando…" não diria de quê. */
+        loading: 'Carregando a atividade…',
+        /* ⚠️ Constatação, nunca cobrança: "ninguém leu ainda" seria o §1 do
+           plano violado pelo estado vazio. E ela é DIFERENTE da de falha. */
+        empty: 'Ainda não há atividade por aqui.',
+        failed: 'Não foi possível carregar a atividade agora.',
+        /* As quatro frases, uma por tipo de `ActivityEvent`. */
+        planNote: '{{name}} escreveu a anotação do dia em {{book}}',
+        freeNote: '{{name}} escreveu uma anotação avulsa em {{book}}',
+        highlight: '{{name}} grifou um trecho de {{book}}',
+        read: '{{name}} leu um dia de {{book}}',
+      },
+      /*
         REGRA 17: o membership sumiu entre o `/me` e a listagem da estante
         (404). Frase própria porque o `errors.notFound` genérico ("Não
         encontramos o que você procurava") não diz o quê — e aqui o "o quê" é o

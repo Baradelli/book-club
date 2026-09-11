@@ -87,6 +87,20 @@ export const en: typeof pt = {
         description:
           'The book of the month is registered by a club admin, already with the reading plan for each day.',
       },
+      /* The activity feed (task 35): a SENTENCE per line, never a table with a
+         column of people — and never a count of anything. The four sentences
+         must stay distinct in BOTH locales; `catalogs.test.ts` is the accuser. */
+      feed: {
+        heading: 'What has been happening here',
+        label: 'Club activity',
+        loading: 'Loading the activity…',
+        empty: 'No activity here yet.',
+        failed: 'We could not load the activity right now.',
+        planNote: '{{name}} wrote the note of the day in {{book}}',
+        freeNote: '{{name}} wrote a standalone note in {{book}}',
+        highlight: '{{name}} highlighted a passage of {{book}}',
+        read: '{{name}} read a day of {{book}}',
+      },
       clubUnavailable: 'We could not open this club right now.',
     },
     book: {
