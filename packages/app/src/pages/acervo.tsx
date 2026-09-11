@@ -100,11 +100,17 @@ import { highlightNewPath, highlightPath } from './paths';
  * 247). Hoje:
  *
  * ```
- * acervo.tsx          514   a tela: estado de requisição, linhas, orquestração
+ * acervo.tsx          511   a tela: estado de requisição, linhas, orquestração
  * acervo-filters.tsx  165   o vocabulário e a marcação dos quatro controles
- * acervo-entries.ts   113   o modelo: entrada, ordem, o que cada dimensão exclui
+ * acervo-entries.ts   120   o modelo: entrada, ordem, o que cada dimensão exclui
  * club-names.ts        23   `userId` → nome, dividido com o `book.tsx`
  * ```
+ *
+ * ⚠️ **OS DOIS PRIMEIROS NÚMEROS ESTAVAM DESATUALIZADOS (514 e 113), e foram
+ * remedidos na Tarefa 32b.** Eles ficaram para trás na Tarefa 29 (a busca), e
+ * o achado é o próprio motivo deste comando existir: número copiado envelhece
+ * sozinho, inclusive no arquivo que **define** como medi-lo. Quem mexer nestes
+ * arquivos roda o comando acima — não estima.
  *
  * E o `acervo.tsx` deixou de ser a maior tela do app — o `free-note.tsx` tem
  * **565**. Cada docblock vizinho diz por que aquele pedaço mora lá e não aqui.

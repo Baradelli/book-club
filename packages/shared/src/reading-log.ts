@@ -61,6 +61,30 @@ export const planItemReadersResponseSchema = z.array(
   }),
 );
 
+/**
+ * ⚠️ **O 204 SEM CORPO, do lado do CLIENTE** (Tarefa 32b, decisão H).
+ *
+ * O `DELETE /plan-items/:planItemId/reading-log` responde **204 e nada mais**
+ * — é hard delete, não sobra linha para devolver. Do lado do servidor a rota
+ * declara `204: z.null()`, que é o schema honesto de "o Fastify não escreve
+ * corpo em 204" e o que faz o OpenAPI dizer a verdade.
+ *
+ * ⚠️ **Do lado do cliente o valor NÃO é `null` — é `undefined`, e a diferença
+ * não é acadêmica.** O `ApiClient` faz `raw = await response.text()` (`''`) e
+ * `safeJsonParse('')` **lança** no `JSON.parse` e devolve `undefined`. Um
+ * `z.null()` aqui recusaria o corpo vazio e transformaria toda desmarcação
+ * bem-sucedida num `ApiError` — com o registro já apagado no banco, que é o
+ * "chegou e foi EXECUTADO" do §6.8 na pior forma.
+ *
+ * Ele mora aqui, e não numa constante da tela, porque é a metade cliente de um
+ * contrato de rota: quem muda a rota tem os dois lados na mesma linha de
+ * busca. O acusador é
+ * `lets a 204 with no body through when the schema accepts it` em
+ * `src/client/__tests__/api-client.test.ts` (§7.10: a propriedade é decidível
+ * no cliente, não na tela).
+ */
+export const noContentResponseSchema = z.undefined();
+
 export type ReadingLogResponse = z.infer<typeof readingLogResponseSchema>;
 export type PlanItemReadersResponse = z.infer<
   typeof planItemReadersResponseSchema

@@ -441,6 +441,7 @@ function bookReply(planItems: readonly PlanItemResponse[] = plan()): Reply {
       book: aBook({ id: BOOK_ID, clubId: CLUB_ID }),
       planItems,
       writers: [],
+      readers: [],
     },
   };
 }

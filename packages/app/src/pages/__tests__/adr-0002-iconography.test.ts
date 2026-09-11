@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { PRIVACY_TERMS } from './adr-0002-dom';
+import { withoutDiacritics } from './harness';
 
 /**
  * ⚠️ **O ADR 0002 CONTRA O DESENHO — a metade que faltava no `app`** (achado da
@@ -170,12 +171,45 @@ describe('no privacy iconography anywhere in @clube/app (ADR 0002)', () => {
       Ela pega a frase que entrou na tela **sem passar pelo `t()`** — o que a
       varredura do CATÁLOGO não vê e a de DOM só vê se o estado for renderizado
       por algum teste.
+
+      ⚠️ **`withoutDiacritics` E NÃO `normalize('NFD')` — CORREÇÃO MEDIDA DA
+      TAREFA 32b.** O `NFD` **decompõe** o acento, não o remove: `'Só você'`
+      vira `'só você'` com o diacrítico solto ao lado da letra, e o
+      `includes('so voc')` continua **falso**. Resultado: cinco dos termos da
+      lista (`'so voc'`, `'somente voc'`, `'apenas voc'`, `'visivel para'`,
+      `'visivel so'`) eram **inalcançáveis** nesta varredura — e em português
+      ninguém escreve nenhum deles sem acento.
+
+      MEDIDO: `const planted = 'Só você vê esta marca'` numa tela dava **0
+      acusadores em 24 testes**; a mesma frase em ASCII dava 1. É a assimetria
+      que a Tarefa 27 pagou caro para fechar no catálogo, sobrevivendo aqui — e
+      o DOM ter pego o caso medido é sorte, não desenho: esta varredura existe
+      justamente para o que o DOM não vê.
+
+      O helper mora no `harness.tsx`, ao lado do `readableText()`, e é o MESMO
+      que as duas varreduras de DOM usam — ele remove o diacrítico e baixa a
+      caixa.
     */
     const offenders = files
-      .filter(({ code }) => mentions(code.normalize('NFD'), term))
+      .filter(({ code }) => mentions(withoutDiacritics(code), term))
       .map(({ path }) => path);
 
     expect(offenders).toEqual([]);
+  });
+
+  it('⚠️ sees an ACCENTED privacy phrase, not only the ASCII one', () => {
+    /*
+      O matcher tem de ser falsificável ELE MESMO (o mesmo par do teste de
+      âncora abaixo). Sem estas duas linhas, alguém que trocasse o
+      `withoutDiacritics` de volta por `normalize('NFD')` deixaria os quinze
+      `it.each` acima **verdes**, e a regressão voltaria calada.
+    */
+    expect(mentions('Só você vê esta marca'.normalize('NFD'), 'so voc')).toBe(
+      false,
+    );
+    expect(mentions(withoutDiacritics('Só você vê esta marca'), 'so voc')).toBe(
+      true,
+    );
   });
 
   it.each(FORBIDDEN_ICONS)('imports no %s icon anywhere in app/src', (term) => {

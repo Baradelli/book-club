@@ -239,18 +239,26 @@ export function booksReply(books: readonly BookResponse[]): Reply {
 }
 
 /**
- * `GET /books/:bookId` — `{ book, planItems, writers }`.
+ * `GET /books/:bookId` — `{ book, planItems, writers, readers }`.
  *
- * O `writers` é **obrigatório** no `bookWithPlanResponseSchema`, e o cliente
- * HTTP roda o schema sobre a resposta (§6.8): um fixture sem ele viraria
- * `ApiError` de corpo fora do contrato, e o atalho de hoje simplesmente não
- * apareceria — falso negativo perfeito.
+ * As DUAS sobreposições são **obrigatórias** no `bookWithPlanResponseSchema`, e
+ * o cliente HTTP roda o schema sobre a resposta (§6.8): um fixture sem uma
+ * delas viraria `ApiError` de corpo fora do contrato, e o atalho de hoje
+ * simplesmente não apareceria — falso negativo perfeito.
+ *
+ * ⚠️ **O `readers` entrou na FASE 2 do phase-in (Tarefa 32b).** Ele nasceu
+ * `.optional()` na Tarefa 32 justamente para este fixture (e mais seis) não
+ * precisarem mudar antes de a tela existir; agora que ela existe, o campo é
+ * obrigatório e a fronteira do §6.1 volta a valer nos dois lados. Este helper
+ * fixa `[]` nos dois porque ele nasceu para o ATALHO DA HOME, que não olha
+ * sobreposição nenhuma — quem testa as marcas monta a resposta com elas
+ * (`book.test.tsx`).
  */
 export function bookWithPlanReply(
   book: BookResponse,
   planItems: readonly PlanItemResponse[],
 ): Reply {
-  return { status: 200, body: { book, planItems, writers: [] } };
+  return { status: 200, body: { book, planItems, writers: [], readers: [] } };
 }
 
 /**

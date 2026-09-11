@@ -186,58 +186,53 @@ export const planItemResponseSchema = z.object({
  * ⚠️ E **nenhum contador**: nem `readDays`, nem total, nem percentual.
  * Progresso é presença, e é o contrato que torna o número irrenderizável.
  *
- * ⚠️⚠️ **POR QUE O `readers` É `.optional()` E O `writers` NÃO — e os dois
- * números que decidiram.**
+ * ⚠️⚠️ **A FASE 2 DO PHASE-IN ESTÁ CONCLUÍDA (Tarefa 32b): o `readers` DEIXOU
+ * DE SER `.optional()`.** O registro fica porque é o phase-in do §6.8
+ * acontecendo por inteiro, e porque a medição é o argumento.
  *
- * O §6.8 diz que campo NOVO no backend é a direção segura porque "o `parse` do
- * Zod faz strip, o front antigo ignora". Isso vale quando o front tem uma
- * CÓPIA velha do schema; aqui o schema é **um só**, morando no `shared`, então
- * declarar `readers` obrigatório torna obrigatório também tudo o que
- * **produz** uma resposta destas — inclusive os fixtures dos testes de tela,
- * que só vão saber dele na 32b.
+ * A **fase 1** (Tarefa 32) declarou o campo `optional()` por uma razão de
+ * ORDEM, não de contrato: o schema é **um só**, morando no `shared`, então
+ * torná-lo obrigatório torna obrigatório também tudo o que **produz** uma
+ * resposta destas — inclusive os fixtures dos testes de tela. Medido:
+ * **164 testes falhando em 7 arquivos** de `packages/app`, e a 32 não podia
+ * tocar o app. (E `.default([])`, que deixaria o fixture antigo passar, **não
+ * compila** aqui: o `RequestOptions.schema` do cliente é `ZodType<TOut>`, cujo
+ * `Input` cai para `TOut` — e `.default()` é justamente onde entrada e saída
+ * divergem. Medido na 32: `TS2345` em `book.tsx` e `book-form.tsx`. Alargar
+ * aquela assinatura é mudança no cliente HTTP compartilhado.)
  *
- * 1. **Obrigatório: 164 testes falhando em 7 arquivos** de `packages/app`
- *    (medido na Tarefa 32), e esta fatia não pode tocar o app — a 32b sobe a
- *    tela e os fixtures juntos.
- * 2. **`.default([])`, que daria tipo de saída não-opcional e deixaria o
- *    fixture antigo passar, NÃO COMPILA aqui**: o `RequestOptions.schema` do
- *    cliente é `ZodType<TOut>`, cujo terceiro parâmetro (`Input`) cai para
- *    `TOut` também — e `.default()` é justamente o caso em que entrada e saída
- *    DIFEREM. Medido: `TS2345` em `book.tsx:226` e `book-form.tsx:158`, com
- *    `readers?: ... | undefined` do lado do valor. Alargar aquela assinatura é
- *    mudança no cliente HTTP compartilhado e está fora desta fatia.
- *
- * Então `optional()` é a **fase 1** do phase-in de duas etapas que o próprio
- * §6.8 prescreve, palavra por palavra. **A fase 2 é da 32b**: ela sobe a tela
- * e os fixtures, tira o `optional()`, e com isso recupera uma proteção real —
- * com o campo obrigatório, um handler que ESQUECESSE o `readers` responde 500
- * (erro de serialização, logado) em vez de omitir o campo em silêncio, que é o
- * mesmo argumento pelo qual o `writers` nasceu obrigatório.
- *
- * ⚠️⚠️ **E O QUE O `optional()` CUSTA, medido na rodada de correção da 32 —
- * porque "quem segura a ponta é a integração" é verdade e insuficiente.**
- * Mutante: apagar `readers` do `send()` de `GET /books/:bookId` em
- * `book-routes.ts`. Resultado:
+ * ⚠️⚠️ **E O QUE O `optional()` CUSTAVA, medido nas duas pontas — porque "quem
+ * segura a ponta é a integração" é verdade e insuficiente.** Mutante: apagar
+ * `readers` do `send()` de `GET /books/:bookId` em `book-routes.ts`.
  *
  * ```
- * pnpm -r typecheck          → verde   (o campo é opcional: o handler pode omitir)
- * backend unit               → 1399/1399 PASSAM
- * integração                 → 4 falhas, TODAS no mesmo bloco
- *                              (`the reading overlay inside GET /books/:bookId`)
+ *                       FASE 1 (optional)        FASE 2 (obrigatório)
+ * pnpm -r typecheck     verde                    TS2345 em book-routes.ts
+ *                                                ("Property 'readers' is
+ *                                                 missing … but required")
+ * backend unit          1399/1399 PASSAM         1399/1399 (não há teste de
+ *                                                 rota unitário: quem acusa
+ *                                                 é o compilador)
+ * integração            4 falhas, num describe   4 falhas + o typecheck
  * ```
  *
  * Ou seja: com o `optional()`, a fiação `getBookWithPlan → rota → resposta`
- * **não tem guarda nenhuma fora da integração**, e os quatro acusadores estão
- * todos num `describe` só. Quem apagar aquele bloco apaga a guarda inteira.
- * Com o campo obrigatório (fase 2), o mesmo mutante vira **500** de erro de
- * serialização, logado — que é a proteção que o `writers` tem hoje e o
- * `readers` não.
+ * não tinha guarda nenhuma fora da integração, e os quatro acusadores estavam
+ * todos num `describe` só — quem apagasse aquele bloco apagava a guarda
+ * inteira. Sem ele, o mesmo mutante é recusado pelo COMPILADOR (o handler não
+ * satisfaz mais o tipo da resposta) e, se alguém o silenciasse, viraria 500 de
+ * erro de serialização, logado. É a proteção que o `writers` sempre teve, e o
+ * `readers` agora tem.
+ *
+ * O acusador do próprio `.optional()` de volta é
+ * `refuses a response without readers, now that the phase-in is done`, em
+ * `src/__tests__/note-schemas.test.ts`.
  */
 export const bookWithPlanResponseSchema = z.object({
   book: bookResponseSchema,
   planItems: z.array(planItemResponseSchema),
   writers: planItemWritersResponseSchema,
-  readers: planItemReadersResponseSchema.optional(),
+  readers: planItemReadersResponseSchema,
 });
 
 /**

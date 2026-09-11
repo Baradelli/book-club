@@ -30,6 +30,7 @@ import {
   type StatusMessages,
 } from './form-errors';
 import { acervoPath, bookEditPath, isClubAdmin } from './paths';
+import { ReadMarks, TodayReading } from './reading-marks';
 
 /**
  * A TELA DO LIVRO — o mês inteiro, dia por dia.
@@ -47,9 +48,21 @@ import { acervoPath, bookEditPath, isClubAdmin } from './paths';
  * ⚠️ **O TAMANHO, MEDIDO E REGISTRADO** (contador canônico no docblock de
  * `acervo.tsx`): **400** linhas antes da Tarefa 27, **486** depois (o filtro por
  * pessoa trouxe uma terceira requisição, um estado e o construtor dos chips), e
- * **247** depois desta fatia — a ordem de grandeza de uma tela de plano. A lição
- * nº 8 do MVP 1 é dividir **antes** de a tela crescer, e esta fatia foi o
+ * **247** depois da Tarefa 28 — a ordem de grandeza de uma tela de plano. A
+ * lição nº 8 do MVP 1 é dividir **antes** de a tela crescer, e a 28 foi o
  * "antes" marcado pela 25 e pela 27.
+ *
+ * ⚠️ **A TAREFA 32b DIVIDIU DE NOVO, E ANTES DE CRESCER.** A marca de leitura,
+ * o toque "li hoje" e o recado de falha foram para `reading-marks.tsx`
+ * (**105** linhas), e o que ficou aqui foi a FIAÇÃO: qual é o dia de hoje,
+ * quem leu cada dia, e a releitura depois de marcar. A tela saiu de **247**
+ * para **277**. O teto que a spec fixou era ~350.
+ *
+ * ⚠️ **E O "LI HOJE" É SÓ DO DIA DE HOJE — escopo, não simplificação.** A rota
+ * aceita qualquer `planItemId`; 30 toggles na lista virariam auditoria
+ * retroativa, que é onde a cobrança nasce. Se o dono quiser marcar dia
+ * passado, a pergunta está registrada em
+ * `docs/tasks/32b-marca-de-leitura-na-tela.md`.
  *
  * ⚠️ **O QUE **NÃO** SAIU, e é regra testada: a SOBREPOSIÇÃO DE AUTORIA
  * continua dizendo o NOME.** O `GET /clubs/:clubId/members` ficou aqui —
@@ -74,8 +87,11 @@ import { acervoPath, bookEditPath, isClubAdmin } from './paths';
  * - **nada de vermelho.** Nenhum `text-danger`/`bg-danger`, nenhuma cor de
  *   valor arbitrário (`[#…`), nenhum `style` com `--clube-danger`;
  * - **nada de contador.** Nem "3 de 30 dias", nem "+2" ao lado dos avatares,
- *   nem número nenhum derivado de dado. A sobreposição de autoria diz **quem**
- *   escreveu e **nunca quantos** — isso seria placar, e o §1 proíbe comparação
+ *   nem número nenhum derivado de dado. As duas sobreposições dizem **quem**
+ *   escreveu e **quem** leu, e **nunca quantos** — isso seria placar, e o §1
+ *   proíbe comparação. É a decisão do dono em `docs/ACEITE-MVP.md` (MVP 3,
+ *   pergunta 1): progresso é **presença**, e a rota não devolve contagem
+ *   nenhuma, então o número é irrenderizável por CONTRATO, não por estilo
  *   (→ `docs/adr/0002-visibilidade-total-no-clube.md`);
  * - **só hoje é destacado.** Destacar "atrasados" é cobrança desenhada;
  *   destacar o futuro não serve para nada.
@@ -167,15 +183,26 @@ function subtitleFor(item: PlanItemResponse, locale: string): string {
   return item.reference === null ? day : `${day} · ${item.reference}`;
 }
 
+/** O endereço do livro — UM, para a carga e para a releitura (decisão F). */
+function bookUrl(bookId: string): string {
+  return `/books/${encodeURIComponent(bookId)}`;
+}
+
 /**
- * `writers` → `planItemId` → autores.
+ * Uma sobreposição → `planItemId` → pessoas.
  *
- * A resposta traz **só os dias que têm nota** (o front sobrepõe no plano que já
- * tem), então a ausência da chave é o caso comum, não uma falha.
+ * ⚠️ **UMA FUNÇÃO PARA AS DUAS, e não duas byte-idênticas** (§7.1, "extrair,
+ * não cobrir duas vezes"). `writers` e `readers` têm o MESMO formato e não o
+ * mesmo assunto (decisão D da Tarefa 31): o que se divide é a CONTA, não o
+ * nome. Duas cópias divergiriam na primeira correção — foi o que aconteceu com
+ * o `GUILT_TERMS` e com o `matches` dos fakes.
  *
- * ⚠️ **E ELA TRAZ SÓ `userId` — NENHUM NOME.** Daí a resolução pelo
- * `nameOfWriter` abaixo, contra o `GET /clubs/:clubId/members` (Tarefa 26a): com
- * o `userId` cru, o `PersonAvatar` extrai a primeira letra do UUID e desenha um
+ * As duas trazem **só os dias que têm registro** (o front sobrepõe no plano que
+ * já tem), então a ausência da chave é o caso comum, não uma falha.
+ *
+ * ⚠️ **E ELAS TRAZEM SÓ `userId` — NENHUM NOME.** Daí a resolução pelo
+ * `nameOfWriter`, contra o `GET /clubs/:clubId/members` (Tarefa 26a): com o
+ * `userId` cru, o `PersonAvatar` extrai a primeira letra do UUID e desenha um
  * "F" ou um "C" — **uma inicial que tem cara de inicial e não é de ninguém**.
  * Medido na Tarefa 17. Comunicar errado é pior que não comunicar, e `null` cai
  * no glifo neutro que a Tarefa 13 pôs ali exatamente para "sem nome", escolhido
@@ -185,11 +212,14 @@ function subtitleFor(item: PlanItemResponse, locale: string): string {
  * ⚠️ E o `me` é `null` fora do `ready` do `/me` — nesse frame TODO avatar cai
  * no glifo neutro, que é a resposta honesta para "ainda não sei quem é você".
  */
-function writersByPlanItem(
-  writers: BookWithPlanResponse['writers'],
+function byPlanItem(
+  overlay: BookWithPlanResponse['writers'] | BookWithPlanResponse['readers'],
 ): Map<string, readonly string[]> {
-  return new Map(writers.map((entry) => [entry.planItemId, entry.userIds]));
+  return new Map(overlay.map((entry) => [entry.planItemId, entry.userIds]));
 }
+
+/** O `Map` vazio das duas sobreposições fora do `ready` — uma referência só. */
+const NO_OVERLAY: Map<string, readonly string[]> = new Map();
 
 export function BookPage() {
   const { t, i18n } = useTranslation();
@@ -220,7 +250,7 @@ export function BookPage() {
     setState(LOADING);
 
     void api
-      .get(`/books/${encodeURIComponent(bookId)}`, bookWithPlanResponseSchema)
+      .get(bookUrl(bookId), bookWithPlanResponseSchema)
       .then((data) => {
         if (cancelled) return;
         setState({ status: 'ready', data });
@@ -288,11 +318,36 @@ export function BookPage() {
 
   const writers = useMemo(
     () =>
-      state.status === 'ready'
-        ? writersByPlanItem(state.data.writers)
-        : new Map<string, readonly string[]>(),
+      state.status === 'ready' ? byPlanItem(state.data.writers) : NO_OVERLAY,
     [state],
   );
+
+  const readers = useMemo(
+    () =>
+      state.status === 'ready' ? byPlanItem(state.data.readers) : NO_OVERLAY,
+    [state],
+  );
+
+  /**
+   * ⚠️ **A RELEITURA DEPOIS DE MARCAR — decisão F, e ela NÃO passa pelo
+   * `attempt`.**
+   *
+   * O caminho óbvio seria somar 1 ao `attempt` e deixar o efeito refazer tudo.
+   * Ele custa duas coisas medidas: o efeito começa com `setState(LOADING)`, o
+   * que APAGA a lista por um frame (a pessoa toca "li hoje" e o plano pisca),
+   * e o `clubOfBook` vira `null` no caminho, o que dispara um segundo
+   * `GET /clubs/:clubId/members` que ninguém pediu. Uma releitura é UMA
+   * requisição.
+   *
+   * Ela **propaga** a rejeição de propósito: quem mostra o recado é o
+   * `TodayReading`, que é quem tem o "tentar de novo" (decisão G). Engolir o
+   * erro aqui deixaria a marca velha na tela sem uma palavra.
+   */
+  async function refreshBook(): Promise<void> {
+    if (bookId === undefined) return;
+    const data = await api.get(bookUrl(bookId), bookWithPlanResponseSchema);
+    setState({ status: 'ready', data });
+  }
 
   /**
    * `userId` → nome. O dono da regra é o `club-names.ts` (o `acervo.tsx` a
@@ -338,11 +393,40 @@ export function BookPage() {
 
     const { book, planItems } = state.data;
 
+    /*
+      ⚠️ **O DIA DE HOJE NO PLANO, e ele pode NÃO EXISTIR** (decisão E). Um
+      livro do mês passado não tem "hoje": o toque simplesmente não aparece.
+      Um botão desabilitado ali seria cobrança silenciosa ("você não pode
+      mais"), que é o anti-culpa aplicado ao espaço vazio — o mesmo que o dia
+      sem autoria já faz.
+    */
+    const todayItem = planItems.find((item) => item.date === today);
+
     return (
       <>
         {book.author !== null ? (
           <p className="text-sm text-muted">{book.author}</p>
         ) : null}
+
+        {/*
+          ⚠️ **"LI HOJE" — e o estado vem de EU ESTAR entre os leitores de
+          hoje, não de o dia TER leitor.** A diferença é a fatia inteira: com a
+          segunda leitura, o botão de quem ainda não leu nasceria marcado no
+          instante em que a outra pessoa do clube marcasse.
+
+          `me` é `null` enquanto o `/me` não chegou, e aí `iRead` é `false` —
+          a resposta honesta para "ainda não sei quem é você" é oferecer o
+          gesto, não a desfeita dele.
+        */}
+        {todayItem === undefined ? null : (
+          <TodayReading
+            marked={
+              me !== null && (readers.get(todayItem.id) ?? []).includes(me.id)
+            }
+            onChanged={refreshBook}
+            planItemId={todayItem.id}
+          />
+        )}
 
         {/*
           REGRA 1 (Tarefa 20) — CORRIGIR O LIVRO E O PLANO, só para OWNER/ADMIN.
@@ -412,6 +496,7 @@ export function BookPage() {
             */}
             {planItems.map((item) => {
               const authors = writers.get(item.id) ?? [];
+              const whoRead = readers.get(item.id) ?? [];
               // REGRAS 3 e 4: comparação de STRING contra o `localDay`, nunca
               // `new Date()`. E é a ÚNICA marca da lista: nada distingue passado
               // de futuro.
@@ -442,10 +527,22 @@ export function BookPage() {
                     contagem ao lado. E dia sem autoria não ganha "ninguém
                     escreveu" — a ausência é silenciosa, que é o anti-culpa
                     aplicado ao espaço vazio.
+
+                    ⚠️ **E DESDE A TAREFA 32b AS DUAS SOBREPOSIÇÕES DIVIDEM
+                    ESTE ESPAÇO** (decisão B): quem LEU e quem ESCREVEU, na
+                    mesma linha. Uma segunda lista ("quem leu") duplicaria o
+                    plano e obrigaria o olho a cruzar duas colunas. As duas são
+                    distinguíveis sem cor — forma e `aria-label` diferentes —,
+                    e o dono desse contrato é o `reading-marks.tsx`.
                   */
                   start={
-                    authors.length === 0 ? undefined : (
+                    authors.length === 0 && whoRead.length === 0 ? undefined : (
                       <span className="flex items-center gap-1">
+                        <ReadMarks
+                          me={me}
+                          names={memberNames}
+                          userIds={whoRead}
+                        />
                         {authors.map((userId) => {
                           const authorName = nameOfWriter(
                             userId,

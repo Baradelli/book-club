@@ -107,22 +107,26 @@ function dayShifted(by: number): string {
   return localDay(instant, 'UTC');
 }
 
+/** As duas sobreposições têm o MESMO formato, e não o mesmo assunto. */
+type Overlay = ReadonlyArray<{
+  planItemId: string;
+  userIds: readonly string[];
+}>;
+
 /**
- * `GET /books/:bookId` com `writers` de VERDADE.
+ * `GET /books/:bookId` com as DUAS sobreposições de VERDADE.
  *
- * O `bookWithPlanReply` do harness fixa `writers: []` — ele nasceu para o
- * atalho da home, que não olha a sobreposição de autoria. Aqui o `writers` É o
- * assunto de duas regras, então o fixture o recebe.
+ * O `bookWithPlanReply` do harness fixa `writers: []` e `readers: []` — ele
+ * nasceu para o atalho da home, que não olha sobreposição nenhuma. Aqui as duas
+ * são o assunto, então o fixture as recebe.
  */
 function bookReply(
   book: BookResponse,
   planItems: readonly PlanItemResponse[],
-  writers: ReadonlyArray<{
-    planItemId: string;
-    userIds: readonly string[];
-  }> = [],
+  writers: Overlay = [],
+  readers: Overlay = [],
 ): Reply {
-  return { status: 200, body: { book, planItems, writers } };
+  return { status: 200, body: { book, planItems, writers, readers } };
 }
 
 /**
@@ -208,6 +212,29 @@ function plan(): PlanItemResponse[] {
 const WRITERS = [{ planItemId: WRITTEN_ID, userIds: [ZECA, MARCOS] }];
 
 /**
+ * ⚠️ **A SOBREPOSIÇÃO DE LEITURA, ESCOLHIDA PARA AS IMPLEMENTAÇÕES ERRADAS
+ * FALHAREM** (§7.2, Tarefa 32b). Quatro propriedades, cada uma matando um
+ * mutante — e a precondição está pinada em
+ * `the reading fixture is hostile to the wrong implementations`:
+ *
+ * 1. **o PRIMEIRO dia não tem leitor nenhum**: uma tela que desenhasse a marca
+ *    em toda linha, ou que casasse a sobreposição por ÍNDICE, acusa;
+ * 2. **quem leu HOJE é a Maria, e não eu**: o botão em primeira pessoa nasce
+ *    DESMARCADO, então "o botão olha se o dia tem leitor" (em vez de "se EU
+ *    li") acusa;
+ * 3. **o último dia tem leitura E escrita**, e as duas listas são DIFERENTES
+ *    ali (`readers: [Zeca]` contra `writers: [Zeca, Marcos]`): uma tela que
+ *    desenhasse o `writers` como leitura poria duas marcas, e uma que
+ *    desenhasse o `readers` como escrita poria um avatar só;
+ * 4. **nenhuma entrada aponta o dia de hoje com o meu id**, que é o estado que
+ *    o teste do "já li" monta À MÃO — assim ele não pode passar por acidente.
+ */
+const READERS = [
+  { planItemId: TODAY_ID, userIds: [MARIA] },
+  { planItemId: WRITTEN_ID, userIds: [ZECA] },
+];
+
+/**
  * ⚠️ **QUEM É O CLUBE — e o fixture é escolhido para o chip errado aparecer**
  * (§7.2). Quatro propriedades, cada uma matando um mutante:
  *
@@ -245,9 +272,48 @@ function members(): ClubMemberResponse[] {
   ];
 }
 
+/** O corpo do `PUT /plan-items/:planItemId/reading-log` — o log recém-gravado. */
+function readingLogReply(planItemId: string, status = 201): Reply {
+  return {
+    status,
+    body: {
+      id: `log-${planItemId}`,
+      clubId: CASAL.id,
+      bookId: BOOK_ID,
+      userId: MARCOS,
+      planItemId,
+      readAt: '2026-09-05T10:00:00.000Z',
+    },
+  };
+}
+
+/**
+ * ⚠️ **O `DELETE` RESPONDE 204 SEM CORPO, e o fixture tem de ser FIEL a isso**
+ * (§7.1 escrito para tela). `raw: ''` e não `body: undefined`: o `stubFetch`
+ * serializa `body ?? {}` como JSON, ou seja, um fixture sem `raw` devolveria
+ * `'{}'` — um corpo que o servidor nunca manda, e que faria o caminho do
+ * `safeJsonParse('')` → `undefined` (o único que a produção percorre) nunca
+ * ser exercitado aqui.
+ */
+const NO_CONTENT: Reply = { status: 204, raw: '' };
+
+/** `https://api.teste/plan-items/p-b/reading-log` → `p-b`. */
+function planItemIdOf(url: string): string {
+  return new URL(url).pathname.split('/')[2] ?? '';
+}
+
+/** O servidor honesto: `PUT` grava e devolve o log, `DELETE` devolve 204. */
+function readingLogOf(request: RecordedRequest): Reply {
+  return request.method === 'DELETE'
+    ? NO_CONTENT
+    : readingLogReply(planItemIdOf(request.url));
+}
+
 interface BookSetup {
   /** As respostas de `GET /books/:bookId`, uma por chamada. */
   book?: readonly Reply[];
+  /** `PUT`/`DELETE /plan-items/:planItemId/reading-log` (Tarefa 32b). */
+  readingLog?: Reply | Responder;
   /** Quem é o clube — `GET /clubs/:clubId/members` (Tarefa 26a). */
   members?: Reply | Responder;
   /** O `GET /me`, para o estado em que ainda não sei quem sou (regra 13). */
@@ -266,13 +332,23 @@ interface BookSetup {
  */
 function bookResponder(setup: BookSetup): Responder {
   const replies = setup.book ?? [
-    bookReply(aBook({ id: BOOK_ID }), plan(), WRITERS),
+    bookReply(aBook({ id: BOOK_ID }), plan(), WRITERS, READERS),
   ];
   let call = 0;
 
   return replyByUrl(
     [
       ['/auth/refresh', { status: 200, body: { token: 'token-renovado' } }],
+      /*
+        ⚠️ O REGISTRO DE LEITURA vem ANTES de tudo: o endereço é
+        `/plan-items/:planItemId/reading-log`, que não casa nenhum dos outros
+        fragmentos hoje — mas a ordem é a documentação de que ele é uma rota
+        própria, e não uma variação de `/books/`.
+      */
+      [
+        '/reading-log',
+        setup.readingLog ?? ((request) => readingLogOf(request)),
+      ],
       /*
         ⚠️ **ANTES DO `/me`, E ISSO NÃO É ESTILO — É UM FALSO VERDE MEDIDO.**
 
@@ -346,8 +422,55 @@ function rowOf(title: string): HTMLElement {
   return row;
 }
 
+/**
+ * Os avatares de quem ESCREVEU.
+ *
+ * ⚠️ **O `:not([data-read-mark])` é a metade de teste da decisão C** (Tarefa
+ * 32b): as duas sobreposições convivem na mesma linha e as duas são
+ * `role="img"` com nome acessível — sem o recorte, este helper contaria as
+ * marcas de leitura como avatares de escrita e os testes da Tarefa 27 (as
+ * iniciais, a frase nomeada) passariam a falar de outra coisa.
+ */
 function avatarsIn(row: HTMLElement): HTMLElement[] {
-  return Array.from(row.querySelectorAll('[role="img"]'));
+  return Array.from(row.querySelectorAll('[role="img"]:not([data-read-mark])'));
+}
+
+/** As marcas de quem LEU. */
+function readMarksIn(row: HTMLElement): HTMLElement[] {
+  return Array.from(row.querySelectorAll('[data-read-mark]'));
+}
+
+function labelsOf(elements: readonly HTMLElement[]): Array<string | null> {
+  return elements.map((element) => element.getAttribute('aria-label'));
+}
+
+function readerLabel(name: string): string {
+  return pt.pages.book.plan.readerNamed.replace('{{name}}', name);
+}
+
+function writerLabel(name: string): string {
+  return pt.pages.book.plan.writerNamed.replace('{{name}}', name);
+}
+
+/** O botão "li hoje", no estado que o rótulo diz — `null` quando não há. */
+function readButton(marked: boolean): HTMLElement | null {
+  return screen.queryByRole('button', {
+    name: marked ? pt.pages.book.read.unmark : pt.pages.book.read.mark,
+  });
+}
+
+function readButtonOrThrow(marked: boolean): HTMLElement {
+  const button = readButton(marked);
+  if (button === null) throw new Error('o botão de leitura não está na tela');
+  return button;
+}
+
+/** As requisições ao registro de leitura de UM dia. */
+function readingLogCalls(
+  calls: readonly RecordedRequest[],
+  planItemId: string,
+): RecordedRequest[] {
+  return requestsTo(calls, `/plan-items/${planItemId}/reading-log`);
 }
 
 function linkIn(row: HTMLElement): HTMLElement {
@@ -388,13 +511,14 @@ async function press(element: HTMLElement): Promise<void> {
  * na Tarefa 16 foi exatamente o que faltava.
  */
 
-function bookSource(): string {
+function pageSource(file: string): string {
   // `process.cwd()` e não `import.meta.url`: no ambiente jsdom do vitest a
   // `import.meta.url` não é uma URL `file:`, e o `fileURLToPath` recusa.
-  return readFileSync(
-    resolve(process.cwd(), 'src', 'pages', 'book.tsx'),
-    'utf8',
-  );
+  return readFileSync(resolve(process.cwd(), 'src', 'pages', file), 'utf8');
+}
+
+function bookSource(): string {
+  return pageSource('book.tsx');
 }
 
 afterEach(() => {
@@ -427,6 +551,33 @@ describe('the fixture of this suite is hostile to the wrong implementations (§7
 
     // E a autoria está no ÚLTIMO item: um `writers` casado por índice acusa.
     expect(WRITERS[0]?.planItemId).toBe(items[2]?.id);
+  });
+
+  it('the reading fixture is hostile to the wrong implementations too (task 32b)', () => {
+    const items = plan();
+    const days = READERS.map((entry) => entry.planItemId);
+
+    // 1. O PRIMEIRO dia não tem leitor: "marca em toda linha" e "casou por
+    //    índice" não passam.
+    expect(days).not.toContain(items[0]?.id);
+    // 2. Quem leu HOJE não sou eu: o botão em primeira pessoa nasce
+    //    desmarcado, e "o dia tem leitor" ≠ "eu li".
+    const today = READERS.find((entry) => entry.planItemId === TODAY_ID);
+    expect(today?.userIds).toEqual([MARIA]);
+    expect(today?.userIds).not.toContain(MARCOS);
+    // 3. O último dia tem leitura E escrita, e as duas listas DIFEREM ali:
+    //    trocar uma pela outra muda a contagem de marcas dos dois lados.
+    expect(days).toContain(WRITTEN_ID);
+    expect(
+      READERS.find((entry) => entry.planItemId === WRITTEN_ID)?.userIds,
+    ).not.toEqual(WRITERS[0]?.userIds);
+    // 4. E as duas frases acessíveis são diferentes no CATÁLOGO — se um dia
+    //    alguém as igualar, é aqui que o vermelho aparece, antes de a asserção
+    //    de tela virar tautologia (a lição nº 16 do MVP 2).
+    expect(pt.pages.book.plan.readerNamed).not.toBe(
+      pt.pages.book.plan.writerNamed,
+    );
+    expect(pt.pages.book.plan.reader).not.toBe(pt.pages.book.plan.writer);
   });
 });
 
@@ -778,6 +929,512 @@ describe('who already wrote, and NEVER how much (rules 6, 7)', () => {
   });
 });
 
+describe('⚠️ WHO ALREADY READ EACH DAY, AND NEVER HOW MANY (task 32b, rules 5 to 9)', () => {
+  it('shows one mark per reader, on the day the entry names, in the order of the plan (rule 5)', async () => {
+    await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    /*
+      Uma marca por leitor, no dia que a entrada nomeia — e a ORDEM é a do
+      plano, não a do array `readers` nem a alfabética. O fixture põe a Maria
+      no dia do MEIO e a Zeca no ÚLTIMO: um casamento por índice poria as duas
+      nos dois primeiros, e uma tela que varresse `readers` em vez de
+      `planItems` inverteria nada — por isso a asserção é sobre a sequência
+      lida do DOM, linha a linha.
+    */
+    expect(planRows().map((row) => readMarksIn(row).length)).toEqual([0, 1, 1]);
+
+    const marks = planRows().flatMap((row) => readMarksIn(row));
+    expect(labelsOf(marks)).toEqual([
+      readerLabel('Maria'),
+      readerLabel('Zeca'),
+    ]);
+    expectNoGuilt();
+  });
+
+  it('leaves a day nobody read without a mark and without a phrase (rule 6)', async () => {
+    await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    /*
+      A ausência é SILENCIOSA — o mesmo que o dia sem autoria já faz. "Ninguém
+      leu este dia" é a cobrança escrita com boas intenções: ela transforma um
+      dia sem leitura numa lacuna anunciada (§1 do plano de produto).
+    */
+    const quiet = rowOf('Zumbis e anões');
+    expect(readMarksIn(quiet)).toHaveLength(0);
+    expect(avatarsIn(quiet)).toHaveLength(0);
+    const spoken = withoutDiacritics(quiet.textContent ?? '');
+    expect(spoken).not.toContain('ninguem');
+    expect(spoken).not.toContain('leu');
+
+    expectNoGuilt();
+  });
+
+  it('⚠️ says nothing about reading on a day that has WRITING and no reading (rule 6)', async () => {
+    /*
+      ⚠️ **A SEGUNDA METADE, E ELA VEIO DE UMA MEDIÇÃO QUE DEU ZERO.** O teste
+      acima olha o dia em que ninguém leu **nem escreveu** — e aí a tela nem
+      monta a sobreposição (o `start` do `ListItem` fica `undefined`). Medido:
+      um `"Ninguém leu este dia"` plantado DENTRO do `ReadMarks`, no ramo da
+      lista vazia, dava **0 acusadores em 45 testes**, porque aquele ramo não
+      era alcançado por fixture nenhum.
+
+      O dia que o alcança é o que tem ESCRITA e não tem leitura: a sobreposição
+      existe por causa dos avatares, e o `ReadMarks` recebe `[]`. É o buraco
+      que este teste fecha — e é o §7.4 na forma de fixture, não de asserção.
+    */
+    await renderBook({
+      book: [bookReply(aBook({ id: BOOK_ID }), plan(), WRITERS, [])],
+    });
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    const written = rowOf('A porta redonda');
+    expect(avatarsIn(written)).toHaveLength(2);
+    expect(readMarksIn(written)).toHaveLength(0);
+    expect(withoutDiacritics(written.textContent ?? '')).not.toContain('leu');
+    expect(readableText()).not.toContain(pt.pages.book.plan.reader);
+    expectNoGuilt();
+  });
+
+  it('⚠️ tells READING apart from WRITING on the same row, without leaning on colour (rule 7)', async () => {
+    /*
+      ⚠️ **DECISÃO C, e ela existe por causa da lição nº 12 do MVP 2** (varrer
+      palavra não pega desenho, e cor sozinha não é portadora) e da nº 16
+      ("duas coisas que falam a mesma frase", que já mentiu numa tela deste
+      projeto).
+
+      As duas sobreposições dividem a linha do último dia. As DUAS metades:
+
+      - **forma**: a marca de leitura é um glifo (SVG, sem letra nenhuma) num
+        quadrado; o avatar de escrita é a INICIAL (letra, sem SVG) num círculo.
+        Um teste que olhasse só o rótulo passaria com as duas desenhadas
+        idênticas;
+      - **fala**: os textos acessíveis não são iguais — e não são iguais NEM
+        para a mesma pessoa, que é o caso que a Zeca cobre (ela leu E escreveu
+        naquele dia).
+    */
+    await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    const row = rowOf('A porta redonda');
+    const marks = readMarksIn(row);
+    const avatars = avatarsIn(row);
+    expect(marks).toHaveLength(1);
+    expect(avatars).toHaveLength(2);
+
+    const mark = marks[0];
+    if (mark === undefined) throw new Error('unreachable: length asserted');
+    expect(mark.querySelector('svg')).not.toBeNull();
+    expect(mark.textContent).toBe('');
+
+    for (const avatar of avatars) {
+      expect(avatar.querySelector('svg')).toBeNull();
+      expect(avatar.textContent ?? '').toMatch(/^\p{Lu}+$/u);
+    }
+
+    // E a MESMA pessoa (a Zeca) é falada de dois jeitos diferentes.
+    expect(labelsOf(marks)).toEqual([readerLabel('Zeca')]);
+    expect([...labelsOf(avatars)].sort()).toEqual(
+      [writerLabel('Zeca'), writerLabel('Marcos')].sort(),
+    );
+    expect(labelsOf(marks)[0]).not.toBe(labelsOf(avatars)[0]);
+    expectNoGuilt();
+  });
+
+  it('names WHO read, with the same nameOfWriter the rest of the screen uses (rule 8)', async () => {
+    await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    // A Maria não escreveu em dia nenhum: o nome dela na tela só pode ter
+    // vindo do `GET /clubs/:clubId/members`, pelo mesmo `nameOfWriter`.
+    expect(labelsOf(readMarksIn(rowOf('O carneiro assado')))).toEqual([
+      readerLabel('Maria'),
+    ]);
+    expectNoGuilt();
+  });
+
+  it('falls back to the NEUTRAL reading phrase when it does not know the people (rule 8)', async () => {
+    await renderBook({
+      members: { status: 500, body: { error: 'Internal Server Error' } },
+    });
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    /*
+      A frase neutra é a versão de LEITURA da que a escrita já tinha — nunca a
+      de escrita reaproveitada, que diria "escreveu" sobre quem só leu.
+    */
+    expect(labelsOf(readMarksIn(rowOf('O carneiro assado')))).toEqual([
+      pt.pages.book.plan.reader,
+    ]);
+    expect(readableText()).not.toContain(readerLabel('Maria'));
+    expectNoGuilt();
+  });
+
+  it('⚠️ puts NO number next to the marks — one more reader is one more mark (rule 9)', async () => {
+    /*
+      ⚠️ Três leitores no mesmo dia é o cenário em que o "+N" de estouro nasce.
+      Não há: três marcas. O `expectNoGuilt` varre o `COUNTER_SHAPE` na tela
+      inteira; estas asserções fecham o cerco no lugar exato onde o número
+      apareceria.
+    */
+    await renderBook({
+      book: [
+        bookReply(aBook({ id: BOOK_ID }), plan(), WRITERS, [
+          { planItemId: TODAY_ID, userIds: [MARIA, ZECA, JOANA] },
+        ]),
+      ],
+    });
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    const row = rowOf('O carneiro assado');
+    expect(readMarksIn(row)).toHaveLength(3);
+    for (const mark of readMarksIn(row)) {
+      expect(mark.textContent ?? '').not.toMatch(/\d/u);
+    }
+    expect(row.textContent ?? '').not.toMatch(/\d\s*(?:leitor|pessoa)/u);
+    expectNoGuilt();
+  });
+});
+
+describe('⚠️ "LI HOJE" — THE FIRST-PERSON TOUCH (task 32b, rules 10 to 14)', () => {
+  it('offers the touch ONLY when the plan has a day of today (rule 10)', async () => {
+    await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+    expect(readButton(false)).not.toBeNull();
+    expectNoGuilt();
+  });
+
+  it('⚠️ offers NO touch at all when the plan has no day of today (rule 10, decision E)', async () => {
+    /*
+      ⚠️ **A AUSÊNCIA, E NÃO UM BOTÃO DESABILITADO** (decisão E). Um livro do
+      mês passado não tem "hoje"; mostrar o toque cinzento seria cobrança
+      silenciosa ("você não pode mais"). É o anti-culpa aplicado ao espaço
+      vazio, o mesmo que o dia sem autoria já faz.
+    */
+    await renderBook({
+      book: [
+        bookReply(aBook({ id: BOOK_ID }), [
+          aPlanItem({ id: 'p-1', order: 1, date: dayShifted(-10) }),
+          aPlanItem({ id: 'p-2', order: 2, date: dayShifted(-9) }),
+        ]),
+      ],
+    });
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(2);
+    });
+    expect(readButton(false)).toBeNull();
+    expect(readButton(true)).toBeNull();
+    // E nem desabilitado, nem com outro nome: NENHUM botão de leitura.
+    expect(screen.queryAllByRole('button', { name: /hoje/iu })).toHaveLength(0);
+    expectNoGuilt();
+  });
+
+  it('says the CURRENT state in the first person, and the state comes from MY reading (rule 10)', async () => {
+    /*
+      No fixture padrão quem leu hoje é a MARIA. Se o botão olhasse "o dia tem
+      leitor" em vez de "EU li", ele já nasceria marcado — e é por isso que o
+      par negativo vem antes do positivo.
+    */
+    await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+    expect(readButton(false)).not.toBeNull();
+    expect(readButton(true)).toBeNull();
+    expectNoGuilt();
+  });
+
+  it('says the OTHER state when I am among the readers of today (rule 10)', async () => {
+    await renderBook({
+      book: [
+        bookReply(aBook({ id: BOOK_ID }), plan(), WRITERS, [
+          { planItemId: TODAY_ID, userIds: [MARIA, MARCOS] },
+        ]),
+      ],
+    });
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+    expect(readButton(true)).not.toBeNull();
+    expect(readButton(false)).toBeNull();
+    expectNoGuilt();
+  });
+
+  it('⚠️ does not show itself as marked while it still does not know who I am (rule 10)', async () => {
+    /*
+      ⚠️ **O RAMO `me === null`, E ELE NÃO TINHA TESTE.** O `BookSetup.me` do
+      harness existe desde a Tarefa 17 e nenhum teste o usava — era inócuo até
+      esta fatia, porque nenhuma decisão dependia do `me`. Agora o estado
+      INICIAL do botão depende: `me !== null && readers.includes(me.id)`.
+
+      Com o `/me` fora do ar, o `useActiveClub` responde `me: null` (é o
+      `withoutMe` de `club/active-club.tsx`, o mesmo para `loading` e
+      `failed`), e hoje quem leu é a Maria. As duas coisas erradas que este
+      teste mata:
+
+      - um `me?.id` sem a guarda, com o `includes(undefined)` virando `false`
+        por acidente em vez de por decisão — aqui é igual, mas a próxima
+        pessoa saberia que o ramo tem dono;
+      - qualquer leitura do estado que ignore o `me` e olhe "o dia tem
+        leitor": ela mostraria "li hoje — tirar a marca" para quem o app ainda
+        nem sabe quem é.
+
+      A resposta honesta para "ainda não sei quem é você" é oferecer o GESTO,
+      nunca a desfeita dele.
+    */
+    await renderBook({
+      me: { status: 500, body: { error: 'Internal Server Error' } },
+    });
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    expect(readButton(false)).not.toBeNull();
+    expect(readButton(true)).toBeNull();
+    // E a marca da Maria continua lá: quem leu é informação do clube, e não
+    // depende de o app saber quem está olhando.
+    expect(readMarksIn(rowOf('O carneiro assado'))).toHaveLength(1);
+    expectNoGuilt();
+  });
+
+  it('marks with ONE PUT, to TODAY plan item, counted (rule 11)', async () => {
+    const calls = await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+    // O lado `0` do par (§7.3): antes do toque não há escrita nenhuma.
+    expect(requestsTo(calls, '/reading-log')).toHaveLength(0);
+
+    await press(readButtonOrThrow(false));
+
+    const written = readingLogCalls(calls, TODAY_ID);
+    expect(written).toHaveLength(1);
+    expect(written[0]?.method).toBe('PUT');
+    // E em NENHUM outro dia: a tela não oferece auditoria retroativa.
+    expect(requestsTo(calls, '/reading-log')).toHaveLength(1);
+    expectNoGuilt();
+  });
+
+  it('unmarks with ONE DELETE, counted (rule 11)', async () => {
+    const calls = await renderBook({
+      book: [
+        bookReply(aBook({ id: BOOK_ID }), plan(), WRITERS, [
+          { planItemId: TODAY_ID, userIds: [MARCOS] },
+        ]),
+        bookReply(aBook({ id: BOOK_ID }), plan(), WRITERS, []),
+      ],
+    });
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    await press(readButtonOrThrow(true));
+
+    const written = readingLogCalls(calls, TODAY_ID);
+    expect(written).toHaveLength(1);
+    expect(written[0]?.method).toBe('DELETE');
+    await waitFor(() => {
+      expect(readButton(false)).not.toBeNull();
+    });
+    expectNoGuilt();
+  });
+
+  it('⚠️ refetches the book after marking, and the overlay shows the new state (rule 12)', async () => {
+    /*
+      ⚠️ **DECISÃO F.** Não existe rota de sobreposição (medido na Tarefa 32),
+      então atualizar só o estado local faria a marca do ATOR aparecer e a dos
+      outros envelhecer — e a divergência só apareceria no próximo
+      recarregamento. A prova é por CONTAGEM de `GET /books/` (§7.3): uma tela
+      que só mexesse no estado local mostraria a marca nova e faria UMA
+      requisição.
+    */
+    const calls = await renderBook({
+      book: [
+        bookReply(aBook({ id: BOOK_ID }), plan(), WRITERS, READERS),
+        bookReply(aBook({ id: BOOK_ID }), plan(), WRITERS, [
+          { planItemId: TODAY_ID, userIds: [MARIA, MARCOS] },
+          { planItemId: WRITTEN_ID, userIds: [ZECA] },
+        ]),
+      ],
+    });
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+    expect(requestsTo(calls, '/books/')).toHaveLength(1);
+    expect(readMarksIn(rowOf('O carneiro assado'))).toHaveLength(1);
+
+    await press(readButtonOrThrow(false));
+
+    await waitFor(() => {
+      expect(requestsTo(calls, '/books/')).toHaveLength(2);
+    });
+    await waitFor(() => {
+      expect(readButton(true)).not.toBeNull();
+    });
+    // A sobreposição inteira foi relida: a marca da Maria continua lá, e a
+    // minha entrou ao lado.
+    expect(labelsOf(readMarksIn(rowOf('O carneiro assado'))).sort()).toEqual(
+      [readerLabel('Marcos'), readerLabel('Maria')].sort(),
+    );
+    expectNoGuilt();
+  });
+
+  it('⚠️ a double tap does NOT send two PUTs (rule 13)', async () => {
+    /*
+      ⚠️ A Tarefa 32 já matou o 500 do lado do servidor (o `PUT` é idempotente);
+      aqui é o lado que evita a CORRIDA. A resposta fica pendurada de
+      propósito: é o único jeito de tocar duas vezes com a primeira requisição
+      ainda no ar. A prova é a CONTAGEM, nunca a ausência de erro (§7.3).
+    */
+    let release: (() => void) | undefined;
+    const inFlight = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const calls = await renderBook({
+      readingLog: async (request) => {
+        await inFlight;
+        return readingLogOf(request);
+      },
+    });
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    const button = readButtonOrThrow(false);
+    await press(button);
+    expect(readingLogCalls(calls, TODAY_ID)).toHaveLength(1);
+
+    // O segundo toque, com a primeira requisição ainda no ar.
+    await press(button);
+    expect(readingLogCalls(calls, TODAY_ID)).toHaveLength(1);
+    expectNoGuilt();
+
+    release?.();
+    await waitFor(() => {
+      expect(requestsTo(calls, '/books/')).toHaveLength(2);
+    });
+    expect(readingLogCalls(calls, TODAY_ID)).toHaveLength(1);
+    expectNoGuilt();
+  });
+
+  it('keeps the list, says so without charging anyone, and the RETRY works (rule 14)', async () => {
+    /*
+      ⚠️ **DECISÃO G**: a falha não desfaz a tela. O recado fala do registro que
+      não foi gravado, nunca da pessoa que não leu — e o `expectNoGuilt` roda
+      NESTE estado, que é onde a frase de cobrança nasceria.
+    */
+    let attempts = 0;
+    const calls = await renderBook({
+      readingLog: (request) => {
+        attempts += 1;
+        return attempts === 1
+          ? { status: 500, body: { error: 'Internal Server Error' } }
+          : readingLogOf(request);
+      },
+      book: [
+        bookReply(aBook({ id: BOOK_ID }), plan(), WRITERS, READERS),
+        bookReply(aBook({ id: BOOK_ID }), plan(), WRITERS, [
+          { planItemId: TODAY_ID, userIds: [MARIA, MARCOS] },
+        ]),
+      ],
+    });
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    await press(readButtonOrThrow(false));
+
+    await waitFor(() => {
+      expect(screen.queryByText(pt.pages.book.read.failed)).not.toBeNull();
+    });
+    // A lista NÃO se perdeu, e nada da API foi para a tela.
+    expect(planRows()).toHaveLength(3);
+    expect(readableText()).not.toContain('Internal Server Error');
+    expect(bookScreenIsUp()).toBe(true);
+    expect(requestsTo(calls, '/books/')).toHaveLength(1);
+    expectNoGuilt();
+
+    // ⚠️ A METADE QUE IMPORTA: repetir REFAZ a requisição.
+    await press(screen.getByRole('button', { name: pt.pages.book.retry }));
+
+    await waitFor(() => {
+      expect(readingLogCalls(calls, TODAY_ID)).toHaveLength(2);
+    });
+    await waitFor(() => {
+      expect(readButton(true)).not.toBeNull();
+    });
+    expect(screen.queryByText(pt.pages.book.read.failed)).toBeNull();
+    expectNoGuilt();
+  });
+
+  it('shows the marking in flight without losing the plan, and charges nothing there either (rule 15)', async () => {
+    let release: (() => void) | undefined;
+    const inFlight = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const calls = await renderBook({
+      readingLog: async (request) => {
+        await inFlight;
+        return readingLogOf(request);
+      },
+    });
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    await press(readButtonOrThrow(false));
+
+    // O estado "em voo" é um estado como outro qualquer: a lista continua, o
+    // botão anuncia que está ocupado, e nada cobra ninguém.
+    expect(planRows()).toHaveLength(3);
+    expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
+    expectNoGuilt();
+
+    release?.();
+    await waitFor(() => {
+      expect(requestsTo(calls, '/books/')).toHaveLength(2);
+    });
+    expectNoGuilt();
+  });
+});
+
 describe('tapping a day goes to the note of that day (rule 8)', () => {
   it('navigates to /books/:bookId/days/:planItemId, with the ids in the right order', async () => {
     const calls = await renderBook();
@@ -875,7 +1532,31 @@ describe('⚠️ ONE LINK TO THE COLLECTION, IN PLACE OF THE TWO TABS (rule 14 o
       (O `<select>` de idioma do cabeçalho não é chip nem grupo.)
     */
     expect(screen.queryAllByRole('group')).toHaveLength(0);
-    expect(document.querySelectorAll('[aria-pressed]')).toHaveLength(0);
+
+    /*
+      ⚠️ **A ASSERÇÃO FOI CORRIGIDA NA RODADA DA 32b, e o achado é a lição nº 4
+      do MVP 1 com o acusador na mão.**
+
+      Ela era `document.querySelectorAll('[aria-pressed]')).toHaveLength(0)` —
+      GLOBAL à tela. Isso não proíbe "aba sobrevivente", que é o que o nome
+      deste teste promete: proíbe **o atributo ARIA em qualquer lugar da tela
+      do livro**. Medido: pôr `aria-pressed` no botão "li hoje" — que não é aba
+      nenhuma, e para quem ouve a tela seria estado anunciado duas vezes — dava
+      **1 acusador**, e era este teste. O teste tinha passado a mandar no
+      produto.
+
+      O corpo agora diz o que o nome diz: nenhum chip de aba, ou seja, nenhum
+      `[aria-pressed]` que **não seja** o toque de leitura. Um chip de verdade
+      continua vermelho aqui (medido: **1** acusador).
+    */
+    const readingToggle = readButton(false);
+    expect(readingToggle).not.toBeNull();
+    expect(
+      Array.from(document.querySelectorAll('[aria-pressed]')).filter(
+        (element) => element !== readingToggle,
+      ),
+    ).toEqual([]);
+
     expect(
       screen.getAllByRole('link', { name: pt.pages.book.acervoLink }),
     ).toHaveLength(1);
@@ -1156,19 +1837,51 @@ describe('⚠️ THE SHELF OF THE HOME LINKS HERE, AND THE CLICK DOES NOT RELOAD
 });
 
 describe('the source of the book screen (rules 5, 15, 16)', () => {
-  it('keeps the danger colour out of the SOURCE FILE, not only out of the states rendered here', () => {
+  it('keeps the danger colour out of the SOURCE FILES, not only out of the states rendered here', () => {
     /*
       A rede contra a cor voltar por um estado que ninguém pensou em renderizar.
-      Vale porque a tela é um arquivo só. O que ele NÃO é: a guarda da cor nos
-      estados — essa é a `expectNoGuilt`, que roda em todos eles.
+
+      ⚠️ **E ELA VARRE OS DOIS ARQUIVOS DESDE A TAREFA 32b.** A tela deixou de
+      ser "um arquivo só" quando a marca de leitura foi para
+      `reading-marks.tsx` — e é justamente lá que mora o caminho de ERRO
+      ("não deu para registrar"), que é o lugar mais natural do mundo para
+      alguém pintar de vermelho. Uma varredura de fonte que ficasse só no
+      `book.tsx` teria perdido exatamente o arquivo novo: é a forma de
+      "guarda no lugar errado" do §7.9, nascendo de um `split`.
+    */
+    for (const file of ['book.tsx', 'reading-marks.tsx']) {
+      expect(stripComments(pageSource(file))).not.toMatch(DANGER_STYLE);
+    }
+
+    // O lado positivo do par: os arquivos lidos são os certos (um caminho
+    // errado lançaria, mas um arquivo VAZIO passaria calado — §7.4 escrito
+    // como varredura de fonte).
+    expect(stripComments(bookSource())).toContain('pages.book.plan.today');
+    expect(stripComments(pageSource('reading-marks.tsx'))).toContain(
+      'pages.book.plan.readerNamed',
+    );
+  });
+
+  it('⚠️ keeps the reading touch OUT of the days that are not today (rule 10, decision E)', () => {
+    /*
+      ⚠️ **A REDE DE FONTE CONTRA OS 30 TOGGLES.** O estado "um botão por dia"
+      não é renderizado por teste nenhum — ele nem existe —, então nenhuma
+      varredura de DOM o pegaria. O que o impede hoje é estrutural: o
+      `TodayReading` é montado **uma vez**, fora do `planItems.map`, a partir
+      de um `find` pelo dia de hoje.
+
+      Se alguém o mover para dentro do `map`, esta asserção fica vermelha antes
+      de a lista virar formulário de auditoria retroativa — que é a razão de
+      escopo que a spec desta fatia escreveu por extenso.
     */
     const source = stripComments(bookSource());
+    const list = source.slice(source.indexOf('planItems.map('));
 
-    expect(source).not.toMatch(DANGER_STYLE);
-    // O lado positivo do par: o arquivo lido é o certo (um caminho errado
-    // lançaria, mas um arquivo VAZIO passaria calado — §7.4 escrito como
-    // varredura de fonte).
-    expect(source).toContain('pages.book.plan.today');
+    expect(source).toContain('<TodayReading');
+    expect(list).not.toContain('TodayReading');
+    // E o dia de hoje é achado por comparação de STRING contra o `localDay`,
+    // o mesmo que a marca da lista usa — nunca um `new Date()` novo aqui.
+    expect(source).toContain('planItems.find((item) => item.date === today)');
   });
 
   it('⚠️ keeps NO filter of its own — the whole filter moved to the acervo (rule 13 of task 28)', () => {
@@ -1264,8 +1977,37 @@ describe('the source of the book screen (rules 5, 15, 16)', () => {
     for (const label of [
       pt.pages.book.plan.writerNamed,
       en.pages.book.plan.writerNamed,
+      pt.pages.book.plan.readerNamed,
+      en.pages.book.plan.readerNamed,
     ]) {
       expect(label).toContain('{{name}}');
     }
+
+    /*
+      ⚠️ **AS CHAVES DA TAREFA 32b, NOS DOIS IDIOMAS.** O par pt≠en é o que
+      pega o bloco copiado e colado — que passa na paridade de CHAVES do
+      catálogo e embarca português no inglês.
+    */
+    expect(Object.keys(en.pages.book.read)).toEqual(
+      Object.keys(pt.pages.book.read),
+    );
+    for (const [ptText, enText] of [
+      [pt.pages.book.read.mark, en.pages.book.read.mark],
+      [pt.pages.book.read.unmark, en.pages.book.read.unmark],
+      [pt.pages.book.read.failed, en.pages.book.read.failed],
+      [pt.pages.book.plan.reader, en.pages.book.plan.reader],
+      [pt.pages.book.plan.readerNamed, en.pages.book.plan.readerNamed],
+    ]) {
+      expect(enText).not.toBe(ptText);
+    }
+
+    /*
+      ⚠️ **E OS DOIS ESTADOS DO BOTÃO NÃO DIZEM A MESMA COISA, nos dois
+      idiomas.** O rótulo É o estado (decisão D: sem `aria-pressed`), então
+      dois rótulos iguais apagariam a informação inteira — e o teste de tela
+      que procura o botão pelo nome passaria a achar o mesmo nos dois casos.
+    */
+    expect(pt.pages.book.read.mark).not.toBe(pt.pages.book.read.unmark);
+    expect(en.pages.book.read.mark).not.toBe(en.pages.book.read.unmark);
   });
 });

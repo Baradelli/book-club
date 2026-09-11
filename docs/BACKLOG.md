@@ -1918,9 +1918,91 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       `migrate dev` de outra pessoa. É do repositório inteiro, não desta tabela._
       _**Gates:** os cinco limpos, verificados pelo orquestrador. `ui` e `app` intocados._
 
-- [ ] **32b** — A marca de leitura na tela do livro. ⚠️ **FATIA INSERIDA**, e a **primeira
-      unidade dela encerra a fase 2 do `readers`** (tirar o `.optional()`), antes da tela.
-      → _a detalhar_
+- [x] **32b** — A marca de leitura na tela do livro. ⚠️ **FATIA INSERIDA**, a metade de tela
+      da 32. → `tasks/32b-marca-de-leitura-na-tela.md`
+      _**PROGRESSO VIRA GESTO, E SEM UM NÚMERO NA TELA.** Entregue: a marca de quem leu em
+      cada dia do plano, ao lado dos avatares de quem escreveu, e o toque "li hoje" em
+      primeira pessoa. **428 shared** (era 426) **· 195 ui** (intocado) **· 1399 backend**
+      (intocado) **· 641 app** (era 620). Integração **436**, inalterada. Chunk
+      **418.320 B** (era 416.251, **+2.069**), folga **31.680**. Banco limpo, super-admin
+      intacto._
+      _**⚠️ A PRIMEIRA UNIDADE NÃO FOI A TELA — foi encerrar a fase 2 do `readers`**, e isso
+      trocou a guarda por uma melhor. Com `.optional()`, o handler que **esquecia** o campo
+      compilava e passava em **1399/1399** unitários (medido na 32). Com o campo obrigatório,
+      o acusador passa a ser **o compilador** (`TS2345` em `book-routes.ts`) — que é um dos
+      cinco gates e roda em toda fatia. A asserção que existia **de propósito** para ficar
+      vermelha na fase 2 foi **trocada**, não apagada: `still accepts a response without
+      readers, which is the phase-1 shape` → `refuses a response without readers, now that
+      the phase-in is done`._
+      _**A tela executa a decisão do dono** (`ACEITE-MVP.md`, MVP 3, pergunta 1): presença,
+      não placar. Uma marca por leitor, nada quando ninguém leu, **nenhum número e nenhum
+      "+N" de estouro** — e o toque só existe quando há dia de hoje no plano, porque um botão
+      desabilitado seria cobrança silenciosa._
+      _**⚠️ O ACHADO ALTO FOI DE DOCUMENTAÇÃO, e reabria um problema que o projeto já tinha
+      fechado.** O executor mediu o `book.tsx` com um contador próprio (o canônico **com um
+      passo a mais**: remove `{/*…*/}` antes dos blocos `/*…*/`), obteve 243, viu o docblock
+      dizendo 247 e **escreveu no código que o canônico divergia**. Medido pelo orquestrador:
+      o canônico dá **247** no HEAD — quem diverge é o contador novo. O repositório passou a
+      ter **dois números para o mesmo arquivo no mesmo commit**, que é a repetição literal do
+      que a auditoria da Tarefa 25 encontrou (**491, 483, 426** para o mesmo `book.tsx`) e a
+      razão de o contador ter virado **um comando único**. Pior que o número errado era a
+      prosa: ela **invertia quem diverge**, ensinando o próximo leitor a desconfiar do
+      instrumento certo. Corrigido, e o executor achou **mais dois** números velhos na própria
+      tabela que **define** o contador (`acervo.tsx` 514→**511**, `acervo-entries.ts`
+      113→**120**). Os sete números da tabela foram reconferidos pelo orquestrador, um a um._
+      _**⚠️ UM BURACO PRÉ-EXISTENTE NA GUARDA DO ADR 0002, medido e fechado.** A varredura de
+      **fonte** do `app` usava `code.normalize('NFD')` — que **decompõe** o acento e **não o
+      remove**. Verificado aritmeticamente pelo orquestrador: `'Só você vê'` em NFD **não**
+      contém `'so voc'`. Cinco dos quinze termos (`so voc`, `somente voc`, `apenas voc`,
+      `visivel para`, `visivel so`) eram **inalcançáveis** — e em português ninguém escreve
+      esses sem acento. A mesma frase em ASCII acusava; acentuada dava **0 em 24**. Conserto
+      de **uma palavra** (`withoutDiacritics`, helper que já existia), medido **0 → 1** pelo
+      orquestrador, mais um **par de falsificação do matcher**, sem o qual voltar ao `NFD`
+      deixaria os quinze `it.each` verdes. ⚠️ **`packages/ui` foi medido e NÃO tem o buraco** —
+      ele paga com a lista dobrada (`'só voc'` **e** `'so voc'`), não com normalização._
+      _**Dois achados sobre onde a guarda mora:** (1) a regra 13 (toque duplo não manda dois
+      `PUT`) estava guardada **inteira pelo `Button` de `packages/ui`** — pacote que a fatia
+      não pode tocar. Nasceu um `useRef` de "em voo" na própria tela; medido com honestidade:
+      com o `Button` intacto os dois mecanismos se sobrepõem e remover só o `ref` dá **0**
+      acusadores — o que o `ref` compra é a propriedade **deixar de depender** de um contrato
+      alheio. (2) ⚠️ **A asserção de zero `aria-pressed` era o teste mandando no produto**
+      (lição nº 4 do MVP 1): o corpo proibia o atributo **em qualquer lugar do documento**,
+      num teste cujo nome promete "nenhuma aba sobrevivente". Consertada **a asserção, não o
+      produto** — a escolha de trocar o rótulo em vez de usar `aria-pressed` está certa (usar
+      os dois faz o leitor anunciar o estado duas vezes), e agora ela ainda pega uma aba de
+      verdade (**1** acusador) sem vetar o atributo no botão de leitura (**0**)._
+      _**A medição do executor foi corrigida pelo revisor num ponto:** os "2 acusadores" da
+      regra 13 eram **sujos** — tirar `loading={busy}` tirava junto o `aria-busy`, então o
+      segundo media o **spinner**, não a corrida. Com o mutante limpo é **1**._
+      _**O executor achou um "zero acusadores" sozinho:** plantou "Ninguém leu este dia" no
+      ramo de lista vazia e mediu **0 em 45** — nenhum fixture alcançava aquele ramo, porque o
+      dia que o alcança é o que tem **escrita e não tem leitura**, caso que ninguém montara.
+      Escreveu o teste: **0 → 1**. E fechou um ramo sem dono que a fatia tornou relevante
+      (`me === null`, o `/me` que ainda não chegou decidindo o estado inicial do botão): o
+      `BookSetup.me` do harness estava declarado e **morto** desde antes; agora tem uso e
+      **1** acusador._
+      _**Dividiu ANTES de crescer** (lição nº 8): nasceu `reading-marks.tsx` (**105**), e o
+      `book.tsx` foi de **247 → 277**, com o teto da spec em ~350. E a varredura de cor foi
+      **estendida ao arquivo novo** — uma guarda que ficasse só no `book.tsx` perderia
+      justamente o arquivo que contém o caminho de erro. As varreduras de **desenho** e de
+      **ícone** absorveram o arquivo novo **de graça** (são recursivas sobre `src`): 1
+      acusador cada, a lição nº 12 coberta sem manutenção._
+      _**Novo caminho no cliente HTTP:** o `DELETE` responde **204 sem corpo**, e o app nunca
+      fizera isso (o único `api.delete` de hoje recebe a linha de volta). `grep 204` no teste
+      do cliente dava **zero**. O teste nasceu no **`shared`**, onde a propriedade é decidível
+      (§7.10), com os **dois** lados do par: corpo vazio passa quando o schema aceita, e um
+      atalho que pulasse o `safeParse` no 204 é acusado pelo par negativo._
+      _**Dívida registrada:** o módulo `reading-marks` tem **dois** assuntos (a marca, que é
+      informação, e o toque, que é escrita com estado e duas chamadas HTTP) — o nome só cobre
+      o primeiro, e é o segundo que vai crescer (desfazer, fila offline, `ActivityEvent`).
+      Registrado no docblock, com o aviso de que é ele que sai quando crescer._
+      _**A densidade de i18n caiu pela metade e o número velho circulava:** depois da 29a uma
+      chave nova custa **~43 B** (só o lado `pt`), não ~86 — o `en` não está mais no chunk de
+      entrada._
+      _**Gates:** os cinco limpos, verificados pelo orquestrador, e a guarda da 29a ainda de
+      pé (`grep 'assets/en-' dist/sw.js` = **0**). `backend` e `ui` intocados._
+      _**Pergunta do dono registrada:** marcar leitura de um **dia que já passou** — ver
+      `ACEITE-MVP.md`, MVP 3, pergunta 2._
 
 - [ ] **32c** — `replacePlanItems` recusa remover dia que já tem LEITURA. ⚠️ **FATIA
       INSERIDA**, com o motivo medido na 32. → _a detalhar_

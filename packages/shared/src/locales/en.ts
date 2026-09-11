@@ -97,6 +97,14 @@ export const en: typeof pt = {
       /* The two tabs died in task 28 (decision B): the book screen is the
          PLAN, and the collection is one place, one link away. */
       acervoLink: 'See the collection of the book',
+      /* "I read today", in the first person, with the CURRENT STATE in the
+         label — the state lives in the words, not in `aria-pressed`. It only
+         exists when the plan has a day of today (task 32b, decision E). */
+      read: {
+        mark: 'Mark that I read today',
+        unmark: 'I read today — remove the mark',
+        failed: 'We could not record your reading right now.',
+      },
       plan: {
         label: 'Days of the reading plan',
         today: 'Today',
@@ -104,6 +112,11 @@ export const en: typeof pt = {
         writer: 'Someone in the club wrote on this day',
         /* Interpolated, so the avatar keeps the name AND the "on this day". */
         writerNamed: '{{name}} wrote on this day',
+        /* The reading overlay (task 32b): the sibling of the pair above, and
+           it must NOT speak the same sentence — the two marks share a row, and
+           whoever hears the screen has to tell them apart. */
+        reader: 'Someone in the club read this day',
+        readerNamed: '{{name}} read this day',
         empty: {
           title: 'This book has no reading plan yet.',
           description:

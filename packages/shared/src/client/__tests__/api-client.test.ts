@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z, ZodError } from 'zod';
 
+import { noContentResponseSchema } from '../../reading-log';
 import {
   ApiError,
   type ApiResponseLike,
@@ -448,6 +449,69 @@ describe('createApiClient', () => {
     expect(error).toBeInstanceOf(ApiError);
     if (!(error instanceof ApiError)) throw new Error('unreachable');
     expect(error.status).toBe(200);
+  });
+
+  /**
+   * ⚠️ **O 204 SEM CORPO — o caminho que o app estreou na Tarefa 32b e que
+   * NÃO tinha um único teste aqui** (`grep 204` neste arquivo devolvia zero).
+   *
+   * O `DELETE /plan-items/:planItemId/reading-log` responde **204 sem corpo**,
+   * e é o primeiro do projeto: o único `api.delete` anterior
+   * (`acervo.tsx`, o arquivamento de nota) recebe a linha atualizada de volta.
+   * A cadeia inteira depende de um detalhe que ninguém escolheu conscientemente:
+   *
+   * ```
+   * raw = await response.text()   →  ''
+   * safeJsonParse('')             →  o JSON.parse LANÇA, e a função devolve undefined
+   * options.schema.safeParse(undefined)
+   * ```
+   *
+   * Ou seja, o corpo vazio chega ao schema como `undefined`, e quem decide se
+   * isso é sucesso ou `ApiError` é o **schema que a tela passou**. A
+   * propriedade é decidível aqui (§7.10) e em nenhum lugar mais barato: numa
+   * tela ela apareceria como "a marca não sumiu" três camadas acima.
+   *
+   * ⚠️ **E O PAR NEGATIVO É METADE DO TESTE.** Sem ele, um cliente que
+   * pulasse o `safeParse` no 204 (ou em todo 2xx sem corpo) passaria — e aí o
+   * `schema` deixaria de ser fronteira exatamente onde o corpo é imprevisível.
+   */
+  it('lets a 204 with no body through when the schema accepts it (task 32b)', async () => {
+    const spy = respondingWith(textResponse(204, ''));
+    const client = createApiClient({
+      baseUrl: 'https://api.exemplo.com',
+      getToken: () => null,
+      onUnauthorized: () => undefined,
+      fetchImpl: spy.fetch,
+    });
+
+    const result = await client.delete(
+      '/plan-items/p-1/reading-log',
+      noContentResponseSchema,
+    );
+
+    expect(result).toBeUndefined();
+    expect(onlyCall(spy.calls).init.method).toBe('DELETE');
+  });
+
+  it('still runs the schema on a 204, so a schema that refuses no body fails', async () => {
+    const spy = respondingWith(textResponse(204, ''));
+    const client = createApiClient({
+      baseUrl: 'https://api.exemplo.com',
+      getToken: () => null,
+      onUnauthorized: () => undefined,
+      fetchImpl: spy.fetch,
+    });
+
+    const error = await client
+      .delete('/plan-items/p-1/reading-log', okSchema)
+      .catch((e: unknown) => e);
+
+    // O 2xx que vira `ApiError` é o "chegou e foi EXECUTADO" do §6.8: o
+    // servidor apagou o registro, e é o corpo que não casou.
+    expect(error).toBeInstanceOf(ApiError);
+    if (!(error instanceof ApiError)) throw new Error('unreachable');
+    expect(error.status).toBe(204);
+    expect(error.cause).toBeInstanceOf(ZodError);
   });
 
   it('sends DELETE without a body', async () => {

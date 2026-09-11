@@ -285,7 +285,16 @@ describe('noteResponseSchema', () => {
 });
 
 describe('bookWithPlanResponseSchema', () => {
-  function aBookWithPlan(writers: unknown): Record<string, unknown> {
+  /**
+   * ⚠️ **O `readers` ENTROU NA FÁBRICA NA FASE 2 (Tarefa 32b).** Ele era um
+   * campo que só os testes dele mandavam, porque o schema o aceitava ausente;
+   * agora é obrigatório como o `writers`, e uma fábrica que o omitisse faria
+   * TODO teste deste bloco falhar por um motivo que não é o assunto dele.
+   */
+  function aBookWithPlan(
+    writers: unknown,
+    readers: unknown = [],
+  ): Record<string, unknown> {
     return {
       book: {
         id: 'book-1',
@@ -302,6 +311,7 @@ describe('bookWithPlanResponseSchema', () => {
       },
       planItems: [],
       writers,
+      readers,
     };
   }
 
@@ -361,17 +371,30 @@ describe('bookWithPlanResponseSchema', () => {
   });
 
   /**
-   * ⚠️ **A FASE 1 DO PHASE-IN, e o teste que ela pede.** Diferente do
-   * `writers`, uma resposta SEM `readers` é aceita — e é isso que deixa os 164
-   * testes de tela de `packages/app` continuarem passando enquanto a 32b não
-   * sobe os fixtures. O docblock do schema é o dono do argumento; este teste
-   * é o que faz a fase 2 (tirar o `optional()`) ficar VERMELHA aqui em vez de
-   * passar batida.
+   * ⚠️ **A ASSERÇÃO TROCADA DA FASE 2 (Tarefa 32b), e o registro da troca.**
+   *
+   * Ela se chamava `still accepts a response without readers, which is the
+   * phase-1 shape` e assertava `expect(parsed.readers).toBeUndefined()`. Aquilo
+   * descrevia a verdade da fase 1 — o `optional()` que segurava os 164 testes
+   * de tela de `packages/app` até a 32b subir os fixtures. Com a fase 2
+   * concluída deixou de ser verdade, então foi **trocada** pela que descreve a
+   * verdade nova, e não apagada nem afrouxada (o `.optional()` reintroduzido
+   * fica vermelho AQUI).
+   *
+   * ⚠️ **E ela é o irmão exato de `refuses a response without writers`, dois
+   * testes acima** — que é o ponto do phase-in: os dois campos passam a ter a
+   * MESMA fronteira. Um handler que esquecer o `readers` no `send()` de
+   * `GET /books/:bookId` não omite mais o campo em silêncio; ele responde 500
+   * de erro de serialização (§6.1), que é a proteção que o `writers` sempre
+   * teve.
    */
-  it('still accepts a response without readers, which is the phase-1 shape', () => {
-    const parsed = bookWithPlanResponseSchema.parse(aBookWithPlan([]));
+  it('refuses a response without readers, now that the phase-in is done', () => {
+    const withoutReaders = aBookWithPlan([]);
+    delete withoutReaders['readers'];
 
-    expect(parsed.readers).toBeUndefined();
+    expect(bookWithPlanResponseSchema.safeParse(withoutReaders).success).toBe(
+      false,
+    );
   });
 
   // Nenhum contador de progresso atravessa: progresso é presença, e é o

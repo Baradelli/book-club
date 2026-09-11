@@ -200,6 +200,7 @@ function bookReply(): Reply {
       },
       planItems: [aPlanItem({ id: 'p-1', order: 1 })],
       writers: [],
+      readers: [],
     },
   };
 }

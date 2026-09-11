@@ -562,3 +562,33 @@ falta** do número, ele é aditivo: um campo na rota e uma linha na tela. Relaxa
 parte cara, e é sua.
 
 **Resposta:**
+
+### 2. Marcar que li um dia que já passou?
+
+**Como está:** o toque "li hoje" aparece **só no dia de hoje** do plano. Se você leu no
+sábado e só abriu o app na segunda, não há como registrar o sábado.
+
+**Por que ficou assim, e não é economia de esforço:** a rota aceita qualquer dia — pôr um
+alternador em cada uma das 30 linhas é barato. O que não é barato é o que isso faz com a
+tela: 30 alternadores transformam o plano numa **lista de auditoria retroativa**, e é
+exatamente ali que *"por que você não marcou o dia 4?"* nasce. Todo o resto do MVP 3 foi
+desenhado para não ter esse tom (a ausência é silenciosa, não há contador, não há barra), e
+seria estranho a única exceção ser justo o gesto central.
+
+**O custo de não ter, e ele é real:** quem lê em fim de semana e marca na segunda perde o
+registro. Como o progresso é presença — a marca no dia do plano —, o dia fica em branco para
+sempre, e o dia em branco é indistinguível de "não li".
+
+**As alternativas:**
+- **(a)** deixar como está: só hoje;
+- **(b)** marcar o dia **ao abrir a anotação daquele dia** — você já está lá, já é o contexto
+  daquele trecho, e não existe lista de alternadores em lugar nenhum;
+- **(c)** 30 alternadores na lista do plano;
+- **(d)** só o dia de hoje e o de ontem.
+
+**Recomendação: (a) por enquanto, e (b) se incomodar.** A (b) é a única que dá o registro
+sem criar a lista de auditoria — ela aparece onde você já está, e uma de cada vez. A (c) é a
+que eu evitaria mesmo se você pedir o recurso; a (d) é uma régua arbitrária que vai gerar a
+pergunta "por que ontem sim e anteontem não?".
+
+**Resposta:**

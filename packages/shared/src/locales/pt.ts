@@ -190,6 +190,29 @@ export const pt = {
         desta tela.
       */
       acervoLink: 'Ver o acervo do livro',
+      /*
+        ⚠️ **O TOQUE "LI HOJE" (Tarefa 32b) — em PRIMEIRA PESSOA, e o rótulo
+        diz o ESTADO ATUAL junto com a ação.**
+
+        Ele é um botão de dois estados e não um `checkbox` (decisão D): o
+        estado é do servidor e a ação é assíncrona, e um `checkbox` prometeria
+        alternância local imediata. Como o estado vive no RÓTULO, não há
+        `aria-pressed` — quem ouve a tela ouve a frase inteira, e a varredura
+        que exige zero `[aria-pressed]` nesta tela (o resto das abas mortas da
+        Tarefa 28) continua valendo.
+
+        ⚠️ Ele só existe quando HÁ um dia de hoje no plano (decisão E): um
+        livro do mês passado não tem "hoje", e um botão desabilitado ali seria
+        cobrança silenciosa ("você não pode mais").
+
+        ⚠️ E o recado de falha **não** cobra ninguém: ele fala do registro que
+        não foi gravado, nunca da pessoa que não leu.
+      */
+      read: {
+        mark: 'Marcar que li hoje',
+        unmark: 'Li hoje — tirar a marca',
+        failed: 'Não deu para registrar sua leitura agora.',
+      },
       plan: {
         /* Nomeia a lista para o leitor de tela ("lista, 30 itens"). */
         label: 'Dias do plano de leitura',
@@ -216,6 +239,23 @@ export const pt = {
           acima.
         */
         writerNamed: '{{name}} escreveu neste dia',
+        /*
+          ⚠️ **A SOBREPOSIÇÃO DE LEITURA (Tarefa 32b) — o par irmão do
+          `writer`/`writerNamed`, e ele NÃO pode dizer a mesma frase.**
+
+          As duas marcas convivem na MESMA linha do plano, e a lição nº 16 do
+          MVP 2 ("duas coisas que falam a mesma frase") já mentiu numa tela
+          deste projeto: o avatar de quem escreveu e a marca de quem leu
+          precisam ser distinguíveis por quem OUVE a tela, e não só por quem a
+          vê. Daí "leu" contra "escreveu", e um teste que prova que os dois
+          textos acessíveis são diferentes.
+
+          Nada de contagem: um leitor a mais é uma marca a mais, nunca um
+          número (`docs/ACEITE-MVP.md`, MVP 3, pergunta 1 — progresso é
+          presença, não placar).
+        */
+        reader: 'Alguém do clube leu este dia',
+        readerNamed: '{{name}} leu este dia',
         empty: {
           title: 'Este livro ainda não tem plano de leitura.',
           description:

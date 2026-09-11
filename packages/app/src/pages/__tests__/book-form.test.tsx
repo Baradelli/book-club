@@ -66,7 +66,7 @@ function bookWithPlanReplyOf(
   book: BookResponse,
   planItems: readonly PlanItemResponse[],
 ): Reply {
-  return { status: 200, body: { book, planItems, writers: [] } };
+  return { status: 200, body: { book, planItems, writers: [], readers: [] } };
 }
 
 /** O plano que a tela de edição abre preenchida (regra 14). */
@@ -357,6 +357,7 @@ describe('THE BOOK: what is required, what is optional, and what goes in the bod
                 book: aBook({ id: 'b-novo', clubId: CLUB_ID }),
                 planItems: [],
                 writers: [],
+                readers: [],
               },
             }
           : booksReply([]),
@@ -390,6 +391,7 @@ describe('THE BOOK: what is required, what is optional, and what goes in the bod
                 book: aBook({ id: 'b-novo', clubId: CLUB_ID }),
                 planItems: [],
                 writers: [],
+                readers: [],
               },
             }
           : booksReply([]),
@@ -457,6 +459,7 @@ function createdReply(): Responder {
             book: aBook({ id: 'b-novo', clubId: CLUB_ID }),
             planItems: [],
             writers: [],
+            readers: [],
           },
         }
       : booksReply([]);

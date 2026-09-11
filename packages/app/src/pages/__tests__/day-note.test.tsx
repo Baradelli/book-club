@@ -282,6 +282,7 @@ function bookReply(planItems: readonly PlanItemResponse[] = plan()): Reply {
       },
       planItems,
       writers: [],
+      readers: [],
     },
   };
 }

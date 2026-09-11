@@ -208,6 +208,7 @@ function bookReply(): Reply {
       book: aBook({ id: BOOK_ID, clubId: CLUB_ID }),
       planItems: [],
       writers: [],
+      readers: [],
     },
   };
 }
