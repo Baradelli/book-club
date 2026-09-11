@@ -2250,21 +2250,90 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       _**Nota operacional:** o Docker estava desligado de novo no começo da fatia; foi subido
       para a migration e a integração, e **deixado de pé**._
 
-- [ ] **34b** — `replacePlanItems` recusa remover dia que já tem ATIVIDADE. ⚠️ **FATIA
-      INSERIDA**, com o motivo medido na 34. → _a detalhar_
-      _**A regressão, confirmada elo por elo:** o `ActivityEvent_planItemId_fkey` é a
-      **terceira** FK `RESTRICT` sobre `ReadingPlanItem`, e é a única **sem guarda de
-      domínio** — as outras duas dão **400 com mensagem** (Tarefas 11 e 32c). O caminho é
-      exatamente um: um dia **lido e depois desmarcado** perde o `ReadingLog` (hard delete),
-      mas **mantém o `ActivityEvent` do tipo `READ`**, porque o port do evento não tem
-      `delete` e o log é imutável. As duas guardas devolvem `[]`, a remoção estoura na FK, e
-      `P2003` **não está mapeado** no `handle-domain-error` → **500 mudo**. O dado fica a salvo
-      (`$transaction`), como nas outras duas vezes._
-      _⚠️ **E há uma pergunta de desenho que merece spec, não apêndice:** esta seria a
-      **terceira** guarda quase idêntica no mesmo UseCase. O §7.1 manda perguntar se elas
-      generalizam — uma guarda que consulta os três repositórios, ou três mensagens distintas
-      como a 32c decidiu? A resposta muda o tamanho da fatia._
-- [ ] **35** — Feed de atividade na home. → _a detalhar_
+- [x] **34b** — `replacePlanItems` recusa remover dia que já tem ATIVIDADE, **e nasce a guarda
+      contra esquecer a quarta FK**. ⚠️ **FATIA INSERIDA**, com o motivo medido na 34.
+      → `tasks/34b-guarda-de-atividade-no-plano.md`
+      _**478 shared · 195 ui · 1548 backend** (era 1520) **· 641 app**. Integração **491** (era
+      484). Chunk **418.565 B**, idêntico. Banco limpo, `ActivityEvent` em 0, super-admin
+      intacto._
+      _**⚠️ A ENTREGA PRINCIPAL NÃO FOI A TERCEIRA GUARDA — FOI A GUARDA CONTRA ESQUECER A
+      QUARTA.** A terceira é 20 linhas copiadas da 32c. O que custava caro era o **padrão**:
+      **duas fatias seguidas** introduziram FK sem guarda (32→32c, 34→34b), e nas duas a
+      lacuna só apareceu porque **alguém foi procurar**. Duas vezes é coincidência; três é
+      padrão, e padrão pede resposta estrutural (§7.9: requisito sem guarda automática é
+      intenção). Nasceu o `plan-item-fk-guards.test.ts`: ele lê o `schema.prisma`, acha **toda**
+      FK que recusa remoção apontando para `ReadingPlanItem`, e exige guarda de domínio para
+      cada uma._
+      _**A regressão consertada**, confirmada elo por elo pelo orquestrador antes da spec: um
+      dia **lido e depois DESMARCADO** perdia o `ReadingLog` (hard delete) mas mantinha o
+      `ActivityEvent` do tipo `READ` — o port do evento não tem `delete` e o log é imutável. As
+      duas guardas devolviam `[]`, a remoção estourava na FK, e `P2003` **não está mapeado** →
+      **500 mudo**. Antes da 34 esse dia se removia. Agora: **400** com
+      `cannot remove N reading plan day(s) that already have activity` — e ela **não diz
+      "leu"**, porque o dia do caso real não tem leitor nenhum._
+      _**⚠️ O ACHADO ALTO: A GUARDA NOVA TINHA UM FURO DO TAMANHO DO PADRÃO DO PRISMA.** O
+      predicado casava o **texto** `onDelete: Restrict`. Medido pelo revisor e **reconfirmado
+      pelo orquestrador rodando o predicado contra quatro formas**: o **implícito obrigatório**
+      — relação sem `?` e sem `onDelete` — **escapava**, e ele **é** `ON DELETE RESTRICT` no
+      Postgres (o próprio `schema.prisma` já registrava isso, medido na Tarefa 24). Ou seja: a
+      quarta FK podia nascer com `RESTRICT` de verdade, sem guarda, com a suíte **verde** —
+      exatamente o bug que a fatia existe para matar, entrando pela porta que o ORM abre por
+      omissão. Conserto: o predicado passou a decidir pelo **default do Prisma**, não pelo
+      texto escrito. Verificado pelo orquestrador nos quatro casos: explícito **conta**,
+      implícito obrigatório **conta**, opcional sem `onDelete` (`SetNull`) **não conta**,
+      `Cascade` declarado **não conta**._
+      _**⚠️ E o executor mediu o OUTRO lado com mutante, porque a asserção passava por
+      acidente.** `restrictFksToPlanItem(implicitOptional) === []` já era verde **antes** do
+      conserto — mas porque **tudo** devolvia `[]`. Com o mutante "toda omissão é Restrict",
+      ela acusa. Asserção que passa pela razão errada não é asserção._
+      _**As três mutações que provaram a guarda estrutural, e a mais valiosa não foi pedida:**
+      **M2** (terceira guarda removida) → 9 acusadores e a mensagem **nomeia** a FK órfã, o
+      método exato a escrever e a consequência (*"answers 500 instead of 400"*). **M5**
+      (chamada da guarda de **nota** removida, **docblock intacto** citando o nome do método) →
+      11 acusadores: o `withoutTsComments` funciona **contra o arquivo real**, não só contra a
+      string fabricada — era o falso verde mais provável. **M6** (regex quebrado) → 3, o
+      antídoto do §7.4. E o regex é robusto em 8 de 8 formas de escrita._
+      _**O LIMITE da guarda, medido e agora escrito onde se lê:** com a chamada mantida e o
+      `throw` removido, a guarda estrutural fica **VERDE** (7 acusadores comportamentais). Ela
+      prova que a **chamada existe**, não que ela recusa. Para as três FKs de hoje é inofensivo;
+      para a quarta é justamente o estado em que teste de comportamento ainda não existe — e é
+      por isso que a mensagem de falha diz "add a call … **that throws**". Ponteiro para onde a
+      recusa é provada, **pelo nome do teste** (§7.4)._
+      _**O rename foi desvio da spec e melhorou a entrega:** `planItemIdsWithAnyActivityEvent`
+      em vez de `…WithAnyActivity`, porque com o nome do **modelo inteiro** a derivação
+      `guardMethodFor(model) = 'planItemIdsWithAny' + model` fica **mecânica** — e a guarda
+      funciona sozinha para a quarta FK, sem tabela de-para mantida à mão. Os três ports já
+      seguiam a convenção sem exceção._
+      _**⚠️ NÃO generalizar as três guardas numa tabela — e o revisor corrigiu o RACIOCÍNIO sem
+      mudar a conclusão.** O executor justificou dizendo que a tabela ficaria verde no mesmo
+      mutante "porque a linha some junto com a guarda". Medido: **não é o mecanismo** — a
+      varredura casa o **texto** do nome do método em qualquer ponto do arquivo, então uma
+      tabela com os três nomes continuaria satisfazendo-a. A conclusão continua certa pela
+      razão certa: **uma tabela não deriva de nada**, e a quarta FK sem linha nela não fica
+      vermelha em lugar nenhum. A prateleira arrumada não tranca a porta. Registro corrigido no
+      docblock._
+      _**Um bug de produto que o executor tornou IRREPRESENTÁVEL, e o revisor mediu a
+      diferença:** `ActivityEvent.planItemId` é **anulável** (grifo e avulsa não têm dia), e uma
+      guarda que contasse esses eventos **recusaria toda edição de plano de um clube que
+      grifa**. Nas duas implementações a exclusão do nulo é **estrutural** (`IN` contra `NULL` é
+      falso; `Set<string>.has(null)` é falso), então os testes unitários do nulo são
+      **documentação (§7.1), não rede** — o único acusador vivo é o contrato. Registrado para
+      ninguém contá-los como proteção._
+      _**Dois ponteiros mortos consertados no `schema.prisma` (só comentário, com autorização
+      explícita do orquestrador):** o bloco ainda dizia que a FK do evento *"NÃO tem guarda"* e
+      apontava para um teste que esta fatia renomeou — **as duas metades falsas**. É a lição do
+      `dayRange` no `CLAUDE.md`: regra que aponta para o que não existe faz o próximo agente
+      procurar, não achar e inventar. Provado que **nenhuma linha de modelo mudou** (md5 do
+      schema sem comentários idêntico; `migrate status` sem drift; `migrate diff` vazio)._
+      _**E a decomposição do "13" estava errada nos DOIS docblocks** — o texto da 34b fora
+      **copiado verbatim** do da 32c, que já errava: são **sete** estados de permissão/tenant e
+      **seis** formatos de rascunho, não seis e sete. Total certo, conta errada. Lição nº 17 em
+      escala pequena: número copiado sem recontar._
+      _**A troca do teste da lacuna** (feita sem a spec pedir, pelo molde da 32c):
+      `is a third reason the plan replacement can fail…` → `is the net under the domain guard…`.
+      Comparado asserção por asserção: os **seis** corpos idênticos, mais um acréscimo._
+      _**Gates:** os cinco limpos, verificados pelo orquestrador. `app`, `ui` e `shared`
+      intocados; nenhuma migration._
 
 ### Bloco I — Push
 

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { ACTIVITY_FEED_DEFAULT_LIMIT } from '@clube/shared';
+import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ActivityEvent } from '../../domain/activity-event';
@@ -603,27 +604,181 @@ describe('PrismaActivityEventRepository (contract)', () => {
   });
 
   /**
-   * ⚠️ **DECISÃO H, a consequência MEDIDA — e ela é REPORTE, não conserto.**
+   * ⚠️ **REGRAS 1, 2 e 3 da Tarefa 34b** — o método da TERCEIRA guarda do
+   * `replacePlanItems`, espelho do `planItemIdsWithAnyNote` da nota e do
+   * `planItemIdsWithAnyReadingLog` do log.
    *
-   * O `ActivityEvent.planItemId` é a **terceira** FK `RESTRICT` apontando para
-   * o `ReadingPlanItem`, ao lado de `Note_planItemId_fkey` e
-   * `ReadingLog_planItemId_fkey`. As duas primeiras têm guarda de domínio na
-   * frente no `replacePlanItems` (`planItemIdsWithAnyNote` e
-   * `planItemIdsWithAnyReadingLog`), que dão **400 com mensagem**; esta **não
-   * tem** — então remover um dia que só tem EVENTO estoura na FK, como erro de
-   * banco, e a borda o relança em **500**.
+   * Contra o Postgres, e não só contra o fake, porque as três propriedades que
+   * importam são do **banco**: o `IN (...)` devolve uma linha por evento (a
+   * Maria escreveu e depois leu o mesmo dia: duas), e é o `Set` do repositório
+   * que as colapsa num id só; o `IN (...)` contra a coluna **nula** é falso, e
+   * é isso que faz o evento de grifo não ancorar dia nenhum; e a lista vazia
+   * não pode virar um `IN ()`.
+   */
+  describe('planItemIdsWithAnyActivityEvent', () => {
+    it('finds a day that some event points at', async () => {
+      await repo.save(anEvent('anyact-found'));
+
+      await expect(
+        repo.planItemIdsWithAnyActivityEvent([DAY_ONE, DAY_TWO]),
+      ).resolves.toEqual([DAY_ONE]);
+    });
+
+    /**
+     * É um CONJUNTO: dois eventos no MESMO dia dão **um** id, não dois — senão
+     * a mensagem da guarda diria "2 dias" para um dia só.
+     *
+     * Aqui a duplicata é real (a tabela não tem `@@unique` nenhum, então
+     * escrever e depois ler o mesmo dia são duas linhas legítimas), e é por
+     * isso que este teste vive contra o banco: no `IN (...)` cru voltariam dois
+     * `planItemId` iguais.
+     */
+    it('returns one id per day, not one per event', async () => {
+      await repo.save(anEvent('anyact-set-a'));
+      await repo.save(anEvent('anyact-set-b', { type: 'READ' }));
+
+      // A precondição que dá dente ao teste: são DUAS linhas no banco.
+      await expect(
+        prisma.activityEvent.count({ where: { planItemId: DAY_ONE } }),
+      ).resolves.toBe(2);
+      await expect(
+        repo.planItemIdsWithAnyActivityEvent([DAY_ONE]),
+      ).resolves.toEqual([DAY_ONE]);
+    });
+
+    it('never returns an id no event points at', async () => {
+      await repo.save(anEvent('anyact-untouched'));
+
+      await expect(
+        repo.planItemIdsWithAnyActivityEvent([DAY_TWO, FOREIGN_DAY]),
+      ).resolves.toEqual([]);
+    });
+
+    // Só os ids PEDIDOS: um método que ignorasse a lista (devolvendo todo dia
+    // com evento) passaria nos testes de cima.
+    it('returns only the asked ids', async () => {
+      await repo.save(anEvent('anyact-asked-a'));
+      await repo.save(anEvent('anyact-asked-b', { planItemId: DAY_TWO }));
+
+      await expect(
+        repo.planItemIdsWithAnyActivityEvent([DAY_ONE]),
+      ).resolves.toEqual([DAY_ONE]);
+    });
+
+    /**
+     * ⚠️ **A coluna é ANULÁVEL, e o `IN (...)` contra nulo é FALSO** — a
+     * fidelidade que o irmão do `ReadingLog` não tem (lá a coluna é NOT NULL) e
+     * o irmão da nota tem. O evento de anotação avulsa e o de grifo gravam
+     * `planItemId: null`, e nenhum dos dois pode manter um dia do plano vivo:
+     * a FK também não os amarra a dia nenhum.
+     */
+    it('ignores an event that has no reading day at all', async () => {
+      await repo.save(
+        anEvent('anyact-null', { type: 'HIGHLIGHT', planItemId: null }),
+      );
+
+      // A precondição: a linha EXISTE, e com a coluna nula — senão uma tabela
+      // vazia passaria aqui sem ter exercitado o `IN` contra `NULL`.
+      // (contado dentro do clube do arquivo: o banco é o de desenvolvimento do
+      // dono, e uma contagem global mediria evento de outra gente.)
+      await expect(
+        prisma.activityEvent.count({
+          where: { clubId: CLUB_ID, planItemId: null },
+        }),
+      ).resolves.toBe(1);
+      await expect(
+        repo.planItemIdsWithAnyActivityEvent([DAY_ONE, DAY_TWO]),
+      ).resolves.toEqual([]);
+    });
+
+    /**
+     * ⚠️ **REGRA 2 — `[]` devolve `[]` SEM IDA AO BANCO, e a prova é uma
+     * CONTAGEM de consultas, não o resultado** (§7.3).
+     *
+     * O resultado é `[]` nas duas implementações — a que sai na hora e a que
+     * manda um `IN ()` ao Postgres para receber zero linhas —, então uma
+     * asserção sobre ele não separa as duas. O que separa é o SQL realmente
+     * emitido, capturado por `$on('query')` num cliente próprio (o `prisma`
+     * compartilhado não emite eventos).
+     *
+     * E os dois lados, porque um contador só afirmado como `0` é meio contador
+     * (§7.3): sem o `afterAsking: 1`, um método mutilado para `return []` antes
+     * de qualquer consulta passaria neste teste.
+     *
+     * ⚠️ **UM CLIENTE POR LADO, e a contagem lida DEPOIS do `$disconnect()`** —
+     * é o `activityEventQueriesOf` no rodapé do arquivo, e a ordem é por causa
+     * da **entrega do evento**, não por estilo: o `$on('query')` do Prisma não
+     * promete ter emitido o evento antes de a promessa da consulta resolver.
+     * Ler o array logo depois do `await` mediria um `0` quando o evento chega
+     * um tick atrasado, e o lado exposto seria justamente o `afterAsking: 1` —
+     * vermelho intermitente, que é como uma suíte aprende a ser ignorada. É a
+     * forma que a Tarefa 32c mediu, no `readingLogQueriesOf` do contrato irmão.
+     */
+    it('asks the database nothing for an empty list, and once for a real one', async () => {
+      await repo.save(anEvent('anyact-count'));
+
+      const empty = await activityEventQueriesOf(
+        async (counted) => await counted.planItemIdsWithAnyActivityEvent([]),
+      );
+      const asked = await activityEventQueriesOf(
+        async (counted) =>
+          await counted.planItemIdsWithAnyActivityEvent([DAY_ONE]),
+      );
+
+      // Os resultados, que são iguais nas duas implementações...
+      expect({ empty: empty.result, asked: asked.result }).toEqual({
+        empty: [],
+        asked: [DAY_ONE],
+      });
+      // ...e a contagem, que é a única coisa que as separa.
+      expect({ afterEmpty: empty.queries, afterAsking: asked.queries }).toEqual(
+        { afterEmpty: 0, afterAsking: 1 },
+      );
+    });
+  });
+
+  /**
+   * ⚠️ **A REDE EMBAIXO DA GUARDA DE DOMÍNIO — e este teste SUBSTITUI o que
+   * pinava a lacuna.**
    *
-   * É exatamente a lacuna que a Tarefa 32 registrou para o `ReadingLog` e que a
-   * **32c** consertou — e é assim que a 32c nasceu. Fica pinada aqui, com o
-   * nome dizendo o que é, para o próximo leitor não precisar descobrir de novo.
+   * O que estava aqui chamava-se
+   * `is a third reason the plan replacement can fail, and no domain guard
+   * covers it`, e documentava um **defeito**: o `ActivityEvent.planItemId` era
+   * a terceira FK `RESTRICT` apontando para o `ReadingPlanItem` e a única sem
+   * guarda de domínio na frente, então remover um dia que só tem evento
+   * estourava aqui como erro de banco — 500 mudo, nos casos irmãos que
+   * respondiam 400 com mensagem.
    *
-   * ⚠️ E a rede continua sendo a certa: tirar o `Restrict` "porque não há
-   * guarda" trocaria uma proteção estrutural por nenhuma. O dado está a salvo —
-   * o `replaceForBook` roda em `$transaction`, e o `after` prova que nem o dia
-   * condenado nem o sobrevivente se mexeram.
+   * O defeito acabou: a **34b** deu ao UseCase a terceira guarda
+   * (`planItemIdsWithAnyActivityEvent`). Mas o teste antigo **continuaria
+   * verde**, porque o repositório de fato deixa passar — quem passou a recusar
+   * é o **UseCase** —, e um teste verde cujo nome descreve um defeito já
+   * consertado é pior que nenhum: ele faz o próximo leitor acreditar que a
+   * lacuna continua aberta. Foi exatamente a troca que a decisão E da Tarefa
+   * 32c fez com o gêmeo do `ReadingLog`; aqui ela se repete, e pela terceira
+   * vez o par fica pinado nos dois lugares certos:
+   *
+   * - **Aqui (contrato):** a FK `ActivityEvent_planItemId_fkey` é a **rede**, e
+   *   continua ativa mesmo sem nota e sem leitura no dia. Tirar o `Restrict`
+   *   porque "agora tem guarda" trocaria uma proteção estrutural por uma que
+   *   alguém pode esquecer de chamar.
+   * - **A recusa EDUCADA (400 com mensagem de atividade):** é do UseCase, e
+   *   está no unitário — `usecases/__tests__/replace-plan-items.test.ts`, no
+   *   `describe('the guard that refuses to remove a day that has activity')` —
+   *   mais a fiação da rota em
+   *   `routes/__tests__/book-routes.integration.test.ts`
+   *   (`answers 400 without touching the plan when a removed day was read and
+   *   then unmarked`).
+   *
+   * As precondições `note.count === 0` e `readingLog.count === 0` ficam: são
+   * elas que dizem que a rede desta linha é a FK do EVENTO, e não uma das duas
+   * que têm `Restrict` igual.
+   *
+   * E o dado continua a salvo: o `replaceForBook` roda em `$transaction`, e o
+   * `after` prova que nem o dia condenado nem o sobrevivente se mexeram.
    */
   describe('the planItem foreign key', () => {
-    it('is a third reason the plan replacement can fail, and no domain guard covers it', async () => {
+    it('is the net under the domain guard: it refuses a day that only an activity event anchors', async () => {
       const doomed = trackedPlanItemId('gap-doomed');
       const survivor = trackedPlanItemId('gap-survivor');
       await planRepo.saveMany([
@@ -642,6 +797,11 @@ describe('PrismaActivityEventRepository (contract)', () => {
       await expect(
         prisma.readingLog.count({ where: { planItemId: doomed } }),
       ).resolves.toBe(0);
+      // ...e é o `planItemIdsWithAnyActivityEvent` que o UseCase usa para nunca
+      // chegar até aqui. A rede existe para o dia em que alguém o esquecer.
+      await expect(
+        repo.planItemIdsWithAnyActivityEvent([survivor, doomed]),
+      ).resolves.toEqual([doomed]);
 
       await expect(
         planRepo.replaceForBook(GAP_BOOK_ID, {
@@ -823,6 +983,39 @@ describe('PrismaActivityEventRepository (contract)', () => {
     });
   });
 });
+
+/**
+ * Roda `fn` contra um repositório de cliente PRÓPRIO e devolve o que ela
+ * devolveu **mais** quantas consultas ao `ActivityEvent` aquele cliente emitiu.
+ *
+ * Cliente próprio porque o `prisma` compartilhado do `_db.ts` não emite eventos
+ * de `query`. E a contagem sai **depois** do `$disconnect()`, nunca logo após o
+ * `await` da consulta: o `$on('query')` não promete ter entregado o evento
+ * quando a promessa resolve, e uma leitura antecipada seria um `0` intermitente
+ * no lado positivo da asserção. É a forma do `readingLogQueriesOf` do contrato
+ * irmão, medida na Tarefa 32c.
+ */
+async function activityEventQueriesOf<T>(
+  fn: (repo: PrismaActivityEventRepository) => Promise<T>,
+): Promise<{ result: T; queries: number }> {
+  const client = new PrismaClient({
+    log: [{ emit: 'event', level: 'query' }],
+  });
+  const seen: string[] = [];
+  client.$on('query', (event) => seen.push(event.query));
+
+  let result: T;
+  try {
+    result = await fn(new PrismaActivityEventRepository(client));
+  } finally {
+    await client.$disconnect();
+  }
+
+  return {
+    result,
+    queries: seen.filter((sql) => sql.includes('"ActivityEvent"')).length,
+  };
+}
 
 /** Um item de plano, no formato do domínio. Factory, nunca `const` (§7.7). */
 function planItem(

@@ -118,4 +118,40 @@ export class PrismaActivityEventRepository implements ActivityEventRepository {
     });
     return records.map(toDomain);
   }
+
+  /**
+   * Os dias, dos pedidos, que algum evento referencia — a leitura da TERCEIRA
+   * guarda do `replacePlanItems` (Tarefa 34b). Espelho do
+   * `planItemIdsWithAnyNote` e do `planItemIdsWithAnyReadingLog`, inclusive no
+   * `select` de uma coluna só e no `Set`.
+   *
+   * ⚠️ **NADA de `orderBy` e NADA de `take` aqui**, ao contrário do `find`
+   * logo acima: o teto do feed é do feed. Um `take` nesta consulta faria a
+   * guarda **liberar** a remoção de um dia cujo evento caísse fora do corte, e
+   * o `Restrict` da FK devolveria o 500 que a guarda existe para evitar.
+   */
+  async planItemIdsWithAnyActivityEvent(
+    planItemIds: readonly string[],
+  ): Promise<string[]> {
+    // O port promete "lista vazia não vai ao banco". Sem isto seria um
+    // `IN ()`, uma ida ao banco garantidamente vazia em toda troca de plano
+    // que não remove nada — que é o caso comum.
+    if (planItemIds.length === 0) return [];
+
+    const rows = await this.prisma.activityEvent.findMany({
+      where: { planItemId: { in: [...planItemIds] } },
+      select: { planItemId: true },
+    });
+
+    const found = new Set<string>();
+    for (const { planItemId } of rows) {
+      // O `IN (...)` já exclui a coluna nula (o evento de anotação avulsa e o
+      // de grifo): `NULL` não é igual a nada. O tipo é que não sabe disso.
+      if (planItemId !== null) found.add(planItemId);
+    }
+    // O `Set` não é otimização: é o contrato. Dois eventos no mesmo dia (a
+    // Maria escreveu e depois leu) são duas linhas e um id só, senão a
+    // mensagem da guarda diria "2 dias" para um dia só.
+    return [...found];
+  }
 }

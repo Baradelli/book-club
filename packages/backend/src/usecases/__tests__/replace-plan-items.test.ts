@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import type { ActivityEvent } from '../../domain/activity-event';
 import type { Book, ReadingPlanItem } from '../../domain/book';
 import {
   BookNotFoundError,
@@ -13,11 +14,13 @@ import type { PlanItemDraft } from '../../domain/reading-plan';
 import {
   aBook,
   aMembership,
+  anActivityEvent,
   aNote,
   aPlanItem,
   aReadingLog,
   required,
 } from '../../test-support/builders';
+import { ActivityEventRepositoryFake } from '../_fakes/activity-event-repository-fake';
 import { BookRepositoryFake } from '../_fakes/book-repository-fake';
 import { MembershipRepositoryFake } from '../_fakes/membership-repository-fake';
 import { NoteRepositoryFake } from '../_fakes/note-repository-fake';
@@ -73,6 +76,7 @@ describe('ReplacePlanItems', () => {
   let plan: ReadingPlanItemRepositoryFake;
   let notes: NoteRepositoryFake;
   let logs: ReadingLogRepositoryFake;
+  let events: ActivityEventRepositoryFake;
   let useCase: ReplacePlanItems;
   let stored: Book;
   let planBefore: ReadingPlanItem[];
@@ -86,12 +90,14 @@ describe('ReplacePlanItems', () => {
     plan = new ReadingPlanItemRepositoryFake();
     notes = new NoteRepositoryFake();
     logs = new ReadingLogRepositoryFake();
+    events = new ActivityEventRepositoryFake();
     useCase = new ReplacePlanItems(
       new AssertMembership(memberships),
       books,
       plan,
       notes,
       logs,
+      events,
     );
 
     stored = aBook({ id: BOOK_ID, clubId: CLUB_ID });
@@ -178,6 +184,12 @@ describe('ReplacePlanItems', () => {
     // consultar o registro de leitura de um clube que não é do ator — e §7.3
     // manda um `xxxCalls === 0` para CADA leitura de conteúdo.
     expect(logs.planItemIdsWithAnyReadingLogCalls).toBe(0);
+    // ⚠️ **E a TERCEIRA pelo mesmo argumento** (Tarefa 34b): "aconteceu alguma
+    // coisa neste dia" é conteúdo do clube tanto quanto as outras duas. Um
+    // contador a menos deixaria a guarda nova consultar o feed de um clube que
+    // não é do ator — e o §7.3 manda um `xxxCalls === 0` para CADA leitura de
+    // conteúdo.
+    expect(events.planItemIdsWithAnyActivityEventCalls).toBe(0);
   }
 
   describe('permission and tenant', () => {
@@ -965,9 +977,10 @@ describe('ReplacePlanItems', () => {
    * da validação do rascunho") NÃO tem teste próprio aqui, e é de propósito: o
    * dono dela é o `expectNothingTouched()`.** A linha
    * `expect(logs.planItemIdsWithAnyReadingLogCalls).toBe(0)` que ele ganhou
-   * cobre os **13** estados de erro que já chamavam o helper — livro
-   * inexistente, livro arquivado, sem membership, membership arquivado, papel
-   * MEMBER, clube alheio, e os sete formatos de rascunho inválido.
+   * cobre os **13** estados de erro que já chamavam o helper: **sete** de
+   * permissão e tenant (livro inexistente, livro arquivado, sem membership,
+   * membership arquivado, papel MEMBER, clube alheio e `clubId` contrabandeado)
+   * e **seis** formatos de rascunho inválido.
    *
    * Medido: o mutante que lê o log **antes** do `bookForActor` dá **17**
    * acusadores, e **16** deles são asserções de contador — 13 do helper e 3 de
@@ -1149,26 +1162,305 @@ describe('ReplacePlanItems', () => {
   });
 
   /**
-   * ⚠️ **REGRA 10 — A MENSAGEM NÃO MENTE EM NENHUM DOS TRÊS CASOS**, e é por
-   * isso que as guardas são DUAS com frases distintas (decisão B), e não uma
-   * frase combinada.
+   * ⚠️ **A TERCEIRA GUARDA (Tarefa 34b, regras 5–10)** — e o que ela conserta
+   * é um **500 mudo** pela SEGUNDA vez na mesma classe de bug.
+   *
+   * `ActivityEvent.planItemId` tem a mesma FK `onDelete: Restrict` (Tarefa 34),
+   * e as duas guardas de cima **não a veem**. O caminho é exatamente **um**, e
+   * é ele que dá nome à fatia: um dia **lido e depois desmarcado**. O
+   * `unmarkRead` faz hard delete do `ReadingLog` (a exceção documentada do
+   * `CLAUDE.md`), o port do evento **não tem `delete`** — o evento `READ` fica,
+   * porque o feed conta o que aconteceu (decisão B da Tarefa 33) —, e aí o dia
+   * passa pelas duas guardas e estoura na FK da terceira.
+   *
+   * ⚠️ **É REGRESSÃO:** antes da Tarefa 34 esse mesmo dia se removia com
+   * sucesso. O dado sempre esteve a salvo (o `replaceForBook` roda em
+   * `$transaction`); o que estava errado é o status e o silêncio.
+   *
+   * ⚠️ **A ORDEM ("a guarda só lê o evento DEPOIS do corte de tenant, do papel
+   * e da validação do rascunho") NÃO tem teste próprio aqui, e é de propósito:
+   * o dono dela é o `expectNothingTouched()`**, exatamente como a 32c decidiu
+   * para a guarda irmã. A linha
+   * `expect(events.planItemIdsWithAnyActivityEventCalls).toBe(0)` que ele
+   * ganhou cobre os **13** estados de erro que já chamavam o helper: **sete** de
+   * permissão e tenant (livro inexistente, livro arquivado, sem membership,
+   * membership arquivado, papel MEMBER, clube alheio e `clubId` contrabandeado)
+   * e **seis** formatos de rascunho inválido. Escrever
+   * aqui os mesmos cenários com um evento semeado seria cobrir duas vezes o que
+   * já está extraído (§7.1), e a 32c mediu que o contador conta a CHAMADA, não
+   * o resultado — semear um evento a mais não acrescenta poder discriminante.
+   */
+  describe('the guard that refuses to remove a day that has activity', () => {
+    /** O evento do dia 2 — o dia que os testes daqui tentam remover. */
+    function anEventOnDayTwo(
+      overrides: Partial<ActivityEvent> = {},
+    ): ActivityEvent {
+      const type = overrides.type ?? 'READ';
+      return anActivityEvent({
+        clubId: CLUB_ID,
+        bookId: BOOK_ID,
+        planItemId: DAY_TWO,
+        userId: MEMBER_ID,
+        ...overrides,
+        type,
+        // O id sai do par (dia, verbo) e vem DEPOIS do spread: dois eventos do
+        // mesmo dia com verbos diferentes são duas linhas, e um id repetido
+        // faria o upsert do fake colapsá-las em silêncio — o teste
+        // `counts days, not events` perderia o dente.
+        id: `activity-${overrides.planItemId ?? DAY_TWO}-${type}`,
+      });
+    }
+
+    /** O rascunho que remove o dia 2 e mantém os dias 1 e 3. */
+    const withoutDayTwo: PlanItemDraft[] = [
+      { date: '2026-10-01', title: 'Cap. 1' },
+      { date: '2026-10-03', title: 'Cap. 3' },
+    ];
+
+    // Regra 9 — o par POSITIVO, sem o qual uma guarda que recusasse tudo
+    // passaria em todos os testes abaixo. O evento está no dia 1, que fica.
+    it('removes a day with no activity at all, exactly as before', async () => {
+      await events.save(anEventOnDayTwo({ planItemId: DAY_ONE }));
+
+      const { planItems, removed } = await useCase.execute(
+        validInput({
+          planItems: [
+            { date: '2026-10-01', title: 'Cap. 1' },
+            { date: '2026-10-02', title: 'Cap. 2' },
+          ],
+        }),
+      );
+
+      expect(planItems.map((item) => item.id)).toEqual([DAY_ONE, DAY_TWO]);
+      expect(removed).toBe(1);
+      expect(plan.removedIds).toEqual([DAY_THREE]);
+    });
+
+    /**
+     * ⚠️ **REGRA 5 — O CASO REAL, e ele é o que dá nome à fatia:** o dia foi
+     * lido e depois desmarcado. **NÃO há log** (o `unmarkRead` o apagou) e
+     * **não há nota** — só o evento `READ`, que nada apaga.
+     *
+     * `InvalidBookError` de propósito: ela já está mapeada em 400, que é a
+     * única classe em que `error.message` sai na resposta (§6.2). Classe nova
+     * não entra nesta fatia.
+     *
+     * ⚠️ **Asserta a FRASE, não só a classe.** A frase é a única coisa desta
+     * fatia que o admin lê, e a classe é a mesma nas três guardas — ela não
+     * distingue nada aqui.
+     */
+    it('refuses to remove a day that was read and then unmarked', async () => {
+      await events.save(anEventOnDayTwo());
+
+      // As precondições do caso: nem nota, nem log — só o evento sobrou.
+      expect(notes.saved).toEqual([]);
+      expect(logs.saved).toEqual([]);
+
+      const error = await caught(
+        useCase.execute(validInput({ planItems: withoutDayTwo })),
+      );
+
+      expect(error).toBeInstanceOf(InvalidBookError);
+      expect(error.message).toBe(
+        'cannot remove 1 reading plan day(s) that already have activity',
+      );
+    });
+
+    /**
+     * ⚠️ **Regra 8 — a recusa vem ANTES de qualquer escrita, e a prova é a
+     * CONTAGEM, não a ausência de erro** (§7.3).
+     *
+     * `plan.saved` inalterado não separa "não chamou o `replaceForBook`" de
+     * "chamou e o fake foi atômico" — e é exatamente essa diferença que a fatia
+     * existe para produzir: sem a guarda, o `replaceForBook` É chamado, a FK
+     * estoura no meio da transação e o admin recebe 500.
+     *
+     * O `planItemIdsWithAnyActivityEventCalls === 1` é o outro lado: sem ele,
+     * um `if` sempre-falso passaria neste teste por não ter chegado a escrever
+     * de outro jeito.
+     */
+    it('writes nothing and removes nothing when it refuses', async () => {
+      await events.save(anEventOnDayTwo());
+
+      await expect(
+        useCase.execute(validInput({ planItems: withoutDayTwo })),
+      ).rejects.toBeInstanceOf(InvalidBookError);
+
+      expect(plan.saved).toEqual(planBefore);
+      expect(plan.saveManyCalls).toBe(saveCallsBefore);
+      expect(plan.replaceForBookCalls).toBe(replaceCallsBefore);
+      expect(plan.removedIds).toEqual([]);
+      expect(books.saved).toEqual([stored]);
+      expect(events.planItemIdsWithAnyActivityEventCalls).toBe(1);
+    });
+
+    // Regra 9 — o evento de OUTRO dia não barra nada. Sem isto, um
+    // `planItemIdsWithAnyActivityEvent` que ignorasse os ids pedidos
+    // (devolvendo todos) passaria em todos os testes acima.
+    it('lets a day go when the activity is all anchored on the survivors', async () => {
+      await events.save(anEventOnDayTwo({ planItemId: DAY_ONE }));
+      await events.save(anEventOnDayTwo({ planItemId: DAY_THREE }));
+
+      const { removed } = await useCase.execute(
+        validInput({ planItems: withoutDayTwo }),
+      );
+
+      expect(removed).toBe(1);
+      expect(plan.removedIds).toEqual([DAY_TWO]);
+    });
+
+    /**
+     * ⚠️ **O evento AVULSO não ancora dia nenhum** — o de anotação avulsa e o
+     * de grifo gravam `planItemId: null`, e a FK também não os amarra a dia
+     * nenhum. Uma guarda que os contasse recusaria TODA edição de plano de um
+     * clube que grifa: a direção restritiva do §7.1, e aqui ela seria um
+     * produto quebrado, não só um fake infiel.
+     */
+    it('never counts an event that has no reading day', async () => {
+      await events.save(
+        anEventOnDayTwo({ planItemId: null, type: 'HIGHLIGHT' }),
+      );
+
+      const { removed } = await useCase.execute(
+        validInput({ planItems: withoutDayTwo }),
+      );
+
+      expect(removed).toBe(1);
+      expect(plan.removedIds).toEqual([DAY_TWO]);
+    });
+
+    // Regra 10 — a mensagem diz QUANTOS dias. A frase INTEIRA, e não um
+    // `toContain('2')`: esse casaria com "12", "20" e "21".
+    it('says how many days have activity', async () => {
+      await events.save(anEventOnDayTwo());
+      await events.save(anEventOnDayTwo({ planItemId: DAY_THREE }));
+
+      const error = await caught(
+        useCase.execute(
+          validInput({ planItems: [{ date: '2026-10-01', title: 'C1' }] }),
+        ),
+      );
+
+      expect(error).toBeInstanceOf(InvalidBookError);
+      expect(error.message).toBe(
+        'cannot remove 2 reading plan day(s) that already have activity',
+      );
+    });
+
+    // Regra 10 — e é UM dia quando é um dia só. Sem este par, um
+    // `${removedIds.length}` no lugar do `${daysWithActivity.length}` passaria:
+    // o rascunho abaixo remove DOIS dias e só um tem evento.
+    it('says one day when a single day has activity', async () => {
+      await events.save(anEventOnDayTwo());
+
+      const error = await caught(
+        useCase.execute(
+          validInput({ planItems: [{ date: '2026-10-01', title: 'C1' }] }),
+        ),
+      );
+
+      expect(error.message).toContain('1');
+      expect(error.message).not.toContain('2');
+    });
+
+    // Regra 10 — dois eventos no MESMO dia são UM dia. O `Set` do repositório
+    // é o dono disso, e este é o teste que o cobra pelo lado do produto: a
+    // mensagem não pode dizer "2 dias" para um dia só.
+    it('counts days, not events', async () => {
+      await events.save(anEventOnDayTwo({ type: 'READ' }));
+      await events.save(anEventOnDayTwo({ type: 'PLAN_NOTE' }));
+
+      // A precondição que dá dente ao teste: são DOIS eventos no acervo.
+      expect(events.saved).toHaveLength(2);
+
+      const { message } = await caught(
+        useCase.execute(validInput({ planItems: withoutDayTwo })),
+      );
+
+      expect(message).toContain('1');
+      expect(message).not.toContain('2');
+    });
+
+    // Regra 10, decisão C — só a CONTAGEM. Nem quem fez, nem o id do dia, nem
+    // o verbo: `error.message` é a única publicada na resposta do 400 (§6.2).
+    it('never names the actor, the day nor the verb', async () => {
+      await events.save(anEventOnDayTwo({ planItemId: DAY_TWO }));
+
+      const { message } = await caught(
+        useCase.execute(validInput({ planItems: withoutDayTwo })),
+      );
+
+      expect(message).not.toContain(MEMBER_ID);
+      expect(message).not.toContain(DAY_TWO);
+      expect(message).not.toContain('activity-');
+      expect(message).not.toContain('READ');
+    });
+  });
+
+  /**
+   * ⚠️ **REGRA 10 — A MENSAGEM NÃO MENTE EM NENHUM DOS QUATRO CASOS**, e é por
+   * isso que as guardas são TRÊS com frases distintas (decisão B da 32c,
+   * reafirmada na decisão E da 34b), e não uma frase combinada.
    *
    * `error.message` é a única publicada ao cliente, e só na classe 400 (§6.2).
-   * A frase que já existia diz *"…that already have notes"*: se um dia com
-   * **só leitura** a reaproveitasse, a resposta **mentiria** para o admin — ele
-   * abriria o dia procurando uma anotação que não existe. E uma frase única
-   * ("notes or readings") não mente, mas obriga a adivinhar qual dos dois é:
-   * são ações mentais diferentes ("alguém escreveu ali" × "alguém já leu
-   * aquilo").
+   * A frase mais antiga diz *"…that already have notes"*: se um dia com **só
+   * leitura**, ou com **só atividade**, a reaproveitasse, a resposta
+   * **mentiria** para o admin — ele abriria o dia procurando uma anotação que
+   * não existe. E uma frase única ("notes, readings or activity") não mente,
+   * mas obriga a adivinhar qual dos três é: são ações mentais diferentes
+   * ("alguém escreveu ali" × "alguém já leu aquilo" × "aconteceu alguma coisa
+   * ali").
    *
-   * Os três testes assertam a **mensagem**, não só a classe do erro — a classe
-   * é `InvalidBookError` nos três, então ela não distingue nada aqui.
+   * ⚠️ **E a terceira frase NÃO pode dizer "leu"** (decisão E da 34b), senão
+   * mente exatamente no caso que a fatia existe para consertar: o dia de quem
+   * leu **e desmarcou** não tem leitura nenhuma — tem o evento que sobrou.
+   *
+   * Os testes assertam a **mensagem**, não só a classe do erro — a classe é
+   * `InvalidBookError` em todos, então ela não distingue nada aqui.
    */
   describe('the message never lies about which guard refused', () => {
     const withoutDayTwo: PlanItemDraft[] = [
       { date: '2026-10-01', title: 'Cap. 1' },
       { date: '2026-10-03', title: 'Cap. 3' },
     ];
+
+    /** A nota do dia 2, para os cenários combinados. */
+    async function seedNote(): Promise<unknown> {
+      return await notes.save(
+        aNote({
+          kind: 'PLAN',
+          clubId: CLUB_ID,
+          bookId: BOOK_ID,
+          planItemId: DAY_TWO,
+          userId: MEMBER_ID,
+        }),
+      );
+    }
+
+    /** A leitura do dia 2. */
+    async function seedReading(): Promise<unknown> {
+      return await logs.save(
+        aReadingLog({
+          clubId: CLUB_ID,
+          bookId: BOOK_ID,
+          planItemId: DAY_TWO,
+          userId: MEMBER_ID,
+        }),
+      );
+    }
+
+    /** O evento do dia 2 — o que sobra de um "li" desmarcado. */
+    async function seedActivity(): Promise<unknown> {
+      return await events.save(
+        anActivityEvent({
+          clubId: CLUB_ID,
+          bookId: BOOK_ID,
+          planItemId: DAY_TWO,
+          userId: MEMBER_ID,
+          type: 'READ',
+        }),
+      );
+    }
 
     async function refusalFor(seed: () => Promise<unknown>): Promise<string> {
       await seed();
@@ -1178,70 +1470,85 @@ describe('ReplacePlanItems', () => {
       return message;
     }
 
-    it('talks about notes, and not about reading, when only a note anchors the day', async () => {
-      const message = await refusalFor(() =>
-        notes.save(
-          aNote({
-            kind: 'PLAN',
-            clubId: CLUB_ID,
-            bookId: BOOK_ID,
-            planItemId: DAY_TWO,
-            userId: MEMBER_ID,
-          }),
-        ),
-      );
+    it('talks about notes, and not about reading nor activity, when only a note anchors the day', async () => {
+      const message = await refusalFor(seedNote);
 
       expect(message).toContain('that already have notes');
       expect(message).not.toContain('already read');
+      expect(message).not.toContain('activity');
     });
 
-    it('talks about reading, and not about notes, when only a reading anchors the day', async () => {
-      const message = await refusalFor(() =>
-        logs.save(
-          aReadingLog({
-            clubId: CLUB_ID,
-            bookId: BOOK_ID,
-            planItemId: DAY_TWO,
-            userId: MEMBER_ID,
-          }),
-        ),
-      );
+    it('talks about reading, and not about notes nor activity, when only a reading anchors the day', async () => {
+      const message = await refusalFor(seedReading);
 
       expect(message).toContain('that somebody already read');
       expect(message).not.toContain('notes');
+      expect(message).not.toContain('activity');
     });
 
     /**
-     * Decisão D — quando o dia tem os DOIS, a mensagem é a de **nota**, que é
-     * o comportamento que já existia. Manter a ordem é o que faz esta fatia não
-     * mexer num caso que já funcionava: ordem estável é menos churn de teste e
-     * menos surpresa para quem já aprendeu a frase.
+     * ⚠️ **REGRA 5 pelo lado da frase, e o caso que dá nome à fatia:** só o
+     * evento ancora o dia (o log foi apagado pelo `unmarkRead`, e nota nunca
+     * houve).
      *
-     * E a mensagem continua sem mentir: o dia **tem** nota.
+     * A frase fala de **atividade**, e **não** de leitura: dizer "somebody
+     * already read" aqui seria mentir para o admin, que abriria o dia e veria
+     * ninguém marcado como leitor. E "evento" é vocabulário interno — o admin
+     * entende "aconteceu alguma coisa neste dia" (decisão E).
      */
-    it('keeps the note message when the day has both', async () => {
+    it('talks about activity, and not about notes nor reading, when only an event anchors the day', async () => {
+      const message = await refusalFor(seedActivity);
+
+      expect(message).toContain('that already have activity');
+      expect(message).not.toContain('notes');
+      expect(message).not.toContain('already read');
+    });
+
+    /**
+     * ⚠️ **REGRA 7, e ela é a decisão F da 34b escrita como teste** — a ordem
+     * nota → leitura → atividade, e a de baixo é a mais improvável.
+     *
+     * O caso combinado importa MAIS depois desta fatia do que antes: um dia com
+     * nota **tem** evento (o gatilho da Tarefa 33 registra `PLAN_NOTE` no
+     * nascimento da anotação), e um dia lido **tem** evento `READ`. Se a guarda
+     * de atividade rodasse primeiro, as outras duas **nunca** disparariam, e as
+     * duas frases que o admin já aprendeu sumiriam do produto sem que uma linha
+     * de teste antiga quebrasse.
+     *
+     * Por isso os três cenários aqui, com o evento presente em todos: é a
+     * ordem, e não a existência da guarda, que eles pinam.
+     */
+    it('keeps the note message when the day has a note, a reading and an event', async () => {
       const message = await refusalFor(async () => {
-        await notes.save(
-          aNote({
-            kind: 'PLAN',
-            clubId: CLUB_ID,
-            bookId: BOOK_ID,
-            planItemId: DAY_TWO,
-            userId: MEMBER_ID,
-          }),
-        );
-        await logs.save(
-          aReadingLog({
-            clubId: CLUB_ID,
-            bookId: BOOK_ID,
-            planItemId: DAY_TWO,
-            userId: MEMBER_ID,
-          }),
-        );
+        await seedNote();
+        await seedReading();
+        await seedActivity();
       });
 
       expect(message).toContain('that already have notes');
       expect(message).not.toContain('already read');
+      expect(message).not.toContain('activity');
+    });
+
+    it('keeps the note message when the day has a note and an event', async () => {
+      const message = await refusalFor(async () => {
+        await seedNote();
+        await seedActivity();
+      });
+
+      expect(message).toContain('that already have notes');
+      expect(message).not.toContain('activity');
+    });
+
+    it('keeps the reading message when the day has a reading and an event', async () => {
+      const message = await refusalFor(async () => {
+        await seedReading();
+        await seedActivity();
+      });
+
+      expect(message).toContain('that somebody already read');
+      expect(message).not.toContain('activity');
+      expect(message).not.toContain('notes');
     });
   });
 

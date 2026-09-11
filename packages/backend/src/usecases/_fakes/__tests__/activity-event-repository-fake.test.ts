@@ -405,4 +405,134 @@ describe('ActivityEventRepositoryFake', () => {
       ).toBe(instant);
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Tarefa 34b — a leitura da TERCEIRA guarda do `replacePlanItems`
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * ⚠️ **REGRAS 1, 2 e 3 da Tarefa 34b** — o espelho do
+   * `planItemIdsWithAnyNote` e do `planItemIdsWithAnyReadingLog`, e chegou
+   * **junto da implementação Prisma, na mesma unidade** (§6.9).
+   *
+   * Duas fidelidades ao Postgres, e as duas são contrato do port:
+   *
+   * 1. **É um CONJUNTO.** Dois eventos no mesmo dia (a Maria escreveu e depois
+   *    leu) são duas linhas legítimas — a tabela não tem `@@unique` nenhum — e
+   *    **um** id, senão a mensagem da guarda diria "2 dias" para um dia só.
+   * 2. **`planItemId` é ANULÁVEL aqui**, ao contrário do `ReadingLog` e como o
+   *    `Note`: a anotação avulsa e o grifo gravam `NULL`. O `IN (...)` contra
+   *    coluna nula é **falso** no SQL, então o evento avulso nunca mantém um
+   *    dia vivo — e o fake tem de reproduzir isso, senão seria mais restritivo
+   *    que o banco na direção que deixa a suíte verde (§7.1).
+   */
+  describe('planItemIdsWithAnyActivityEvent', () => {
+    const DAY_ONE = 'plan-day-1';
+    const DAY_TWO = 'plan-day-2';
+    const DAY_THREE = 'plan-day-3';
+
+    it('finds a day that has an event', async () => {
+      await events.save(anActivityEvent({ id: 'e1', planItemId: DAY_ONE }));
+
+      await expect(
+        events.planItemIdsWithAnyActivityEvent([DAY_ONE, DAY_TWO]),
+      ).resolves.toEqual([DAY_ONE]);
+    });
+
+    it('never returns an id no event points at', async () => {
+      await events.save(anActivityEvent({ id: 'e1', planItemId: DAY_ONE }));
+
+      await expect(
+        events.planItemIdsWithAnyActivityEvent([DAY_TWO, DAY_THREE]),
+      ).resolves.toEqual([]);
+    });
+
+    // Só os ids PEDIDOS: um método que ignorasse a lista (devolvendo todo dia
+    // com evento) passaria nos dois testes acima.
+    it('returns only the asked ids', async () => {
+      await events.save(anActivityEvent({ id: 'e1', planItemId: DAY_ONE }));
+      await events.save(anActivityEvent({ id: 'e2', planItemId: DAY_THREE }));
+
+      await expect(
+        events.planItemIdsWithAnyActivityEvent([DAY_ONE, DAY_TWO]),
+      ).resolves.toEqual([DAY_ONE]);
+    });
+
+    /**
+     * É um CONJUNTO: dois eventos no MESMO dia dão **um** id. A tabela não tem
+     * `@@unique`, então "a Maria escreveu e depois leu o dia 2" são duas linhas
+     * de verdade — e a mensagem da guarda não pode dizer "2 dias" por causa
+     * delas.
+     */
+    it('returns one id per day, not one per event', async () => {
+      await events.save(
+        anActivityEvent({ id: 'e1', planItemId: DAY_ONE, type: 'PLAN_NOTE' }),
+      );
+      await events.save(
+        anActivityEvent({ id: 'e2', planItemId: DAY_ONE, type: 'READ' }),
+      );
+
+      // A precondição que dá dente ao teste: são DUAS linhas no acervo.
+      expect(events.saved).toHaveLength(2);
+      await expect(
+        events.planItemIdsWithAnyActivityEvent([DAY_ONE]),
+      ).resolves.toEqual([DAY_ONE]);
+    });
+
+    /**
+     * ⚠️ **Fidelidade ao SQL, a mesma do irmão da nota**: `IN (...)` contra
+     * coluna nula é **falso**, então o evento de anotação avulsa e o de grifo
+     * (que gravam `planItemId: null`) nunca mantêm um dia vivo. Um fake que
+     * colapsasse `null` no conjunto recusaria remoções que o Postgres aceita —
+     * a direção do §7.1 que fica verde e só morde na operação real.
+     */
+    it('ignores an event with no reading day at all', async () => {
+      await events.save(
+        anActivityEvent({ id: 'e1', planItemId: null, type: 'HIGHLIGHT' }),
+      );
+
+      // A precondição: o evento EXISTE — senão um acervo vazio passaria aqui.
+      expect(events.saved).toHaveLength(1);
+      await expect(
+        events.planItemIdsWithAnyActivityEvent([DAY_ONE]),
+      ).resolves.toEqual([]);
+    });
+
+    /**
+     * ⚠️ **REGRA 2, a metade decidível AQUI: `[]` devolve `[]`.**
+     *
+     * A propriedade que importa é "sem ida ao banco", e ela **não é decidível
+     * em memória** — o resultado é `[]` nas duas implementações e não existe
+     * consulta a contar. É o mesmo limite que o `ReadingLogRepositoryFake`
+     * registra, e a saída é a do §7.10: a propriedade se prova onde ela É
+     * decidível, e é no contrato — o teste
+     * `asks the database nothing for an empty list, and once for a real one`,
+     * em `repositories/__tests__/prisma-activity-event-repository.contract.integration.test.ts`,
+     * que conta as consultas emitidas por `$on('query')`. **O ponteiro é pelo
+     * NOME do teste, nunca pela linha** (§7.4).
+     */
+    it('answers an empty list with an empty list', async () => {
+      await events.save(anActivityEvent({ id: 'e1', planItemId: DAY_ONE }));
+
+      await expect(events.planItemIdsWithAnyActivityEvent([])).resolves.toEqual(
+        [],
+      );
+    });
+
+    /**
+     * §7.3 — o contador conta a **chamada, não o sucesso**, e o lado POSITIVO é
+     * afirmado aqui: sem ele, um incremento que alguém apague deixaria todo
+     * `toBe(0)` do corte de tenant do `replacePlanItems` passar por acidente, e
+     * aí ele seria a asserção vazia do §7.4.
+     */
+    it('counts every planItemIdsWithAnyActivityEvent call', async () => {
+      expect(events.planItemIdsWithAnyActivityEventCalls).toBe(0);
+
+      await events.planItemIdsWithAnyActivityEvent([DAY_ONE]);
+      // A chamada com lista vazia também conta: ela É uma chamada.
+      await events.planItemIdsWithAnyActivityEvent([]);
+
+      expect(events.planItemIdsWithAnyActivityEventCalls).toBe(2);
+    });
+  });
 });

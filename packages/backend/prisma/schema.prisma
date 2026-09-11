@@ -425,10 +425,27 @@ model ActivityEvent {
   //
   // ⚠️ E a CONSEQUÊNCIA medida (decisão H da Tarefa 34): o `planItem` faz desta
   // a TERCEIRA FK que pode recusar a remoção de um dia no `replacePlanItems`,
-  // ao lado de `Note_planItemId_fkey` e `ReadingLog_planItemId_fkey`. As duas
-  // primeiras têm guarda de domínio na frente (400 com mensagem); esta NÃO tem
-  // — está registrada como lacuna no relatório da fatia, e o teste de contrato
-  // `is a third reason the plan replacement can fail` a pina.
+  // ao lado de `Note_planItemId_fkey` e `ReadingLog_planItemId_fkey`.
+  //
+  // ⚠️ **As TRÊS têm guarda de domínio na frente desde a Tarefa 34b** (400 com
+  // mensagem, em vez do `P2003` cru que a borda relançava como 500): esta é o
+  // `planItemIdsWithAnyActivityEvent`. A lacuna que a Tarefa 34 registrou aqui
+  // ACABOU — o caminho era um dia lido e depois DESMARCADO, que perde o
+  // `ReadingLog` (hard delete) e mantém o evento.
+  //
+  // Os dois testes que pinam esta FK, pelo NOME (nunca pela linha — §7.4):
+  // - a rede, no contrato: `is the net under the domain guard: it refuses a day
+  //   that only an activity event anchors`;
+  // - a recusa educada, no unitário do UseCase: o `describe('the guard that
+  //   refuses to remove a day that has activity')`.
+  //
+  // ⚠️ E quem garante que a QUARTA FK não nasça sem guarda não é este
+  // comentário: é `src/usecases/__tests__/plan-item-fk-guards.test.ts`, que LÊ
+  // este arquivo, acha toda relação com `ReadingPlanItem` que recuse a remoção
+  // — o `onDelete: Restrict` declarado E o implícito de relação obrigatória — e
+  // fica vermelho nomeando a que estiver sem guarda. Duas fatias seguidas
+  // (32→32c, 34→34b) introduziram FK sem guarda; requisito sem guarda
+  // automática é intenção (`docs/CONVENCOES-CODIGO.md` §7.9).
   club     Club             @relation(fields: [clubId], references: [id], onDelete: Restrict)
   user     User             @relation(fields: [userId], references: [id], onDelete: Restrict)
   book     Book             @relation(fields: [bookId], references: [id], onDelete: Restrict)

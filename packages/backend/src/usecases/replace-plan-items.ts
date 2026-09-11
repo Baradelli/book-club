@@ -7,6 +7,7 @@ import type { PlanItemDraft } from '../domain/reading-plan';
 import { normalizePlanDrafts } from '../domain/reading-plan';
 import type { AssertMembership } from './assert-membership';
 import { bookForActor } from './book-for-actor';
+import type { ActivityEventRepository } from './ports/activity-event-repository';
 import type { BookRepository } from './ports/book-repository';
 import type { NoteRepository } from './ports/note-repository';
 import type { ReadingLogRepository } from './ports/reading-log-repository';
@@ -41,11 +42,22 @@ export interface ReplacePlanItemsOutput {
  * - data nova → item novo;
  * - data que desapareceu → item removido.
  *
- * E as guardas "não remover item do plano que já tem nota" (Tarefa 11) e "…que
- * alguém já leu" (Tarefa 32c): o `Restrict` das duas FKs recusaria a remoção de
- * qualquer jeito, mas como erro de banco cru, que a borda relança como **500**.
- * As guardas transformam isso num **400** com mensagem, e antecipam a recusa
- * para antes de qualquer escrita.
+ * E as guardas "não remover item do plano que já tem nota" (Tarefa 11), "…que
+ * alguém já leu" (Tarefa 32c) e "…em que aconteceu alguma coisa" (Tarefa 34b):
+ * o `Restrict` das **três** FKs recusaria a remoção de qualquer jeito, mas como
+ * erro de banco cru, que a borda relança como **500**. As guardas transformam
+ * isso num **400** com mensagem, e antecipam a recusa para antes de qualquer
+ * escrita.
+ *
+ * ⚠️ **São exatamente três porque são exatamente três as FKs `ON DELETE
+ * RESTRICT` que apontam para o `ReadingPlanItem`** — `Note`, `ReadingLog` e
+ * `ActivityEvent` —, e quem garante que a quarta não nasce sem guarda não é
+ * este comentário: é o teste estrutural
+ * `usecases/__tests__/plan-item-fk-guards.test.ts`, que lê o `schema.prisma` e
+ * fica **vermelho** no dia em que houver uma FK sem a guarda correspondente.
+ * Duas fatias seguidas (32→32c, 34→34b) introduziram FK sem guarda, e nas duas
+ * a lacuna só apareceu porque alguém foi procurar (§7.9: requisito sem guarda
+ * automática é intenção).
  */
 export class ReplacePlanItems {
   constructor(
@@ -54,6 +66,7 @@ export class ReplacePlanItems {
     private readonly planItems: ReadingPlanItemRepository,
     private readonly notes: NoteRepository,
     private readonly readingLogs: ReadingLogRepository,
+    private readonly activityEvents: ActivityEventRepository,
   ) {}
 
   async execute(input: ReplacePlanItemsInput): Promise<ReplacePlanItemsOutput> {
@@ -166,6 +179,54 @@ export class ReplacePlanItems {
       // nome de leitor num corpo de 400 é conteúdo do clube vazando.
       throw new InvalidBookError(
         `cannot remove ${daysRead.length} reading plan day(s) that somebody already read`,
+      );
+    }
+
+    /**
+     * A TERCEIRA GUARDA: nenhum dia que o FEED referencia pode ser removido.
+     *
+     * A mesma classe de bug pela **segunda** vez, e por isso esta fatia não
+     * entregou só a guarda: `ActivityEvent.planItemId` tem a mesma FK
+     * `Restrict` (Tarefa 34) e as duas guardas de cima não a veem.
+     *
+     * ⚠️ **O caminho é exatamente UM, e ele é uma REGRESSÃO:** um dia **lido e
+     * depois desmarcado**. O `unmarkRead` faz hard delete do `ReadingLog` (a
+     * exceção documentada do `CLAUDE.md`), o port do `ActivityEvent` **não tem
+     * `delete`** — o evento `READ` fica, porque o feed conta o que aconteceu
+     * (decisão B da Tarefa 33) —, e aí o dia tem `note.count === 0`,
+     * `readingLog.count === 0` e um evento pendurado: passava pelas duas
+     * guardas e estourava na FK. Antes da Tarefa 34 esse mesmo dia se removia
+     * com sucesso.
+     *
+     * **Por último, e não por acaso** (decisão F da 34b): um dia com nota
+     * **ou** com leitura **também tem evento** — o gatilho da Tarefa 33 grava
+     * `PLAN_NOTE` no nascimento da anotação e `READ` na marcação. Se esta
+     * guarda viesse antes, as outras duas **nunca** disparariam, e as duas
+     * frases que o admin já aprendeu sumiriam do produto sem nada quebrar.
+     *
+     * **Mensagem PRÓPRIA, e ela fala de ATIVIDADE** (decisão E): "evento" é
+     * vocabulário interno, e dizer "já leu" aqui **mentiria** exatamente no
+     * caso que esta guarda existe para consertar — o dia de quem leu e
+     * desmarcou não tem leitor nenhum.
+     *
+     * ⚠️ **O evento AVULSO não conta**, e quem garante isso são as duas
+     * implementações do port: `ActivityEvent.planItemId` é anulável (a anotação
+     * avulsa e o grifo gravam `NULL`), e `IN (...)` contra nulo é falso. Uma
+     * guarda que os contasse recusaria toda edição de plano de um clube que
+     * grifa.
+     *
+     * Chamada sem `if` de lista vazia, como as duas de cima: o port declara que
+     * `[]` devolve `[]` sem ida ao banco.
+     */
+    const daysWithActivity =
+      await this.activityEvents.planItemIdsWithAnyActivityEvent(removedIds);
+    if (daysWithActivity.length > 0) {
+      // Só a CONTAGEM, como nas duas guardas de cima e pelo mesmo motivo: o
+      // admin não precisa saber QUEM fez o quê para entender que não pode
+      // remover o dia, e `error.message` é a única publicada na resposta do
+      // 400 (CONVENCOES-CODIGO §6.2).
+      throw new InvalidBookError(
+        `cannot remove ${daysWithActivity.length} reading plan day(s) that already have activity`,
       );
     }
 

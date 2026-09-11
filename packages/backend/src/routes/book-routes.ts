@@ -98,6 +98,11 @@ export const bookRoutes: FastifyPluginAsyncZod<{
     // `Restrict`, e sem este repositório o 500 mudo volta, só que para o dia
     // que alguém marcou como lido sem escrever nada.
     repos.readingLogs,
+    // E a TERCEIRA, "…em que aconteceu alguma coisa" (Tarefa 34b):
+    // `ActivityEvent.planItemId` tem a mesma FK `Restrict` desde a Tarefa 34, e
+    // sem este repositório o 500 mudo volta pela terceira vez — agora no dia
+    // que alguém leu e **desmarcou**, que perde o log e mantém o evento.
+    repos.activityEvents,
   );
 
   app.post(

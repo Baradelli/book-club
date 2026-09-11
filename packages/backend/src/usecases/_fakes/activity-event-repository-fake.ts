@@ -10,6 +10,7 @@ export class ActivityEventRepositoryFake implements ActivityEventRepository {
   private saveCallCount = 0;
   private findCallCount = 0;
   private findFiltersSeen: ActivityEventFilter[] = [];
+  private planItemIdsWithAnyActivityEventCallCount = 0;
 
   /**
    * Upsert por `id`, a convenção dos outros repositórios (Tarefa 03).
@@ -88,6 +89,51 @@ export class ActivityEventRepositoryFake implements ActivityEventRepository {
   }
 
   /**
+   * Os dias, dos pedidos, que algum evento referencia — a leitura da TERCEIRA
+   * guarda do `replacePlanItems` (Tarefa 34b), espelho do
+   * `planItemIdsWithAnyNote` e do `planItemIdsWithAnyReadingLog`.
+   *
+   * Duas fidelidades, e as duas são contrato do port:
+   *
+   * 1. **É um CONJUNTO.** A tabela não tem `@@unique` nenhum, então "a Maria
+   *    escreveu e depois leu o dia 2" são duas linhas legítimas e **um** id —
+   *    senão a mensagem da guarda diria "2 dias" para um dia só.
+   * 2. **A coluna é ANULÁVEL**, como a do `Note` e ao contrário da do
+   *    `ReadingLog`: `IN (...)` contra nulo é falso no SQL, então o evento de
+   *    anotação avulsa e o de grifo nunca mantêm um dia vivo. É a mesma linha
+   *    do `NoteRepositoryFake`, e pelo mesmo motivo — um fake que colapsasse
+   *    `null` no conjunto recusaria remoções que o Postgres aceita (§7.1, na
+   *    direção restritiva, que é a que fica verde).
+   *
+   * ⚠️ **A saída antecipada da lista vazia NÃO tem acusador aqui**, como no
+   * fake do log: em memória não existe "ida ao banco" a contar, e o resultado
+   * é `[]` nas duas implementações. A propriedade se prova onde ela É
+   * decidível (§7.10) — o teste de contrato
+   * `asks the database nothing for an empty list, and once for a real one`,
+   * que conta as consultas por `$on('query')`. **O ponteiro é pelo NOME do
+   * teste, nunca pela linha** (§7.4). A linha fica aqui porque o fake que
+   * divergisse do port seria a infidelidade do §7.1 — só não é ela que a
+   * guarda.
+   */
+  async planItemIdsWithAnyActivityEvent(
+    planItemIds: readonly string[],
+  ): Promise<string[]> {
+    // Conta a CHAMADA, não o sucesso (§7.3).
+    this.planItemIdsWithAnyActivityEventCallCount += 1;
+
+    if (planItemIds.length === 0) return [];
+
+    const asked = new Set(planItemIds);
+    const found = new Set<string>();
+    for (const event of this.store.values()) {
+      const { planItemId } = event;
+      if (planItemId === null) continue;
+      if (asked.has(planItemId)) found.add(planItemId);
+    }
+    return [...found];
+  }
+
+  /**
    * O acervo, para os testes olharem.
    *
    * ⚠️ **ARMADILHA DELIBERADA — não "conserte" esta ordem.** Enumera na ordem
@@ -159,6 +205,24 @@ export class ActivityEventRepositoryFake implements ActivityEventRepository {
    */
   get findFilters(): readonly ActivityEventFilter[] {
     return this.findFiltersSeen.map((filter) => ({ ...filter }));
+  }
+
+  /**
+   * Quantas vezes `planItemIdsWithAnyActivityEvent` foi chamado — a chamada,
+   * não o sucesso.
+   *
+   * Existe para o `replacePlanItems` poder afirmar que a terceira guarda roda
+   * **depois** do corte de tenant, do papel e da validação do rascunho: quem
+   * não é admin daquele clube não descobre que houve atividade naquele dia, e
+   * um rascunho malformado não chega a consultar. Sem contador, "recusou antes
+   * de ler" e "leu e depois recusou" dão o mesmo erro para o cliente (§7.3) —
+   * e o §7.3 manda um `xxxCalls === 0` para **cada** leitura de conteúdo.
+   *
+   * O lado POSITIVO é afirmado na suíte deste fake e na do UseCase: um contador
+   * só afirmado como `toBe(0)` é meio contador (§7.4).
+   */
+  get planItemIdsWithAnyActivityEventCalls(): number {
+    return this.planItemIdsWithAnyActivityEventCallCount;
   }
 
   /**

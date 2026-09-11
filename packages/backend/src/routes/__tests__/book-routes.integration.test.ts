@@ -897,6 +897,93 @@ describe('book routes', () => {
       ).toBe(1);
     });
 
+    /**
+     * ⚠️ **O CASO QUE DÁ NOME À TAREFA 34b, PONTA A PONTA: marcar leitura →
+     * desmarcar → tentar remover o dia.**
+     *
+     * Este é o caminho inteiro, e ele é **um só**:
+     *
+     * 1. `PUT /plan-items/:id/reading-log` grava o `ReadingLog` **e** dispara o
+     *    `ActivityEvent` `READ` (o gatilho da Tarefa 33).
+     * 2. `DELETE /plan-items/:id/reading-log` faz **hard delete** do log — a
+     *    exceção documentada do `CLAUDE.md`. O evento **fica**: o port do
+     *    `ActivityEvent` não tem `delete`, porque o feed conta o que aconteceu
+     *    (decisão B da 33).
+     * 3. O dia passa a ter `note.count === 0` e `readingLog.count === 0`, e
+     *    **passava pelas duas guardas** — batendo na FK
+     *    `ActivityEvent_planItemId_fkey` dentro da transação, como `P2003` cru,
+     *    que o `handleDomainError` não mapeia: **500 mudo**.
+     *
+     * ⚠️ **E era REGRESSÃO**: antes da Tarefa 34 (quando nada gravava evento)
+     * este mesmo dia se removia com sucesso. Medido nesta fatia, mutilando a
+     * terceira guarda: **500**, corpo `{"error":"Internal Server Error"}`.
+     *
+     * A guarda é provada no unitário com o fake; o que se decide **aqui** é a
+     * fiação `new ReplacePlanItems(..., repos.activityEvents)` — a auditoria da
+     * Tarefa 11 mediu o gêmeo: um duplo devolvendo `[]` sobrevivia a 1202
+     * testes, e a consequência real era o 500. Por isso as três chamadas são
+     * pela ROTA, e o par (status, linha) é conferido no banco.
+     */
+    it('answers 400 without touching the plan when a removed day was read and then unmarked', async () => {
+      const marked = await app.inject({
+        method: 'PUT',
+        url: `/plan-items/${dayTwoId}/reading-log`,
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+      expect(marked.statusCode).toBe(201);
+
+      const unmarked = await app.inject({
+        method: 'DELETE',
+        url: `/plan-items/${dayTwoId}/reading-log`,
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+      expect(unmarked.statusCode).toBe(204);
+
+      // ⚠️ **As precondições do caso, e elas são a fatia inteira**: o log SUMIU
+      // (hard delete) e o evento FICOU. Sem estas duas linhas o teste poderia
+      // estar exercitando a guarda de leitura, que já existia.
+      expect(
+        await prisma.readingLog.count({ where: { planItemId: dayTwoId } }),
+      ).toBe(0);
+      expect(await prisma.note.count({ where: { planItemId: dayTwoId } })).toBe(
+        0,
+      );
+      expect(
+        await prisma.activityEvent.count({ where: { planItemId: dayTwoId } }),
+      ).toBe(1);
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: `/books/${bookId}/plan`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: { planItems: [{ date: '2026-10-01', title: 'Cap. 1' }] },
+      });
+
+      // 400, e NÃO 500: sem a fiação o `Restrict` da FK viraria erro de banco.
+      expect(response.statusCode).toBe(400);
+      const body = response.json<ErrorBody>();
+      // ⚠️ **E a MENSAGEM não mente**: fala de ATIVIDADE, e não de leitura —
+      // ninguém está marcado como leitor deste dia. É esta string que o cliente
+      // recebe, porque a classe 400 é a única em que `error.message` sai (§6.2).
+      expect(body.error).toContain('that already have activity');
+      expect(body.error).not.toContain('already read');
+      expect(body.error).not.toContain('notes');
+      expect(body.error).toContain('1');
+      // Só a contagem: nem quem fez, nem o id do dia, nem o verbo.
+      expect(body.error).not.toContain(ADMIN_ID);
+      expect(body.error).not.toContain(dayTwoId);
+      expect(body.error).not.toContain('READ');
+
+      // E NADA foi escrito nem removido: o dia continua no banco, com o evento.
+      expect(
+        await prisma.readingPlanItem.count({ where: { id: dayTwoId } }),
+      ).toBe(1);
+      expect(await prisma.readingPlanItem.count({ where: { bookId } })).toBe(2);
+      expect(
+        await prisma.activityEvent.count({ where: { planItemId: dayTwoId } }),
+      ).toBe(1);
+    });
+
     it('empties the plan when planItems is empty', async () => {
       const response = await app.inject({
         method: 'PUT',

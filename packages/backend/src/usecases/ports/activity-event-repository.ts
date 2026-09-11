@@ -67,9 +67,11 @@ export function activityFeedTake(limit?: number): number {
 }
 
 /**
- * O port do registro de atividade: `save` e `find`.
+ * O port do registro de atividade: `save`, `find` e
+ * `planItemIdsWithAnyActivityEvent`.
  *
- * Nasceu com **um método só** na Tarefa 33 e ganhou o `find` na **34**, junto
+ * Nasceu com **um método só** na Tarefa 33, ganhou o `find` na **34** e a
+ * leitura da terceira guarda na **34b**, sempre junto
  * da implementação Prisma, na **mesma unidade** — que é o que o
  * `docs/CONVENCOES-CODIGO.md` §6.9 exige de quem cresce um port: crescer sem
  * implementar no Prisma dá vermelho de compilação em arquivos de rota que não
@@ -130,4 +132,56 @@ export interface ActivityEventRepository {
    * existe a divergência "arquivada × ativa" que o `find` da nota tem.
    */
   find(filter: ActivityEventFilter): Promise<ActivityEvent[]>;
+  /**
+   * Dos `planItemIds` dados, quais **algum evento já referencia**.
+   *
+   * É o **espelho exato** do `planItemIdsWithAnyNote` e do
+   * `planItemIdsWithAnyReadingLog`, e existe pelo mesmo motivo: a **terceira**
+   * guarda do `replacePlanItems`. A FK `ActivityEvent_planItemId_fkey` é
+   * `ON DELETE RESTRICT`, então remover um dia que o feed referencia falha no
+   * banco — como erro cru, que a borda relança em **500**. Esta leitura é o
+   * que transforma isso num **400** com mensagem, e antecipa a recusa para
+   * antes de qualquer escrita.
+   *
+   * ⚠️ **E o caminho que ela conserta é exatamente UM, e ele é real:** um dia
+   * **lido e depois desmarcado**. O `unmarkRead` faz hard delete do
+   * `ReadingLog` (a exceção documentada do `CLAUDE.md`), este port **não tem
+   * `delete`** — o evento `READ` fica, porque o feed conta o que aconteceu
+   * (decisão B da Tarefa 33) —, e aí o dia passa pelas duas guardas antigas e
+   * estoura na FK desta. Antes da Tarefa 34 esse mesmo dia se removia com
+   * sucesso: é regressão, e é o que dá nome à 34b.
+   *
+   * **Um método próprio, e NÃO um `find({ clubId })` filtrado em memória.**
+   * O `find` traria o feed inteiro do clube para descartar quase tudo — o §7.3
+   * na letra (*"em vez de carregar tudo e filtrar em memória — o mesmo bug com
+   * uma fatura de banco maior"*) —, e ainda por cima cortado pelo
+   * `activityFeedTake`, o que faria a guarda **liberar** a remoção de um dia
+   * cujo evento caiu fora do teto. Aqui o Prisma faz `select` de **uma**
+   * coluna, com `IN (...)` sobre os ids que estão mesmo em risco.
+   *
+   * **Sem `status` a ignorar**, como o irmão do log e ao contrário do da nota:
+   * o evento é imutável e não se arquiva.
+   *
+   * ⚠️ **`planItemId` é ANULÁVEL aqui** — como no `Note` e ao contrário do
+   * `ReadingLog`: a anotação avulsa e o grifo gravam `NULL`. O `IN (...)`
+   * contra coluna nula é falso no SQL, então o evento avulso nunca mantém um
+   * dia vivo; quem implementa (as duas implementações) reproduz isso.
+   *
+   * Devolve **ids de item de plano**, não de evento, e nada sobre autoria nem
+   * sobre o verbo: a guarda precisa saber **quantos** dias estão ancorados,
+   * nunca por quem nem por quê — `error.message` é a única publicada na
+   * resposta do 400 (`docs/CONVENCOES-CODIGO.md` §6.2).
+   *
+   * **Sem promessa de ordem** e sem repetição: é um conjunto — dois eventos no
+   * mesmo dia dão **um** id. Lista vazia na entrada devolve lista vazia,
+   * **sem ida ao banco**: sem isso seria um `IN ()`, uma consulta
+   * garantidamente vazia em toda troca de plano que não remove nada, que é o
+   * caso comum.
+   *
+   * Não recebe `clubId`: os ids vêm do plano que o `replacePlanItems` acabou
+   * de ler do livro já cortado por tenant — o mesmo desenho dos dois irmãos.
+   */
+  planItemIdsWithAnyActivityEvent(
+    planItemIds: readonly string[],
+  ): Promise<string[]>;
 }
