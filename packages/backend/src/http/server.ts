@@ -15,6 +15,7 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 
+import { activityRoutes } from '../routes/activity-routes';
 import { bookRoutes } from '../routes/book-routes';
 import { clubRoutes } from '../routes/club-routes';
 import { highlightRoutes } from '../routes/highlight-routes';
@@ -318,6 +319,11 @@ export async function buildServer(
     // dele, e nada mais no projeto notaria — quem acusa é o bloco
     // `authentication` do `reading-log-routes.integration.test.ts`.
     await api.register(readingLogRoutes, { prisma });
+    // DENTRO do escopo autenticado, pelo mesmo motivo das rotas de grifo e de
+    // leitura: o feed do clube nasceria PÚBLICO se o registro fosse para fora
+    // dele, e nada mais no projeto notaria — quem acusa é o bloco
+    // `authentication` do `activity-routes.integration.test.ts`.
+    await api.register(activityRoutes, { prisma });
   });
 
   return app;

@@ -1,3 +1,4 @@
+import { ACTIVITY_FEED_DEFAULT_LIMIT } from '@clube/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { ActivityEvent } from '../../../domain/activity-event';
@@ -11,10 +12,10 @@ const MARCOS_ID = 'user-marcos';
  * Regra 16 — o fake do `ActivityEvent` tem suíte própria, como os doze fakes
  * anteriores.
  *
- * O port tem **um método só** (`save`): nada lê eventos nesta fatia, e o `find`
- * chega na Tarefa 34 junto da implementação Prisma, na mesma unidade (§6.9).
- * Não há `update` nem `delete`: o evento é log imutável — nada o reescreve,
- * nada o arquiva e nada o apaga.
+ * O port nasceu com **um método só** (`save`) na 33 e ganhou o `find` na
+ * **Tarefa 34**, junto da implementação Prisma, na mesma unidade (§6.9) — o
+ * bloco `find` no rodapé deste arquivo é o dela. Não há `update` nem `delete`:
+ * o evento é log imutável — nada o reescreve, nada o arquiva e nada o apaga.
  */
 describe('ActivityEventRepositoryFake', () => {
   let events: ActivityEventRepositoryFake;
@@ -183,5 +184,225 @@ describe('ActivityEventRepositoryFake', () => {
     await events.save(anActivityEvent({ id: 'e3' }));
 
     expect(events.saved.map((event) => event.id)).toEqual(['e3', 'e2', 'e1']);
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Tarefa 34 — o `find` do feed
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * O `find` chegou na Tarefa 34, **junto da implementação Prisma, na mesma
+   * unidade** (§6.9).
+   *
+   * ⚠️ **Ele é o ÚNICO `find` do projeto que promete ordem**, e é por isso que
+   * este bloco existe mesmo com o contrato provando a mesma coisa contra o
+   * Postgres: o fake que não ordenasse seria a infidelidade do §7.1 na direção
+   * permissiva — os UseCases escritos contra ele afirmariam uma ordem que só o
+   * banco entrega, e o dia em que alguém trocasse o repositório a suíte não
+   * diria nada.
+   */
+  describe('find', () => {
+    const CLUB = 'club-1';
+    const OTHER_CLUB = 'club-2';
+
+    function at(iso: string): Date {
+      return new Date(iso);
+    }
+
+    describe('the tenant cut', () => {
+      it('returns only the events of the asked club', async () => {
+        const mine = anActivityEvent({ id: 'e1', clubId: CLUB });
+        const theirs = anActivityEvent({ id: 'e2', clubId: OTHER_CLUB });
+        await events.save(mine);
+        await events.save(theirs);
+
+        expect(await events.find({ clubId: CLUB })).toEqual([mine]);
+        // A precondição: o outro EXISTE e é achado pelo clube dele — senão um
+        // `find` que devolvesse vazio passaria no teste de cima.
+        expect(await events.find({ clubId: OTHER_CLUB })).toEqual([theirs]);
+      });
+
+      it('returns an empty list for a club where nothing happened', async () => {
+        await events.save(anActivityEvent({ id: 'e1', clubId: CLUB }));
+
+        expect(await events.find({ clubId: 'club-ghost' })).toEqual([]);
+      });
+    });
+
+    describe('the order, which is the product', () => {
+      /**
+       * ⚠️ **FIXTURE HOSTIL, e as precondições pinadas** (§7.2). Três eventos em
+       * que a ordem de inserção, a alfabética dos ids e a cronológica
+       * **discordam** — as quatro implementações erradas plausíveis dão
+       * resultados diferentes do esperado:
+       *
+       * ```
+       * esperado (createdAt desc)   b, c, a
+       * a enumeração do fake        c, a, b   (inversa da inserção)
+       * a ordem de inserção         b, a, c
+       * orderBy id asc              a, b, c
+       * ```
+       */
+      it('returns the newest first, with insertion order, id and clock disagreeing', async () => {
+        await events.save(
+          anActivityEvent({ id: 'b', createdAt: at('2026-10-03T00:00:00Z') }),
+        );
+        await events.save(
+          anActivityEvent({ id: 'a', createdAt: at('2026-10-01T00:00:00Z') }),
+        );
+        await events.save(
+          anActivityEvent({ id: 'c', createdAt: at('2026-10-02T00:00:00Z') }),
+        );
+
+        // As precondições: a armadilha de ordem do fake continua armada, e ela
+        // NÃO é o resultado esperado.
+        expect(events.saved.map((event) => event.id)).toEqual(['c', 'a', 'b']);
+
+        expect((await events.find({ clubId: CLUB })).map((e) => e.id)).toEqual([
+          'b',
+          'c',
+          'a',
+        ]);
+      });
+
+      /**
+       * ⚠️ O desempate por `id` ASC. `createdAt desc` sozinho não é ordem total,
+       * e empate no mesmo milissegundo é o caso normal de um clube — duas pessoas
+       * salvando ao mesmo tempo, o retry da fila offline.
+       */
+      it('breaks a createdAt tie by id, ascending', async () => {
+        const tie = at('2026-10-05T12:00:00Z');
+        await events.save(anActivityEvent({ id: 'z', createdAt: tie }));
+        await events.save(anActivityEvent({ id: 'm', createdAt: tie }));
+        await events.save(anActivityEvent({ id: 'a', createdAt: tie }));
+
+        expect((await events.find({ clubId: CLUB })).map((e) => e.id)).toEqual([
+          'a',
+          'm',
+          'z',
+        ]);
+      });
+    });
+
+    describe('the limit', () => {
+      async function saveDays(count: number): Promise<void> {
+        for (let i = 0; i < count; i += 1) {
+          await events.save(
+            anActivityEvent({
+              id: `e${String(i).padStart(4, '0')}`,
+              createdAt: new Date(Date.UTC(2026, 5, 1, 0, 0, i)),
+            }),
+          );
+        }
+      }
+
+      it('honours an explicit limit, keeping the newest', async () => {
+        await saveDays(5);
+
+        const found = await events.find({ clubId: CLUB, limit: 2 });
+
+        expect(found.map((e) => e.id)).toEqual(['e0004', 'e0003']);
+        // A precondição: sem o limite as cinco voltam.
+        expect(await events.find({ clubId: CLUB })).toHaveLength(5);
+      });
+
+      /**
+       * ⚠️ **O PADRÃO do port, emulado aqui porque o banco o aplica** (§7.1: o
+       * fake mais permissivo que o Postgres esconde bug igual). Um fake sem teto
+       * devolveria o acervo inteiro, e um UseCase escrito contra ele afirmaria um
+       * feed que a produção corta.
+       */
+      it('falls back to ACTIVITY_FEED_DEFAULT_LIMIT when nobody asks', async () => {
+        await saveDays(ACTIVITY_FEED_DEFAULT_LIMIT + 1);
+
+        const found = await events.find({ clubId: CLUB });
+
+        expect(found).toHaveLength(ACTIVITY_FEED_DEFAULT_LIMIT);
+        // ...e o que ficou de fora é o MAIS ANTIGO, não um qualquer.
+        expect(found.map((e) => e.id)).not.toContain('e0000');
+        expect(events.saved).toHaveLength(ACTIVITY_FEED_DEFAULT_LIMIT + 1);
+      });
+
+      it('returns everything when the limit is bigger than the club', async () => {
+        await saveDays(3);
+
+        expect(await events.find({ clubId: CLUB, limit: 100 })).toHaveLength(3);
+      });
+
+      /**
+       * ⚠️ **A normalização do `limit` é do PORT, e o fake chama a mesma
+       * função** (§7.1: um fake que não a aplicasse divergiria do Postgres).
+       *
+       * A divergência seria feia dos dois lados, e por motivos DIFERENTES: no
+       * Prisma o `take` é com sinal (`-1` traz os mais ANTIGOS), e aqui um
+       * `slice(0, -1)` cortaria o ÚLTIMO elemento. Duas implementações erradas,
+       * duas respostas erradas, nenhuma exceção — exatamente a família
+       * "vazio × resultado errado" do §7.1.
+       */
+      it.each([
+        ['a negative limit', -1],
+        ['a very negative limit', -50],
+        ['zero', 0],
+      ])('clamps %s to a single newest event', async (_label, limit) => {
+        await saveDays(3);
+
+        const found = await events.find({ clubId: CLUB, limit });
+
+        expect(found.map((e) => e.id)).toEqual(['e0002']);
+      });
+
+      it('truncates a fractional limit instead of passing it on', async () => {
+        await saveDays(3);
+
+        expect(await events.find({ clubId: CLUB, limit: 2.9 })).toHaveLength(2);
+      });
+    });
+
+    describe('the counters (§7.3)', () => {
+      /**
+       * §7.3 — o contador conta a **chamada, não o sucesso**, e o lado POSITIVO é
+       * afirmado aqui: sem ele, um incremento que alguém apague deixa todo
+       * `toBe(0)` do corte de tenant passar por acidente (§7.4).
+       */
+      it('counts every find, starting at zero', async () => {
+        expect(events.findCalls).toBe(0);
+
+        await events.find({ clubId: CLUB });
+        expect(events.findCalls).toBe(1);
+
+        await events.find({ clubId: CLUB });
+        await events.find({ clubId: OTHER_CLUB });
+        expect(events.findCalls).toBe(3);
+      });
+
+      /**
+       * O contador não distingue "o filtro foi para o repositório" de "o
+       * resultado deu certo" (§7.3) — este distingue. É por ele que o
+       * `listActivity` prova que manda **um** filtro só, com o `clubId` do
+       * recurso e **nenhuma chave à toa**.
+       */
+      it('pins a copy of every filter it was given', async () => {
+        const filter = { clubId: CLUB, limit: 3 };
+
+        await events.find(filter);
+        filter.limit = 999;
+
+        expect(events.findFilters).toEqual([{ clubId: CLUB, limit: 3 }]);
+      });
+    });
+
+    /** Nem o acervo devolve referência sua, nem o chamador o contamina. */
+    it('never shares the Date it stored with the caller', async () => {
+      const event = anActivityEvent({ id: 'e1' });
+      const instant = event.createdAt.getTime();
+      await events.save(event);
+
+      const found = required((await events.find({ clubId: CLUB }))[0]);
+      found.createdAt.setUTCFullYear(1999);
+
+      expect(
+        required((await events.find({ clubId: CLUB }))[0]).createdAt.getTime(),
+      ).toBe(instant);
+    });
   });
 });

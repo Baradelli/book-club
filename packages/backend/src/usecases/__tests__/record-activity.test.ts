@@ -255,6 +255,10 @@ describe('RecordActivity', () => {
     it('resolves instead of rejecting when the recorder throws', async () => {
       const failing = new RecordActivity({
         save: () => Promise.reject(new Error('o banco caiu')),
+        // O `find` entrou no port na Tarefa 34 (junto do repositório Prisma,
+        // §6.9). Este stub não o exercita — o assunto aqui é o `save` que
+        // falha —, mas ele tem de existir para satisfazer a interface.
+        find: () => Promise.resolve([]),
       });
       const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -273,6 +277,10 @@ describe('RecordActivity', () => {
     it('does not swallow the failure in silence: it logs it, with no content', async () => {
       const failing = new RecordActivity({
         save: () => Promise.reject(new Error('o banco caiu')),
+        // O `find` entrou no port na Tarefa 34 (junto do repositório Prisma,
+        // §6.9). Este stub não o exercita — o assunto aqui é o `save` que
+        // falha —, mas ele tem de existir para satisfazer a interface.
+        find: () => Promise.resolve([]),
       });
       const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
 

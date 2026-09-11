@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 
+import { PrismaActivityEventRepository } from '../repositories/prisma-activity-event-repository';
 import { PrismaBookRepository } from '../repositories/prisma-book-repository';
 import { PrismaClubRepository } from '../repositories/prisma-club-repository';
 import { PrismaHighlightRepository } from '../repositories/prisma-highlight-repository';
@@ -10,8 +11,6 @@ import { PrismaReadingLogRepository } from '../repositories/prisma-reading-log-r
 import { PrismaReadingPlanItemRepository } from '../repositories/prisma-reading-plan-item-repository';
 import { PrismaSettingsRepository } from '../repositories/prisma-settings-repository';
 import { PrismaUserRepository } from '../repositories/prisma-user-repository';
-import type { ActivityEventRepository } from '../usecases/ports/activity-event-repository';
-import { PendingActivityEventRepository } from './pending-activity-event-repository';
 
 export interface Repositories {
   users: PrismaUserRepository;
@@ -25,12 +24,17 @@ export interface Repositories {
   highlights: PrismaHighlightRepository;
   readingLogs: PrismaReadingLogRepository;
   /**
-   * ⚠️ **Tipado pelo PORT, e não pela classe concreta** — é o único assim, e é
-   * de propósito: a implementação de hoje é a
-   * `PendingActivityEventRepository`, que a **Tarefa 34** troca pela do Prisma.
-   * Com o tipo do port, essa troca é **uma linha aqui** e nada nas rotas.
+   * Foi o único campo tipado pelo PORT até a Tarefa 33, porque a implementação
+   * de então era um remendo em `src/http/` que **lançava de propósito**, à
+   * espera do `model ActivityEvent`. A **Tarefa 34** criou o modelo, a
+   * migration e o repositório real, e o remendo — com a guarda auto-desarmável
+   * que vigiava esta linha — foi **apagado**. Com a implementação de verdade no
+   * lugar, o campo volta à forma dos outros dez: tipado pela classe concreta.
+   *
+   * (O nome da classe removida não é citado aqui de propósito: a regra 4 da
+   * fatia é que o `grep` por ele em `packages/backend/src` volte VAZIO.)
    */
-  activityEvents: ActivityEventRepository;
+  activityEvents: PrismaActivityEventRepository;
 }
 
 /**
@@ -50,7 +54,6 @@ export function buildRepositories(prisma: PrismaClient): Repositories {
     notes: new PrismaNoteRepository(prisma),
     highlights: new PrismaHighlightRepository(prisma),
     readingLogs: new PrismaReadingLogRepository(prisma),
-    // ⚠️ A LINHA QUE A TAREFA 34 TROCA — ver o docblock da classe.
-    activityEvents: new PendingActivityEventRepository(),
+    activityEvents: new PrismaActivityEventRepository(prisma),
   };
 }

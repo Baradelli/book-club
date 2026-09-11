@@ -2173,7 +2173,97 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       gatilho, **indistinguível** de um autosave._
       _**Gates:** os cinco limpos, verificados pelo orquestrador. `app`, `ui` e `prisma/`
       intocados; nenhuma migration; nenhuma dependência nova._
-- [ ] **34** — UseCase `listActivity(clubId)` + repo + rota. → _a detalhar_
+- [x] **34** — UseCase `listActivity(clubId)` + repo + rota. → `tasks/34-listar-atividade.md`
+      _**O FEED TEM DE ONDE VIR, E A DÍVIDA DATADA FOI PAGA.** Entregue: `model ActivityEvent`
+      + migration, `find(filter)` no port **com a implementação Prisma na mesma unidade**
+      (§6.9), o repositório com contrato, `listActivity`, os schemas em `shared` e
+      `GET /clubs/:clubId/activity`. **478 shared** (era 454) **· 195 ui** (intocado) **· 1520
+      backend** (era 1496) **· 641 app** (intocado). Integração **484** (era 442). Chunk
+      **418.565 B** (+245), folga 31.435._
+      _**⚠️ A GUARDA AUTO-DESARMÁVEL DA 33 FUNCIONOU COMO PROJETADA.** Ela lia o
+      `schema.prisma` e ficou **vermelha** no instante em que o `model ActivityEvent` foi
+      declarado — obrigando esta fatia a apagar o `PendingActivityEventRepository`. `grep`
+      volta vazio. **Apagar a guarda junto é correto e foi exigido com justificativa:** as 4
+      asserções dela eram todas sobre o **estado de transição**, e a preocupação viva ("falhar
+      registrando não derruba a escrita") nunca morou lá — mora no `record-activity.test.ts`,
+      intocada. O substituto (`the four births reach the feed`, pelas quatro rotas reais) cobre
+      **por chegada**, não por fiação, que é mais forte do que a guarda era. **Dívida com
+      cobrador automático, não com prazo.** E a prova do lado de fora: o log
+      `activity_event_not_recorded`, que disparava **87 vezes** na suíte de integração, hoje
+      dispara **0**._
+      _**⚠️ O INCIDENTE: A FATIA VAZOU FIXTURE NO BANCO DO DONO, e o padrão é o pior
+      possível.** A FK nova quebrou o `afterAll` de **quatro arquivos de integração que já
+      existiam** — os testes ficavam **verdes** e a limpeza estourava depois. Três rodadas
+      deixaram **261 eventos, 231 itens de plano, 138 livros, 24 clubes e 36 usuários**. O
+      executor viu, apagou à mão **por id** (caminhando a partir dos clubes de fixture, com
+      dry-run e conferência de que o conteúdo do dono ficava de fora) e consertou a causa. **O
+      orquestrador conferiu o banco diretamente pelo Prisma**: 1 usuário (o super-admin, mesmo
+      `createdAt`), 1 clube, 2 livros, 0 eventos, 0 logs — exatamente como antes._
+      _**E o CONSERTO foi auditado com mais rigor que o vazamento.** A limpeza nova apaga
+      evento **por âncora** (um `OR` sobre os ids que o teste declarou seus), porque o evento é
+      o único fixture que o teste **não cria** — ele nasce do gatilho, com `randomUUID()` que
+      nenhum arquivo conhece. O revisor leu os **20 chamadores**: os anchors só aceitam
+      `in [...]` de ids concretos, o `TEST_ADMIN_ID` **nunca** é passado, e há rede embaixo —
+      **mesmo apagando os ternários, `{ in: [] }` no Prisma casa zero linhas**, então o `OR`
+      **não degenera para "tudo"** por nenhuma mutação de uma linha. E o `singleFork: true`
+      torna colisão entre arquivos impossível por construção. ⚠️ **Mais forte que o §6.6
+      exige, não mais fraco:** quem decide o conjunto apagado é o **banco**, não o teste — um
+      evento deixado por um teste que morreu no meio ainda casa a âncora._
+      _**⚠️ A REGRESSÃO QUE VIRA A 34b, confirmada elo por elo pelo orquestrador:** só existem
+      **duas** guardas no `replacePlanItems`; o `unmarkRead` faz **hard delete** do log; o port
+      do `ActivityEvent` **não tem `delete`**, então o evento fica; e `P2003` **não está
+      mapeado**. O caminho é exatamente **um**: um dia **lido e depois DESMARCADO** perde o
+      log, passa pelas duas guardas e estoura na FK do evento → **500 mudo**. Antes desta fatia
+      esse mesmo dia se removia. **É regressão do que a 32c consertou**, um passo mais fora. Já
+      tem testemunha automática (`is a third reason the plan replacement can fail`)._
+      _**Dois achados contra código PRÉ-EXISTENTE, os dois medidos:** (1) ⚠️ **o pino do
+      `highlightColor` — o molde que esta spec mandou copiar — era FRACO**: trocar
+      `z.enum(HIGHLIGHT_COLORS)` por uma cópia à mão com os mesmos valores passava em
+      **478 + 195 + 1520 + 641 + 484 — ZERO acusadores**. O executor apertou o dele para
+      identidade (`toBe`), mediu, e a rodada de correção apertou o original: **0 → 1**. E o
+      docblock registra o que a troca **não** fecha: a paleta continua sem a segunda rede (a
+      varredura de produção) que o `activity.ts` tem. (2) O **`FIND_ROW_LIMIT` da nota não tem
+      acusador nenhum** — removê-lo deixa a suíte inteira verde, porque nenhum teste cria mais
+      de 500 notas; o do grifo tem 1. Registrado, **não consertado** (é da Tarefa 11, e
+      consertar exigiria 501 notas no banco do dono)._
+      _**O `take` do Prisma é COM SINAL, e isso virou conserto com dono único.** `take: -5`
+      devolve os **mais antigos** — a ponta oposta do feed — e `take: 0` devolve nada. O teto
+      morava só na borda, e os docblocks já nomeavam a **Tarefa 38** como segundo chamador
+      **que não passa por Zod**. Conserto: `activityFeedTake` no **port**, chamado pelas duas
+      implementações. ⚠️ **E o argumento para extrair em vez de clampar só no Prisma é medido:
+      as duas implementações erram de formas DIFERENTES** com o mesmo limite inválido — no
+      Prisma `-1` traz o mais antigo; num `slice(0, -1)` o último elemento some; `slice(0,-50)`
+      devolve vazio. Clamp só no Prisma deixaria o fake com um **terceiro** comportamento
+      (§7.1). Medido pelo orquestrador: **0 → 3** no unitário, +1 no contrato. E a precondição
+      sobre o Prisma virou **teste permanente** — afirmação sobre o banco não colada é
+      suposição (lição nº 17)._
+      _**O `limit` na borda foi desvio da spec e era consequência necessária:** a spec pedia
+      `limit?` no UseCase e não mencionava a query — o que faria dele código sem chamador de
+      produção. Forma por forma igual ao `page` do grifo, e sem cursor/offset/contagem, então
+      não vira paginação disfarçada._
+      _**Dívidas registradas:** a **34b** (acima); o `FIND_ROW_LIMIT` da nota sem acusador; e o
+      `buildRepositories` ficou **sem pino unitário** para a fiação de `activityEvents` — a
+      guarda apagada era a única asserção de unidade que a tocava, e hoje só há testemunha de
+      integração._
+      _**Gates:** os cinco limpos, verificados pelo orquestrador. `app` e `ui` intocados;
+      migration gerada pelo Prisma, sem drift (`migrate status` limpo)._
+      _**Nota operacional:** o Docker estava desligado de novo no começo da fatia; foi subido
+      para a migration e a integração, e **deixado de pé**._
+
+- [ ] **34b** — `replacePlanItems` recusa remover dia que já tem ATIVIDADE. ⚠️ **FATIA
+      INSERIDA**, com o motivo medido na 34. → _a detalhar_
+      _**A regressão, confirmada elo por elo:** o `ActivityEvent_planItemId_fkey` é a
+      **terceira** FK `RESTRICT` sobre `ReadingPlanItem`, e é a única **sem guarda de
+      domínio** — as outras duas dão **400 com mensagem** (Tarefas 11 e 32c). O caminho é
+      exatamente um: um dia **lido e depois desmarcado** perde o `ReadingLog` (hard delete),
+      mas **mantém o `ActivityEvent` do tipo `READ`**, porque o port do evento não tem
+      `delete` e o log é imutável. As duas guardas devolvem `[]`, a remoção estoura na FK, e
+      `P2003` **não está mapeado** no `handle-domain-error` → **500 mudo**. O dado fica a salvo
+      (`$transaction`), como nas outras duas vezes._
+      _⚠️ **E há uma pergunta de desenho que merece spec, não apêndice:** esta seria a
+      **terceira** guarda quase idêntica no mesmo UseCase. O §7.1 manda perguntar se elas
+      generalizam — uma guarda que consulta os três repositórios, ou três mensagens distintas
+      como a 32c decidiu? A resposta muda o tamanho da fatia._
 - [ ] **35** — Feed de atividade na home. → _a detalhar_
 
 ### Bloco I — Push

@@ -4,7 +4,16 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { ACTIVITY_TYPES, isActivityType } from '../activity';
+import {
+  ACTIVITY_FEED_DEFAULT_LIMIT,
+  ACTIVITY_FEED_MAX_LIMIT,
+  ACTIVITY_TYPES,
+  activityEventResponseSchema,
+  activityResponseSchema,
+  activityType,
+  isActivityType,
+  listActivityQuerySchema,
+} from '../activity';
 
 /**
  * Regras 1 e 2 da Tarefa 33 — o vocabulário de tipos do `ActivityEvent`, no
@@ -192,5 +201,182 @@ describe('isActivityType', () => {
     // `value` é `ActivityType` daqui para baixo: o `includes` de uma lista de
     // literais só compila com o tipo estreito.
     expect(ACTIVITY_TYPES.includes(value)).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tarefa 34 — os schemas de borda do feed
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('activityType (the z.enum of the border)', () => {
+  /**
+   * ⚠️ **REGRA 15 — o `z.enum` da borda É `ACTIVITY_TYPES`, e a asserção é de
+   * IDENTIDADE.**
+   *
+   * É o molde medido do `highlightColor` (Tarefa 24), com um aperto: lá o pino
+   * é `toEqual([...HIGHLIGHT_COLORS])`, aqui é `toBe`. `z.enum(X)` guarda a
+   * MESMA referência em `_def.values`, e `.options` a devolve — então a
+   * identidade é decidível, e ela recusa também o caso que o `toEqual` deixa
+   * passar: uma cópia literal escrita à mão com os mesmos quatro valores de
+   * hoje, que ficaria verde e divergiria no dia em que a lista crescesse.
+   *
+   * Uma segunda lista escrita à mão aqui é a lição nº 3 do MVP 1 — e a guarda
+   * `is declared in one file, and nothing else enumerates the four`, logo
+   * acima, varre produção justamente atrás dela.
+   */
+  it('is built from ACTIVITY_TYPES itself, by identity', () => {
+    expect(activityType.options).toBe(ACTIVITY_TYPES);
+    // ...e o valor, para o vermelho dizer o que quebrou.
+    expect(activityType.options).toEqual([...ACTIVITY_TYPES]);
+  });
+
+  it.each(ACTIVITY_TYPES)('accepts %s', (type) => {
+    expect(activityType.safeParse(type).success).toBe(true);
+  });
+
+  /**
+   * A borda **não normaliza caixa nem dá `trim`**, pelo motivo do
+   * `isActivityType`: normalizar aqui criaria uma segunda grafia aceita que o
+   * `=` byte-sensível do Postgres não reconhece como o mesmo tipo — a
+   * divergência do ADR 0007 com outra roupa.
+   */
+  it.each([
+    ['the same type in lower case', 'plan_note'],
+    ['the same type with a leading space', ' READ'],
+    ['a verb the decision B left out', 'NOTE_EDITED'],
+    ['the non-event of unmarking', 'UNREAD'],
+    ['an empty string', ''],
+  ])('rejects %s', (_label, value) => {
+    expect(activityType.safeParse(value).success).toBe(false);
+  });
+});
+
+describe('activityEventResponseSchema', () => {
+  function anEventBody(): Record<string, unknown> {
+    return {
+      id: 'activity-1',
+      clubId: 'club-1',
+      userId: 'user-maria',
+      type: 'PLAN_NOTE',
+      bookId: 'book-1',
+      planItemId: 'day-3',
+      subjectId: 'note-9',
+      createdAt: '2026-10-01T18:30:45.123Z',
+    };
+  }
+
+  it('accepts the eight fields of the entity', () => {
+    expect(activityEventResponseSchema.parse(anEventBody())).toEqual(
+      anEventBody(),
+    );
+  });
+
+  /**
+   * `planItemId` é **obrigatório e anulável**, nunca `optional()`: a anotação
+   * avulsa e o grifo gravam `null`, e o `null` é estado real que a tela do feed
+   * usa para decidir a frase. A AUSÊNCIA do campo quebraria o front em cheio,
+   * porque o cliente valida a resposta de sucesso (§6.8).
+   */
+  it('takes a null planItemId, and refuses the field missing', () => {
+    const withoutTheDay = { ...anEventBody() };
+    delete withoutTheDay['planItemId'];
+
+    expect(
+      activityEventResponseSchema.parse({ ...anEventBody(), planItemId: null })
+        .planItemId,
+    ).toBeNull();
+    expect(activityEventResponseSchema.safeParse(withoutTheDay).success).toBe(
+      false,
+    );
+  });
+
+  /**
+   * ⚠️ **§6.1 — o `response` schema é FRONTEIRA DE SEGURANÇA**: é o strip do
+   * Zod que corta o que não está declarado, e é o que impede um objeto de
+   * domínio inteiro de ir para a rede.
+   */
+  it('strips a field nobody declared', () => {
+    const parsed = activityEventResponseSchema.parse({
+      ...anEventBody(),
+      passwordHash: 'nao-vaza',
+      plainText: 'nem o conteudo',
+    });
+
+    expect(Object.keys(parsed).sort()).toEqual([
+      'bookId',
+      'clubId',
+      'createdAt',
+      'id',
+      'planItemId',
+      'subjectId',
+      'type',
+      'userId',
+    ]);
+  });
+
+  it('refuses a type outside the four', () => {
+    expect(
+      activityEventResponseSchema.safeParse({
+        ...anEventBody(),
+        type: 'NOTE_EDITED',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('is an array in activityResponseSchema', () => {
+    expect(activityResponseSchema.parse([])).toEqual([]);
+    expect(activityResponseSchema.parse([anEventBody()])).toHaveLength(1);
+    expect(activityResponseSchema.safeParse(anEventBody()).success).toBe(false);
+  });
+});
+
+describe('listActivityQuerySchema', () => {
+  /**
+   * ⚠️ **DECISÃO D — o limite é PARÂMETRO EXPLÍCITO, não um teto escondido no
+   * repositório.** Query string é texto, então `z.coerce` — é o precedente
+   * exato do `page` do `listHighlightsQuerySchema`.
+   */
+  it('coerces the text of a query string into a number', () => {
+    expect(listActivityQuerySchema.parse({ limit: '20' })).toEqual({
+      limit: 20,
+    });
+  });
+
+  it('leaves the limit undefined when nobody asked for one', () => {
+    expect(listActivityQuerySchema.parse({})).toEqual({});
+  });
+
+  it.each([
+    ['zero', '0'],
+    ['a negative', '-1'],
+    ['a fraction', '1.5'],
+    ['text', 'vinte'],
+    ['one past the ceiling', String(ACTIVITY_FEED_MAX_LIMIT + 1)],
+  ])('refuses %s', (_label, value) => {
+    expect(listActivityQuerySchema.safeParse({ limit: value }).success).toBe(
+      false,
+    );
+  });
+
+  it('accepts the ceiling itself', () => {
+    expect(
+      listActivityQuerySchema.parse({ limit: String(ACTIVITY_FEED_MAX_LIMIT) }),
+    ).toEqual({ limit: ACTIVITY_FEED_MAX_LIMIT });
+  });
+});
+
+describe('the two numbers of the feed limit', () => {
+  /**
+   * O padrão e o teto são **dois números declarados**, e a relação entre eles é
+   * o que faz o padrão ser alcançável pela borda: um padrão acima do teto seria
+   * um valor que nenhum cliente consegue pedir de volta depois de mudá-lo.
+   */
+  it('has a default inside the ceiling, and both are whole and positive', () => {
+    expect(Number.isInteger(ACTIVITY_FEED_DEFAULT_LIMIT)).toBe(true);
+    expect(Number.isInteger(ACTIVITY_FEED_MAX_LIMIT)).toBe(true);
+    expect(ACTIVITY_FEED_DEFAULT_LIMIT).toBeGreaterThan(0);
+    expect(ACTIVITY_FEED_DEFAULT_LIMIT).toBeLessThanOrEqual(
+      ACTIVITY_FEED_MAX_LIMIT,
+    );
   });
 });

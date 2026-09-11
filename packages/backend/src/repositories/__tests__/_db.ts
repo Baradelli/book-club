@@ -45,6 +45,7 @@ export interface Fixtures {
   settingsIds?: string[];
   inviteIds?: string[];
   membershipIds?: string[];
+  activityEventIds?: string[];
   highlightIds?: string[];
   readingLogIds?: string[];
   noteIds?: string[];
@@ -63,6 +64,7 @@ export async function removeFixtures(fixtures: Fixtures): Promise<void> {
     settingsIds = [],
     inviteIds = [],
     membershipIds = [],
+    activityEventIds = [],
     highlightIds = [],
     readingLogIds = [],
     noteIds = [],
@@ -82,6 +84,43 @@ export async function removeFixtures(fixtures: Fixtures): Promise<void> {
     await prisma.membership.deleteMany({
       where: { id: { in: membershipIds } },
     });
+  }
+  // ⚠️ **O ActivityEvent sai antes das QUATRO TABELAS QUE ELE REFERENCIA —
+  // plano, livro, clube e usuário —, e ele é o único que se apaga também POR
+  // ÂNCORA, não só por id** (Tarefa 34).
+  //
+  // As QUATRO FKs dele são `ON DELETE RESTRICT` e apontam para clube, pessoa,
+  // livro e dia do plano. E, ao contrário de toda outra linha deste arquivo, o
+  // evento **não é criado pelo teste**: ele nasce como efeito colateral dos
+  // quatro UseCases de escrita (o gatilho da Tarefa 33), com id de
+  // `randomUUID()` que nenhum teste conhece. Medido na Tarefa 34, no instante
+  // em que o gatilho passou a gravar de verdade: QUATRO arquivos de integração
+  // que já existiam (`book`, `highlight`, `note` e `reading-log`) passaram a
+  // estourar no `afterAll` com
+  // `Foreign key constraint violated: ActivityEvent_planItemId_fkey` — os
+  // testes verdes, a limpeza quebrada e fixture vazando no banco de
+  // desenvolvimento do dono.
+  //
+  // A saída é apagar por âncora, aqui, num lugar só: o `OR` cobre exatamente os
+  // ids que o CHAMADOR já declarou como seus, então nada de outro clube é
+  // tocado e **não existe `deleteMany({})`** — com todas as listas vazias, o
+  // bloco inteiro é pulado. A alternativa (cada arquivo consultar e passar os
+  // ids dos eventos) precisaria de uma linha em cada arquivo de integração que
+  // escreve alguma coisa, presente e futuro, e a lição nº 3 do MVP 1 diz o que
+  // acontece com regras que moram em N lugares.
+  if (activityEventIds.length > 0) {
+    await prisma.activityEvent.deleteMany({
+      where: { id: { in: activityEventIds } },
+    });
+  }
+  const activityAnchors = [
+    planItemIds.length > 0 ? { planItemId: { in: planItemIds } } : undefined,
+    bookIds.length > 0 ? { bookId: { in: bookIds } } : undefined,
+    clubIds.length > 0 ? { clubId: { in: clubIds } } : undefined,
+    userIds.length > 0 ? { userId: { in: userIds } } : undefined,
+  ].filter((clause) => clause !== undefined);
+  if (activityAnchors.length > 0) {
+    await prisma.activityEvent.deleteMany({ where: { OR: activityAnchors } });
   }
   // O grifo antes do livro, do clube e do usuário: as TRÊS relações do
   // `Highlight` são obrigatórias e saem `ON DELETE RESTRICT` (lido do

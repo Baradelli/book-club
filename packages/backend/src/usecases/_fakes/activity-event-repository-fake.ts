@@ -1,9 +1,15 @@
 import type { ActivityEvent } from '../../domain/activity-event';
-import type { ActivityEventRepository } from '../ports/activity-event-repository';
+import type {
+  ActivityEventFilter,
+  ActivityEventRepository,
+} from '../ports/activity-event-repository';
+import { activityFeedTake } from '../ports/activity-event-repository';
 
 export class ActivityEventRepositoryFake implements ActivityEventRepository {
   private store = new Map<string, ActivityEvent>();
   private saveCallCount = 0;
+  private findCallCount = 0;
+  private findFiltersSeen: ActivityEventFilter[] = [];
 
   /**
    * Upsert por `id`, a convenção dos outros repositórios (Tarefa 03).
@@ -32,6 +38,53 @@ export class ActivityEventRepositoryFake implements ActivityEventRepository {
 
     this.store.set(event.id, this.clone(event));
     return this.clone(event);
+  }
+
+  /**
+   * "O que aconteceu neste clube" — o `find` que a Tarefa 34 trouxe, junto da
+   * implementação Prisma (§6.9).
+   *
+   * ⚠️ **ELE ORDENA, e é a única exceção do projeto ao §7.2.** Todos os outros
+   * `find` não prometem ordem, e por isso os fakes enumeram INVERTIDO, para
+   * ninguém depender dela sem perceber. Aqui a ordem **é o produto** (feed é
+   * cronologia invertida por definição), então o port a promete — e um fake que
+   * não ordenasse seria a infidelidade do §7.1 na direção permissiva: os
+   * UseCases escritos contra ele afirmariam uma ordem que só o banco entrega.
+   *
+   * ⚠️ **E a armadilha continua armada, porque a ordenação parte DELA**: o
+   * `.reverse()` da enumeração é a ENTRADA do `sort`, então um `sort` que
+   * alguém apague não devolve a ordem de inserção (que poderia coincidir com a
+   * esperada num fixture descuidado) — devolve a inversa dela. A fixture hostil
+   * da suíte pina as quatro permutações que as implementações erradas produzem.
+   *
+   * `createdAt desc`, desempate por `id` asc: `createdAt` sozinho não é ordem
+   * total, e empate de milissegundo é o caso normal de um clube.
+   *
+   * ⚠️ **O teto vem do `activityFeedTake` do port — a MESMA função que o
+   * repositório Prisma chama**, e emular o teto aqui é fidelidade, não
+   * semântica a mais (§7.1): um fake sem teto devolveria o acervo inteiro (a
+   * direção permissiva, com a suíte verde e a produção cortando o que o teste
+   * afirmou).
+   *
+   * ⚠️ E o `??` cru **não serviria**, porque as duas implementações erram de
+   * formas DIFERENTES com um `limit` inválido: no Prisma o `take` é com sinal
+   * (`-1` traz o mais ANTIGO), e num `slice(0, -1)` de array o ÚLTIMO elemento
+   * some. Duas respostas erradas, nenhuma exceção — a função compartilhada é o
+   * que faz as duas concordarem.
+   */
+  async find(filter: ActivityEventFilter): Promise<ActivityEvent[]> {
+    // Conta a CHAMADA, não o sucesso (§7.3).
+    this.findCallCount += 1;
+    // Uma CÓPIA, não a referência: o chamador pode reusar (e mutar) o objeto
+    // que passou, e um filtro pinado que mudasse depois não pinaria nada.
+    this.findFiltersSeen.push({ ...filter });
+
+    return [...this.store.values()]
+      .reverse()
+      .filter((event) => event.clubId === filter.clubId)
+      .sort(compareForTheFeed)
+      .slice(0, activityFeedTake(filter.limit))
+      .map((event) => this.clone(event));
   }
 
   /**
@@ -84,6 +137,31 @@ export class ActivityEventRepositoryFake implements ActivityEventRepository {
   }
 
   /**
+   * Quantas vezes `find` foi chamado — a chamada, não o sucesso.
+   *
+   * É o que o corte de tenant do `listActivity` precisa: "recusou antes de ler"
+   * e "leu e depois recusou" dão o mesmo erro para o cliente, e a segunda ordem
+   * trafega o feed de um clube para quem não é dele antes de descartá-lo
+   * (§7.3). O lado POSITIVO é afirmado na suíte deste fake e na do UseCase —
+   * um contador só afirmado como `toBe(0)` é meio contador (§7.4).
+   */
+  get findCalls(): number {
+    return this.findCallCount;
+  }
+
+  /**
+   * Os filtros que o `find` recebeu, em cópia.
+   *
+   * O contador não distingue "o filtro foi para o repositório" de "o resultado
+   * deu certo" (§7.3) — este distingue. É por ele que o `listActivity` prova
+   * que manda **um** filtro só, com o `clubId` da rota e **nenhuma chave à
+   * toa**: nada disso muda o resultado num clube de duas pessoas.
+   */
+  get findFilters(): readonly ActivityEventFilter[] {
+    return this.findFiltersSeen.map((filter) => ({ ...filter }));
+  }
+
+  /**
    * Clona nos dois sentidos (entrada do save e saída da leitura). Só o
    * `createdAt` precisa de cópia — o Prisma devolve `Date` nova a cada leitura
    * —, e não há clone profundo a fazer: a entidade guarda **referência, nunca
@@ -93,4 +171,20 @@ export class ActivityEventRepositoryFake implements ActivityEventRepository {
   private clone(event: ActivityEvent): ActivityEvent {
     return { ...event, createdAt: new Date(event.createdAt) };
   }
+}
+
+/**
+ * A ordem do feed: o mais recente primeiro, empate desfeito pelo `id`.
+ *
+ * É a MESMA ordem que o `PrismaActivityEventRepository` pede ao Postgres
+ * (`orderBy: [{ createdAt: 'desc' }, { id: 'asc' }]`), e é isso que a torna
+ * fidelidade em vez de conveniência. O desempate não é decoração: `createdAt`
+ * sozinho não é ordem total, e duas pessoas do clube salvando no mesmo
+ * milissegundo é o caso normal.
+ */
+function compareForTheFeed(a: ActivityEvent, b: ActivityEvent): number {
+  const byCreatedAt = b.createdAt.getTime() - a.createdAt.getTime();
+  if (byCreatedAt !== 0) return byCreatedAt;
+
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }

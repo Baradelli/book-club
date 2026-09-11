@@ -59,8 +59,42 @@ describe('highlightColor', () => {
    * A asserção é sobre as `options` do enum contra a constante, e não uma lista
    * escrita à mão: uma lista à mão aqui seria a **terceira** cópia da paleta, e
    * ficaria verde no dia em que a paleta mudasse e o schema não.
+   *
+   * ⚠️⚠️ **ELA ERA `toEqual`, e o `toEqual` NÃO PROVAVA ISTO — medido na rodada
+   * de correção da Tarefa 34.** O mutante
+   *
+   * ```
+   * z.enum(HIGHLIGHT_COLORS) → z.enum(['#facc15','#22c55e','#f97316','#3b82f6','#ec4899'])
+   * ```
+   *
+   * — que é **exatamente** a cópia à mão que o parágrafo acima diz recusar —
+   * passava em **shared 478 · ui 195 · backend 1520 · app 641 · integração
+   * 484**: **ZERO acusadores**. O `toEqual` compara VALOR, e a cópia tem o
+   * valor de hoje; ela só divergiria no dia em que a paleta mudasse, que é o
+   * dia em que ninguém está olhando para cá.
+   *
+   * Agora a asserção é de **IDENTIDADE** (`toBe`), e ela é decidível:
+   * `z.enum(X)` guarda a MESMA referência em `_def.values`, e `.options` a
+   * devolve. O `toEqual` fica **abaixo**, e não acima, para o vermelho dizer
+   * *qual* cor mudou quando a falha for de conteúdo — sozinho ele não segura
+   * nada, mas ao lado do `toBe` ele é a mensagem de erro.
+   *
+   * É o desenho que a Tarefa 34 usou no irmão desta guarda
+   * (`activityType > is built from ACTIVITY_TYPES itself, by identity`), e a
+   * troca aqui é **a mesma medição aplicada ao molde de onde ele foi copiado**.
+   *
+   * ⚠️ **E fica registrado o que esta linha NÃO fecha:** o `ActivityEvent` tem
+   * uma SEGUNDA rede — o teste
+   * `is declared in one file, and nothing else enumerates the four`, em
+   * `activity.test.ts`, varre os quatro pacotes atrás de um arquivo de produção
+   * que enumere a lista inteira. A paleta **não tem** essa varredura: o
+   * `highlight-color.test.ts` não olha produção. Quem duplicar a paleta num
+   * terceiro arquivo continua sem acusador. Fica anotado, não consertado: é
+   * guarda nova, com desenho próprio, e esta rodada só devia trocar o pino.
    */
-  it('is built from HIGHLIGHT_COLORS itself, in the same order', () => {
+  it('is built from HIGHLIGHT_COLORS itself, by identity', () => {
+    expect(highlightColor.options).toBe(HIGHLIGHT_COLORS);
+    // ...e o valor, para o vermelho dizer o que quebrou.
     expect(highlightColor.options).toEqual([...HIGHLIGHT_COLORS]);
   });
 

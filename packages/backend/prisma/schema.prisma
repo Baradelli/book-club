@@ -1,7 +1,7 @@
 // Schema dos Blocos A (Tarefa 03), B (Tarefa 07), C (Tarefa 11), E
-// (Tarefa 24) e F (Tarefa 32). Os modelos vêm do esqueleto de referência em
-// docs/plano-clube-do-livro.md §6, recortando as relações que apontam para
-// modelos que ainda não existem (ActivityEvent, NoteLink, Attachment,
+// (Tarefa 24), F (Tarefa 32) e G (Tarefa 34). Os modelos vêm do esqueleto de
+// referência em docs/plano-clube-do-livro.md §6, recortando as relações que
+// apontam para modelos que ainda não existem (NoteLink, Attachment,
 // PushSubscription, NotificationDelivery) — cada um nasce na sua tarefa, com a
 // sua migration.
 //
@@ -57,6 +57,7 @@ model User {
   notes        Note[]
   highlights   Highlight[]
   readingLogs  ReadingLog[]
+  activity     ActivityEvent[]
 }
 
 model Club {
@@ -73,6 +74,7 @@ model Club {
   notes       Note[]
   highlights  Highlight[]
   readingLogs ReadingLog[]
+  activity    ActivityEvent[]
 }
 
 model Membership {
@@ -127,6 +129,7 @@ model Book {
   notes       Note[]
   highlights  Highlight[]
   readingLogs ReadingLog[]
+  activity    ActivityEvent[]
 
   @@index([clubId, status])
 }
@@ -143,9 +146,10 @@ model ReadingPlanItem {
   reference String? // texto livre: "p. 45-62"
   createdAt DateTime @default(now())
 
-  book        Book         @relation(fields: [bookId], references: [id])
+  book        Book            @relation(fields: [bookId], references: [id])
   notes       Note[]
   readingLogs ReadingLog[]
+  activity    ActivityEvent[]
 
   // A chave natural do dia de leitura e do diff do replacePlanItems.
   @@unique([bookId, date])
@@ -354,6 +358,95 @@ model ReadingLog {
   // índice sem consulta é custo de escrita à toa (decisão G da Tarefa 32).
   @@index([bookId])
 }
+
+// Bloco G (Tarefa 34) — "a Maria escreveu sobre o Cap. 3": o registro de que
+// alguém do clube leu, escreveu ou grifou. OITO colunas e nada mais: o docblock
+// de `src/domain/activity-event.ts` é o dono de cada ausência, e elas são
+// decisão, não esquecimento.
+//
+// - SEM `status`/`archivedAt`: `ActivityEvent` é log IMUTÁVEL (`CLAUDE.md`).
+//   E aqui nem a exceção do `ReadingLog` existe — desmarcar "li" apaga o log,
+//   mas o evento "a Maria leu" já aconteceu, e o feed conta o que aconteceu
+//   (decisão B da Tarefa 33). Nada arquiva e nada apaga: o port não tem
+//   `update` nem `delete`.
+// - SEM `updatedAt`: nenhum caminho reescreve a linha. Instante sem dono é
+//   campo que mente (ADR 0008).
+// - SEM título do dia, nome do livro ou nome de quem fez: o evento guarda
+//   REFERÊNCIA, nunca conteúdo (decisão G da Tarefa 33). O título do dia muda
+//   (`editBook` ressincroniza até o título da nota), e um evento com título
+//   velho é uma tela que mente. O feed resolve na leitura.
+// - SEM contagem de nada: `COUNTER_SHAPE` proíbe, e progresso é presença.
+model ActivityEvent {
+  id         String @id @default(cuid())
+  clubId     String
+  userId     String // o ATOR. Sempre o ator; nunca vem do input.
+  // `String` e não enum Prisma, e é decisão do `CLAUDE.md`: ele lista
+  // `ActivityEvent.type` ao lado de `NotificationDelivery.kind`,
+  // `PushSubscription.platform` e `Highlight.color` como os campos "String
+  // validados por z.enum/regex (ainda evoluem)" — a lista de verbos do feed
+  // ainda cresce, e um enum Prisma exigiria migration por verbo. O portão são
+  // o `z.enum(ACTIVITY_TYPES)` da borda e o `assertActivityType` do domínio.
+  type       String
+  bookId     String
+  // ANULÁVEL, e é o produto que decide: a anotação AVULSA e o GRIFO não têm dia
+  // de leitura. É a diferença que salta aos olhos em relação ao `ReadingLog`,
+  // onde a coluna é NOT NULL porque não existe leitura avulsa. `PLAN_NOTE` e
+  // `READ` preenchem; `FREE_NOTE` e `HIGHLIGHT` gravam NULL.
+  planItemId String?
+  // O id da `Note` / do `Highlight` / do `ReadingLog` que acabou de nascer.
+  // NÃO é uma FK: as três tabelas são alvos diferentes conforme o `type`, e uma
+  // FK por tipo seria três colunas anuláveis com uma só preenchida. E o log é
+  // imutável — arquivar a nota não desfaz o evento de tê-la escrito.
+  subjectId  String
+  // O instante em que aconteceu, e é o ÚNICO da linha. O `@default(now())` é
+  // rede de segurança, como os `@default(cuid())`: quem escreve o valor é o
+  // `recordActivity`, com UMA leitura de relógio (ADR 0008).
+  //
+  // ⚠️ Ele SEGUE a convenção dos outros sete modelos (todo campo chamado
+  // `createdAt` no projeto tem esta rede) e DIVERGE do irmão mais próximo — o
+  // `ReadingLog.readAt`, que nasceu sem `@default` de propósito. A divergência
+  // é deliberada, não descuido: lá o campo tem outro nome e outro significado
+  // (uma linha inserida por fora sem `readAt` seria uma leitura sem hora, e é
+  // melhor o INSERT falhar); aqui a rede segue o padrão de `createdAt`, e quem
+  // garante que o valor é do domínio é o teste de contrato
+  // `stores the createdAt the domain sent, down to the millisecond`, que
+  // asserta a COLUNA e não o que o mapper devolveu.
+  createdAt  DateTime @default(now())
+
+  // As três primeiras relações são OBRIGATÓRIAS e a quarta é OPCIONAL, e as
+  // QUATRO declaram `onDelete: Restrict` EXPLICITAMENTE. Para relação
+  // obrigatória o default do Prisma já é `Restrict`; para relação OPCIONAL ele
+  // é `SetNull` — e foi exatamente esse implícito que quase produziu corrupção
+  // silenciosa no `Note.planItem`. A regra que saiu daquele susto é declarar, e
+  // dizer por quê: apagar um clube, uma pessoa, um livro ou um dia do plano que
+  // o feed referencia tem de FALHAR, não zerar coluna nenhuma — um evento com
+  // `planItemId` zerado viraria um "escreveu sobre o dia nenhum", que nenhum
+  // UseCase produz e que a tela do feed não sabe desenhar.
+  //
+  // ⚠️ E a CONSEQUÊNCIA medida (decisão H da Tarefa 34): o `planItem` faz desta
+  // a TERCEIRA FK que pode recusar a remoção de um dia no `replacePlanItems`,
+  // ao lado de `Note_planItemId_fkey` e `ReadingLog_planItemId_fkey`. As duas
+  // primeiras têm guarda de domínio na frente (400 com mensagem); esta NÃO tem
+  // — está registrada como lacuna no relatório da fatia, e o teste de contrato
+  // `is a third reason the plan replacement can fail` a pina.
+  club     Club             @relation(fields: [clubId], references: [id], onDelete: Restrict)
+  user     User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  book     Book             @relation(fields: [bookId], references: [id], onDelete: Restrict)
+  planItem ReadingPlanItem? @relation(fields: [planItemId], references: [id], onDelete: Restrict)
+
+  // O feed do clube, do mais recente para o mais antigo — é EXATAMENTE a
+  // consulta do `find`, e o mesmo índice que `Note` e `Highlight` já têm.
+  //
+  // NADA de índice por `type` nem por `userId` (decisão G): não há filtro por
+  // eles no escopo, e índice sem consulta é custo de escrita à toa — a mesma
+  // conta que deixou o `ReadingLog` com um índice só.
+  @@index([clubId, createdAt])
+}
+
+// NENHUM `@@unique`: o evento é ILIMITADO. Escrever a anotação do dia 1 e a do
+// dia 2 são dois acontecimentos, e grifar o mesmo livro numa releitura também.
+// Quem impede a enxurrada do autosave não é o banco — é a decisão A da Tarefa
+// 33, no UseCase, que só dispara no nascimento (`created === true`).
 
 model Settings {
   id                  String  @id @default(cuid())
