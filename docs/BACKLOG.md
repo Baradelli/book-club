@@ -2090,8 +2090,89 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
 
 ### Bloco H — Atividade
 
-- [ ] **33** — Domínio `ActivityEvent` + UseCase `recordActivity` + gatilho nos UseCases de
-      nota, grifo e leitura. → _a detalhar_
+- [x] **33** — Domínio `ActivityEvent` + UseCase `recordActivity` + gatilho nos UseCases de
+      nota, grifo e leitura. → `tasks/33-dominio-activity-event.md`
+      _**O BLOCO H ABRE, E A FATIA É A PRIMEIRA QUE MEXE POR DENTRO DE CÓDIGO JÁ AUDITADO.**
+      Entregue: `ACTIVITY_TYPES` num arquivo só em `shared` (molde do `HIGHLIGHT_COLORS`), a
+      entidade, o port com fake, o `recordActivity`, e o gatilho nos **quatro** UseCases de
+      nascimento. **454 shared** (era 428) **· 195 ui** (intocado) **· 1496 backend** (era
+      1417) **· 641 app** (intocado). Integração **442**, medida nesta fatia. Chunk
+      **418.320 B — +0 B** (o `activity.ts` é exportado mas nenhum código do app o importa; o
+      tree-shaking o descarta)._
+      _**⚠️ UMA MEDIÇÃO DECIDIU O DESENHO INTEIRO: o `upsertPlanNote` é chamado pelo
+      AUTOSAVE, a cada 1500 ms** (`day-note.tsx:118`). Sem a condição `created === true`, meia
+      hora escrevendo produziria **dezenas** de eventos e o feed afogaria o clube — o oposto de
+      "um incentiva o outro", que é a razão de o feed existir. A saída saiu de graça: os dois
+      UseCases idempotentes **já devolviam `created`**. Medido: **3 autosaves → 1 evento**, com
+      2 acusadores no mutante que registra no ramo `existing`._
+      _**A regra mais importante não era sobre o evento, era sobre o que acontece quando ele
+      falha.** O que a pessoa escreveu é o produto; o feed é o acessório. Se o
+      `recordActivity` lançar, a nota tem de estar salva e a resposta tem de ser 201 — **mas
+      engolir em silêncio também é errado**. Provado nas **duas** metades: `try/catch` removido
+      → **6** acusadores; `catch {}` vazio → **5** (os quatro UseCases + a forma do log). A
+      decisão C não é prosa._
+      _**⚠️ O EXECUTOR ACHOU UM BURACO REAL NA SPEC — ela era autocontraditória.** A spec
+      mandava tocar as rotas para instanciar os UseCases **e** proibia `src/repositories/**` e
+      migration: a rota precisa de algo que satisfaça o port, e a implementação real é a
+      Tarefa 34. Ele listou três saídas e escolheu a melhor: um
+      `PendingActivityEventRepository` em `http/` que **lança de propósito**, para cada
+      nascimento deixar uma linha de log até a 34 — em vez de um `save` que devolve sucesso e
+      joga o evento fora, *"que é a versão que ninguém descobre"*. A 34 troca **uma linha** e
+      apaga um arquivo; nenhum UseCase nem rota é reaberto._
+      _**⚠️ E A PREMISSA DE UMA REGRA MINHA CAIU JUNTO — o achado ALTO.** A regra 20 dizia
+      *"integração não roda, a fatia não toca repositório nem rota"*. Deixou de ser verdade no
+      instante em que o desenho mudou: a fatia passou a tocar quatro arquivos de `http/` e
+      `routes/`, e existem três suítes de integração cobrindo exatamente essas rotas. **Ninguém
+      havia medido** se `POST` de nota, grifo e "li" ainda devolve 201 com um repositório que
+      **lança** dentro do grafo de injeção. Medido depois: **150 testes das três suítes verdes,
+      442 na íntegra**, o log disparou **85 vezes** (uma por nascimento) e **zero conteúdo
+      vazou** (`grep -c "quote:|plainText:|title:"` = **0** em 85 linhas) — a regra do
+      `NOTIFICACOES.md` §1 vale no caminho real, não só no unitário. **Premissa de spec que cai
+      junto com uma decisão de desenho não se corrige sozinha.**_
+      _**⚠️ O §7.4 in fine cobrou: "reabriu um arquivo? olhe o teste do lado".** A fatia
+      acrescentou uma **segunda** leitura de relógio aos quatro UseCases. Dois ganharam o
+      contador nesta fatia; os outros dois **nunca tiveram**. Medido pelo revisor e
+      **reconfirmado pelo orquestrador**: o mutante nominal do §7.8 — um `new Date()` por campo
+      — passava em **1490/1490, zero acusadores**, nos dois. Depois: **0 → 2**._
+      _**Uma guarda melhor do que a promessa do orquestrador.** O repositório temporário estava
+      impecavelmente documentado, mas `grep` achava três ocorrências e **zero guardas** — nada
+      falharia se a Tarefa 34 esquecesse de apagá-lo (§7.9: requisito sem guarda automática é
+      intenção). O orquestrador ia resolver com uma regra dura na spec da 34; o revisor
+      sugeriu melhor, e nasceu um teste **auto-desarmável**: ele lê o `schema.prisma` e exige
+      que `repositories.ts` mencione o repositório temporário **enquanto o modelo não existir**
+      — e que **não** o mencione a partir do instante em que existir. Passa hoje (4 testes);
+      falharia com o modelo, provado por sonda no predicado. **Promessa não é guarda.** E o
+      predicado é o `schema.prisma`, não o `Prisma.dmmf`, porque um cliente sem `generate`
+      deixaria a guarda dormindo justo na janela em que ela precisa acordar._
+      _**O executor registrou um MUTANTE DEGENERADO por conta própria**, aplicando a regra a si
+      mesmo: o primeiro mutante de relógio dele (`new Date(new Date().getTime())`) passou em
+      **1490/1490** porque o relógio de teste só conta leituras **sem argumento** — a chamada
+      interna conta 1, a externa passa intacta. Semanticamente equivalente, não um buraco.
+      Descartado e trocado por um genuíno (`new Date(Date.now())`), que deu **3** acusadores._
+      _**Quatro gatilhos, e os cinco excluídos têm motivo, não economia:** editar, arquivar e
+      desmarcar não são notícia — e `unmarkRead` é o caso mais claro, porque registrar "a Maria
+      desmarcou" é o vocabulário de cobrança que o §1 do plano proíbe. O `NOTIFICACOES.md` §1
+      usa verbos de **nascimento** ("lê, escreve, registra")._
+      _**Outros achados corrigidos:** o log prometia dizer **"quem"** e não tinha `userId` (a
+      prosa prometia o que o código não pagava, e quem fosse diagnosticar não saberia de quem
+      era o evento) — corrigido, e a asserção de "sem conteúdo" virou **lista fechada de
+      chaves**, porque `toMatchObject` é subconjunto e ficaria verde com um `quote` a mais.
+      Três docblocks citavam o **ADR errado** (a regra "o push nunca leva o conteúdo" está no
+      `NOTIFICACOES.md` §1, não no ADR 0006) — lição nº 17 na forma de ponteiro. E o docblock
+      do domínio afirmava um **500 que não acontece**, porque os quatro chamadores reais passam
+      pelo `recordActivitySafely`._
+      _**O orquestrador RECUSOU duas sugestões do revisor**, pelo mesmo critério: ele apontou 8
+      testes de "poder de morte quase nulo", mas escreveu que foi *"avaliação, não medição"* —
+      e cortar teste sem medição já foi recusado duas vezes neste MVP (na 32b isso evitou um
+      erro real). Ficam._
+      _**Decisão registrada, medida, NÃO virada escopo:** reescrever uma nota **arquivada** a
+      ressuscita (`status: 'ACTIVE'`, `archivedAt: null`) devolvendo `created: false`, logo
+      **não registra** evento. Fica como está, pela razão que o revisor deu e que convence: a
+      condição honesta **não é** `created`, é *"estava `ARCHIVED` e voltou a `ACTIVE`"* — regra
+      nova com nome próprio, não ajuste de `if`. E a ressurreição é, do ponto de vista do
+      gatilho, **indistinguível** de um autosave._
+      _**Gates:** os cinco limpos, verificados pelo orquestrador. `app`, `ui` e `prisma/`
+      intocados; nenhuma migration; nenhuma dependência nova._
 - [ ] **34** — UseCase `listActivity(clubId)` + repo + rota. → _a detalhar_
 - [ ] **35** — Feed de atividade na home. → _a detalhar_
 

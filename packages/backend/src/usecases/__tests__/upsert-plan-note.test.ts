@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { docToText } from '../../domain/doc-to-text';
 import {
@@ -9,6 +9,7 @@ import {
   PlanItemNotFoundError,
 } from '../../domain/errors';
 import type { NoteDoc } from '../../domain/note';
+import { installAdvancingClock } from '../../test-support/advancing-clock';
 import {
   aBook,
   aDoc,
@@ -18,11 +19,13 @@ import {
   FIXED_ISO,
   required,
 } from '../../test-support/builders';
+import { ActivityEventRepositoryFake } from '../_fakes/activity-event-repository-fake';
 import { BookRepositoryFake } from '../_fakes/book-repository-fake';
 import { MembershipRepositoryFake } from '../_fakes/membership-repository-fake';
 import { NoteRepositoryFake } from '../_fakes/note-repository-fake';
 import { ReadingPlanItemRepositoryFake } from '../_fakes/reading-plan-item-repository-fake';
 import { AssertMembership } from '../assert-membership';
+import { RecordActivity } from '../record-activity';
 import type { UpsertPlanNoteInput } from '../upsert-plan-note';
 import { UpsertPlanNote } from '../upsert-plan-note';
 
@@ -52,6 +55,8 @@ describe('UpsertPlanNote', () => {
   let books: BookRepositoryFake;
   let plan: ReadingPlanItemRepositoryFake;
   let notes: NoteRepositoryFake;
+  let events: ActivityEventRepositoryFake;
+  let recordActivity: RecordActivity;
   let useCase: UpsertPlanNote;
 
   beforeEach(async () => {
@@ -59,6 +64,11 @@ describe('UpsertPlanNote', () => {
     books = new BookRepositoryFake();
     plan = new ReadingPlanItemRepositoryFake();
     notes = new NoteRepositoryFake();
+    events = new ActivityEventRepositoryFake();
+    // O `recordActivity` é um UseCase REAL sobre o fake do repositório, e não
+    // um dublê: é o precedente do `AssertMembership` (decisão D), e é o que
+    // faz `events.saveCalls` ser a contagem do gatilho de verdade.
+    recordActivity = new RecordActivity(events);
     // O corte de tenant vem do assertMembership da Tarefa 01 e do
     // bookForActor da Tarefa 06, não de uma segunda implementação aqui.
     useCase = new UpsertPlanNote(
@@ -66,6 +76,7 @@ describe('UpsertPlanNote', () => {
       books,
       plan,
       notes,
+      recordActivity,
     );
 
     await books.save(aBook({ id: BOOK_ID, clubId: CLUB_ID }));
@@ -116,6 +127,12 @@ describe('UpsertPlanNote', () => {
         role: 'MEMBER',
       }),
     );
+  });
+
+  // O stub de relógio do teste de contagem é GLOBAL: sem isto ele vazaria para
+  // os testes seguintes do arquivo, que leem o relógio de verdade.
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   function validInput(
@@ -352,6 +369,41 @@ describe('UpsertPlanNote', () => {
       expect(note.id).toMatch(UUID);
       expect(note.createdAt).toEqual(note.updatedAt);
       expect(notes.saved).toHaveLength(1);
+    });
+
+    /**
+     * ⚠️ **O `expect(note.createdAt).toEqual(note.updatedAt)` do teste acima
+     * NÃO prova "uma leitura só" — este prova.** É a 6ª aparição do §7.8, e
+     * chegou aqui na rodada de correção da Tarefa 33: duas chamadas a
+     * `new Date()` no mesmo tick devolvem o MESMO milissegundo, então o mutante
+     * "um `new Date()` por campo" passava em **1490/1490 — zero acusadores**,
+     * exatamente como na Tarefa 22 (1206/1206).
+     *
+     * O `create-highlight` e o `mark-read` ganharam o contador quando nasceram;
+     * este UseCase e o `createFreeNote` não tinham, e a fatia do gatilho
+     * **reabriu os quatro arquivos** — é o §7.4 *in fine*: "reabriu um arquivo?
+     * olhe o teste do lado".
+     *
+     * As DUAS leituras têm dono declarado: a `at(1)` é a da nota (`createdAt` e
+     * `updatedAt` saem dela), a `at(2)` é a do `ActivityEvent`. Daí o teste
+     * provar de brinde a **ordem** que a decisão I exige — o evento é o
+     * instante mais NOVO, logo nasceu depois da nota.
+     *
+     * O esperado sai de `CLOCK_BASE_ISO`, não do código sob teste, e a
+     * precondição "duas leituras consecutivas diferem" é o primeiro teste de
+     * `advancing-clock.test.ts`.
+     */
+    it('reads the clock once for the note and once for the event, in that order', async () => {
+      const clock = installAdvancingClock();
+
+      const { note } = await useCase.execute(validInput());
+
+      expect(clock.reads).toBe(2);
+      expect(note.createdAt.getTime()).toBe(clock.at(1));
+      expect(note.updatedAt.getTime()).toBe(clock.at(1));
+      expect(required(notes.saved[0]).createdAt.getTime()).toBe(clock.at(1));
+      expect(required(notes.saved[0]).updatedAt.getTime()).toBe(clock.at(1));
+      expect(required(events.saved[0]).createdAt.getTime()).toBe(clock.at(2));
     });
 
     // Regra 18 — dois ids sorteados, nunca derivados da chave natural: o id é
@@ -684,6 +736,173 @@ describe('UpsertPlanNote', () => {
 
       const stored = await notes.byPlanItemAndUser(DAY_ONE, SECOND_MEMBER_ID);
       expect(stored).toEqual(theirs);
+    });
+  });
+
+  /**
+   * ⚠️ **O GATILHO DE ATIVIDADE (Tarefa 33)** — e a pergunta que governa este
+   * bloco não é "o evento nasce?", é **"o que o gatilho pode quebrar?"**.
+   */
+  describe('the activity trigger', () => {
+    /**
+     * Regras 5, 13, 14 e 15 — o nascimento da anotação do dia registra **um**
+     * `PLAN_NOTE`, com o `clubId` e o `bookId` do LIVRO, o `userId` do ATOR, o
+     * dia do plano e o id da nota como `subjectId`.
+     */
+    it('records one PLAN_NOTE when the note is born', async () => {
+      const { note } = await useCase.execute(validInput());
+
+      expect(events.saveCalls).toBe(1);
+      expect(events.saved).toHaveLength(1);
+      expect(required(events.saved[0])).toMatchObject({
+        clubId: CLUB_ID,
+        userId: MEMBER_ID,
+        type: 'PLAN_NOTE',
+        bookId: BOOK_ID,
+        planItemId: DAY_ONE,
+        subjectId: note.id,
+      });
+    });
+
+    /**
+     * ⚠️ **Regra 8 — o AUTOSAVE NÃO REGISTRA, e é a decisão que salva a
+     * fatia.** O `upsertPlanNote` é chamado pela tela do dia a cada **1500 ms**
+     * (`packages/app/src/pages/day-note.tsx`), então sem a condição
+     * `created === true` meia hora escrevendo produziria dezenas de eventos e o
+     * feed afogaria o clube — o oposto exato de "um incentiva o outro".
+     *
+     * Provado por **CONTAGEM**, e não por "o acervo tem um evento só" (§7.3):
+     * um gatilho que disparasse a cada reescrita e um repositório que
+     * convergisse sobre a mesma linha dariam o mesmo acervo.
+     */
+    it('records nothing on a rewrite, because the autosave is not a birth', async () => {
+      await useCase.execute(validInput({ doc: aDoc('primeiro parágrafo') }));
+      expect(events.saveCalls).toBe(1);
+
+      const { created } = await useCase.execute(
+        validInput({ doc: aDoc('primeiro parágrafo, corrigido') }),
+      );
+
+      expect(created).toBe(false);
+      expect(events.saveCalls).toBe(1);
+      expect(events.saved).toHaveLength(1);
+    });
+
+    /**
+     * ⚠️ **Regra 9 — o caso que a decisão A existe para impedir**: três
+     * autosaves seguidos do mesmo dia produzem **UM** evento.
+     */
+    it('produces one single event out of three autosaves in a row', async () => {
+      await useCase.execute(validInput({ doc: aDoc('era uma vez') }));
+      await useCase.execute(validInput({ doc: aDoc('era uma vez um') }));
+      await useCase.execute(validInput({ doc: aDoc('era uma vez um hobbit') }));
+
+      expect(notes.saveCalls).toBe(3);
+      expect(events.saveCalls).toBe(1);
+      expect(events.saved).toHaveLength(1);
+    });
+
+    /**
+     * ⚠️ **Regra 11 — o gatilho vem DEPOIS da escrita** (decisão I). Registrar
+     * antes e a escrita falhar produz um feed que mente: "a Maria escreveu"
+     * sem nota nenhuma.
+     *
+     * A ordem é observável só por **contagem**: com a escrita principal
+     * falhando, `events.saveCalls === 0`.
+     */
+    it('records nothing when the note itself fails to be written', async () => {
+      const save = vi
+        .spyOn(notes, 'save')
+        .mockRejectedValue(new Error('o banco caiu'));
+
+      await expect(useCase.execute(validInput())).rejects.toThrow(
+        'o banco caiu',
+      );
+
+      expect(events.saveCalls).toBe(0);
+      save.mockRestore();
+    });
+
+    /**
+     * ⚠️ **Regra 12 — A ESCRITA DA PESSOA SOBREVIVE A UM RECORDER QUE LANÇA**
+     * (decisão C). É a regra mais importante da fatia.
+     *
+     * O que a pessoa escreveu é o produto; o feed é o acessório. Com o
+     * `recordActivity` mutilado para rejeitar, o `upsertPlanNote` **resolve
+     * normalmente** e a nota **está gravada** — e a asserção é sobre o ESTADO
+     * DO FAKE, não sobre ausência de erro: `resolves.not.toThrow()` seria a
+     * asserção vazia do §7.4, porque o valor resolvido nunca poderia ser um
+     * `Error`.
+     */
+    it('keeps the note the person wrote when the recorder throws', async () => {
+      const record = vi
+        .spyOn(recordActivity, 'execute')
+        .mockRejectedValue(new Error('o feed caiu'));
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const { note, created } = await useCase.execute(
+        validInput({ doc: aDoc('o parágrafo que não pode se perder') }),
+      );
+
+      // O que a rota devolve: 201 e a nota.
+      expect(created).toBe(true);
+      expect(note.plainText).toBe('o parágrafo que não pode se perder');
+      // E o que ficou GRAVADO — a asserção que importa.
+      const stored = await notes.byPlanItemAndUser(DAY_ONE, MEMBER_ID);
+      expect(required(stored).plainText).toBe(
+        'o parágrafo que não pode se perder',
+      );
+      expect(notes.saveCalls).toBe(1);
+      // A falha foi tentada e não foi engolida em silêncio.
+      expect(record).toHaveBeenCalledTimes(1);
+      expect(logged).toHaveBeenCalledTimes(1);
+
+      record.mockRestore();
+      logged.mockRestore();
+    });
+
+    /**
+     * Regra 13 — contrabando com o ator LEGÍTIMO, assertado na linha gravada
+     * do EVENTO (§7.5). O mutante perigoso não é `input.userId` cru: é
+     * `input.userId ?? input.actorUserId`, que se comporta normalmente em todo
+     * teste que não manda o campo.
+     */
+    it('stamps the event with the actor and the club of the book, never with the input', async () => {
+      const smuggled = {
+        actorUserId: MEMBER_ID,
+        planItemId: DAY_ONE,
+        doc: aDoc('a minha anotação'),
+        // @ts-expect-error nenhum dos três existe no input
+        userId: SECOND_MEMBER_ID,
+        clubId: OTHER_CLUB_ID,
+        bookId: OTHER_CLUB_BOOK_ID,
+      } satisfies UpsertPlanNoteInput;
+
+      await useCase.execute(smuggled);
+
+      expect(required(events.saved[0]).userId).toBe(MEMBER_ID);
+      expect(required(events.saved[0]).clubId).toBe(CLUB_ID);
+      expect(required(events.saved[0]).bookId).toBe(BOOK_ID);
+    });
+
+    // O corte de tenant recusa ANTES do gatilho: quem não é do clube não gera
+    // evento nenhum (§7.3 — "recusou antes de escrever").
+    it('records nothing for someone who is not a member of the club', async () => {
+      await expect(
+        useCase.execute(validInput({ actorUserId: OTHER_CLUB_MEMBER_ID })),
+      ).rejects.toBeInstanceOf(NotAMemberError);
+
+      expect(events.saveCalls).toBe(0);
+    });
+
+    // Doc malformado é recusado antes de qualquer escrita — e o evento é uma
+    // escrita como outra qualquer.
+    it('records nothing when the doc is refused', async () => {
+      await expect(
+        useCase.execute(validInput({ doc: { type: 'paragraph' } })),
+      ).rejects.toBeInstanceOf(InvalidNoteError);
+
+      expect(events.saveCalls).toBe(0);
     });
   });
 

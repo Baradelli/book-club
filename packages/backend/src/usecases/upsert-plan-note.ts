@@ -10,6 +10,8 @@ import { bookForActor } from './book-for-actor';
 import type { BookRepository } from './ports/book-repository';
 import type { NoteRepository } from './ports/note-repository';
 import type { ReadingPlanItemRepository } from './ports/reading-plan-item-repository';
+import type { RecordActivity } from './record-activity';
+import { recordActivitySafely } from './record-activity';
 
 export interface UpsertPlanNoteInput {
   actorUserId: string; // o autor. NÃO existe `userId` aqui.
@@ -34,6 +36,14 @@ export interface UpsertPlanNoteOutput {
  * `planItem.bookId` e o `clubId` de `book.clubId`. É isso que impede escrever
  * num livro de outro clube mandando o `clubId` "certo" no corpo — a mesma
  * regra que o `bookForActor` implementa desde a Tarefa 06, reusada sem cópia.
+ *
+ * ⚠️ **Registra atividade SÓ NO NASCIMENTO** (Tarefa 33, decisão A). Esta é a
+ * rota que o **autosave da tela do dia chama a cada 1500 ms**
+ * (`packages/app/src/pages/day-note.tsx`): um gatilho a cada reescrita daria
+ * dezenas de eventos por meia hora de escrita, e um feed que afoga o clube é o
+ * oposto de "um incentiva o outro". O `created` que este UseCase já devolvia
+ * para a rota escolher 201 × 200 é exatamente a condição, então ela **não custa
+ * consulta nova**.
  */
 export class UpsertPlanNote {
   constructor(
@@ -41,6 +51,7 @@ export class UpsertPlanNote {
     private readonly books: BookRepository,
     private readonly planItems: ReadingPlanItemRepository,
     private readonly notes: NoteRepository,
+    private readonly recordActivity: RecordActivity,
   ) {}
 
   async execute(input: UpsertPlanNoteInput): Promise<UpsertPlanNoteOutput> {
@@ -94,6 +105,27 @@ export class UpsertPlanNote {
       createdAt: now,
       updatedAt: now,
     });
+
+    /*
+      ⚠️ **O GATILHO, e ele vem DEPOIS da escrita** (Tarefa 33, decisão I).
+      Registrar antes e a escrita falhar produziria um feed que mente — "a
+      Maria escreveu" sem nota nenhuma. A ordem é observável só por CONTAGEM
+      (§7.3), e é o que o teste `records nothing when the note itself fails to
+      be written` afirma.
+
+      E ele **não pode derrubar a escrita da pessoa** (decisão C): quem captura
+      e loga é o `recordActivitySafely`, que é o dono único dessa regra nos
+      quatro UseCases de nascimento.
+    */
+    await recordActivitySafely(this.recordActivity, {
+      clubId: book.clubId,
+      actorUserId: input.actorUserId,
+      type: 'PLAN_NOTE',
+      bookId: book.id,
+      planItemId: planItem.id,
+      subjectId: note.id,
+    });
+
     return { note, created: true };
   }
 

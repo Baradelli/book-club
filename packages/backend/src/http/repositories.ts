@@ -10,6 +10,8 @@ import { PrismaReadingLogRepository } from '../repositories/prisma-reading-log-r
 import { PrismaReadingPlanItemRepository } from '../repositories/prisma-reading-plan-item-repository';
 import { PrismaSettingsRepository } from '../repositories/prisma-settings-repository';
 import { PrismaUserRepository } from '../repositories/prisma-user-repository';
+import type { ActivityEventRepository } from '../usecases/ports/activity-event-repository';
+import { PendingActivityEventRepository } from './pending-activity-event-repository';
 
 export interface Repositories {
   users: PrismaUserRepository;
@@ -22,6 +24,13 @@ export interface Repositories {
   notes: PrismaNoteRepository;
   highlights: PrismaHighlightRepository;
   readingLogs: PrismaReadingLogRepository;
+  /**
+   * ⚠️ **Tipado pelo PORT, e não pela classe concreta** — é o único assim, e é
+   * de propósito: a implementação de hoje é a
+   * `PendingActivityEventRepository`, que a **Tarefa 34** troca pela do Prisma.
+   * Com o tipo do port, essa troca é **uma linha aqui** e nada nas rotas.
+   */
+  activityEvents: ActivityEventRepository;
 }
 
 /**
@@ -41,5 +50,7 @@ export function buildRepositories(prisma: PrismaClient): Repositories {
     notes: new PrismaNoteRepository(prisma),
     highlights: new PrismaHighlightRepository(prisma),
     readingLogs: new PrismaReadingLogRepository(prisma),
+    // ⚠️ A LINHA QUE A TAREFA 34 TROCA — ver o docblock da classe.
+    activityEvents: new PendingActivityEventRepository(),
   };
 }

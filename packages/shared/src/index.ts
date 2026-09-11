@@ -1,6 +1,10 @@
 // @clube/shared — schemas Zod, tipos e helpers compartilhados.
 // Back e front importam daqui: um schema valida, infere tipo e gera o OpenAPI.
 
+// Os quatro tipos do `ActivityEvent` (MVP 3, Tarefa 33). Moram aqui pelo mesmo
+// motivo da paleta do grifo: o domínio do backend, o `z.enum` da borda (Tarefa
+// 34) e o feed da home (Tarefa 35) precisam da MESMA lista.
+export * from './activity';
 export * from './auth';
 // `CalendarDay`/`isCalendarDay`/`isClubMonth` moraram no domínio do backend até
 // a Tarefa 07. Mudaram de casa porque o Zod da borda e a tela de cadastro

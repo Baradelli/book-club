@@ -12,6 +12,8 @@ import type { AssertMembership } from './assert-membership';
 import { bookForActor } from './book-for-actor';
 import type { BookRepository } from './ports/book-repository';
 import type { HighlightRepository } from './ports/highlight-repository';
+import type { RecordActivity } from './record-activity';
+import { recordActivitySafely } from './record-activity';
 
 /**
  * Não existem `userId` nem `clubId` aqui, e é a primeira barreira: a autoria é
@@ -51,12 +53,18 @@ export interface CreateHighlightOutput {
  *
  * **Não exige papel**: `MEMBER` grifa. E o `clubId` vem de `book.clubId`, nunca
  * do input — o corte é o do `bookForActor`, reusado sem cópia.
+ *
+ * ⚠️ **Registra atividade SEMPRE** (Tarefa 33, regra 10), como a avulsa: não há
+ * idempotência para condicionar, porque duas chamadas idênticas criam dois
+ * grifos. O `docs/NOTIFICACOES.md` §1 chama isto de "**registra** um grifo" —
+ * verbo de nascimento, e é o único momento do grifo que vira notícia.
  */
 export class CreateHighlight {
   constructor(
     private readonly assertMembership: AssertMembership,
     private readonly books: BookRepository,
     private readonly highlights: HighlightRepository,
+    private readonly recordActivity: RecordActivity,
   ) {}
 
   async execute(input: CreateHighlightInput): Promise<CreateHighlightOutput> {
@@ -111,6 +119,25 @@ export class CreateHighlight {
       archivedAt: null,
       createdAt: now,
       updatedAt: now,
+    });
+
+    /*
+      ⚠️ **O GATILHO, e ele vem DEPOIS da escrita** (Tarefa 33, decisão I) —
+      registrar antes e a escrita falhar produziria um feed que mente. E ele
+      **não pode derrubar o grifo da pessoa** (decisão C): quem captura e loga
+      é o `recordActivitySafely`, dono único dessa regra nos quatro.
+
+      `planItemId: null` é o caso que decidiu o ADR 0004: grifar **não depende**
+      de eu ter escrito anotação naquele dia, e o grifo não ancora em dia
+      nenhum. Um dia aqui inventaria um vínculo que a entidade não tem.
+    */
+    await recordActivitySafely(this.recordActivity, {
+      clubId: book.clubId,
+      actorUserId: input.actorUserId,
+      type: 'HIGHLIGHT',
+      bookId: book.id,
+      planItemId: null,
+      subjectId: highlight.id,
     });
 
     return { highlight };

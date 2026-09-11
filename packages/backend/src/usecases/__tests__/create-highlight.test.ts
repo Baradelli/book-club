@@ -15,12 +15,14 @@ import {
   aMembership,
   required,
 } from '../../test-support/builders';
+import { ActivityEventRepositoryFake } from '../_fakes/activity-event-repository-fake';
 import { BookRepositoryFake } from '../_fakes/book-repository-fake';
 import { HighlightRepositoryFake } from '../_fakes/highlight-repository-fake';
 import { MembershipRepositoryFake } from '../_fakes/membership-repository-fake';
 import { AssertMembership } from '../assert-membership';
 import type { CreateHighlightInput } from '../create-highlight';
 import { CreateHighlight } from '../create-highlight';
+import { RecordActivity } from '../record-activity';
 
 const CLUB_ID = 'club-1';
 const OTHER_CLUB_ID = 'club-2';
@@ -42,16 +44,24 @@ describe('CreateHighlight', () => {
   let memberships: MembershipRepositoryFake;
   let books: BookRepositoryFake;
   let highlights: HighlightRepositoryFake;
+  let events: ActivityEventRepositoryFake;
+  let recordActivity: RecordActivity;
   let useCase: CreateHighlight;
 
   beforeEach(async () => {
     memberships = new MembershipRepositoryFake();
     books = new BookRepositoryFake();
     highlights = new HighlightRepositoryFake();
+    events = new ActivityEventRepositoryFake();
+    // O `recordActivity` é um UseCase REAL sobre o fake do repositório, e não
+    // um dublê: é o precedente do `AssertMembership` (decisão D), e é o que
+    // faz `events.saveCalls` ser a contagem do gatilho de verdade.
+    recordActivity = new RecordActivity(events);
     useCase = new CreateHighlight(
       new AssertMembership(memberships),
       books,
       highlights,
+      recordActivity,
     );
 
     await books.save(aBook({ id: BOOK_ID, clubId: CLUB_ID }));
@@ -423,15 +433,20 @@ describe('CreateHighlight', () => {
      * `CLOCK_BASE_ISO`, não do código sob teste, e a precondição "o relógio
      * ANDA" tem suíte própria (`advancing-clock.test.ts`).
      *
-     * `reads` é 1 e não mais porque este é o único `new Date()` sem argumento do
-     * caminho: o `clone` do fake reconstrói `Date` a partir de `Date`.
+     * ⚠️ **`reads` passou de 1 para 2 na Tarefa 33, e as DUAS leituras têm
+     * dono declarado**: a `at(1)` é a do grifo, a `at(2)` é a do
+     * `ActivityEvent`. O mutante "um `new Date()` por campo" continua acusado
+     * (ele levaria `reads` a 3 e separaria `createdAt` de `updatedAt`), e o
+     * teste ganhou de brinde uma prova da **ordem** que a decisão I exige: o
+     * evento é o instante mais NOVO, logo ele nasceu depois do grifo. Um
+     * gatilho movido para antes da escrita inverteria os dois.
      */
-    it('reads the clock once and stamps both createdAt and updatedAt with it', async () => {
+    it('reads the clock once for the highlight and once for the event, in that order', async () => {
       const clock = installAdvancingClock();
 
       const { highlight } = await useCase.execute(validInput());
 
-      expect(clock.reads).toBe(1);
+      expect(clock.reads).toBe(2);
       expect(highlight.createdAt.getTime()).toBe(clock.at(1));
       expect(highlight.updatedAt.getTime()).toBe(clock.at(1));
       expect(required(highlights.saved[0]).createdAt.getTime()).toBe(
@@ -440,6 +455,7 @@ describe('CreateHighlight', () => {
       expect(required(highlights.saved[0]).updatedAt.getTime()).toBe(
         clock.at(1),
       );
+      expect(required(events.saved[0]).createdAt.getTime()).toBe(clock.at(2));
     });
 
     // Regra 2 — o trecho gravado vem sem as pontas.
@@ -764,6 +780,138 @@ describe('CreateHighlight', () => {
       expect(highlights.saved.map((one) => one.color).sort()).toEqual(
         [YELLOW, GREEN].sort(),
       );
+    });
+  });
+
+  /**
+   * ⚠️ **O GATILHO DE ATIVIDADE (Tarefa 33)** — e a pergunta que governa este
+   * bloco não é "o evento nasce?", é **"o que o gatilho pode quebrar?"**.
+   */
+  describe('the activity trigger', () => {
+    /**
+     * Regras 5, 13, 14 e 15 — o grifo registra um `HIGHLIGHT`, com o `clubId`
+     * do LIVRO, o `userId` do ATOR, o id do grifo como `subjectId` e
+     * **`planItemId` nulo**.
+     *
+     * ⚠️ **O `planItemId` nulo é o caso que decidiu o ADR 0004**: registrar um
+     * grifo **não depende** de haver anotação naquele dia, e o grifo não
+     * ancora em dia nenhum. Um evento com dia aqui inventaria um vínculo que a
+     * entidade não tem.
+     */
+    it('records one HIGHLIGHT, with no day of reading', async () => {
+      const { highlight } = await useCase.execute(validInput());
+
+      expect(events.saveCalls).toBe(1);
+      expect(events.saved).toHaveLength(1);
+      expect(required(events.saved[0])).toMatchObject({
+        clubId: CLUB_ID,
+        userId: MEMBER_ID,
+        type: 'HIGHLIGHT',
+        bookId: BOOK_ID,
+        subjectId: highlight.id,
+      });
+      expect(required(events.saved[0]).planItemId).toBeNull();
+    });
+
+    /**
+     * ⚠️ **Regra 10 — o grifo registra SEMPRE.** Não há idempotência para
+     * condicionar: duas chamadas idênticas criam dois grifos (o caso é grifar
+     * o mesmo trecho de novo numa releitura, com outra cor), então são dois
+     * acontecimentos e dois eventos. O contador afirmado no lado POSITIVO
+     * (§7.3).
+     */
+    it('records every highlight, because two identical calls are two highlights', async () => {
+      await useCase.execute(validInput());
+      await useCase.execute(validInput());
+      await useCase.execute(validInput());
+
+      expect(highlights.saveCalls).toBe(3);
+      expect(events.saveCalls).toBe(3);
+      expect(events.saved).toHaveLength(3);
+    });
+
+    /**
+     * ⚠️ **Regra 11 — o gatilho vem DEPOIS da escrita** (decisão I): com a
+     * escrita principal falhando, `events.saveCalls === 0`.
+     */
+    it('records nothing when the highlight itself fails to be written', async () => {
+      const save = vi
+        .spyOn(highlights, 'save')
+        .mockRejectedValue(new Error('o banco caiu'));
+
+      await expect(useCase.execute(validInput())).rejects.toThrow(
+        'o banco caiu',
+      );
+
+      expect(events.saveCalls).toBe(0);
+      save.mockRestore();
+    });
+
+    /**
+     * ⚠️ **Regra 12 — O GRIFO SOBREVIVE A UM RECORDER QUE LANÇA** (decisão C),
+     * assertado sobre o ESTADO DO FAKE e não sobre ausência de erro (§7.4).
+     */
+    it('keeps the highlight the person registered when the recorder throws', async () => {
+      const record = vi
+        .spyOn(recordActivity, 'execute')
+        .mockRejectedValue(new Error('o feed caiu'));
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const { highlight } = await useCase.execute(
+        validInput({ quote: 'o trecho que não pode se perder' }),
+      );
+
+      expect(highlight.quote).toBe('o trecho que não pode se perder');
+      expect(highlights.saved).toHaveLength(1);
+      expect(required(highlights.saved[0]).quote).toBe(
+        'o trecho que não pode se perder',
+      );
+      expect(record).toHaveBeenCalledTimes(1);
+      expect(logged).toHaveBeenCalledTimes(1);
+
+      record.mockRestore();
+      logged.mockRestore();
+    });
+
+    /**
+     * Regra 13 — contrabando com o ator LEGÍTIMO, assertado na linha gravada
+     * do EVENTO (§7.5).
+     */
+    it('stamps the event with the actor and the club of the book, never with the input', async () => {
+      const smuggled = {
+        actorUserId: MEMBER_ID,
+        bookId: BOOK_ID,
+        quote: 'a coragem de continuar',
+        color: YELLOW,
+        // @ts-expect-error nenhum dos dois existe no input
+        userId: OWNER_ID,
+        clubId: OTHER_CLUB_ID,
+      } satisfies CreateHighlightInput;
+
+      await useCase.execute(smuggled);
+
+      expect(required(events.saved[0]).userId).toBe(MEMBER_ID);
+      expect(required(events.saved[0]).clubId).toBe(CLUB_ID);
+      expect(required(events.saved[0]).bookId).toBe(BOOK_ID);
+    });
+
+    // O corte de tenant recusa ANTES do gatilho (§7.3).
+    it('records nothing for someone who is not a member of the club', async () => {
+      await expect(
+        useCase.execute(validInput({ actorUserId: OTHER_CLUB_MEMBER_ID })),
+      ).rejects.toBeInstanceOf(NotAMemberError);
+
+      expect(events.saveCalls).toBe(0);
+    });
+
+    // Cor fora da paleta é recusada antes de qualquer escrita — e o evento é
+    // uma escrita como outra qualquer.
+    it('records nothing when the colour is refused', async () => {
+      await expect(
+        useCase.execute(validInput({ color: '#ff0000' })),
+      ).rejects.toBeInstanceOf(InvalidHighlightError);
+
+      expect(events.saveCalls).toBe(0);
     });
   });
 

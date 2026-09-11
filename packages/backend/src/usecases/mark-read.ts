@@ -7,6 +7,8 @@ import { bookForActor } from './book-for-actor';
 import type { BookRepository } from './ports/book-repository';
 import type { ReadingLogRepository } from './ports/reading-log-repository';
 import type { ReadingPlanItemRepository } from './ports/reading-plan-item-repository';
+import type { RecordActivity } from './record-activity';
+import { recordActivitySafely } from './record-activity';
 
 export interface MarkReadInput {
   actorUserId: string; // quem leu. NÃO existe `userId` aqui.
@@ -37,8 +39,15 @@ export interface MarkReadOutput {
  * não há "que dia é hoje" e não há `dayRange` — quem lê no domingo o capítulo
  * de sexta marca o capítulo de sexta. Ver o docblock de `domain/reading-log.ts`.
  *
- * **Não emite `ActivityEvent`**: o gatilho dos três UseCases de escrita entra
- * de uma vez na Tarefa 33. Espalhá-lo agora criaria dois donos da mesma regra.
+ * ⚠️ **Registra atividade SÓ NO NASCIMENTO** (Tarefa 33, decisão A). Dois
+ * toques na tela, ou o retry da fila offline, são **um** acontecimento — e um
+ * evento por toque faria o celular de quem lê apitar duas vezes pela mesma
+ * leitura. O `created` que este UseCase já devolvia para a rota escolher
+ * 201 × 200 é exatamente a condição, então ela **não custa consulta nova**.
+ *
+ * E **desmarcar não é evento**: o `unmarkRead` não dispara nada. Registrar
+ * "a Maria desmarcou" é o vocabulário de cobrança que o princípio anti-culpa
+ * proíbe (decisão B).
  */
 export class MarkRead {
   constructor(
@@ -46,6 +55,7 @@ export class MarkRead {
     private readonly books: BookRepository,
     private readonly planItems: ReadingPlanItemRepository,
     private readonly logs: ReadingLogRepository,
+    private readonly recordActivity: RecordActivity,
   ) {}
 
   async execute(input: MarkReadInput): Promise<MarkReadOutput> {
@@ -115,6 +125,29 @@ export class MarkRead {
       planItemId: planItem.id,
       readAt: new Date(),
     });
+
+    /*
+      ⚠️ **O GATILHO, e ele vem DEPOIS da escrita** (Tarefa 33, decisão I).
+      Registrar antes e a escrita falhar produziria um feed que mente — "a
+      Maria leu" sem log nenhum —, e a ordem é observável só por CONTAGEM
+      (§7.3): é o que o teste `records nothing when the log itself fails to be
+      written` afirma.
+
+      E ele **não pode derrubar o "li" da pessoa** (decisão C): quem captura e
+      loga é o `recordActivitySafely`, dono único dessa regra nos quatro. Aqui
+      isso tem uma consequência a mais — o `readAt` é o dado que a supressão
+      anti-culpa do lembrete (Bloco I) consulta, então perder o log porque o
+      feed caiu faria o app **cobrar quem já leu**.
+    */
+    await recordActivitySafely(this.recordActivity, {
+      clubId: book.clubId,
+      actorUserId: input.actorUserId,
+      type: 'READ',
+      bookId: book.id,
+      planItemId: planItem.id,
+      subjectId: log.id,
+    });
+
     return { log, created: true };
   }
 }

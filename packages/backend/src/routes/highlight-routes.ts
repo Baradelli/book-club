@@ -21,6 +21,7 @@ import { AssertMembership } from '../usecases/assert-membership';
 import { CreateHighlight } from '../usecases/create-highlight';
 import { EditHighlight } from '../usecases/edit-highlight';
 import { ListHighlights } from '../usecases/list-highlights';
+import { RecordActivity } from '../usecases/record-activity';
 
 /**
  * Arquivo de rota PRÓPRIO, e não mais quatro rotas dentro do `note-routes.ts`:
@@ -87,6 +88,9 @@ export const highlightRoutes: FastifyPluginAsyncZod<{
     assertMembership,
     repos.books,
     repos.highlights,
+    // O gatilho de atividade (Tarefa 33): só o NASCIMENTO do grifo é notícia.
+    // Editar e arquivar não entram (decisão B).
+    new RecordActivity(repos.activityEvents),
   );
   const editHighlight = new EditHighlight(assertMembership, repos.highlights);
   const archiveHighlight = new ArchiveHighlight(

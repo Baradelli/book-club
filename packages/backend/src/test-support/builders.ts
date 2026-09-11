@@ -5,6 +5,7 @@
 // ids diferentes para a mesma chave — os testes de unicidade — passa `id`
 // explícito.
 
+import type { ActivityEvent } from '../domain/activity-event';
 import type { Book, ReadingPlanItem } from '../domain/book';
 import type { Club, Membership } from '../domain/club';
 import { docToText } from '../domain/doc-to-text';
@@ -250,6 +251,33 @@ export function aReadingLog(overrides: Partial<ReadingLog> = {}): ReadingLog {
     userId,
     planItemId,
     readAt: new Date(FIXED_ISO),
+    ...overrides,
+  };
+}
+
+/**
+ * Um `ActivityEvent` já gravado, para as suítes que precisam de acervo (a do
+ * fake). Quem monta o evento no caminho real é o `recordActivity` — esta
+ * fábrica nunca substitui a asserção sobre a linha que ELE monta.
+ *
+ * O padrão é o do `PLAN_NOTE`: com dia de leitura. Quem quer a avulsa ou o
+ * grifo passa `planItemId: null`, que é o caso da regra 14.
+ */
+export function anActivityEvent(
+  overrides: Partial<ActivityEvent> = {},
+): ActivityEvent {
+  const userId = overrides.userId ?? 'user-1';
+  const subjectId = overrides.subjectId ?? 'note-1';
+
+  return {
+    id: `activity-${subjectId}-${userId}`,
+    clubId: 'club-1',
+    userId,
+    type: 'PLAN_NOTE',
+    bookId: 'book-1',
+    planItemId: aPlanItem().id,
+    subjectId,
+    createdAt: new Date(FIXED_ISO),
     ...overrides,
   };
 }

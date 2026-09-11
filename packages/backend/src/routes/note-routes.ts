@@ -25,6 +25,7 @@ import { CreateFreeNote } from '../usecases/create-free-note';
 import { EditNote } from '../usecases/edit-note';
 import { ListNotes } from '../usecases/list-notes';
 import { ListPlanItemWriters } from '../usecases/list-plan-item-writers';
+import { RecordActivity } from '../usecases/record-activity';
 import { UpsertPlanNote } from '../usecases/upsert-plan-note';
 
 /**
@@ -76,16 +77,22 @@ export const noteRoutes: FastifyPluginAsyncZod<{
   const repos = buildRepositories(options.prisma);
   // Os UseCases são instanciados UMA vez, no registro — não por request.
   const assertMembership = new AssertMembership(repos.memberships);
+  // O gatilho de atividade (Tarefa 33): UM `recordActivity` para os dois
+  // UseCases de nascimento deste arquivo — é a mesma regra, e um por rota
+  // seriam dois donos dela.
+  const recordActivity = new RecordActivity(repos.activityEvents);
   const upsertPlanNote = new UpsertPlanNote(
     assertMembership,
     repos.books,
     repos.planItems,
     repos.notes,
+    recordActivity,
   );
   const createFreeNote = new CreateFreeNote(
     assertMembership,
     repos.books,
     repos.notes,
+    recordActivity,
   );
   const editNote = new EditNote(assertMembership, repos.notes);
   const archiveNote = new ArchiveNote(assertMembership, repos.notes);

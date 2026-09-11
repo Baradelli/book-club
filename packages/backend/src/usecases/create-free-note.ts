@@ -8,6 +8,8 @@ import type { AssertMembership } from './assert-membership';
 import { bookForActor } from './book-for-actor';
 import type { BookRepository } from './ports/book-repository';
 import type { NoteRepository } from './ports/note-repository';
+import type { RecordActivity } from './record-activity';
+import { recordActivitySafely } from './record-activity';
 
 export interface CreateFreeNoteInput {
   actorUserId: string; // o autor. NÃO existe `userId` aqui.
@@ -31,12 +33,18 @@ export interface CreateFreeNoteOutput {
  *
  * **Não exige papel**: `MEMBER` escreve. E o `clubId` vem de `book.clubId`,
  * nunca do input — o corte é o do `bookForActor`, reusado sem cópia.
+ *
+ * ⚠️ **Registra atividade SEMPRE** (Tarefa 33, regra 10), e é a metade oposta
+ * do `upsertPlanNote`: aqui não há idempotência para condicionar, porque duas
+ * chamadas idênticas criam duas notas. Não há autosave nesta rota — quem
+ * escreve avulsa aperta um botão — então cada chamada é um acontecimento.
  */
 export class CreateFreeNote {
   constructor(
     private readonly assertMembership: AssertMembership,
     private readonly books: BookRepository,
     private readonly notes: NoteRepository,
+    private readonly recordActivity: RecordActivity,
   ) {}
 
   async execute(input: CreateFreeNoteInput): Promise<CreateFreeNoteOutput> {
@@ -71,6 +79,25 @@ export class CreateFreeNote {
       archivedAt: null,
       createdAt: now,
       updatedAt: now,
+    });
+
+    /*
+      ⚠️ **O GATILHO, e ele vem DEPOIS da escrita** (Tarefa 33, decisão I) —
+      registrar antes e a escrita falhar produziria um feed que mente. E ele
+      **não pode derrubar a escrita da pessoa** (decisão C): quem captura e
+      loga é o `recordActivitySafely`, dono único dessa regra nos quatro.
+
+      `planItemId: null` é o produto, e não um detalhe: a avulsa **não tem dia
+      de leitura** — é a metade em que o índice `unique(planItemId, userId)`
+      não atrapalha justamente porque `NULL` não colide com `NULL`.
+    */
+    await recordActivitySafely(this.recordActivity, {
+      clubId: book.clubId,
+      actorUserId: input.actorUserId,
+      type: 'FREE_NOTE',
+      bookId: book.id,
+      planItemId: null,
+      subjectId: note.id,
     });
 
     return { note };

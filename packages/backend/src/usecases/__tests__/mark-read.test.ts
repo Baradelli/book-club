@@ -13,6 +13,7 @@ import {
   aPlanItem,
   required,
 } from '../../test-support/builders';
+import { ActivityEventRepositoryFake } from '../_fakes/activity-event-repository-fake';
 import { BookRepositoryFake } from '../_fakes/book-repository-fake';
 import { MembershipRepositoryFake } from '../_fakes/membership-repository-fake';
 import { ReadingLogRepositoryFake } from '../_fakes/reading-log-repository-fake';
@@ -20,6 +21,7 @@ import { ReadingPlanItemRepositoryFake } from '../_fakes/reading-plan-item-repos
 import { AssertMembership } from '../assert-membership';
 import type { MarkReadInput } from '../mark-read';
 import { MarkRead } from '../mark-read';
+import { RecordActivity } from '../record-activity';
 
 const CLUB_ID = 'club-1';
 const OTHER_CLUB_ID = 'club-2';
@@ -45,6 +47,8 @@ describe('MarkRead', () => {
   let books: BookRepositoryFake;
   let planItems: ReadingPlanItemRepositoryFake;
   let logs: ReadingLogRepositoryFake;
+  let events: ActivityEventRepositoryFake;
+  let recordActivity: RecordActivity;
   let useCase: MarkRead;
 
   beforeEach(async () => {
@@ -52,11 +56,17 @@ describe('MarkRead', () => {
     books = new BookRepositoryFake();
     planItems = new ReadingPlanItemRepositoryFake();
     logs = new ReadingLogRepositoryFake();
+    events = new ActivityEventRepositoryFake();
+    // O `recordActivity` é um UseCase REAL sobre o fake do repositório, e não
+    // um dublê: é o precedente do `AssertMembership` (decisão D), e é o que
+    // faz `events.saveCalls` ser a contagem do gatilho de verdade.
+    recordActivity = new RecordActivity(events);
     useCase = new MarkRead(
       new AssertMembership(memberships),
       books,
       planItems,
       logs,
+      recordActivity,
     );
 
     await books.save(aBook({ id: BOOK_ID, clubId: CLUB_ID }));
@@ -424,17 +434,22 @@ describe('MarkRead', () => {
      * que a spec quer (o esperado sai de uma constante, e não do código) é o
      * que `at(1)` dá.
      *
-     * `reads` é 1 e não mais porque este é o único `new Date()` sem argumento
-     * do caminho: o `clone` do fake reconstrói `Date` a partir de `Date`.
+     * ⚠️ **`reads` passou de 1 para 2 na Tarefa 33, e as DUAS leituras têm
+     * dono declarado**: a `at(1)` é a do log, a `at(2)` é a do
+     * `ActivityEvent`. O mutante "um `new Date()` por campo" continua acusado,
+     * e o teste ganhou de brinde uma prova da **ordem** que a decisão I exige:
+     * o evento é o instante mais NOVO, logo nasceu depois do log. Um gatilho
+     * movido para antes da escrita inverteria os dois.
      */
-    it('reads the clock exactly once and stamps readAt with it', async () => {
+    it('reads the clock once for the log and once for the event, in that order', async () => {
       const clock = installAdvancingClock();
 
       const { log } = await useCase.execute(validInput());
 
-      expect(clock.reads).toBe(1);
+      expect(clock.reads).toBe(2);
       expect(log.readAt.getTime()).toBe(clock.at(1));
       expect(required(logs.saved[0]).readAt.getTime()).toBe(clock.at(1));
+      expect(required(events.saved[0]).createdAt.getTime()).toBe(clock.at(2));
     });
 
     // O complemento do teste acima, sem stub: o instante gravado é AGORA, e cai
@@ -508,6 +523,140 @@ describe('MarkRead', () => {
 
       expect(log.bookId).toBe(OTHER_CLUB_BOOK_ID);
       expect(log.clubId).toBe(OTHER_CLUB_ID);
+    });
+  });
+
+  /**
+   * ⚠️ **O GATILHO DE ATIVIDADE (Tarefa 33)** — e a pergunta que governa este
+   * bloco não é "o evento nasce?", é **"o que o gatilho pode quebrar?"**.
+   */
+  describe('the activity trigger', () => {
+    /**
+     * Regras 5, 13, 14 e 15 — marcar o dia registra um `READ`, com o `clubId`
+     * e o `bookId` do LIVRO, o `userId` do ATOR, o dia do plano e o id do
+     * **log** como `subjectId`.
+     */
+    it('records one READ when the log is born', async () => {
+      const { log } = await useCase.execute(validInput());
+
+      expect(events.saveCalls).toBe(1);
+      expect(events.saved).toHaveLength(1);
+      expect(required(events.saved[0])).toMatchObject({
+        clubId: CLUB_ID,
+        userId: MEMBER_ID,
+        type: 'READ',
+        bookId: BOOK_ID,
+        planItemId: DAY_1,
+        subjectId: log.id,
+      });
+    });
+
+    /**
+     * ⚠️ **Regra 8 — a segunda marcação NÃO registra.** Dois toques na tela,
+     * ou o retry da fila offline, são **um** acontecimento: o `markRead` é
+     * idempotente por `unique(planItemId, userId)` e já devolvia o `created`
+     * que a rota usa para 201 × 200, então a condição da decisão A não custa
+     * consulta nova.
+     *
+     * Provado por **CONTAGEM** (§7.3): "não registrou" e "registrou e o acervo
+     * ficou igual" dão o mesmo `saved` — e um evento por toque faria o celular
+     * de quem lê apitar duas vezes pela mesma leitura.
+     */
+    it('records nothing on the second marking of the same day', async () => {
+      await useCase.execute(validInput());
+      expect(events.saveCalls).toBe(1);
+
+      const { created } = await useCase.execute(validInput());
+
+      expect(created).toBe(false);
+      expect(events.saveCalls).toBe(1);
+      expect(events.saved).toHaveLength(1);
+    });
+
+    /**
+     * ⚠️ **Regra 11 — o gatilho vem DEPOIS da escrita** (decisão I): com a
+     * escrita principal falhando, `events.saveCalls === 0`. Um feed que diz
+     * "a Maria leu" sem log nenhum é pior que um feed atrasado.
+     */
+    it('records nothing when the log itself fails to be written', async () => {
+      const save = vi
+        .spyOn(logs, 'save')
+        .mockRejectedValue(new Error('o banco caiu'));
+
+      await expect(useCase.execute(validInput())).rejects.toThrow(
+        'o banco caiu',
+      );
+
+      expect(events.saveCalls).toBe(0);
+      save.mockRestore();
+    });
+
+    /**
+     * ⚠️ **Regra 12 — O "LI" SOBREVIVE A UM RECORDER QUE LANÇA** (decisão C),
+     * assertado sobre o ESTADO DO FAKE e não sobre ausência de erro (§7.4).
+     *
+     * Aqui a decisão C tem uma consequência a mais: o `readAt` é o dado que a
+     * supressão anti-culpa do lembrete (Bloco I) consulta. Perder o log porque
+     * o feed caiu faria o app **cobrar quem já leu**.
+     */
+    it('keeps the reading log when the recorder throws', async () => {
+      const record = vi
+        .spyOn(recordActivity, 'execute')
+        .mockRejectedValue(new Error('o feed caiu'));
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const { log, created } = await useCase.execute(validInput());
+
+      expect(created).toBe(true);
+      expect(logs.saved).toHaveLength(1);
+      expect(required(logs.saved[0]).id).toBe(log.id);
+      expect(required(logs.saved[0]).planItemId).toBe(DAY_1);
+      expect(required(logs.saved[0]).userId).toBe(MEMBER_ID);
+      expect(record).toHaveBeenCalledTimes(1);
+      expect(logged).toHaveBeenCalledTimes(1);
+
+      record.mockRestore();
+      logged.mockRestore();
+    });
+
+    /**
+     * Regra 13 — contrabando com o ator LEGÍTIMO, assertado na linha gravada
+     * do EVENTO (§7.5). Nem `clubId` nem `bookId` existem neste input: os dois
+     * saem de `planItem.bookId` → `book.clubId`.
+     */
+    it('stamps the event with the actor and the club of the book, never with the input', async () => {
+      const smuggled = {
+        actorUserId: MEMBER_ID,
+        planItemId: DAY_1,
+        // @ts-expect-error nenhum dos três existe no input
+        userId: OWNER_ID,
+        clubId: OTHER_CLUB_ID,
+        bookId: OTHER_CLUB_BOOK_ID,
+      } satisfies MarkReadInput;
+
+      await useCase.execute(smuggled);
+
+      expect(required(events.saved[0]).userId).toBe(MEMBER_ID);
+      expect(required(events.saved[0]).clubId).toBe(CLUB_ID);
+      expect(required(events.saved[0]).bookId).toBe(BOOK_ID);
+    });
+
+    // O corte de tenant recusa ANTES do gatilho (§7.3).
+    it('records nothing for someone who is not a member of the club', async () => {
+      await expect(
+        useCase.execute(validInput({ actorUserId: OTHER_CLUB_MEMBER_ID })),
+      ).rejects.toBeInstanceOf(NotAMemberError);
+
+      expect(events.saveCalls).toBe(0);
+    });
+
+    // Dia de plano inexistente é recusado antes de qualquer escrita.
+    it('records nothing when the plan item does not exist', async () => {
+      await expect(
+        useCase.execute(validInput({ planItemId: 'plan-que-nao-existe' })),
+      ).rejects.toBeInstanceOf(PlanItemNotFoundError);
+
+      expect(events.saveCalls).toBe(0);
     });
   });
 
