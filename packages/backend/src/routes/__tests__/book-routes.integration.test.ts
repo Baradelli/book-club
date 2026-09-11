@@ -145,12 +145,21 @@ describe('book routes', () => {
       where: { bookId: { in: books.map((book) => book.id) } },
       select: { id: true },
     });
+    // E os LOGS DE LEITURA pelo mesmo motivo, desde a Tarefa 32c: a guarda
+    // irmã tem um teste que marca um dia como lido pela rota, e
+    // `ReadingLog.planItemId` também é `onDelete: Restrict`. Consultados pelo
+    // `bookId`, nunca por uma lista alimentada pelas respostas esperadas (§6.6).
+    const readingLogs = await prisma.readingLog.findMany({
+      where: { bookId: { in: books.map((book) => book.id) } },
+      select: { id: true },
+    });
     const memberships = await prisma.membership.findMany({
       where: { clubId: { in: [CLUB_ID, OTHER_CLUB_ID] } },
       select: { id: true },
     });
 
     await removeFixtures({
+      readingLogIds: readingLogs.map((log) => log.id),
       noteIds: notes.map((note) => note.id),
       planItemIds: planItems.map((item) => item.id),
       bookIds: books.map((book) => book.id),
@@ -831,6 +840,61 @@ describe('book routes', () => {
       expect(await prisma.note.count({ where: { planItemId: dayTwoId } })).toBe(
         1,
       );
+    });
+
+    /**
+     * ⚠️ **A GUARDA IRMÃ, pela ROTA** — a fiação
+     * `new ReplacePlanItems(..., repos.readingLogs)` da Tarefa 32c, e é ela
+     * que este teste existe para provar.
+     *
+     * A guarda é provada no unitário com o fake; o que se decide **aqui** é se
+     * o repositório de leitura está **ligado** ao UseCase nesta rota. A
+     * auditoria da Tarefa 11 mediu o gêmeo: um duplo cujo
+     * `planItemIdsWithAnyNote` devolvesse `[]` sobrevivia a 1202 testes, e a
+     * consequência real era o **500**. Aqui é idêntico, com o `P2003` do
+     * `ReadingLog_planItemId_fkey` no lugar.
+     *
+     * Por isso a leitura é marcada pela ROTA (`PUT
+     * /plan-items/:planItemId/reading-log`) e a sobrevivência do dia é
+     * conferida por `count` no banco: é o par (status, linha) que distingue a
+     * guarda ligada da FK gritando no meio da transação.
+     */
+    it('answers 400 without touching the plan when a removed day was already read', async () => {
+      const marked = await app.inject({
+        method: 'PUT',
+        url: `/plan-items/${dayTwoId}/reading-log`,
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+      expect(marked.statusCode).toBe(201);
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: `/books/${bookId}/plan`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: { planItems: [{ date: '2026-10-01', title: 'Cap. 1' }] },
+      });
+
+      // 400, e NÃO 500: sem a fiação o `Restrict` da FK viraria erro de banco.
+      expect(response.statusCode).toBe(400);
+      const body = response.json<ErrorBody>();
+      // ⚠️ **E a MENSAGEM não mente**: é a de leitura, não a de nota — e é esta
+      // string que o cliente recebe, porque a classe 400 é a única em que
+      // `error.message` sai (§6.2). Não há nota nenhuma neste dia.
+      expect(body.error).toContain('somebody already read');
+      expect(body.error).not.toContain('notes');
+      expect(body.error).toContain('1');
+      // Só a contagem: nem quem leu, nem o id do dia.
+      expect(body.error).not.toContain(ADMIN_ID);
+      expect(body.error).not.toContain(dayTwoId);
+
+      // E NADA foi escrito nem removido: o dia continua no banco, com o log.
+      expect(
+        await prisma.readingPlanItem.count({ where: { id: dayTwoId } }),
+      ).toBe(1);
+      expect(await prisma.readingPlanItem.count({ where: { bookId } })).toBe(2);
+      expect(
+        await prisma.readingLog.count({ where: { planItemId: dayTwoId } }),
+      ).toBe(1);
     });
 
     it('empties the plan when planItems is empty', async () => {

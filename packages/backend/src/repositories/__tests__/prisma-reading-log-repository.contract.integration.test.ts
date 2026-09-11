@@ -621,6 +621,113 @@ describe('PrismaReadingLogRepository (contract)', () => {
   });
 
   /**
+   * ⚠️ **REGRAS 1, 2 e 4 da Tarefa 32c** — o método da segunda guarda do
+   * `replacePlanItems`, espelho do `planItemIdsWithAnyNote` da nota.
+   *
+   * Contra o Postgres, e não só contra o fake, porque as duas propriedades que
+   * importam são do **banco**: o `IN (...)` devolve uma linha por leitura (dois
+   * leitores no mesmo dia dão duas), e é o `Set` do repositório que as colapsa
+   * num id só; e a lista vazia não pode virar um `IN ()`.
+   */
+  describe('planItemIdsWithAnyReadingLog', () => {
+    it('finds a day that somebody read', async () => {
+      await repo.save(aLog('anylog-found'));
+
+      await expect(
+        repo.planItemIdsWithAnyReadingLog([DAY_ONE, DAY_TWO]),
+      ).resolves.toEqual([DAY_ONE]);
+    });
+
+    /**
+     * É um CONJUNTO: duas pessoas que leram o MESMO dia dão **um** id, não
+     * dois — senão a mensagem da guarda diria "2 dias" para um dia só.
+     *
+     * Aqui a duplicata é real (o `@@unique` é `(planItemId, userId)`, então
+     * dois leitores no mesmo dia são duas linhas legítimas), e é por isso que
+     * este teste vive contra o banco: no `IN (...)` cru voltariam dois
+     * `planItemId` iguais.
+     */
+    it('returns one id per day, not one per reader', async () => {
+      await repo.save(aLog('anylog-set-a'));
+      await repo.save(aLog('anylog-set-b', { userId: OTHER_READER_ID }));
+
+      // A pré-condição que dá dente ao teste: são DUAS linhas no banco.
+      await expect(
+        prisma.readingLog.count({ where: { planItemId: DAY_ONE } }),
+      ).resolves.toBe(2);
+      await expect(
+        repo.planItemIdsWithAnyReadingLog([DAY_ONE]),
+      ).resolves.toEqual([DAY_ONE]);
+    });
+
+    it('never returns an id nobody read', async () => {
+      await repo.save(aLog('anylog-unread'));
+
+      await expect(
+        repo.planItemIdsWithAnyReadingLog([DAY_TWO, DAY_THREE]),
+      ).resolves.toEqual([]);
+    });
+
+    // Só os ids PEDIDOS: um método que ignorasse a lista (devolvendo todos os
+    // dias lidos) passaria nos testes de cima.
+    it('returns only the asked ids', async () => {
+      await repo.save(aLog('anylog-asked-a'));
+      await repo.save(aLog('anylog-asked-c', { planItemId: DAY_THREE }));
+
+      await expect(
+        repo.planItemIdsWithAnyReadingLog([DAY_ONE, DAY_TWO]),
+      ).resolves.toEqual([DAY_ONE]);
+    });
+
+    /**
+     * ⚠️ **REGRA 2 — `[]` devolve `[]` SEM IDA AO BANCO, e a prova é uma
+     * CONTAGEM de consultas, não o resultado** (§7.3).
+     *
+     * O resultado é `[]` nas duas implementações — a que sai na hora e a que
+     * manda um `IN ()` ao Postgres para receber zero linhas —, então uma
+     * asserção sobre ele não separa as duas. O que separa é o SQL realmente
+     * emitido, capturado por `$on('query')` num cliente próprio (o `prisma`
+     * compartilhado não emite eventos): é o mesmo instrumento do
+     * `emits no LIMIT and no ORDER BY` logo acima.
+     *
+     * E os dois lados, porque um contador só afirmado como `0` é meio contador
+     * (§7.3): sem o `afterAsking: 1`, um método mutilado para `return []` antes
+     * de qualquer consulta passaria neste teste.
+     *
+     * ⚠️ **UM CLIENTE POR LADO, e a contagem lida DEPOIS do `$disconnect()`** —
+     * é o `readingLogQueriesOf` no rodapé do arquivo, e a ordem é por causa da
+     * **entrega do evento**, não por estilo: o `$on('query')` do Prisma não
+     * promete ter emitido o evento antes de a promessa da consulta resolver.
+     * Ler o array logo depois do `await` mediria um `0` quando o evento chega
+     * um tick atrasado, e o lado exposto seria justamente o `afterAsking: 1` —
+     * vermelho intermitente, que é como uma suíte aprende a ser ignorada. O
+     * vizinho `emits no LIMIT and no ORDER BY` já lê depois do `$disconnect()`
+     * pelo mesmo motivo.
+     */
+    it('asks the database nothing for an empty list, and once for a real one', async () => {
+      await repo.save(aLog('anylog-count'));
+
+      const empty = await readingLogQueriesOf(
+        async (counted) => await counted.planItemIdsWithAnyReadingLog([]),
+      );
+      const asked = await readingLogQueriesOf(
+        async (counted) =>
+          await counted.planItemIdsWithAnyReadingLog([DAY_ONE]),
+      );
+
+      // Os resultados, que são iguais nas duas implementações...
+      expect({ empty: empty.result, asked: asked.result }).toEqual({
+        empty: [],
+        asked: [DAY_ONE],
+      });
+      // ...e a contagem, que é a única coisa que as separa.
+      expect({ afterEmpty: empty.queries, afterAsking: asked.queries }).toEqual(
+        { afterEmpty: 0, afterAsking: 1 },
+      );
+    });
+  });
+
+  /**
    * ⚠️ REGRA 3 — o `onDelete: Restrict` do `planItem` ESTÁ ATIVO no banco.
    *
    * Para relação **obrigatória** o default do Prisma já é `Restrict`, mas foi
@@ -666,25 +773,44 @@ describe('PrismaReadingLogRepository (contract)', () => {
     });
 
     /**
-     * ⚠️ **A LACUNA DA DECISÃO H, MEDIDA E FIXADA COMO ESTÁ.**
+     * ⚠️ **A REDE EMBAIXO DA GUARDA DE DOMÍNIO — decisões E e F da Tarefa 32c,
+     * e este teste SUBSTITUI o que pinava a lacuna.**
      *
-     * O `replacePlanItems` tem guarda de domínio para "não remover dia que já
-     * tem NOTA" (`planItemIdsWithAnyNote`), e **não tem** para dia que já tem
-     * LEITURA. Um dia só-com-leitura passa pela guarda, chega ao
-     * `replaceForBook`, e a remoção estoura **aqui** — como erro de banco, que
-     * a borda relança em **500** em vez do 400 com mensagem.
+     * O que estava aqui chamava-se
+     * `lets a day with only a reading log through the note guard, and then the
+     * FK refuses it`, e documentava um **defeito**: o `replacePlanItems` só
+     * tinha guarda para "dia que já tem NOTA", então um dia com **só leitura**
+     * passava, chegava ao `replaceForBook` e estourava aqui como erro de banco
+     * — 500 mudo, no caso irmão daquele que respondia 400 com mensagem.
      *
-     * Este teste pina as duas metades do fato, para o conserto (que é fatia
-     * própria: cresce o construtor do `ReplacePlanItems` e passa pelo
-     * `book-routes`) nascer com um vermelho pronto:
+     * O defeito acabou: a 32c deu ao UseCase a segunda guarda
+     * (`planItemIdsWithAnyReadingLog`). Mas o teste antigo **continuaria
+     * verde**, porque o repositório de fato deixa passar — quem passou a
+     * recusar é o **UseCase** —, e um teste verde cujo nome descreve um defeito
+     * já consertado é pior que nenhum: ele faz o próximo leitor acreditar que a
+     * lacuna continua aberta. Por isso a troca, e não o apagamento: a verdade
+     * nova é pinada nos dois lugares certos.
      *
-     * 1. a guarda que existe **não vê** o dia com leitura — ela olha `Note`;
-     * 2. a FK vê, e derruba a operação INTEIRA, inclusive a parte legítima.
+     * - **Aqui (contrato):** a FK `ReadingLog_planItemId_fkey` é a **rede**, e
+     *   ela continua ativa mesmo sem nota nenhuma no dia. É a decisão F: tirar
+     *   o `Restrict` porque "agora tem guarda" trocaria uma proteção estrutural
+     *   por uma que alguém pode esquecer de chamar.
+     * - **A recusa EDUCADA (400 com mensagem de leitura):** é do UseCase, e
+     *   está no unitário —
+     *   `usecases/__tests__/replace-plan-items.test.ts`, no
+     *   `describe('the guard that refuses to remove a day that has readings')`
+     *   — mais a fiação da rota em
+     *   `routes/__tests__/book-routes.integration.test.ts`
+     *   (`answers 400 without touching the plan when a removed day was already
+     *   read`).
      *
-     * O dado está a salvo (o `replaceForBook` é uma transação, e o `after`
-     * abaixo prova que nada mudou); o que está errado é o status e a mensagem.
+     * A precondição `note.count === 0` fica: é ela que diz que a rede desta
+     * linha é a FK do LOG, e não a da nota, que tem `Restrict` igual.
+     *
+     * E o dado continua a salvo: o `replaceForBook` roda em `$transaction`, e o
+     * `after` prova que nem o dia condenado nem o sobrevivente se mexeram.
      */
-    it('lets a day with only a reading log through the note guard, and then the FK refuses it', async () => {
+    it('is the net under the domain guard: it refuses a day that only a reading log anchors', async () => {
       const doomed = trackedPlanItemId('gap-doomed');
       const survivor = trackedPlanItemId('gap-survivor');
       await planRepo.saveMany([
@@ -693,12 +819,17 @@ describe('PrismaReadingLogRepository (contract)', () => {
       ]);
       await repo.save(aLog('gap', { bookId: GAP_BOOK_ID, planItemId: doomed }));
 
-      // 1. A guarda do `replacePlanItems` NÃO vê este dia: ela consulta `Note`.
+      // A precondição: NENHUMA nota ancora este dia — a rede que morde abaixo
+      // é a FK do log, não a da nota.
       await expect(
         prisma.note.count({ where: { planItemId: doomed } }),
       ).resolves.toBe(0);
+      // ...e é o `planItemIdsWithAnyReadingLog` que o UseCase usa para nunca
+      // chegar até aqui. A rede existe para o dia em que alguém o esquecer.
+      await expect(
+        repo.planItemIdsWithAnyReadingLog([survivor, doomed]),
+      ).resolves.toEqual([doomed]);
 
-      // 2. ...e a FK vê, e derruba a operação inteira.
       await expect(
         planRepo.replaceForBook(GAP_BOOK_ID, {
           upsert: [planItem(survivor, GAP_BOOK_ID, 0, '2026-11-01', 'Cap. 1')],
@@ -830,6 +961,38 @@ describe('PrismaReadingLogRepository (contract)', () => {
     });
   });
 });
+
+/**
+ * Roda `fn` contra um repositório de cliente PRÓPRIO e devolve o que ela
+ * devolveu **mais** quantas consultas ao `ReadingLog` aquele cliente emitiu.
+ *
+ * Cliente próprio porque o `prisma` compartilhado do `_db.ts` não emite eventos
+ * de `query`. E a contagem sai **depois** do `$disconnect()`, nunca logo após o
+ * `await` da consulta: o `$on('query')` não promete ter entregado o evento
+ * quando a promessa resolve, e uma leitura antecipada seria um `0` intermitente
+ * no lado positivo da asserção.
+ */
+async function readingLogQueriesOf<T>(
+  fn: (repo: PrismaReadingLogRepository) => Promise<T>,
+): Promise<{ result: T; queries: number }> {
+  const client = new PrismaClient({
+    log: [{ emit: 'event', level: 'query' }],
+  });
+  const seen: string[] = [];
+  client.$on('query', (event) => seen.push(event.query));
+
+  let result: T;
+  try {
+    result = await fn(new PrismaReadingLogRepository(client));
+  } finally {
+    await client.$disconnect();
+  }
+
+  return {
+    result,
+    queries: seen.filter((sql) => sql.includes('"ReadingLog"')).length,
+  };
+}
 
 async function uniqueIndexColumnsOf(
   table: string,

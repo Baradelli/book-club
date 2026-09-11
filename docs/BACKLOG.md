@@ -2004,19 +2004,89 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       _**Pergunta do dono registrada:** marcar leitura de um **dia que já passou** — ver
       `ACEITE-MVP.md`, MVP 3, pergunta 2._
 
-- [ ] **32c** — `replacePlanItems` recusa remover dia que já tem LEITURA. ⚠️ **FATIA
-      INSERIDA**, com o motivo medido na 32. → _a detalhar_
-      _**A lacuna, medida e pinada em teste na Tarefa 32:** a guarda de domínio do
-      `replacePlanItems` consulta **só `Note`** (`planItemIdsWithAnyNote`), então um dia do
-      plano que tem **só leitura** passa por ela e estoura na **FK** — vira **500** em vez do
-      **400** com mensagem. O dado **fica a salvo** (`replaceForBook` roda em `$transaction`).
-      É **caso de terça-feira**, não raro: o admin edita o plano do livro do mês e basta uma
-      pessoa ter marcado "li" sem escrever nota — e pior, a guarda de nota **funciona**, então
-      o admin aprende que o sistema recusa com mensagem clara e é surpreendido por um 500 mudo
-      no caso irmão. **Foi a Tarefa 32 que introduziu este caminho.** O conserto cabe no port
-      como está (`logs.find({bookId})` intersectado com `removeIds`), mas cresce o construtor
-      do `ReplacePlanItems` para cinco dependências e mexe em `book-routes.ts` e em toda
-      instanciação do teste dele — unidade com auditoria própria._
+- [x] **32c** — `replacePlanItems` recusa remover dia que já tem LEITURA: **400 com mensagem,
+      não 500 mudo**. ⚠️ **FATIA INSERIDA**, com o motivo medido na 32.
+      → `tasks/32c-guarda-de-leitura-no-plano.md`
+      _**O ADMIN VOLTA A SER RECUSADO COM EDUCAÇÃO.** Entregue:
+      `planItemIdsWithAnyReadingLog` no port (com a implementação Prisma **na mesma unidade**,
+      §6.9), a segunda guarda no `replacePlanItems`, e três mensagens que não mentem.
+      **428 shared · 195 ui · 1417 backend** (era 1399) **· 641 app**. Integração **442** (era
+      436). Chunk **418.320 B**, byte a byte idêntico. Banco limpo, super-admin intacto,
+      **zero** fixture sobrevivente em 10 tabelas._
+      _**A lacuna, que a Tarefa 32 mediu e ESTA fatia fecha:** a guarda de domínio consultava
+      **só `Note`**, então um dia do plano com **só leitura** passava por ela e batia na FK
+      `ON DELETE RESTRICT` — erro de banco, **500**, sem mensagem. O dado sempre ficou a salvo
+      (`replaceForBook` roda em `$transaction`). O pior detalhe era de produto: a guarda de
+      nota **funciona** e dá mensagem clara, então o admin aprendia que o sistema recusa
+      educadamente e era surpreendido por um 500 mudo no caso irmão._
+      _**As três mensagens, como o cliente as recebe** (`error.message` só sai na classe 400,
+      §6.2 — é a única string desta fatia que alguém lê):_
+      ```
+      só nota    → cannot remove 1 reading plan day(s) that already have notes
+      só leitura → cannot remove 1 reading plan day(s) that somebody already read
+      os dois    → a de nota (decisão D: a guarda antiga continua primeiro)
+      ```
+      _Nenhuma cita autor, id de dia, id de log ou título — **só a contagem**, a mesma decisão
+      que o docblock da guarda de nota já registrava._
+      _**⚠️ O EXECUTOR DISCORDOU DA SPEC E ESTAVA CERTO — pela terceira vez neste MVP, e pela
+      mesma razão.** A regra 2 mandava provar `[] → []` "sem ida ao banco" **por contagem no
+      fake**. Ele recusou com o §7.10: no fake **não existe banco**, então um contador ali
+      conta a chamada ao próprio método, não a ida ao banco. Medido pelo revisor **e** pelo
+      orquestrador: removendo a saída antecipada do fake, a suíte dá **1420/1420 — zero
+      acusadores**, porque `resolves.toEqual([])` **não separa** as duas implementações (nem no
+      fake nem no Prisma, onde `in: []` devolve `[]`). A prova mudou para o contrato, com
+      `$on('query')` — o instrumento que já existia no mesmo arquivo. **A spec pedia a prova
+      no lugar onde ela não vale**, e o próprio parágrafo seguinte da spec avisava disso._
+      _**E ele acrescentou um teste que a spec deixou opcional, com o argumento medido:** a
+      fiação de `book-routes.ts` (a quinta dependência) não é decidível nem no unitário (que
+      usa fake) nem no contrato (que não conhece o UseCase). O precedente está em docblock
+      desde a Tarefa 11: trocar `repos.notes` por um duplo devolvendo `[]` **sobrevivia a 1202
+      testes**, com 500 como consequência real._
+      _**A linha de maior rendimento da fatia foi UMA, num helper que já existia:** a asserção
+      de contador que ele acrescentou ao `expectNothingTouched()` cobre **13 estados de erro**
+      sem escrever 13 testes — o mutante que lê o log antes do corte de tenant dá **17**
+      acusadores, e **16** deles são asserções de contagem._
+      _**⚠️ E isso revelou três testes que cobriam duas vezes.** Os três `never reads a reading
+      log for…` que ele escrevera assertavam o que o helper já assertava nos mesmos cenários.
+      O revisor procurou e **não achou** mutante que os três matassem e os 13 deixassem viver.
+      Apagados — **com trava**: o orquestrador exigiu que a contagem do mutante de tenant fosse
+      remedida depois e **não caísse abaixo de 14**, sob pena de a decisão estar errada.
+      Medido pelo orquestrador: **17 → 14**, exatamente o piso, com os **mesmos 42 passed** —
+      a prova de que os três só acusavam o que o helper já acusava. (A trava existia porque a
+      Tarefa 32b ensinou a desconfiar: lá o orquestrador quase cortou testes em nome de uma
+      simetria que não existia.)_
+      _**A troca do teste da Tarefa 32 preservou as duas metades.** O antigo
+      (`lets a day with only a reading log through the note guard, and then the FK refuses it`)
+      documentava o **defeito**, e continuaria passando depois do conserto — porque quem
+      deixava passar era o **repositório**, e quem passa a recusar é o **UseCase**. O
+      substituto (`is the net under the domain guard…`) mantém as 3 asserções do antigo e
+      acrescenta 1. Comparado asserção por asserção pelo revisor._
+      _**Um risco de INTERMITÊNCIA achado e consertado antes de existir:** o teste da regra 2
+      lia o contador de queries **dentro** do `try`, logo após o `await` — mas os eventos de
+      `$on('query')` do Prisma não têm entrega garantida antes de a promessa resolver, e o
+      precedente no mesmo arquivo lê **depois** do `$disconnect()`. Passava, mas teste de
+      integração intermitente é veneno: ele ensina a suíte a ser ignorada. Reescrito com um
+      cliente por lado, e o docblock diz que a ordem é **por causa da entrega do evento**,
+      não por estilo._
+      _**⚠️ DUAS CORREÇÕES DE REGISTRO, e as duas eram do revisor e do orquestrador, não do
+      executor.** (1) O revisor reportou que **o gate de lint é vácuo** (`pnpm -r lint` diz
+      *"None of the selected packages has a 'lint' script"*), o que tornaria falsa a caixinha
+      de lint de **todas** as fatias do MVP. **Medido pelo orquestrador: o gate é `pnpm lint`
+      (raiz, `eslint .`) — outro comando, que roda** — e, porque verde não é guarda, foi
+      plantado um `const naoUsada` e o eslint acusou (`@typescript-eslint/no-unused-vars`).
+      Nenhuma caixinha era falsa. (2) O revisor "corrigiu" a contagem de linhas de 703→900
+      para 954→1274; **não é correção, são instrumentos diferentes** — o executor usou o
+      contador **canônico** (descarta comentário e linha em branco) e o revisor usou `wc -l`.
+      Justo a fatia anterior teve um ALTO por confundir isso._
+      _**Outros dois BAIXOS corrigidos:** o ponteiro no docblock do fake passou a dizer **onde**
+      a propriedade é provada, **pelo NOME do teste e nunca pela linha** (§7.4); e uma asserção
+      de contagem que usava `toContain('2')` — e portanto passaria para "12", "20" e "21" —
+      virou comparação da frase inteira, que de brinde deu um segundo acusador à mensagem
+      publicada (**1 → 3**)._
+      _**Gates:** os cinco limpos, verificados pelo orquestrador. `app`, `ui`, `shared` e
+      `prisma/` intocados; nenhuma migration (a FK e o índice já existiam desde a 32)._
+      _**Nota operacional para o dono:** o Docker estava **desligado** quando a fatia começou;
+      o executor subiu o Docker Desktop para rodar a integração e **deixou rodando**._
 
 ### Bloco H — Atividade
 

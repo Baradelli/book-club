@@ -139,6 +139,33 @@ export class PrismaReadingLogRepository implements ReadingLogRepository {
   }
 
   /**
+   * Os dias, dos pedidos, que alguém já leu — a leitura da segunda guarda do
+   * `replacePlanItems`. Espelho do `planItemIdsWithAnyNote` da nota, inclusive
+   * no `select` de uma coluna só e no `Set`.
+   *
+   * A coluna é **NOT NULL** aqui (não existe leitura avulsa), então não há o
+   * descarte de `null` que o irmão da nota precisa fazer depois do `IN`.
+   */
+  async planItemIdsWithAnyReadingLog(
+    planItemIds: readonly string[],
+  ): Promise<string[]> {
+    // O port promete "lista vazia não vai ao banco". Sem isto seria um
+    // `IN ()`, uma ida ao banco garantidamente vazia em toda troca de plano
+    // que não remove nada — que é o caso comum.
+    if (planItemIds.length === 0) return [];
+
+    const rows = await this.prisma.readingLog.findMany({
+      where: { planItemId: { in: [...planItemIds] } },
+      select: { planItemId: true },
+    });
+
+    // O `Set` não é otimização: é o contrato. Dois leitores no mesmo dia são
+    // duas linhas (o `@@unique` é `(planItemId, userId)`) e um id só, senão a
+    // mensagem da guarda diria "2 dias" para um dia só.
+    return [...new Set(rows.map((row) => row.planItemId))];
+  }
+
+  /**
    * Hard delete, e **idempotente**: id inexistente não é erro.
    *
    * ⚠️ **`deleteMany` e não `delete`, e agora isso está MEDIDO** — o docblock

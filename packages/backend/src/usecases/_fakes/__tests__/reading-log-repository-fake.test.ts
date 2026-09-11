@@ -640,6 +640,127 @@ describe('ReadingLogRepositoryFake', () => {
   });
 
   /**
+   * O método da segunda guarda do `replacePlanItems` (Tarefa 32c), espelho
+   * exato do `planItemIdsWithAnyNote` do `NoteRepositoryFake`.
+   *
+   * O que os testes daqui pinam é o que a guarda precisa e nada mais: **quais**
+   * dias têm leitura, como **conjunto**, sem autoria e sem corte de tenant
+   * próprio — os ids já vêm do plano de um livro que o `bookForActor` cortou.
+   */
+  describe('planItemIdsWithAnyReadingLog', () => {
+    const BOOK_ID = 'book-1';
+    const OTHER_BOOK_ID = 'book-2';
+    const THIRD_PLAN_ITEM_ID = 'plan-book-1-2026-10-03';
+
+    /** Uma leitura de um dia, com id derivado do dia e do leitor. */
+    async function aReadOf(
+      planItemId: string,
+      userId: string = READER_ID,
+      overrides: Partial<ReadingLog> = {},
+    ): Promise<ReadingLog> {
+      return await logs.save(
+        aReadingLog({
+          id: `log-${planItemId}-${userId}`,
+          bookId: BOOK_ID,
+          planItemId,
+          userId,
+          ...overrides,
+        }),
+      );
+    }
+
+    it('returns the plan item id of a day that somebody read', async () => {
+      await aReadOf(PLAN_ITEM_ID);
+
+      await expect(
+        logs.planItemIdsWithAnyReadingLog([PLAN_ITEM_ID]),
+      ).resolves.toEqual([PLAN_ITEM_ID]);
+    });
+
+    it('omits a day that nobody read', async () => {
+      await aReadOf(PLAN_ITEM_ID);
+
+      await expect(
+        logs.planItemIdsWithAnyReadingLog([OTHER_PLAN_ITEM_ID]),
+      ).resolves.toEqual([]);
+    });
+
+    // É um CONJUNTO: duas pessoas que leram o mesmo dia dão UM id, não dois.
+    // Sem isto a mensagem da guarda diria "2 dias" para um dia só.
+    it('returns one id per day, not one per reader', async () => {
+      await aReadOf(PLAN_ITEM_ID, READER_ID);
+      await aReadOf(PLAN_ITEM_ID, OTHER_READER_ID);
+
+      await expect(
+        logs.planItemIdsWithAnyReadingLog([PLAN_ITEM_ID]),
+      ).resolves.toEqual([PLAN_ITEM_ID]);
+    });
+
+    // Ordenado antes de comparar: o assunto é QUAIS dias, não a ordem — e a
+    // enumeração do fake é a armadilha invertida do §7.2.
+    it('returns only the asked ids that have a reading log', async () => {
+      await aReadOf(PLAN_ITEM_ID);
+      await aReadOf(THIRD_PLAN_ITEM_ID);
+
+      const found = await logs.planItemIdsWithAnyReadingLog([
+        PLAN_ITEM_ID,
+        OTHER_PLAN_ITEM_ID,
+        THIRD_PLAN_ITEM_ID,
+      ]);
+
+      expect([...found].sort()).toEqual(
+        [PLAN_ITEM_ID, THIRD_PLAN_ITEM_ID].sort(),
+      );
+    });
+
+    it('returns an empty list for an empty list of ids', async () => {
+      await aReadOf(PLAN_ITEM_ID);
+
+      await expect(logs.planItemIdsWithAnyReadingLog([])).resolves.toEqual([]);
+    });
+
+    /**
+     * Não é escopado por livro nem por clube **de propósito**: os ids vêm do
+     * plano que o `replacePlanItems` acabou de ler do livro já cortado por
+     * tenant, e um segundo corte aqui seria uma segunda regra de tenant para
+     * manter em dia com aquela — o argumento que o docblock do
+     * `ReadingLogFilter` já registra.
+     *
+     * A leitura abaixo é de OUTRO livro e OUTRO clube, apontando para o dia
+     * pedido: estado impossível no banco (a FK amarra o log ao item real),
+     * posto aqui só para provar que o método não inventa o segundo corte.
+     */
+    it('does not filter by book or club: the ids are already scoped', async () => {
+      await aReadOf(PLAN_ITEM_ID, READER_ID, {
+        bookId: OTHER_BOOK_ID,
+        clubId: 'club-2',
+      });
+
+      await expect(
+        logs.planItemIdsWithAnyReadingLog([PLAN_ITEM_ID]),
+      ).resolves.toEqual([PLAN_ITEM_ID]);
+    });
+
+    /**
+     * O contador, com o lado POSITIVO junto (§7.3, e o §7.4 logo atrás).
+     *
+     * Existe para o `replacePlanItems` poder afirmar que a segunda guarda roda
+     * **depois** do corte de tenant e **depois** da validação do rascunho: quem
+     * não é admin daquele clube não descobre que alguém leu, e sem contador
+     * "recusou antes de ler" e "leu e depois recusou" dão o mesmo erro para o
+     * cliente.
+     */
+    it('counts every planItemIdsWithAnyReadingLog call', async () => {
+      expect(logs.planItemIdsWithAnyReadingLogCalls).toBe(0);
+
+      await logs.planItemIdsWithAnyReadingLog([PLAN_ITEM_ID]);
+      await logs.planItemIdsWithAnyReadingLog([]);
+
+      expect(logs.planItemIdsWithAnyReadingLogCalls).toBe(2);
+    });
+  });
+
+  /**
    * ⚠️ Regra 18 — **A ARMADILHA DELIBERADA**, e o teste que a chama pelo nome
    * (§7.2). Não "conserte" esta ordem.
    *

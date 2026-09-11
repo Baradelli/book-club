@@ -93,6 +93,11 @@ export const bookRoutes: FastifyPluginAsyncZod<{
     // este repositório a rota `PUT /books/:bookId/plan` devolveria 500 de FK
     // em vez do 400 que explica.
     repos.notes,
+    // E a guarda irmã, "…que alguém já leu" (Tarefa 32c): a mesma fiação, a
+    // mesma consequência se faltar — `ReadingLog.planItemId` tem a mesma FK
+    // `Restrict`, e sem este repositório o 500 mudo volta, só que para o dia
+    // que alguém marcou como lido sem escrever nada.
+    repos.readingLogs,
   );
 
   app.post(

@@ -8,17 +8,20 @@ import {
   NotAMemberError,
 } from '../../domain/errors';
 import type { Note } from '../../domain/note';
+import type { ReadingLog } from '../../domain/reading-log';
 import type { PlanItemDraft } from '../../domain/reading-plan';
 import {
   aBook,
   aMembership,
   aNote,
   aPlanItem,
+  aReadingLog,
   required,
 } from '../../test-support/builders';
 import { BookRepositoryFake } from '../_fakes/book-repository-fake';
 import { MembershipRepositoryFake } from '../_fakes/membership-repository-fake';
 import { NoteRepositoryFake } from '../_fakes/note-repository-fake';
+import { ReadingLogRepositoryFake } from '../_fakes/reading-log-repository-fake';
 import { ReadingPlanItemRepositoryFake } from '../_fakes/reading-plan-item-repository-fake';
 import { AssertMembership } from '../assert-membership';
 import type { ReplacePlanItemsInput } from '../replace-plan-items';
@@ -69,6 +72,7 @@ describe('ReplacePlanItems', () => {
   let books: BookRepositoryFake;
   let plan: ReadingPlanItemRepositoryFake;
   let notes: NoteRepositoryFake;
+  let logs: ReadingLogRepositoryFake;
   let useCase: ReplacePlanItems;
   let stored: Book;
   let planBefore: ReadingPlanItem[];
@@ -81,11 +85,13 @@ describe('ReplacePlanItems', () => {
     books = new BookRepositoryFake();
     plan = new ReadingPlanItemRepositoryFake();
     notes = new NoteRepositoryFake();
+    logs = new ReadingLogRepositoryFake();
     useCase = new ReplacePlanItems(
       new AssertMembership(memberships),
       books,
       plan,
       notes,
+      logs,
     );
 
     stored = aBook({ id: BOOK_ID, clubId: CLUB_ID });
@@ -166,6 +172,12 @@ describe('ReplacePlanItems', () => {
     expect(books.saved).toEqual([stored]);
     expect(books.updateCalls).toBe(0);
     expect(notes.planItemIdsWithAnyNoteCalls).toBe(0);
+    // ⚠️ **E a SEGUNDA guarda pelo mesmo argumento** (Tarefa 32c): "alguém já
+    // leu este dia" é conteúdo do clube tanto quanto "alguém escreveu nele".
+    // Um contador só, afirmado para a guarda que já existia, deixaria a nova
+    // consultar o registro de leitura de um clube que não é do ator — e §7.3
+    // manda um `xxxCalls === 0` para CADA leitura de conteúdo.
+    expect(logs.planItemIdsWithAnyReadingLogCalls).toBe(0);
   }
 
   describe('permission and tenant', () => {
@@ -931,6 +943,305 @@ describe('ReplacePlanItems', () => {
       ).rejects.toBeInstanceOf(ForbiddenRoleError);
 
       expect(notes.planItemIdsWithAnyNoteCalls).toBe(0);
+    });
+  });
+
+  /**
+   * ⚠️ **A SEGUNDA GUARDA (Tarefa 32c, regras 6–10)** — o caso irmão, e o que
+   * ele conserta é um **500 mudo**.
+   *
+   * `ReadingLog.planItemId` tem FK com `onDelete: Restrict` (Tarefa 32), e a
+   * guarda de nota **não vê** um dia que só tem leitura: `note.count` é zero
+   * ali. O dia passava, batia na FK dentro do `replaceForBook` e virava erro de
+   * banco — status 500, sem mensagem —, enquanto o caso da nota respondia 400
+   * com uma frase clara. É caso de terça-feira: basta **uma** pessoa ter
+   * marcado "li" sem escrever nada.
+   *
+   * O dado sempre esteve a salvo (o `replaceForBook` roda em `$transaction`, e
+   * o teste de contrato prova que o plano fica intacto). O que estava errado
+   * era o status e o silêncio.
+   *
+   * ⚠️ **A ORDEM ("a guarda só lê o log DEPOIS do corte de tenant, do papel e
+   * da validação do rascunho") NÃO tem teste próprio aqui, e é de propósito: o
+   * dono dela é o `expectNothingTouched()`.** A linha
+   * `expect(logs.planItemIdsWithAnyReadingLogCalls).toBe(0)` que ele ganhou
+   * cobre os **13** estados de erro que já chamavam o helper — livro
+   * inexistente, livro arquivado, sem membership, membership arquivado, papel
+   * MEMBER, clube alheio, e os sete formatos de rascunho inválido.
+   *
+   * Medido: o mutante que lê o log **antes** do `bookForActor` dá **17**
+   * acusadores, e **16** deles são asserções de contador — 13 do helper e 3 de
+   * testes de ordem escritos aqui, que eram cópia do mesmo cenário. Procurado e
+   * **não encontrado** mutante que os três matassem e os 13 deixassem viver: o
+   * contador conta a CHAMADA, não o resultado, então semear um log a mais não
+   * acrescenta poder discriminante. Os três foram apagados na rodada de
+   * correção — é o §7.1 (*extrair, não cobrir duas vezes*), e a extração já
+   * tinha acontecido no helper.
+   */
+  describe('the guard that refuses to remove a day that has readings', () => {
+    /** A leitura do dia 2 — o dia que os testes daqui tentam remover. */
+    function aReadOfDayTwo(overrides: Partial<ReadingLog> = {}): ReadingLog {
+      return aReadingLog({
+        clubId: CLUB_ID,
+        bookId: BOOK_ID,
+        planItemId: DAY_TWO,
+        userId: MEMBER_ID,
+        ...overrides,
+      });
+    }
+
+    /** O rascunho que remove o dia 2 e mantém os dias 1 e 3. */
+    const withoutDayTwo: PlanItemDraft[] = [
+      { date: '2026-10-01', title: 'Cap. 1' },
+      { date: '2026-10-03', title: 'Cap. 3' },
+    ];
+
+    // Regra 9 — o par POSITIVO, sem o qual uma guarda que recusasse tudo
+    // passaria em todos os testes abaixo. A leitura está no dia 1, que fica.
+    it('removes a day that nobody read, exactly as before', async () => {
+      await logs.save(aReadOfDayTwo({ planItemId: DAY_ONE }));
+
+      const { planItems, removed } = await useCase.execute(
+        validInput({
+          planItems: [
+            { date: '2026-10-01', title: 'Cap. 1' },
+            { date: '2026-10-02', title: 'Cap. 2' },
+          ],
+        }),
+      );
+
+      expect(planItems.map((item) => item.id)).toEqual([DAY_ONE, DAY_TWO]);
+      expect(removed).toBe(1);
+      expect(plan.removedIds).toEqual([DAY_THREE]);
+    });
+
+    /**
+     * Regra 6 — e é `InvalidBookError` de propósito: ela já está mapeada em
+     * 400, que é a única classe em que `error.message` sai na resposta (§6.2).
+     * Classe nova não entra nesta fatia.
+     *
+     * ⚠️ **Asserta a FRASE, não só a classe.** A frase é a única coisa desta
+     * fatia que o usuário lê, e a classe é a mesma nas duas guardas — ela não
+     * distingue nada aqui. O `describe` de baixo prova que a mensagem não mente
+     * nos três casos; esta linha põe o acusador também no caminho mais óbvio,
+     * que é onde o próximo leitor vai procurar primeiro.
+     */
+    it('refuses to remove a day that somebody already read', async () => {
+      await logs.save(aReadOfDayTwo());
+
+      const error = await caught(
+        useCase.execute(validInput({ planItems: withoutDayTwo })),
+      );
+
+      expect(error).toBeInstanceOf(InvalidBookError);
+      expect(error.message).toBe(
+        'cannot remove 1 reading plan day(s) that somebody already read',
+      );
+    });
+
+    /**
+     * ⚠️ **Regra 8 — a recusa vem ANTES de qualquer escrita, e a prova é a
+     * CONTAGEM, não a ausência de erro** (§7.3).
+     *
+     * `plan.saved` inalterado não separa "não chamou o `replaceForBook`" de
+     * "chamou e o fake foi atômico" — e é exatamente essa diferença que a
+     * fatia existe para produzir: sem a guarda, o `replaceForBook` É chamado,
+     * a FK estoura no meio da transação e o admin recebe 500.
+     *
+     * O `planItemIdsWithAnyReadingLogCalls === 1` é o outro lado: sem ele, um
+     * `if` sempre-falso passaria neste teste por não ter chegado a escrever de
+     * outro jeito.
+     */
+    it('writes nothing and removes nothing when it refuses', async () => {
+      await logs.save(aReadOfDayTwo());
+
+      await expect(
+        useCase.execute(validInput({ planItems: withoutDayTwo })),
+      ).rejects.toBeInstanceOf(InvalidBookError);
+
+      expect(plan.saved).toEqual(planBefore);
+      expect(plan.saveManyCalls).toBe(saveCallsBefore);
+      expect(plan.replaceForBookCalls).toBe(replaceCallsBefore);
+      expect(plan.removedIds).toEqual([]);
+      expect(books.saved).toEqual([stored]);
+      expect(logs.planItemIdsWithAnyReadingLogCalls).toBe(1);
+    });
+
+    // Regra 9 — a leitura de OUTRO dia não barra nada. Sem isto, um
+    // `planItemIdsWithAnyReadingLog` que ignorasse os ids pedidos (devolvendo
+    // todos) passaria em todos os testes acima.
+    it('lets a day go when the readings are all anchored on the survivors', async () => {
+      await logs.save(aReadOfDayTwo({ planItemId: DAY_ONE }));
+      await logs.save(aReadOfDayTwo({ planItemId: DAY_THREE }));
+
+      const { removed } = await useCase.execute(
+        validInput({ planItems: withoutDayTwo }),
+      );
+
+      expect(removed).toBe(1);
+      expect(plan.removedIds).toEqual([DAY_TWO]);
+    });
+
+    // Regra 10 — a mensagem diz QUANTOS dias. A frase INTEIRA, e não um
+    // `toContain('2')`: esse casaria com "12", "20" e "21" — o lado negativo
+    // que o teste irmão logo abaixo escreve à mão, e que aqui sai de graça.
+    it('says how many days were already read', async () => {
+      await logs.save(aReadOfDayTwo());
+      await logs.save(aReadOfDayTwo({ planItemId: DAY_THREE }));
+
+      const error = await caught(
+        useCase.execute(
+          validInput({ planItems: [{ date: '2026-10-01', title: 'C1' }] }),
+        ),
+      );
+
+      expect(error).toBeInstanceOf(InvalidBookError);
+      expect(error.message).toBe(
+        'cannot remove 2 reading plan day(s) that somebody already read',
+      );
+    });
+
+    // Regra 10 — e é UM dia quando é um dia só. Sem este par, um
+    // `${removedIds.length}` no lugar do `${daysRead.length}` passaria: o
+    // rascunho abaixo remove DOIS dias e só um foi lido.
+    it('says one day when a single day was read', async () => {
+      await logs.save(aReadOfDayTwo());
+
+      const error = await caught(
+        useCase.execute(
+          validInput({ planItems: [{ date: '2026-10-01', title: 'C1' }] }),
+        ),
+      );
+
+      expect(error.message).toContain('1');
+      expect(error.message).not.toContain('2');
+    });
+
+    // Regra 10 — duas pessoas no MESMO dia são UM dia. O `Set` do repositório
+    // é o dono disso, e este é o teste que o cobra pelo lado do produto: a
+    // mensagem não pode dizer "2 dias" para um dia só.
+    it('counts days, not readers', async () => {
+      await logs.save(aReadOfDayTwo({ userId: MEMBER_ID }));
+      await logs.save(aReadOfDayTwo({ userId: OWNER_ID }));
+
+      const { message } = await caught(
+        useCase.execute(validInput({ planItems: withoutDayTwo })),
+      );
+
+      expect(message).toContain('1');
+      expect(message).not.toContain('2');
+    });
+
+    // Regra 10, decisão C — só a CONTAGEM. Nem quem leu, nem o id do dia:
+    // `error.message` é a única publicada na resposta do 400 (§6.2), e o admin
+    // não precisa saber quem leu para entender que não pode remover o dia.
+    it('never names the reader nor the day', async () => {
+      await logs.save(aReadOfDayTwo({ id: 'log-do-membro' }));
+
+      const { message } = await caught(
+        useCase.execute(validInput({ planItems: withoutDayTwo })),
+      );
+
+      expect(message).not.toContain(MEMBER_ID);
+      expect(message).not.toContain(DAY_TWO);
+      expect(message).not.toContain('log-');
+    });
+  });
+
+  /**
+   * ⚠️ **REGRA 10 — A MENSAGEM NÃO MENTE EM NENHUM DOS TRÊS CASOS**, e é por
+   * isso que as guardas são DUAS com frases distintas (decisão B), e não uma
+   * frase combinada.
+   *
+   * `error.message` é a única publicada ao cliente, e só na classe 400 (§6.2).
+   * A frase que já existia diz *"…that already have notes"*: se um dia com
+   * **só leitura** a reaproveitasse, a resposta **mentiria** para o admin — ele
+   * abriria o dia procurando uma anotação que não existe. E uma frase única
+   * ("notes or readings") não mente, mas obriga a adivinhar qual dos dois é:
+   * são ações mentais diferentes ("alguém escreveu ali" × "alguém já leu
+   * aquilo").
+   *
+   * Os três testes assertam a **mensagem**, não só a classe do erro — a classe
+   * é `InvalidBookError` nos três, então ela não distingue nada aqui.
+   */
+  describe('the message never lies about which guard refused', () => {
+    const withoutDayTwo: PlanItemDraft[] = [
+      { date: '2026-10-01', title: 'Cap. 1' },
+      { date: '2026-10-03', title: 'Cap. 3' },
+    ];
+
+    async function refusalFor(seed: () => Promise<unknown>): Promise<string> {
+      await seed();
+      const { message } = await caught(
+        useCase.execute(validInput({ planItems: withoutDayTwo })),
+      );
+      return message;
+    }
+
+    it('talks about notes, and not about reading, when only a note anchors the day', async () => {
+      const message = await refusalFor(() =>
+        notes.save(
+          aNote({
+            kind: 'PLAN',
+            clubId: CLUB_ID,
+            bookId: BOOK_ID,
+            planItemId: DAY_TWO,
+            userId: MEMBER_ID,
+          }),
+        ),
+      );
+
+      expect(message).toContain('that already have notes');
+      expect(message).not.toContain('already read');
+    });
+
+    it('talks about reading, and not about notes, when only a reading anchors the day', async () => {
+      const message = await refusalFor(() =>
+        logs.save(
+          aReadingLog({
+            clubId: CLUB_ID,
+            bookId: BOOK_ID,
+            planItemId: DAY_TWO,
+            userId: MEMBER_ID,
+          }),
+        ),
+      );
+
+      expect(message).toContain('that somebody already read');
+      expect(message).not.toContain('notes');
+    });
+
+    /**
+     * Decisão D — quando o dia tem os DOIS, a mensagem é a de **nota**, que é
+     * o comportamento que já existia. Manter a ordem é o que faz esta fatia não
+     * mexer num caso que já funcionava: ordem estável é menos churn de teste e
+     * menos surpresa para quem já aprendeu a frase.
+     *
+     * E a mensagem continua sem mentir: o dia **tem** nota.
+     */
+    it('keeps the note message when the day has both', async () => {
+      const message = await refusalFor(async () => {
+        await notes.save(
+          aNote({
+            kind: 'PLAN',
+            clubId: CLUB_ID,
+            bookId: BOOK_ID,
+            planItemId: DAY_TWO,
+            userId: MEMBER_ID,
+          }),
+        );
+        await logs.save(
+          aReadingLog({
+            clubId: CLUB_ID,
+            bookId: BOOK_ID,
+            planItemId: DAY_TWO,
+            userId: MEMBER_ID,
+          }),
+        );
+      });
+
+      expect(message).toContain('that already have notes');
+      expect(message).not.toContain('already read');
     });
   });
 

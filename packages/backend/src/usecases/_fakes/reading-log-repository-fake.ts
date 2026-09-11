@@ -11,6 +11,7 @@ export class ReadingLogRepositoryFake implements ReadingLogRepository {
   private byPlanItemAndUserCallCount = 0;
   private findCallCount = 0;
   private findFiltersSeen: ReadingLogFilter[] = [];
+  private planItemIdsWithAnyReadingLogCallCount = 0;
 
   /**
    * Upsert com o alvo em **`(planItemId, userId)`**, espelhando o
@@ -112,6 +113,53 @@ export class ReadingLogRepositoryFake implements ReadingLogRepository {
           log.planItemId === filter.planItemId,
       )
       .map((log) => this.clone(log));
+  }
+
+  /**
+   * Dos ids pedidos, quais alguém já leu — a leitura da segunda guarda do
+   * `replacePlanItems` (Tarefa 32c), espelho do `planItemIdsWithAnyNote` do
+   * `NoteRepositoryFake`.
+   *
+   * Duas fidelidades, e as duas são contrato do port, não detalhe:
+   *
+   * 1. **É um CONJUNTO.** Duas pessoas que leram o mesmo dia são duas linhas
+   *    legítimas (o `@@unique` é `(planItemId, userId)`) e **um** id — senão a
+   *    mensagem da guarda diria "2 dias" para um dia só.
+   * 2. **Lista vazia sai antes do laço.** No Prisma seria um `IN ()`, que o
+   *    port declara como "sem ida ao banco" — e lá isso é uma consulta a menos
+   *    em toda troca de plano que não remove nada.
+   *
+   * ⚠️ **A saída antecipada desta linha NÃO tem acusador aqui, e o lugar onde
+   * ela é provada é outro arquivo.** Medido na rodada de correção: removê-la
+   * deixa a suíte do backend em **1420/1420 — zero acusadores**, porque em
+   * memória não existe "ida ao banco" a contar e o resultado é `[]` nas duas
+   * implementações. A propriedade se prova onde ela É decidível (§7.10), e lá
+   * ela tem acusador: o teste de contrato
+   * `asks the database nothing for an empty list, and once for a real one`,
+   * em `repositories/__tests__/prisma-reading-log-repository.contract.integration.test.ts`,
+   * que conta as consultas realmente emitidas por `$on('query')`. **O ponteiro
+   * é pelo NOME do teste, nunca pela linha** (§7.4): um número envelhece
+   * sozinho, e o próximo leitor confere a linha errada e conclui que a dívida
+   * foi paga. A linha fica aqui porque o fake que divergisse do port seria a
+   * infidelidade do §7.1 — só não é ela que a guarda.
+   *
+   * **Nenhuma semântica de `NULL` a emular**, ao contrário do irmão da nota:
+   * `ReadingLog.planItemId` é NOT NULL (não existe leitura avulsa), então não
+   * há a linha "o `IN (...)` contra coluna nula é falso" para reproduzir.
+   */
+  async planItemIdsWithAnyReadingLog(
+    planItemIds: readonly string[],
+  ): Promise<string[]> {
+    this.planItemIdsWithAnyReadingLogCallCount += 1;
+
+    if (planItemIds.length === 0) return [];
+
+    const asked = new Set(planItemIds);
+    const found = new Set<string>();
+    for (const log of this.store.values()) {
+      if (asked.has(log.planItemId)) found.add(log.planItemId);
+    }
+    return [...found];
   }
 
   /**
@@ -228,6 +276,20 @@ export class ReadingLogRepositoryFake implements ReadingLogRepository {
    */
   get findFilters(): readonly ReadingLogFilter[] {
     return this.findFiltersSeen.map((filter) => ({ ...filter }));
+  }
+
+  /**
+   * Quantas vezes `planItemIdsWithAnyReadingLog` foi chamado — como o
+   * `findCalls`, e conta a chamada, não o sucesso.
+   *
+   * Existe para o `replacePlanItems` poder afirmar que a segunda guarda roda
+   * **depois** do corte de tenant e **depois** da validação do rascunho: quem
+   * não é admin daquele clube não descobre que alguém leu, e um rascunho
+   * malformado não chega a consultar. Sem contador, "recusou antes de ler" e
+   * "leu e depois recusou" dão o mesmo erro para o cliente (§7.3).
+   */
+  get planItemIdsWithAnyReadingLogCalls(): number {
+    return this.planItemIdsWithAnyReadingLogCallCount;
   }
 
   private inReverseInsertionOrder(): ReadingLog[] {

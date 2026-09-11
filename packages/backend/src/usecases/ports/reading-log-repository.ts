@@ -100,6 +100,46 @@ export interface ReadingLogRepository {
    */
   find(filter: ReadingLogFilter): Promise<ReadingLog[]>;
   /**
+   * Dos `planItemIds` dados, quais **alguém já leu**.
+   *
+   * É o **espelho exato** do `planItemIdsWithAnyNote` do `NoteRepository`, e
+   * existe pelo mesmo motivo: a segunda guarda do `replacePlanItems`. A FK
+   * `ReadingLog_planItemId_fkey` é `ON DELETE RESTRICT`, então remover um dia
+   * que alguém leu falha no banco — como erro cru, que a borda relança em
+   * **500**. Esta leitura é o que transforma isso num **400** com mensagem, e
+   * antecipa a recusa para antes de qualquer escrita.
+   *
+   * **Um método próprio, e NÃO um `find({ bookId })` filtrado em memória.**
+   * O `find` traria **todas** as leituras do livro (dias × membros) para
+   * descartar quase todas — o §7.3 na letra: *"em vez de carregar tudo e
+   * filtrar em memória — o mesmo bug com uma fatura de banco maior"*. Aqui o
+   * Prisma faz `select` de **uma** coluna, com `IN (...)` sobre os ids que
+   * estão mesmo em risco, que costumam ser zero.
+   *
+   * **Sem `status` a ignorar**, ao contrário do irmão da nota: o log é
+   * imutável e não se arquiva, então não existe a divergência
+   * "arquivada × ativa" que lá obrigou o método a ser cego a `status`.
+   *
+   * Devolve **ids de item de plano**, não de log, e nada sobre autoria: a
+   * guarda precisa saber **quantos** dias já foram lidos, nunca por quem — o
+   * admin não precisa saber quem leu para entender que não pode remover o dia,
+   * e `error.message` é a única publicada na resposta do 400
+   * (`docs/CONVENCOES-CODIGO.md` §6.2).
+   *
+   * **Sem promessa de ordem** e sem repetição: é um conjunto — duas pessoas que
+   * leram o mesmo dia dão **um** id. Lista vazia na entrada devolve lista
+   * vazia, **sem ida ao banco**: sem isso seria um `IN ()`, uma consulta
+   * garantidamente vazia em toda troca de plano que não remove nada, que é o
+   * caso comum.
+   *
+   * Não recebe `clubId` nem `bookId`: os ids vêm do plano que o
+   * `replacePlanItems` acabou de ler do livro já cortado por tenant — o mesmo
+   * desenho do `find` acima, que também não conhece `clubId`.
+   */
+  planItemIdsWithAnyReadingLog(
+    planItemIds: readonly string[],
+  ): Promise<string[]>;
+  /**
    * Hard delete de verdade: a linha some.
    *
    * **É a exceção documentada ao soft delete do projeto** (`CLAUDE.md`):
