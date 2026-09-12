@@ -155,8 +155,11 @@ Meta: **nunca ter medo de refatorar.** Não perseguir 100% de cobertura de UI.
 - Nada de IA/agente, OCR de foto de página, resumo automático de capítulo, busca semântica.
 - Nada de reação, curtida ou comentário na nota de outra pessoa (registrado em aberto).
 - Nada de e-mail transacional / SMTP — convite é **link com código**.
-- Nada de `Highlight`/grifos no MVP 1 (isso é MVP 2).
-- Nada de `ReadingLog`, feed ou push no MVP 1 e 2 (isso é MVP 3).
+- ~~Nada de `Highlight`/grifos no MVP 1 (isso é MVP 2).~~ ✅ **ENTREGUE no MVP 2.**
+- ~~Nada de `ReadingLog`, feed ou push no MVP 1 e 2 (isso é MVP 3).~~ ✅ **ENTREGUE no MVP 3**
+  (Tarefas 30–38). ⚠️ As duas linhas ficam riscadas em vez de apagadas porque esta seção é
+  **histórica**: ela registra *quando* cada coisa pôde entrar, e apagar faria a próxima pessoa
+  achar que nunca houve regra. **Não as leia como proibição** — leia como data.
 - Nada de resolução de conflito offline (Nível 2). Offline Nível 1 = rascunho local + fila
   de escrita de nota/grifo.
 - Não criar telas antes do domínio testado.

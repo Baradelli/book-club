@@ -31,7 +31,7 @@ O PWA já gera um service worker pelo Workbox (`vite-plugin-pwa`). **Não crie u
 service worker** — injete o handler no gerado:
 
 ```ts
-// packages/app/vite.config.ts
+// packages/app/vite.config.ts — ⚠️ ESBOÇO DE 2026-09, NÃO COPIE (ver errata abaixo)
 VitePWA({
   registerType: 'autoUpdate',
   workbox: {
@@ -42,6 +42,24 @@ VitePWA({
   manifest: { /* … */ },
 })
 ```
+
+> ⚠️ **ERRATA (Tarefa 38) — o bloco acima é o ESBOÇO, e copiá-lo QUEBRA duas coisas
+> entregues.** O `vite.config.ts` de verdade diverge em três pontos, e os três têm motivo:
+>
+> 1. **`globPatterns` termina em `webmanifest`, não em `woff2`** — o projeto não tem fonte
+>    própria, e o manifesto do PWA precisa entrar.
+> 2. ⚠️ **Falta o `globIgnores: ['assets/en-*.js']`**, que é a entrega inteira da **Tarefa
+>    29a**. Sem ele o catálogo `en` volta ao precache e o install baixa o que a fatia tirou —
+>    medido lá: 15 entradas / 887,15 KiB → 16 / 887,79 KiB, *mais* download, não menos.
+> 3. **`navigateFallback` é `'/index.html'` com a barra**, e existe uma
+>    `navigateFallbackDenylist` que o esboço não tem — sem ela o service worker devolve HTML
+>    para `GET /api/...`, que é o bug clássico de PWA.
+>
+> **A fonte da verdade é o `vite.config.ts`**, e as cinco propriedades daquele bloco têm
+> acusador medido em `packages/app/src/__tests__/service-worker-config.test.ts` (quatro) e
+> `bundle-guard.test.ts` (a quinta, que roda **build real** e exige o `push-handler.js` no
+> precache **com revisão** — é ela que faz uma correção no handler chegar a quem já tem o app
+> instalado).
 
 `packages/app/public/push-handler.js` — arquivo pequeno, sem build, sem imports:
 
@@ -109,6 +127,7 @@ Env: `VAPID_PUBLIC_KEY` · `VAPID_PRIVATE_KEY` · `VAPID_SUBJECT` ·
 
 ```ts
 export const notificationPlatform = z.enum(['web', 'mobile']);
+// ⚠️ ERRATA: o `TEST` NÃO entrou — ver abaixo.
 export const notificationKind = z.enum(['READING_REMINDER', 'GROUP_ACTIVITY', 'TEST']);
 
 export const browserPushSubscriptionSchema = z.object({
@@ -143,6 +162,18 @@ Rotas (dentro do escopo autenticado):
 | `DELETE /notifications/subscriptions` | desativação **soft** (`disabledAt = now`) |
 | `POST /notifications/test` | manda um `TEST`; `400` quando VAPID não está configurado |
 
+> ⚠️ **ERRATA (Tarefa 38) — o `TEST` NÃO entrou no vocabulário, e é decisão, não
+> esquecimento.** O `NOTIFICATION_KINDS` de verdade tem **dois** valores:
+> `READING_REMINDER` e `GROUP_ACTIVITY`. O motivo é que essa lista virou, na Tarefa 37, o
+> vocabulário de uma **chave de idempotência** (`NotificationDelivery` é `unique(userId, kind,
+> localDate)`): um `TEST` ali significaria **"só dá para testar o push uma vez por dia"** —
+> exatamente o contrário do que um botão de diagnóstico serve.
+>
+> O `POST /notifications/test` **existe e funciona** (a linha da tabela está certa, inclusive o
+> `400` sem VAPID). O que ele usa é um `tag` com a string `'test'`, que é do protocolo do
+> navegador e não precisa estar no enum. E ele **não grava `NotificationDelivery`** — gravar
+> faria o diagnóstico consumir a idempotência do dia da pessoa.
+
 ---
 
 ## 5. Envio
@@ -153,6 +184,22 @@ Rotas (dentro do escopo autenticado):
 ```ts
 sendPushToUser(config, userId, payload): Promise<{ sent: number; disabled: number }>
 ```
+
+> ⚠️ **ERRATA (Tarefa 38) — o arquivo e a assinatura são outros.** O adaptador é
+> `packages/backend/src/notifications/**web-push-sender.ts**` (classe `WebPushSender`), e o
+> método do port é **`send(userId, payload)`** — sem o `config`, que o adaptador recebe **no
+> construtor** junto do `PushSubscriptionRepository`. O resto do §5 (o `TTL`, o `topic`, o
+> tratamento de `WebPushError` 404/410 e o relance de qualquer outro erro) está **correto e
+> implementado**.
+>
+> ⚠️ **E o §5 não responde o caso misto** — um aparelho morto **e** outro estourando rede na
+> mesma chamada. A Tarefa 38 decidiu: **desativa e relança**, e a contagem `disabled` daquela
+> passada se perde. A decisão está escrita no docblock do port, com o teste que a sustenta. E
+> ela não é fail-fast: o adaptador **percorre todos os aparelhos**, guarda a primeira falha
+> não-morta e relança no fim — a primeira versão era fail-fast, passou **22 de 23** testes, e o
+> que a derrubou foi o fake enumerar **invertido de propósito** (§7.2 do
+> `CONVENCOES-CODIGO.md`), mostrando que a desativação dependia de uma ordem que o port **não
+> promete**.
 
 - Carrega as inscrições do usuário com `disabledAt IS NULL` (**via repository**, não
   `$queryRaw`).
@@ -241,12 +288,49 @@ duas instâncias do backend conviverem.
 quem tem `notifyGroupActivity`. Um debounce curto (60 s, por clube + tipo) evita três
 notificações quando três coisas acontecem juntas.
 
+> ⚠️ **ERRATA (Tarefa 38) — o debounce de 60 s NÃO foi feito, porque o `tag` já o faz.** O
+> problema que ele resolveria — "três notificações quando três coisas acontecem juntas" — é
+> resolvido **no aparelho**, de graça e sem estado no servidor: o `tag` do payload (§2) faz
+> uma notificação nova **substituir** a anterior, então três atividades viram **uma**
+> notificação visível.
+>
+> O resíduo que o `tag` **não** resolve são **três vibrações**. É real e é menor, e fica
+> registrado como limite conhecido em vez de escondido. ⚠️ **Se incomodar**, o conserto não é
+> memória de processo (que não sobrevive a duas instâncias): é um claim com chave de janela —
+> e a coluna do claim se chama `localDate`, então usá-la para um balde de minutos seria mentir
+> no nome. **Renomeá-la é migration**, ou seja, fatia própria.
+>
+> O resto do parágrafo está **implementado e medido**: o disparo vive dentro do
+> `recordActivitySafely` (dono único do `try/catch` nos quatro UseCases de escrita, que **não
+> mudaram uma linha**), e as três exclusões têm mutante com acusador — autor **7**, quem
+> desligou `notifyGroupActivity` **1**, membership não-ativo **1**.
+
 ---
 
 ## 7. Ativar no aparelho (a tela)
 
 Componente em `packages/ui` (`NotificationSettingsSection`), consumido pela tela de
 preferências:
+
+> ⚠️ **ERRATA (Tarefa 36b) — a seção mora em `packages/app`, não em `packages/ui`, e o nome é
+> outro.** Os arquivos de verdade são `packages/app/src/pages/push-section.tsx` (a seção) e
+> `push-device.ts` (a costura com o navegador). **Precedência:** o `CLAUDE.md` diz que
+> `packages/ui` é de componentes **compartilhados**, e esta seção tem **um chamador só**, fala
+> com `navigator`/`Notification` (que `packages/ui` não toca em lugar nenhum) e conversa com a
+> API. É o mesmo precedente do §7.1 que recusou subir o `matchesText` enquanto ele tivesse um
+> chamador só. Se uma segunda tela precisar dela, ela sobe — **com o segundo chamador na mão**.
+>
+> ⚠️ **E a lista de 1 a 5 abaixo está CERTA mas INCOMPLETA:** ela tem três recusas implícitas
+> (contexto inseguro, permissão negada, navegador sem suporte) e falta a quarta, que é a do
+> **dono**: no iPhone, push em PWA só funciona com o app **adicionado à tela de início** — fora
+> dela o `PushManager` **existe**, o feature-detect passa, e a permissão simplesmente nunca é
+> concedida. É a mais cruel porque **não parece falha**. A tela entregue tem **quatro** frases
+> distintas, uma por causa, e a distinção é propriedade do **catálogo**, nos dois idiomas.
+>
+> ⚠️ **Uma medição que contraria o passo 5:** o `unsubscribe()` do navegador vem **depois** do
+> `DELETE` no servidor, não junto. Se desinscrever primeiro e o `DELETE` falhar, o backend fica
+> com uma inscrição morta que o dispatcher vai tentar usar. Há teste para a ordem **e** para o
+> caso "o `DELETE` falhou → o navegador **continua** inscrito" (2 acusadores).
 
 1. **Feature-detect** antes de mostrar qualquer coisa:
    `'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window`.

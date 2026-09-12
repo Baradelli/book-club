@@ -2851,6 +2851,31 @@ Eu marco que li o trecho de hoje e vejo onde eu e o clube estamos no livro. Rece
 lembrete no horário que eu escolhi — e não recebo se eu já li. E quando ela lê, escreve ou
 grifa, meu celular avisa e a atividade aparece no feed da home.
 
+**Conferida frase por frase no fechamento** (o detalhe está em `ACEITE-MVP.md` §A.4):
+
+| Pedaço | Estado |
+| --- | --- |
+| *"marco que li o trecho de hoje"* | ✅ ⚠️ **só o dia de hoje** — dia passado não se marca pela tela (pergunta 2) |
+| *"vejo onde eu e o clube estamos no livro"* | ✅ **como presença, não como número** — resposta do dono à pergunta 1, tornada estrutural (a rota não devolve contagem) |
+| *"recebo um lembrete no horário que eu escolhi"* | ⚠️ **entregue, NÃO automático** |
+| *"e não recebo se eu já li"* | ✅ |
+| *"meu celular avisa"* | ⚠️ **entregue, com duas condições de ambiente** |
+| *"a atividade aparece no feed da home"* | ✅ |
+
+⚠️ **O QUE NÃO TEM DONO — três buracos entre a frase e a realidade, e os três são de
+AMBIENTE, não de código:**
+
+1. **Ninguém chama o lembrete.** Não existe cron instalado, e é decisão de desenho
+   (`NOTIFICACOES.md` §6: não há agendador dentro do Fastify). Hoje o lembrete só sai se
+   alguém rodar `notifications:dispatch`. Virar automático é instalar um cron externo a cada
+   5–10 min na máquina do backend — **operação, não fatia**. É o maior dos três.
+2. **Push no celular pela rede local não funciona** — contexto seguro, a mesma limitação que
+   impede o PWA de instalar pelo IP. Exige `localhost` ou túnel HTTPS.
+3. **As chaves VAPID não estão configuradas**, e nunca estarão por padrão — são segredo. Sem
+   elas a metade de notificação fica desligada, e **a tela diz isso** sem parecer erro.
+
+Os três têm passo a passo no `COMO-TESTAR.md` (§6.6 e §6.7). Nenhum é dívida escondida.
+
 ---
 
 # MVP 4 — Administração
