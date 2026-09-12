@@ -54,6 +54,9 @@ model User {
   // Bloco I (Tarefa 36). Uma pessoa, N aparelhos — e NENHUM clube no meio: push
   // é da pessoa (decisão F).
   pushSubscriptions PushSubscription[]
+  // Bloco I (Tarefa 37). A RESERVA do aviso do dia — uma linha por pessoa, por
+  // tipo, por dia dela. Também sem clube no meio, pelo mesmo motivo.
+  notificationDeliveries NotificationDelivery[]
   invitesMade       Invite[]           @relation("InviteCreator")
   invitesUsed       Invite[]           @relation("InviteUser")
   booksCreated      Book[]             @relation("BookCreator")
@@ -551,6 +554,88 @@ model PushSubscription {
   // índice sem consulta é custo de escrita à toa (a mesma conta que deixou o
   // `ReadingLog` com um índice só).
   @@index([userId])
+}
+
+// Bloco I (Tarefa 37) — "esta pessoa já recebeu ESTE aviso HOJE". CINCO colunas
+// e nada mais: o docblock de `src/domain/notification-delivery.ts` é o dono de
+// cada ausência, e elas são decisão, não esquecimento.
+//
+// Ela não é o registro de uma mensagem: é uma RESERVA. O dispatcher a pede
+// ANTES de mandar qualquer coisa (decisão E da Tarefa 37), e o `@@unique`
+// abaixo é quem garante que só uma passada — de qualquer instância, de qualquer
+// processo — a consegue. É a idempotência do `docs/NOTIFICACOES.md` §6: por
+// claim no banco, não por lock e não por memória, porque memória é exatamente o
+// que reinicia.
+//
+// - SEM `clubId`: push é da PESSOA (decisão F da Tarefa 36), como o
+//   `PushSubscription` e o `Settings`. A mesma pessoa em dois clubes recebe UM
+//   lembrete por dia, e é isso que a chave diz.
+// - SEM `status`/`archivedAt`/`updatedAt`: log IMUTÁVEL (`CLAUDE.md`), como o
+//   `ReadingLog` e o `ActivityEvent`. Nada reescreve a linha, e instante sem
+//   dono mente (ADR 0008).
+// - SEM `payload`, SEM `title`, SEM `bookId`: o registro diz que SAIU, não o
+//   que dizia. O texto vem do catálogo de i18n e muda com ele — guardá-lo aqui
+//   seria histórico que envelhece mentindo (o mesmo argumento da decisão G da
+//   Tarefa 33, que deixou o `ActivityEvent` sem o título do dia).
+model NotificationDelivery {
+  id        String @id @default(cuid())
+  userId    String
+  // `String` e não enum Prisma, e é decisão do `CLAUDE.md`: ele lista
+  // `NotificationDelivery.kind` entre os quatro campos "String validados por
+  // z.enum/regex (ainda evoluem)", ao lado de `ActivityEvent.type`,
+  // `PushSubscription.platform` e `Highlight.color`. O portão são o
+  // `z.enum(NOTIFICATION_KINDS)` de `@clube/shared` e o `assertNotificationKind`
+  // do domínio — este último também na LEITURA do repositório, como o
+  // `assertActivityType`.
+  kind      String
+  // ⚠️ `String` e NÃO `@db.Date` — a divergência deliberada com
+  // `ReadingPlanItem.date`, e é a decisão F da Tarefa 37.
+  //
+  // Lá a coluna é uma data de calendário do PLANO, a mesma para o clube todo, e
+  // o `calendar-day-mapper.ts` a traduz em UTC. Aqui ela é o dia NO FUSO DA
+  // PESSOA: com um instante (ou com uma `DATE` em UTC), duas pessoas em fusos
+  // diferentes no mesmo momento teriam a MESMA chave — e uma das duas ficaria
+  // sem lembrete —, ou a mesma pessoa teria DUAS e receberia duas vezes. A
+  // string "YYYY-MM-DD" é exatamente o que `localDay(instant, timeZone)`
+  // devolve, e é por isso que a comparação do dispatcher é igualdade de string,
+  // sem aritmética de data em lugar nenhum (decisão A).
+  localDate String
+  // SEM `@default(now())`, como o `ReadingLog.readAt` e ao contrário de todo
+  // `createdAt` do projeto: o dono do instante é o dispatcher, que lê o relógio
+  // UMA vez (ADR 0008 e regra 2 da Tarefa 37). Uma rede de segurança aqui
+  // esconderia uma segunda leitura de relógio dentro do repositório, que é
+  // justamente o que a regra 2 proíbe.
+  deliveredAt DateTime
+
+  // `onDelete: Restrict` EXPLÍCITO, e não herdado — a regra que saiu do susto do
+  // `Note.planItem`, onde o default de relação OPCIONAL é `SetNull`. Para
+  // relação OBRIGATÓRIA como esta o default do Prisma já é `Restrict`, mas
+  // declarar é o que faz a convenção virar requisito.
+  //
+  // ⚠️ **E a relação NÃO aponta para `ReadingPlanItem`** — de propósito
+  // (decisão J da Tarefa 37), e é o que mantém a guarda estrutural da 34b
+  // (`usecases/__tests__/plan-item-fk-guards.test.ts`) verde SEM uma linha de
+  // mudança: ela cobra guarda de domínio no `replacePlanItems` para toda FK que
+  // recuse a remoção de um DIA DO PLANO, e esta recusa a remoção de uma PESSOA.
+  //
+  // O motivo de não haver o vínculo é de PRODUTO, não de esquema: o claim é por
+  // dia de CALENDÁRIO no fuso da pessoa. Amarrá-lo ao item do plano faria a
+  // chave mudar quando o admin editasse o plano — e o lembrete daquele dia
+  // sairia de novo para quem já o tinha recebido. O plano é editável; o dia 5 de
+  // outubro não é.
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  // ⚠️ A CHAVE DE IDEMPOTÊNCIA, e é a razão de a tabela existir: "no máximo um
+  // aviso deste tipo, para esta pessoa, neste dia dela". É contra este índice
+  // que o `INSERT ... ON CONFLICT DO NOTHING` do `claim` bate — a única exceção
+  // de SQL explícito da feature (`docs/NOTIFICACOES.md` §6), e ela vive dentro
+  // do repositório.
+  //
+  // NADA de índice por `deliveredAt` nem por `kind`: não existe listagem de
+  // entrega em lugar nenhum do produto, e índice sem consulta é custo de escrita
+  // à toa (a mesma conta que deixou o `ReadingLog` com um índice só). O
+  // `@@unique` já começa por `userId`, então a busca por pessoa também o usa.
+  @@unique([userId, kind, localDate])
 }
 
 model Settings {

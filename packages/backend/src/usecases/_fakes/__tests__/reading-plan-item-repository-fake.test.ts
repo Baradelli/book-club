@@ -573,6 +573,129 @@ describe('ReadingPlanItemRepositoryFake', () => {
     });
   });
 
+  /**
+   * ⚠️ **O `find` DA TAREFA 37 — "o trecho de hoje, nestes livros".**
+   *
+   * O port cresceu junto com a implementação Prisma, na MESMA unidade (§6.9), e
+   * o contrato contra o Postgres está em
+   * `repositories/__tests__/prisma-reading-plan-item-repository.contract.integration.test.ts`.
+   */
+  describe('find({ bookIds, date })', () => {
+    it('brings the item of that day, in those books only', async () => {
+      await plan.saveMany([
+        aPlanItem({ id: 'hoje-a', bookId: 'book-a', date: '2026-10-05' }),
+        aPlanItem({ id: 'ontem-a', bookId: 'book-a', date: '2026-10-04' }),
+        aPlanItem({ id: 'hoje-b', bookId: 'book-b', date: '2026-10-05' }),
+        aPlanItem({ id: 'hoje-c', bookId: 'book-c', date: '2026-10-05' }),
+      ]);
+
+      const found = await plan.find({
+        bookIds: ['book-a', 'book-b'],
+        date: '2026-10-05',
+      });
+
+      // Ordenado antes de comparar: o assunto NÃO é a ordem (§7.2).
+      expect(found.map((item) => item.id).sort()).toEqual(['hoje-a', 'hoje-b']);
+    });
+
+    /**
+     * ⚠️ **A comparação é EXATA: o dia de ontem, o de amanhã e uma grafia
+     * diferente do MESMO dia ficam todos de fora** (decisão A da Tarefa 37).
+     *
+     * ⚠️ **E o LIMITE DESTE TESTE, medido em vez de suposto (§7.10).** A versão
+     * original deste comentário dizia que ele ficaria vermelho se alguém
+     * trocasse a igualdade de string por comparação de `Date` — *"num `Date`, os
+     * dois seriam o MESMO dia"*. **É falso, e o mutante sobreviveu**: trocar o
+     * predicado por
+     * `new Date(item.date).getTime() === new Date(filter.date).getTime()` passa
+     * nos 171 testes desta pasta. O motivo, medido neste Node:
+     *
+     * ```
+     * new Date('2026-10-05') → 2026-10-05T00:00:00.000Z   (ISO: UTC)
+     * new Date('2026-10-5')  → 2026-10-05T03:00:00.000Z   (não-ISO: meia-noite LOCAL)
+     * ```
+     *
+     * Ou seja: as duas grafias são instantes **diferentes** também pela conta de
+     * data, e para `CalendarDay` bem formado as duas implementações são
+     * **equivalentes**. A propriedade que a decisão A defende não é decidível
+     * contra um fake que guarda strings — ela é decidível contra a **coluna
+     * `@db.Date`**, onde `new Date(dia)` sem o `Z` desloca o dia inteiro em
+     * qualquer fuso negativo.
+     *
+     * **Onde ela É provada**, e é para lá que este comentário aponta: o teste
+     * `asks for one day and gets one day, never a neighbour` do
+     * `prisma-reading-plan-item-repository.contract.integration.test.ts`, mais o
+     * `calendar-day-mapper.test.ts`, que é o dono da tradução.
+     */
+    it('matches the calendar day exactly: a different spelling is a different day', async () => {
+      await plan.saveMany([
+        aPlanItem({ id: 'hoje', bookId: 'book-a', date: '2026-10-05' }),
+      ]);
+
+      await expect(
+        plan.find({ bookIds: ['book-a'], date: '2026-10-04' }),
+      ).resolves.toEqual([]);
+      await expect(
+        plan.find({ bookIds: ['book-a'], date: '2026-10-06' }),
+      ).resolves.toEqual([]);
+      await expect(
+        plan.find({ bookIds: ['book-a'], date: '2026-10-5' }),
+      ).resolves.toEqual([]);
+      // O par positivo, sem o qual "devolve vazio" passaria para tudo.
+      await expect(
+        plan.find({ bookIds: ['book-a'], date: '2026-10-05' }),
+      ).resolves.toHaveLength(1);
+    });
+
+    /** Lista de livros vazia devolve vazio — o espelho do `IN ()` que o Prisma evita. */
+    it('answers empty for an empty list of books', async () => {
+      await plan.saveMany([
+        aPlanItem({ id: 'hoje', bookId: 'book-a', date: '2026-10-05' }),
+      ]);
+
+      await expect(
+        plan.find({ bookIds: [], date: '2026-10-05' }),
+      ).resolves.toEqual([]);
+    });
+
+    /** ⚠️ A enumeração é INVERTIDA de propósito (§7.2) — aqui a ordem É o assunto. */
+    it('enumerates in reverse insertion order, so nobody depends on it', async () => {
+      await plan.saveMany([
+        aPlanItem({ id: 'primeiro', bookId: 'book-a', date: '2026-10-05' }),
+        aPlanItem({ id: 'segundo', bookId: 'book-b', date: '2026-10-05' }),
+        aPlanItem({ id: 'terceiro', bookId: 'book-c', date: '2026-10-05' }),
+      ]);
+
+      const found = await plan.find({
+        bookIds: ['book-a', 'book-b', 'book-c'],
+        date: '2026-10-05',
+      });
+
+      expect(found.map((item) => item.id)).toEqual([
+        'terceiro',
+        'segundo',
+        'primeiro',
+      ]);
+    });
+
+    /**
+     * ⚠️ **O FILTRO QUE FOI AO REPOSITÓRIO, em cópia** (§7.3) — é ele que
+     * distingue "pediu o dia certo ao banco" de "pediu tudo e filtrou depois".
+     */
+    it('counts the call and records a COPY of the filter', async () => {
+      expect(plan.findCalls).toBe(0);
+
+      const bookIds = ['book-a'];
+      await plan.find({ bookIds, date: '2026-10-05' });
+      bookIds.push('book-invadido');
+
+      expect(plan.findCalls).toBe(1);
+      expect(plan.findFilters).toEqual([
+        { bookIds: ['book-a'], date: '2026-10-05' },
+      ]);
+    });
+  });
+
   // Contrato do fake, não regra de domínio: quem cair aqui escreveu um plano
   // que o Postgres recusaria, e isso é bug de código, não entrada do usuário.
   it('signals an index violation with a raw Error, never a domain error', async () => {

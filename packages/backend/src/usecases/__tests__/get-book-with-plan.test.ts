@@ -64,6 +64,16 @@ class ReversingPlanRepository implements ReadingPlanItemRepository {
     return (await this.inner.findByBook(bookId)).reverse();
   }
 
+  // O `find` da Tarefa 37 não é assunto deste adversário (ele existe para
+  // desordenar o `findByBook`, que é o que o `getBookWithPlan` chama), mas o
+  // port o exige — delegar é o que mantém a classe satisfazendo a interface sem
+  // inventar comportamento que nenhum teste daqui observa.
+  async find(
+    filter: Parameters<ReadingPlanItemRepository['find']>[0],
+  ): Promise<ReadingPlanItem[]> {
+    return this.inner.find(filter);
+  }
+
   async replaceForBook(
     bookId: string,
     change: PlanChange,

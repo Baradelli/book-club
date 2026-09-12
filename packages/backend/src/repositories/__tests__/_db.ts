@@ -42,6 +42,7 @@ export async function setupTestUser(
 }
 
 export interface Fixtures {
+  notificationDeliveryIds?: string[];
   pushSubscriptionIds?: string[];
   settingsIds?: string[];
   inviteIds?: string[];
@@ -62,6 +63,7 @@ export interface Fixtures {
  */
 export async function removeFixtures(fixtures: Fixtures): Promise<void> {
   const {
+    notificationDeliveryIds = [],
     pushSubscriptionIds = [],
     settingsIds = [],
     inviteIds = [],
@@ -76,6 +78,31 @@ export async function removeFixtures(fixtures: Fixtures): Promise<void> {
     userIds = [],
   } = fixtures;
 
+  // ⚠️ **A RESERVA DE AVISO SAI ANTES DO USUÁRIO — e ela também se apaga POR
+  // ÂNCORA, não só por id** (Tarefa 37).
+  //
+  // `NotificationDelivery_userId_fkey` é `ON DELETE RESTRICT`, e a reserva **não
+  // é criada por id conhecido** no caminho que importa: quem a cria é o
+  // `dispatchDueNotifications`, com `randomUUID()` dentro do UseCase — nenhum
+  // teste vê o id. É a MESMA forma que a Tarefa 34 aprendeu com o
+  // `ActivityEvent` e a 36 repetiu com o `PushSubscription`: uma FK nova quebrou
+  // o `afterAll` de QUATRO arquivos de integração que já existiam, **com os
+  // testes verdes** — a limpeza estourando em `Foreign key constraint violated`
+  // e 261 eventos vazando no banco de desenvolvimento do dono.
+  //
+  // O `OR` cobre apenas os `userIds` que o CHAMADOR já declarou como seus, então
+  // nada de outra pessoa é tocado e **não existe `deleteMany({})`** — com a
+  // lista vazia, o bloco inteiro é pulado.
+  if (notificationDeliveryIds.length > 0) {
+    await prisma.notificationDelivery.deleteMany({
+      where: { id: { in: notificationDeliveryIds } },
+    });
+  }
+  if (userIds.length > 0) {
+    await prisma.notificationDelivery.deleteMany({
+      where: { userId: { in: userIds } },
+    });
+  }
   // ⚠️ **A INSCRIÇÃO DE PUSH SAI ANTES DO USUÁRIO — e ela também se apaga POR
   // ÂNCORA, não só por id** (Tarefa 36).
   //

@@ -7,6 +7,7 @@ import { PrismaHighlightRepository } from '../repositories/prisma-highlight-repo
 import { PrismaInviteRepository } from '../repositories/prisma-invite-repository';
 import { PrismaMembershipRepository } from '../repositories/prisma-membership-repository';
 import { PrismaNoteRepository } from '../repositories/prisma-note-repository';
+import { PrismaNotificationDeliveryRepository } from '../repositories/prisma-notification-delivery-repository';
 import { PrismaPushSubscriptionRepository } from '../repositories/prisma-push-subscription-repository';
 import { PrismaReadingLogRepository } from '../repositories/prisma-reading-log-repository';
 import { PrismaReadingPlanItemRepository } from '../repositories/prisma-reading-plan-item-repository';
@@ -42,6 +43,14 @@ export interface Repositories {
    * não conhece `clubId`.
    */
   pushSubscriptions: PrismaPushSubscriptionRepository;
+  /**
+   * Bloco I (Tarefa 37). A RESERVA do aviso do dia — e ela é a única desta
+   * lista que nenhuma ROTA usa: quem a chama é o script de cron
+   * (`notifications/dispatch-main.ts`). Está aqui mesmo assim porque o §6.6
+   * manda instanciar repositório num lugar só, e porque a Tarefa 38 traz o
+   * segundo chamador (o `GROUP_ACTIVITY`, que sai do UseCase de escrita).
+   */
+  notificationDeliveries: PrismaNotificationDeliveryRepository;
 }
 
 /**
@@ -63,5 +72,6 @@ export function buildRepositories(prisma: PrismaClient): Repositories {
     readingLogs: new PrismaReadingLogRepository(prisma),
     activityEvents: new PrismaActivityEventRepository(prisma),
     pushSubscriptions: new PrismaPushSubscriptionRepository(prisma),
+    notificationDeliveries: new PrismaNotificationDeliveryRepository(prisma),
   };
 }

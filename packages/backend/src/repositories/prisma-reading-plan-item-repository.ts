@@ -6,6 +6,7 @@ import type {
 import type { ReadingPlanItem } from '../domain/book';
 import type {
   PlanChange,
+  ReadingPlanItemFilter,
   ReadingPlanItemRepository,
 } from '../usecases/ports/reading-plan-item-repository';
 import { calendarDayToDate, dateToCalendarDay } from './calendar-day-mapper';
@@ -85,6 +86,54 @@ export class PrismaReadingPlanItemRepository implements ReadingPlanItemRepositor
       // O port promete ordem de `order`. É o índice [bookId, order] servindo
       // ao uso real (ADR 0007).
       orderBy: { order: 'asc' },
+    });
+    return records.map(toDomain);
+  }
+
+  /**
+   * "O trecho de hoje, nestes livros" — a leitura do dispatcher (Tarefa 37).
+   *
+   * ⚠️ **Lista de livros vazia devolve vazio SEM ida ao banco** — senão seria um
+   * `IN ()`, uma consulta garantidamente vazia a cada 5 minutos para quem não
+   * tem livro ativo, que é o estado normal do clube entre dois livros. É o
+   * mesmo cuidado do `planItemIdsWithAnyNote` e dos dois irmãos dele.
+   *
+   * ⚠️ **A `date` atravessa o `calendarDayToDate`, e é o ÚNICO tradutor** — em
+   * UTC, como manda o `CLAUDE.md`. Aqui não há aritmética nenhuma (decisão A):
+   * o dia vem pronto do `localDay`, e o que este mapper faz é a conversão
+   * `CalendarDay` → coluna `@db.Date`, que é a mesma que o `saveMany` já faz.
+   *
+   * ⚠️ **O que o teste de contrato PROVA e o que ele NÃO prova — medido na
+   * Tarefa 37, não suposto (§7.10).** Dois mutantes foram plantados neste
+   * `where`, contra este Postgres:
+   *
+   * - `new Date(\`${'$'}{filter.date}T00:00:00.000\`)`, **sem o `Z`** —
+   *   **SOBREVIVEU** aos 32 testes do contrato. O Prisma normaliza o parâmetro
+   *   de uma coluna `@db.Date` para o dia de calendário em UTC, então o
+   *   deslocamento de fuso do construtor não chega à consulta. O `Z` continua
+   *   sendo indispensável na ESCRITA (é o que o `calendar-day-mapper.ts`
+   *   documenta e o teste dele prova), e o chamar daqui é coerência, não
+   *   defesa;
+   * - **um dia a mais** (`+ 86400000`) — **4 acusadores**, entre eles
+   *   `asks for one day and gets one day, never a neighbour`. Ou seja: o
+   *   contrato distingue o dia certo do dia errado, que é a propriedade da
+   *   decisão A.
+   *
+   * Registrado porque "este teste pega comparação de data" é a afirmação fácil
+   * de escrever e difícil de conferir — e das duas que a Tarefa 24 conferiu
+   * dizendo "medido", duas caíram.
+   *
+   * **Sem `orderBy`** porque o port não promete ordem, e **sem `take`** porque
+   * o `@@unique([bookId, date])` já limita o resultado a um item por livro.
+   */
+  async find(filter: ReadingPlanItemFilter): Promise<ReadingPlanItem[]> {
+    if (filter.bookIds.length === 0) return [];
+
+    const records = await this.prisma.readingPlanItem.findMany({
+      where: {
+        bookId: { in: [...filter.bookIds] },
+        date: calendarDayToDate(filter.date),
+      },
     });
     return records.map(toDomain);
   }

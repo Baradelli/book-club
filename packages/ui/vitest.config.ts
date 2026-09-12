@@ -35,6 +35,28 @@ import { defineConfig } from 'vitest/config';
  * Se um dia o `tippy.js` publicar ESM de verdade, ou o TipTap parar de
  * importá-lo por default, meça de novo antes de apagar.
  */
+/**
+ * ⚠️ **O FUSO DOS TESTES É FIXO — e a medição que obrigou isto está colada em
+ * `packages/backend/vitest.workspace.ts`.** Leia lá; aqui fica só o porquê e a
+ * ressalva, para ninguém apagar a linha achando que é enfeite.
+ *
+ * A auditoria de cada fatia se apoia em **teste de mutação**, e "zero
+ * acusadores" só quer dizer alguma coisa se o ambiente for determinístico: o
+ * mesmo mutante deu 0 acusadores no fuso da máquina do dono e 2 em `UTC`.
+ *
+ * ⚠️ **A ressalva honesta: isto troca VARIÂNCIA por um PONTO CEGO FIXO.** Pode
+ * existir mutante que o offset zero esconde e um fuso deslocado revelaria —
+ * `packages/app/vitest.config.ts` pina **`America/Sao_Paulo`** justamente por
+ * isso, e o pino de lá tem acusador nomeado. Os dois são deliberados.
+ *
+ * Aqui `UTC` porque **nenhum componente deste pacote lê o relógio ou o fuso**
+ * (medido na Tarefa 37: nenhum teste ficou vermelho ao fixar). O pino é
+ * profilático — ele existe para que o dia em que um componente de data chegar,
+ * o veredito já nasça repetível. **Quem precisar de um fuso específico PASSA O
+ * FUSO**, nunca depende daqui.
+ */
+const TEST_TIME_ZONE = 'UTC';
+
 export default defineConfig({
   plugins: [react()],
   test: {
@@ -43,5 +65,6 @@ export default defineConfig({
     setupFiles: ['./src/test-setup.ts'],
     restoreMocks: true,
     server: { deps: { inline: [/@tiptap\//] } },
+    env: { TZ: TEST_TIME_ZONE },
   },
 });

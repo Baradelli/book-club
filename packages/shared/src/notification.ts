@@ -17,6 +17,11 @@ import { z } from 'zod';
  * chamador é especulação: o `docs/CONVENCOES-CODIGO.md` §7.1 registra a decisão
  * de não subir o `matchesText` para o arquivo compartilhado enquanto ele tivesse
  * um chamador só. Eles entram na fatia que os usa, com o teste que os pina.
+ *
+ * ⚠️ **E a TAREFA 37 CUMPRIU METADE DISSO:** o `NotificationDelivery` nasceu,
+ * então o `NOTIFICATION_KINDS` desceu para cá, com o chamador que o pedia (o
+ * domínio do backend e o `claim` do repositório). O
+ * `notificationSendResponseSchema` continua fora — a rota que o devolve é a 38.
  */
 
 /**
@@ -65,6 +70,54 @@ export function isNotificationPlatform(
  * identidade**.
  */
 export const notificationPlatform = z.enum(NOTIFICATION_PLATFORMS);
+
+/**
+ * ⚠️ **OS DOIS TIPOS QUE UM CLAIM RESERVA — o vocabulário do
+ * `NotificationDelivery.kind` (Tarefa 37, decisão G).**
+ *
+ * O `CLAUDE.md` nomeia `NotificationDelivery.kind` entre os quatro campos
+ * "`String` validados por `z.enum`/regex (ainda evoluem)", ao lado de
+ * `ActivityEvent.type`, `PushSubscription.platform` e `Highlight.color`: **não
+ * é enum Prisma**, porque a lista ainda cresce e um enum exigiria migration por
+ * tipo.
+ *
+ * ⚠️ **`TEST` FICA DE FORA, e é decisão, não esquecimento.** O
+ * `NOTIFICACOES.md` §4 lista três tipos, mas esta constante é o vocabulário de
+ * uma **chave de idempotência**: `@@unique([userId, kind, localDate])` quer
+ * dizer "no máximo um destes por pessoa por dia". `READING_REMINDER` é
+ * exatamente isso, e `GROUP_ACTIVITY` também — ele ainda não tem chamador aqui
+ * (é a Tarefa 38), mas é a chave de idempotência **dele** que faz a tabela ter
+ * sentido, e por isso ele nasce junto. Um `TEST` ali significaria "só dá para
+ * testar o push uma vez por dia", que é o oposto do que um botão de diagnóstico
+ * serve: ele **envia**, não reserva. O vocabulário de ENVIO é outro conjunto, e
+ * nasce na 38 com a rota que o usa.
+ */
+export const NOTIFICATION_KINDS = [
+  'READING_REMINDER',
+  'GROUP_ACTIVITY',
+] as const;
+
+/** Um dos dois — nunca um tipo inventado. */
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
+
+/**
+ * O portão do tipo: recebe `unknown` e **estreita**.
+ *
+ * Comparação exata, **sem `trim` e sem dobrar caixa**, e aqui o preço de
+ * normalizar é maior que nos irmãos: o `kind` entra na chave única
+ * `(userId, kind, localDate)`, e o `=` de texto do Postgres é byte-sensível —
+ * um `'reading_reminder'` aceito seria uma **segunda** reserva do mesmo dia,
+ * ou seja, o lembrete dobrado que a fatia inteira existe para impedir.
+ */
+export function isNotificationKind(value: unknown): value is NotificationKind {
+  return (NOTIFICATION_KINDS as readonly unknown[]).includes(value);
+}
+
+/**
+ * O tipo na borda: **a mesma constante** de cima, nunca uma lista copiada. O
+ * teste pina as `options` do enum contra a constante **por identidade**.
+ */
+export const notificationKind = z.enum(NOTIFICATION_KINDS);
 
 /**
  * A inscrição como o NAVEGADOR a entrega — é literalmente o

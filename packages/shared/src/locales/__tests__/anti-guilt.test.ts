@@ -86,6 +86,40 @@ describe('the anti-guilt principle is a property of the CATALOGS (plano §1)', (
     expect(offenders).toEqual([]);
   });
 
+  /**
+   * ⚠️ **REGRA 15 DA TAREFA 37 — A MENSAGEM DO LEMBRETE ENTRA NA VARREDURA, E
+   * ELA É A ÚNICA FRASE DO SISTEMA QUE CHEGA SEM A PESSOA ABRIR A TELA.**
+   *
+   * Toda outra frase do catálogo é lida por quem decidiu olhar. Esta acorda a
+   * pessoa no celular — então ela é a que menos pode cobrar, e é justamente a
+   * que NENHUMA varredura de DOM alcança: ela não passa por tela nenhuma, é
+   * montada no backend (`packages/backend/src/notifications/reminder-message.ts`)
+   * e sai pela rede. Se a guarda dela morasse numa tela, ela não existiria —
+   * §7.9 na letra: a guarda mora onde a propriedade é DECIDÍVEL.
+   *
+   * Este teste não repete a varredura (o `it.each` acima já percorre os dois
+   * catálogos inteiros): ele prova que as chaves novas **estão dentro do
+   * conjunto varrido**, nos dois idiomas. Sem ele, alguém que pusesse a
+   * mensagem fora do catálogo — uma string no backend — teria as duas guardas
+   * verdes e nenhuma delas olhando a frase.
+   */
+  it.each([
+    ['pt', pt],
+    ['en', en],
+  ])(
+    'puts the reading reminder itself inside the swept set, in %s',
+    (_locale, catalog) => {
+      const swept = entries(catalog).map(([path]) => path);
+
+      expect(swept).toEqual(
+        expect.arrayContaining([
+          'notifications.readingReminder.title',
+          'notifications.readingReminder.body',
+        ]),
+      );
+    },
+  );
+
   it('would catch the phrases the audit walked through, in both languages', () => {
     /*
       ⚠️ O LADO POSITIVO DO PAR, e ele é o que impede a lista de virar decoração:

@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   browserPushSubscriptionSchema,
   deletePushSubscriptionSchema,
+  isNotificationKind,
   isNotificationPlatform,
+  NOTIFICATION_KINDS,
   NOTIFICATION_PLATFORMS,
   notificationConfigResponseSchema,
+  notificationKind,
   notificationPlatform,
   pushSubscriptionResponseSchema,
   savePushSubscriptionSchema,
@@ -64,6 +67,65 @@ describe('the platform vocabulary', () => {
       expect(notificationPlatform.safeParse(value).success).toBe(false);
     },
   );
+});
+
+/**
+ * ⚠️ **O VOCABULÁRIO DO `NotificationDelivery.kind` (Tarefa 37, decisão G).**
+ *
+ * O `CLAUDE.md` nomeia `NotificationDelivery.kind` entre os quatro campos
+ * "`String` validados por `z.enum`/regex (ainda evoluem)" — então ele NÃO é
+ * enum Prisma, e a lista vive aqui, com o `z.enum` derivado dela e o portão
+ * `isX` que o domínio do backend usa. É o mesmo molde da plataforma acima, da
+ * cor do grifo (Tarefa 22) e do tipo de atividade (33).
+ *
+ * ⚠️ **Ele nasce com DOIS valores, e o `TEST` do `NOTIFICACOES.md` §4 fica de
+ * fora de propósito.** Esta lista é o vocabulário de uma CHAVE DE IDEMPOTÊNCIA:
+ * `@@unique([userId, kind, localDate])` significa "no máximo um destes por
+ * pessoa por dia". `READING_REMINDER` é isso; `GROUP_ACTIVITY` também (a
+ * Tarefa 38 o usa). Um `TEST` ali significaria "só dá para testar o push uma
+ * vez por dia", que é o oposto do que um botão de diagnóstico serve — ele
+ * ENVIA, não reserva. Quando a Tarefa 38 criar o `POST /notifications/test`, o
+ * vocabulário que ela precisa é o de ENVIO, e é outro conjunto.
+ */
+describe('the delivery kind vocabulary', () => {
+  /** Os dois, escritos à mão: é a decisão G da Tarefa 37, pinada. */
+  const EXPECTED_KINDS = ['READING_REMINDER', 'GROUP_ACTIVITY'] as const;
+
+  it('is the two kinds that a claim can reserve, in order', () => {
+    expect(NOTIFICATION_KINDS).toEqual(EXPECTED_KINDS);
+  });
+
+  /**
+   * ⚠️ **A identidade, e não uma lista igual:** uma lista escrita à mão no
+   * schema ficaria verde no dia em que a constante crescesse e o schema não.
+   */
+  it('feeds the z.enum from the constant itself', () => {
+    expect(notificationKind.options).toBe(NOTIFICATION_KINDS);
+  });
+
+  it.each(EXPECTED_KINDS)('narrows %s', (value) => {
+    expect(isNotificationKind(value)).toBe(true);
+  });
+
+  /**
+   * Sem `trim` e sem dobrar caixa — uma grafia por tipo. O `kind` entra na
+   * chave única `(userId, kind, localDate)`, e o `=` de texto do Postgres é
+   * byte-sensível: `'reading_reminder'` seria uma SEGUNDA reserva do mesmo dia.
+   */
+  it.each([
+    'reading_reminder',
+    ' READING_REMINDER',
+    'READING_REMINDER ',
+    'READING-REMINDER',
+    'TEST',
+    '',
+    42,
+    null,
+    undefined,
+  ])('refuses %s', (value) => {
+    expect(isNotificationKind(value)).toBe(false);
+    expect(notificationKind.safeParse(value).success).toBe(false);
+  });
 });
 
 describe('browserPushSubscriptionSchema', () => {

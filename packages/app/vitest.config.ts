@@ -36,6 +36,34 @@ export default defineConfig({
      * `America/Sao_Paulo` porque é o fuso do dono (UTC−3, sem horário de verão
      * desde 2019) — o offset negativo é o que faz a virada do dia acontecer
      * ANTES da meia-noite UTC.
+     *
+     * ⚠️ **E NÃO TROQUE PARA `UTC` PARA "PADRONIZAR" COM OS OUTROS TRÊS
+     * PACOTES. Medido na Tarefa 37, e a conta é esta:**
+     *
+     * | `TZ` | acusadores do mutante `toISOString().slice(0, 10)` |
+     * |---|---|
+     * | `America/Sao_Paulo` (este) | **2** — e são os dois nomeados acima |
+     * | `UTC` | **0** |
+     *
+     * Em `UTC` os dois testes ficam vermelhos, mas **na PRECONDIÇÃO**
+     * (`expected 'UTC' to be 'America/Sao_Paulo'`, o `expect(process.env['TZ'])`
+     * que eles pinam no §7.2) — com o mutante e sem ele, exatamente igual. Ou
+     * seja: eles nunca chegam à asserção, e o mutante deixa de ser julgado. Em
+     * offset zero "o dia em UTC" e "o dia de quem olha" **são o mesmo dia por
+     * construção**, então não existe fixture que separe os dois.
+     *
+     * Os outros três pacotes pinam `UTC` (veja
+     * `packages/backend/vitest.workspace.ts`, onde a medição que obrigou os
+     * pinos está colada por extenso): lá o offset zero **revela** um mutante
+     * que o fuso do dono escondia, e aqui ele **esconde** um que o fuso do dono
+     * revela. É a ressalva do ponto cego fixo com os papéis trocados, e é por
+     * isso que os pinos são diferentes **de propósito**. Nenhum dos dois é o
+     * "padrão certo": cada um é o fuso em que a propriedade daquele pacote é
+     * decidível (§7.10).
+     *
+     * A precondição pinada é o que torna esta divergência segura: quem trocar o
+     * fuso aqui recebe um vermelho **alto e nominal**, não uma suíte verde que
+     * parou de provar alguma coisa.
      */
     env: { TZ: 'America/Sao_Paulo' },
   },

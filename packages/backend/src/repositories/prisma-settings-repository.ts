@@ -1,7 +1,10 @@
 import type { PrismaClient, Settings as PrismaSettings } from '@prisma/client';
 
 import type { Settings } from '../domain/settings';
-import type { SettingsRepository } from '../usecases/ports/settings-repository';
+import type {
+  SettingsFilter,
+  SettingsRepository,
+} from '../usecases/ports/settings-repository';
 
 function toDomain(record: PrismaSettings): Settings {
   return {
@@ -40,5 +43,19 @@ export class PrismaSettingsRepository implements SettingsRepository {
       where: { userId },
     });
     return record ? toDomain(record) : null;
+  }
+
+  /**
+   * "Quem pediu para ser lembrado" — a varredura do dispatcher (Tarefa 37).
+   *
+   * **Sem `orderBy`** porque o port não promete ordem, e **sem `take`** porque
+   * um corte aqui seria a falha e não a válvula: as pessoas depois do corte
+   * nunca receberiam lembrete, em silêncio. Ver o docblock do port.
+   */
+  async find(filter: SettingsFilter): Promise<Settings[]> {
+    const records = await this.prisma.settings.findMany({
+      where: { reminderEnabled: filter.reminderEnabled },
+    });
+    return records.map(toDomain);
   }
 }

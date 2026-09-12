@@ -912,6 +912,40 @@ export const pt = {
     `RichEditor` por PROP, já traduzidas pela tela (decisão B da Tarefa 13: o
     `@clube/ui` não chama `t()`).
   */
+  /*
+    ⚠️ **A NOTIFICAÇÃO PUSH (Tarefa 37) — A ÚNICA FRASE DO SISTEMA QUE CHEGA
+    SEM A PESSOA ABRIR A TELA.**
+
+    Ela mora no catálogo por duas razões, e as duas são regra do projeto:
+
+    1. **`CLAUDE.md`:** não se escreve português cru no backend. O dispatcher é
+       backend, e a frase é conteúdo que a pessoa lê.
+    2. **decisão H da Tarefa 37:** o idioma é o `Settings.locale` DELA, e não o
+       do navegador — porque não há navegador nenhum aberto quando o lembrete
+       sai. É a única mensagem do produto que não pode perguntar ao i18n da
+       tela.
+
+    ⚠️ **E ELA NÃO COBRA** (`docs/plano-clube-do-livro.md` §1 e regra 15): nada
+    de "você não leu", "faltam N dias", "você está atrasada", nem contagem de
+    coisa alguma. Ela diz **o trecho de hoje** e para por aí — o mesmo texto do
+    `home.today.heading`, que é o que a pessoa vê ao abrir o app. Quem guarda
+    isso é a varredura de `__tests__/anti-guilt.test.ts`, que percorre os DOIS
+    catálogos: uma guarda de tela nunca veria esta frase, porque ela não passa
+    por tela nenhuma.
+  */
+  notifications: {
+    readingReminder: {
+      /** O título da notificação no aparelho. */
+      title: 'A leitura de hoje',
+      /*
+        O corpo é SÓ o tema do dia — "Cap. 3 — A promessa" —, que vem do plano
+        que o admin cadastrou. Nenhuma moldura em volta: um "não se esqueça de"
+        ou um "que tal" transformaria o lembrete em cutucada, e o `{{title}}`
+        sozinho é a frase mais curta que ainda diz o que ler.
+      */
+      body: '{{title}}',
+    },
+  },
   editor: {
     image: {
       uploading: 'Enviando imagem…',

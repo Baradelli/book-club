@@ -136,6 +136,17 @@ mesmo dia, e entrega a mensagem a um port de envio — que nesta fatia é um **f
 20. Contador canônico de linhas em todo arquivo novo, no docblock. Se o `scheduler.ts` passar
     de ~200 linhas, **divida antes de entregar**: o candidato óbvio é a seleção de candidatos
     (quem é considerado), que é separável da decisão (manda ou não manda).
+
+    > ⚠️ **A PRIMEIRA METADE DESTA REGRA ESTAVA ERRADA, e o revisor a pegou.** "Contador no
+    > docblock" é convenção de **tela** — ela só existe em `packages/app/src/pages/*`, e
+    > **nenhum** arquivo de backend a segue. O executor seguiu a precedência do backend e
+    > estava certo; cobrar dele o contrário teria espalhado uma convenção de um pacote para
+    > outro sem ninguém decidir isso. A metade que vale é a **substantiva** — dividir antes de
+    > doer —, e ela foi cumprida com folga: o maior arquivo de produção da fatia tem **90**
+    > linhas, e o `scheduler` já nasceu dividido do `reminder-candidates`.
+    >
+    > Regra corrigida: **o contador vai ao docblock nas telas; no backend, medir e reportar,
+    > sem escrever no arquivo.**
 21. Gates, todos, com os números colados:
     ```
     pnpm -r test          # baseline: shared 575 · ui 195 · backend 1684 · app 665
@@ -163,18 +174,18 @@ Prisma · `packages/backend/src/notifications/scheduler.ts` (novo) ·
 
 ## Definição de pronto
 
-- [ ] Os **três** testes que o `NOTIFICACOES.md` §8 exige existem e mordem: `isInsideWindow`,
+- [x] Os **três** testes que o `NOTIFICACOES.md` §8 exige existem e mordem: `isInsideWindow`,
       a supressão de quem já leu, e o claim idempotente.
-- [ ] Os quatro limites da janela testados, mais os dois casos de DST (a hora que não existe e
+- [x] Os quatro limites da janela testados, mais os dois casos de DST (a hora que não existe e
       a que acontece duas vezes), com o claim mostrando que a repetida não dobra o lembrete.
-- [ ] Claim antes do envio, provado por **contagem** (claim recusado → zero chamadas ao
+- [x] Claim antes do envio, provado por **contagem** (claim recusado → zero chamadas ao
       sender); envio que falha **não** desfaz o claim.
-- [ ] Concorrência real no contrato: dois claims simultâneos, exatamente um `true`.
-- [ ] `{ considered, sent, disabled, skipped }` fecham a conta, com teste.
-- [ ] Um relógio só, provado **contando** leituras.
-- [ ] Luxon só no backend, com teste que pega import **transitivo** e tem antídoto.
-- [ ] Nenhuma aritmética de data: a comparação de dia é igualdade de `CalendarDay`.
-- [ ] `web-push` **não** instalado. `PushSender` é port + fake.
-- [ ] `plan-item-fk-guards.test.ts` verde, e você leu o schema para saber por quê.
-- [ ] Seis gates verdes com números colados, chunk em bytes, e o **banco provado limpo por
+- [x] Concorrência real no contrato: dois claims simultâneos, exatamente um `true`.
+- [x] `{ considered, sent, disabled, skipped }` fecham a conta, com teste.
+- [x] Um relógio só, provado **contando** leituras.
+- [x] Luxon só no backend, com teste que pega import **transitivo** e tem antídoto.
+- [x] Nenhuma aritmética de data: a comparação de dia é igualdade de `CalendarDay`.
+- [x] `web-push` **não** instalado. `PushSender` é port + fake.
+- [x] `plan-item-fk-guards.test.ts` verde, e você leu o schema para saber por quê.
+- [x] Seis gates verdes com números colados, chunk em bytes, e o **banco provado limpo por
       consulta** depois da integração.

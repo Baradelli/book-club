@@ -486,4 +486,108 @@ describe('PrismaReadingPlanItemRepository (contract)', () => {
       expect(await repo.findByBook(BOOK_ID)).toEqual(before);
     });
   });
+
+  /**
+   * ⚠️ **O `find` DA TAREFA 37 — "o trecho de hoje, nestes livros", contra o
+   * Postgres.**
+   *
+   * O port cresceu junto com esta implementação, na MESMA unidade (§6.9).
+   *
+   * ⚠️ **É AQUI que a decisão A se prova contra o banco:** o dia vem como
+   * `CalendarDay` (`"YYYY-MM-DD"`), atravessa o `calendarDayToDate` — o único
+   * tradutor, sempre em UTC — e casa a coluna `@db.Date` por **igualdade**.
+   * Nenhuma faixa, nenhum `startOf`, nenhuma comparação de `Date` espalhada.
+   *
+   * Esta máquina está em **UTC−3**, e é justamente o fuso em que a
+   * implementação ingênua erra: `new Date('2026-10-05T00:00:00')` daria
+   * `2026-10-05T03:00Z`, e o item do dia 5 não casaria — ou o do dia 4 casaria
+   * no lugar. O `calendar-day-mapper.ts` registra a medição.
+   */
+  describe('find({ bookIds, date })', () => {
+    beforeEach(async () => {
+      await repo.saveMany([
+        anItem(trackedId('find-hoje'), { order: 0, date: '2026-10-05' }),
+        anItem(trackedId('find-amanha'), { order: 1, date: '2026-10-06' }),
+        anItem(trackedId('find-outro-livro'), {
+          bookId: OTHER_BOOK_ID,
+          order: 0,
+          date: '2026-10-05',
+        }),
+      ]);
+    });
+
+    it('brings the item of that exact calendar day, in those books only', async () => {
+      const found = await repo.find({
+        bookIds: [BOOK_ID],
+        date: '2026-10-05',
+      });
+
+      expect(found).toHaveLength(1);
+      expect(required(found[0]).date).toBe('2026-10-05');
+      expect(required(found[0]).bookId).toBe(BOOK_ID);
+    });
+
+    it('brings one item per book when the same day is in two books', async () => {
+      const found = await repo.find({
+        bookIds: [BOOK_ID, OTHER_BOOK_ID],
+        date: '2026-10-05',
+      });
+
+      expect(found.map((item) => item.bookId).sort()).toEqual(
+        [BOOK_ID, OTHER_BOOK_ID].sort(),
+      );
+    });
+
+    /**
+     * ⚠️ **Os dois vizinhos do dia ficam de fora, e é a prova de que a
+     * comparação é IGUALDADE e não faixa.** Um `gte`/`lt` mal escrito traria o
+     * dia 6 aqui.
+     */
+    it('asks for one day and gets one day, never a neighbour', async () => {
+      // O dia 4 não existe no plano: vazio.
+      await expect(
+        repo.find({ bookIds: [BOOK_ID], date: '2026-10-04' }),
+      ).resolves.toEqual([]);
+
+      // O dia 6 existe — e vem SOZINHO, sem o 5 a reboque. É esta metade que
+      // uma faixa mal escrita (`gte` sem `lt`) quebraria.
+      const tomorrow = await repo.find({
+        bookIds: [BOOK_ID],
+        date: '2026-10-06',
+      });
+      expect(tomorrow.map((item) => item.date)).toEqual(['2026-10-06']);
+    });
+
+    /**
+     * ⚠️ **Nenhuma ida ao banco com lista vazia** — senão seria um `IN ()` a
+     * cada 5 minutos, para sempre, para quem está entre dois livros.
+     *
+     * O que o teste consegue provar daqui é o **resultado**; que não houve
+     * consulta está no `if` da implementação e no espelho do fake. O par
+     * positivo (o mesmo dia COM livro) é o que impede "devolve vazio sempre" de
+     * passar.
+     */
+    it('answers empty for an empty list of books', async () => {
+      await expect(
+        repo.find({ bookIds: [], date: '2026-10-05' }),
+      ).resolves.toEqual([]);
+      await expect(
+        repo.find({ bookIds: [BOOK_ID], date: '2026-10-05' }),
+      ).resolves.toHaveLength(1);
+    });
+
+    /**
+     * ⚠️ **O id de um livro que não é da pessoa não traz nada de graça** — o
+     * corte de tenant é do chamador (ver o port), e este teste pina que o
+     * repositório respeita a lista que recebeu em vez de ignorá-la.
+     */
+    it('never brings a book that was not asked for', async () => {
+      const found = await repo.find({
+        bookIds: [OTHER_BOOK_ID],
+        date: '2026-10-05',
+      });
+
+      expect(found.map((item) => item.bookId)).toEqual([OTHER_BOOK_ID]);
+    });
+  });
 });

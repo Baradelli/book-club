@@ -1,6 +1,7 @@
 import type { ReadingPlanItem } from '../../domain/book';
 import type {
   PlanChange,
+  ReadingPlanItemFilter,
   ReadingPlanItemRepository,
 } from '../ports/reading-plan-item-repository';
 
@@ -9,6 +10,8 @@ export class ReadingPlanItemRepositoryFake implements ReadingPlanItemRepository 
   private saveManyCallCount = 0;
   private replaceForBookCallCount = 0;
   private findByBookCallCount = 0;
+  private findCallCount = 0;
+  private findFiltersSeen: ReadingPlanItemFilter[] = [];
   private removedIdsSeen: string[] = [];
 
   async saveMany(items: ReadingPlanItem[]): Promise<ReadingPlanItem[]> {
@@ -35,6 +38,38 @@ export class ReadingPlanItemRepositoryFake implements ReadingPlanItemRepository 
     return [...this.store.values()]
       .filter((item) => item.bookId === bookId)
       .sort((a, b) => a.order - b.order)
+      .map((item) => this.clone(item));
+  }
+
+  /**
+   * "O trecho de hoje, nestes livros" — a leitura do dispatcher (Tarefa 37).
+   *
+   * ⚠️ **A comparação de dia é IGUALDADE DE STRING** (decisão A), e o fake é
+   * fiel a isso de propósito: o Postgres compara a coluna `@db.Date` com o
+   * instante que o `calendarDayToDate` produz, e as duas implementações têm de
+   * concordar sobre `'2026-10-05'` × `'2026-10-5'` — que são dias diferentes
+   * aqui e o mesmo dia num `Date`. Um fake que normalizasse a data aceitaria
+   * uma chave que o banco não aceita.
+   *
+   * ⚠️ **Lista de livros vazia devolve vazio SEM procurar** — o espelho do
+   * `IN ()` que a implementação Prisma evita.
+   *
+   * A enumeração é **INVERTIDA** (§7.2): o port não promete ordem, e é o
+   * chamador que ordena pelo que precisa.
+   */
+  async find(filter: ReadingPlanItemFilter): Promise<ReadingPlanItem[]> {
+    this.findCallCount += 1;
+    this.findFiltersSeen.push({
+      bookIds: [...filter.bookIds],
+      date: filter.date,
+    });
+
+    if (filter.bookIds.length === 0) return [];
+
+    const wanted = new Set(filter.bookIds);
+    return [...this.store.values()]
+      .filter((item) => wanted.has(item.bookId) && item.date === filter.date)
+      .reverse()
       .map((item) => this.clone(item));
   }
 
@@ -100,6 +135,31 @@ export class ReadingPlanItemRepositoryFake implements ReadingPlanItemRepository 
    */
   get findByBookCalls(): number {
     return this.findByBookCallCount;
+  }
+
+  /**
+   * Quantas vezes `find` foi chamado (Tarefa 37).
+   *
+   * O plano é **conteúdo do clube**, então "não leu o plano" é afirmação de
+   * tenant, não de desempenho (§7.3) — e aqui ela é a que prova que o
+   * dispatcher **não vai ao banco** quando a pessoa está fora da janela.
+   */
+  get findCalls(): number {
+    return this.findCallCount;
+  }
+
+  /**
+   * Uma CÓPIA do filtro de cada `find` (§7.3).
+   *
+   * É o que distingue "pediu o dia certo ao banco" de "pediu tudo e filtrou
+   * depois" — duas implementações que dão o mesmo resultado em qualquer cenário
+   * com um livro só, e que só divergem no dia em que houver dois.
+   */
+  get findFilters(): readonly ReadingPlanItemFilter[] {
+    return this.findFiltersSeen.map((filter) => ({
+      bookIds: [...filter.bookIds],
+      date: filter.date,
+    }));
   }
 
   /** Todo id que alguma chamada pediu para remover, na ordem em que veio. */

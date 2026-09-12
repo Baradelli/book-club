@@ -2598,9 +2598,150 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       prettier limpos, chunk **429.721 B** medido por mim. `backend`, `prisma` e `ui`
       intocados; **nenhuma dependência nova**; nenhum `.env` tocado; nenhuma chave real em
       lugar nenhum (a fixture é uma progressão inventada de 65 bytes, nomeada como falsa)._
-- [ ] **37** — `dispatchDueNotifications` (`READING_REMINDER`, janela, fuso, supressão de
+- [x] **37** — `dispatchDueNotifications` (`READING_REMINDER`, janela, fuso, supressão de
       quem já leu, idempotência) — **TDD pesado** + script de cron. Luxon entra aqui, backend
       **only**. → `tasks/37-dispatcher-de-lembretes.md`
+      _**600 shared** (era 577) **· 195 ui** (intocado) **· 1826 backend** (era 1684, +142)
+      **· 744 app** (intocado). Integração **601** (era 581, +20). Chunk **429.852 B** (era
+      429.721, +131 — só as duas chaves novas do catálogo `pt`), folga **20.148**. Migration
+      `20260912015107_notification_delivery` gerada pelo Prisma. Banco provado limpo **por
+      consulta**, `diff` antes/depois IDENTICAL nas 13 tabelas._
+      _**A fatia mais pesada do MVP, e tudo nela é sobre NÃO mandar:** não mandar duas vezes
+      (claim no banco), não mandar para quem já leu, não mandar quando não há o que ler. Nada
+      aqui envia coisa alguma para fora da máquina — o `PushSender` é port com **fake**, e
+      `web-push` continua ausente do lockfile._
+      _**⚠️ A DECISÃO DE SEGURANÇA QUE O EXECUTOR TOMOU SOZINHO, E A SPEC NÃO PEDIA.** O script
+      de cron **RECUSA a passada** enquanto não houver `PushSender` real
+      (`reason: 'push-sender-not-implemented'`). O motivo é a decisão E: o claim é gasto
+      **ANTES** do envio, então uma passada com sender de mentira **queimaria a reserva do dia
+      de todo mundo** — e ninguém receberia nada, nem hoje nem amanhã. Verificado pelo
+      orquestrador por leitura e pelo revisor por `grep` do monorepo: `sender: null` é
+      **literal** (sem env, sem flag, sem `NODE_ENV`), as duas recusas retornam **antes** de
+      `options.open()` — o script nem abre o Prisma —, não há segundo chamador de
+      `runDispatch` nem de `dispatchDueNotifications`, e não há `bin` nem `postinstall` em
+      manifesto nenhum. **A propriedade é estrutural, não configuracional.**_
+      _**⚠️⚠️ O ACHADO QUE VALE MAIS QUE A FATIA: O VEREDITO DA MUTAÇÃO DEPENDIA DA MÁQUINA.**
+      O revisor mediu, e o orquestrador **reconfirmou com o protocolo completo**: o **mesmo**
+      mutante, no **mesmo** arquivo — trocar `item.date === filter.date` por comparação de
+      `new Date(...)` — dá **0 acusadores** em `America/Sao_Paulo` e **1** em `TZ=UTC`. Causa:
+      `new Date('2026-10-5')` é meia-noite **local** e `new Date('2026-10-05')` é meia-noite
+      **UTC** — iguais só em offset zero. E `grep TZ vitest.workspace.ts` voltava **vazio**.
+      Isso não é defeito desta fatia: é defeito do **método inteiro do projeto**, que se apoia
+      em teste de mutação. **Um "zero acusadores" só significa alguma coisa se o ambiente for
+      determinístico.**_
+      _**E o conserto encontrou um teste morto que era da própria fatia.** Com o `TZ` fixado,
+      o mutante passou de 0 para **2** acusadores — e o segundo é
+      `readingOfTheDay > matches the day by CalendarDay equality, so date arithmetic would
+      fail here`, escrito **nesta fatia, para exatamente esta propriedade**, e que estava
+      **verde com o mutante aplicado**. Ele existia, tinha o nome certo e não guardava nada. É
+      a lição do MVP inteiro em uma linha: **o nome do teste não é a guarda; a medição é.**_
+      _**⚠️ E O PINO QUE EU MANDEI COLOCAR APAGOU SEIS ACUSADORES — o executor pegou e
+      consertou a causa raiz.** `TZ=UTC` no backend zerou a rede do
+      `calendar-day-mapper.test.ts`: o mutante que apaga o `Z` de `calendarDayToDate` (o que o
+      `CLAUDE.md` proíbe "para sempre") ia de **6 acusadores** em `America/Sao_Paulo` para
+      **0** em `UTC`, porque em offset zero `new Date('…T00:00:00')` e `…T00:00:00Z'` são o
+      **mesmo valor**. A rede inteira daquele arquivo dependia, **sem dizer**, de a máquina
+      estar a oeste de Greenwich. Segunda baixa no mesmo arquivo: um teste com
+      `if (offset > 0) … else expect(local).toBe(utc)` caía no `else` sob `UTC` e virava
+      **tautologia** — o §7.8 escrito com um `if`. Conserto na causa, não no pino: os testes
+      passaram a **escolher o fuso**, com precondição pinada e restauração no `finally`, e há
+      um caso de **cada lado do meridiano**. Reconfirmado pelo orquestrador: **0 → 2
+      acusadores, e agora independentes do pino** (medido sob o pino e com fuso forçado)._
+      _**⚠️ NÃO EXISTE UM VALOR DE PINO QUE SIRVA PARA TUDO, e agora está medido.** No mesmo
+      pacote, dois mutantes puxam para lados opostos: o do fake de plano precisa de **offset
+      zero** para ter acusador; o do `calendarDayToDate` precisava de **offset não-zero**. E o
+      `app` **não** foi para `UTC`: ele já pinava `America/Sao_Paulo` desde a Tarefa 17, e
+      medir mostrou por quê — o mutante `localDay(...)` → `toISOString().slice(0,10)` tem **2
+      acusadores** em São Paulo e **0** em UTC (em offset zero "o dia em UTC" e "o dia de quem
+      olha" são o mesmo dia **por construção**, e não existe fixture que os separe).
+      Padronizar teria cegado a suíte para o bug que a revisão da 17 existia para pegar.
+      **Fixar troca variância por ponto cego fixo** — está escrito nos quatro arquivos de
+      configuração._
+      _**⚠️ E A REGRA QUE O EXECUTOR ESCREVEU SOBRE O `TZ` ESTAVA ERRADA — o orquestrador
+      mediu.** Ele gravou no repositório que *"`TZ=` não é confiável no Node do Windows"*,
+      com o controle `FOO=bar` (chega) × `TZ=Asia/Tokyo` (não chega). **O controle variava
+      DUAS coisas**: o nome da variável **e** a forma do valor. Medido: `TZ=UTC` **chega**
+      (`Intl = UTC`); `TZ=Asia/Tokyo` e `TZ=Etc/UTC` **não chegam**. A regra é
+      **"valor com BARRA não chega"** — o MSYS2 trata valor que parece caminho POSIX como
+      caminho e o descarta **sem erro**. Como quase todo nome IANA tem barra, a impressão que
+      fica é a de que `TZ` não funciona. Comentário reescrito com as cinco rotas medidas,
+      porque uma regra que diz "não dá para forçar o fuso pela linha de comando" **impede a
+      próxima pessoa de fazer uma medição que dá**._
+      _**Os três testes que o `NOTIFICACOES.md` §8 exige existem e mordem.** A janela nos
+      quatro limites (`>= 0 && < windowMinutes`, fechada à esquerda e aberta à direita) → 5 e
+      12 acusadores nos dois mutantes. **Horário de verão nos dois lados:** a hora que **não
+      existe** (08/03, `America/New_York`, varrida **minuto a minuto do dia inteiro**, com o
+      antídoto do §7.4 colado ao lado — `still fires for an hour that DOES exist`) e a que
+      **acontece duas vezes** (01/11). ⚠️ E o revisor mediu **quem de fato corta o lembrete
+      dobrado**: com o claim sempre concedendo, o teste da queda fica **vermelho** (6
+      acusadores) — não é a janela que salva, é o claim, e o teste separa as duas coisas
+      explicitamente (`claimCalls === 2`, uma linha gravada)._
+      _**Um relógio só, provado CONTANDO** (§7.8): mutar `deliveredAt: now` → `new Date()` dá
+      **1 acusador**, com `expect(clock.reads).toBe(1)` e o valor esperado vindo de uma
+      **constante do relógio de teste**, não do código sob teste. Varredura completa do
+      caminho do dispatcher: **uma** leitura de relógio em todo ele (`scheduler.ts:116`); os
+      demais hits são prosa. O schema reforça — `NotificationDelivery.deliveredAt` nasce **sem
+      `@default(now())`**, de propósito._
+      _**Idempotência com concorrência de verdade:** o contrato dispara claims simultâneos com
+      `Promise.all` — dois e **dez** — e exige exatamente **um** `true`. Quebrar o
+      `DO NOTHING` para `DO UPDATE` dá 3 acusadores. O fake recusa pelos **três** campos da
+      chave (tirar `localDate` → 3 acusadores; tirar `kind` → 1), com o separador escrito como
+      **sequencia de escape, nunca como byte cru**._
+      _**⚠️ O BYTE INVISÍVEL, TRÊS VEZES — E A TERCEIRA FOI DO ORQUESTRADOR, ESCREVENDO ESTE
+      PARÁGRAFO.** (1) O fake do claim nasceu com um byte **NUL literal** como separador:
+      passava em lint, prettier e nos 1823 testes, e fazia o `grep` tratar o arquivo como
+      **binário** (`file` respondia `data`). O executor achou, trocou por escape e escreveu um
+      scanner de caracteres de controle. (2) **Uma fatia depois o scanner pegou o seguinte**:
+      ao redigir um docblock, ele mesmo introduziu um **soft hyphen (U+00AD)** dentro da
+      palavra "contrato" — a ferramenta feita para um achado pegou o próximo, sozinha.
+      Varredura independente do revisor nos 46 caminhos do diff: **zero**._
+      _**(3) E ao escrever esta linha do `BACKLOG.md`, o orquestrador tentou renderizar a
+      sequência de escape do separador e gravou um NUL CRU no lugar** — o `grep` passou a
+      responder `Binary file docs/BACKLOG.md matches` no comando seguinte, que foi como se
+      descobriu. ⚠️ **E o próprio harness recusou o comando de conserto**, por conter
+      caractere de controle: confirmação independente, de uma terceira ferramenta, de que o
+      perigo é real. Conserto: parar de tentar renderizar a sequência e **descrevê-la em
+      prosa**. A lição não é "tome cuidado" — é **estrutural**: o byte entra quando alguém
+      escreve o escape à mão, então não se escreve o escape à mão. E quem varre tem de varrer
+      **a documentação também**, não só o código; nenhum `lint` deste projeto olha para
+      `docs/`._
+      _**⚠️ RECUSEI A MAIOR PARTE DO ÚNICO MÉDIO DO REVISOR, com o motivo lido no port.** Ele
+      cobrou do `PushSenderFake` que distinguisse `WebPushError` 404/410, desativasse inscrição
+      e lesse o `PushSubscriptionRepository`. Através do `PushSender` existem **exatamente
+      duas** condutas observáveis: devolver `{ sent, disabled }` ou **lançar** — o docblock do
+      port diz que o 404/410 e a escrita de `disabledAt` são **da implementação**, invisíveis
+      para quem chama. Ele auditou o fake contra a **Tarefa 38**, não contra o **contrato do
+      port**, e um fake de port não reimplementa o adaptador. **O resíduo que É real ficou
+      registrado:** o caso misto (um aparelho morto **e** outro estourando rede) pode lançar
+      **depois** de já ter desativado alguém, e aí a contagem `disabled` se perde. Escrito no
+      port como **pergunta aberta para a 38**, com as duas saídas legítimas — não como
+      propriedade garantida (§7.10)._
+      _**Outros desvios do executor, todos com medição:** o `claim` recebe a **entidade**, não
+      três argumentos (com três, `id` e `deliveredAt` nasceriam **dentro** do repositório — a
+      segunda leitura de relógio que a regra 2 proíbe); `considered = sent + skipped`, com
+      `disabled` como contador de **inscrição**, não de pessoa (somá-lo faria o log dizer que
+      cinco pessoas foram lembradas quando foi uma com dois aparelhos mortos — quatro mutações
+      provam que cada `+= 1` tem dono); o dispatcher **não recebe `vapid` nem lê ambiente**
+      (quem decide "a feature está ligada" é o script); e o filtro do plano é
+      `{ bookIds, date }`, não `{ userId, date }`, porque pôr a junção `Membership × Club ×
+      Book` dentro do port criaria uma **segunda regra de tenant**._
+      _**E a regra 20 da spec estava errada — o revisor pegou.** Ela cobrava contador de linhas
+      no docblock de todo arquivo novo; essa convenção **só existe nas telas**
+      (`packages/app/src/pages/*`), e nenhum arquivo de backend a segue. O executor seguiu a
+      precedência certa. A metade substantiva foi cumprida com folga: o maior arquivo de
+      produção tem **90** linhas, e o `scheduler` já nasceu dividido do `reminder-candidates`.
+      Spec corrigida._
+      _**Gates:** os seis verificados pelo orquestrador — 600/195/1826/744, typecheck, lint e
+      prettier limpos, chunk **429.852 B** medido por mim, guarda da 29a de pé, e **zero
+      `luxon` no bundle** (os 2 hits do meu primeiro `grep` eram `Intl.DateTimeFormat` — falso
+      positivo do meu próprio comando). `plan-item-fk-guards` verde pelo motivo **lido no
+      schema**: a única FK do `NotificationDelivery` aponta para `User`. Integração **601**,
+      rodada pelo executor, com o banco provado limpo por consulta._
+      _**Dívida registrada para fatia futura:** os dois testes que hoje só acusam **porque o
+      pino é `UTC`** (`matches the calendar day exactly` e `readingOfTheDay > matches the day
+      by CalendarDay equality`) **não pinam a precondição**, ao contrário dos do `app`. Se
+      alguém trocar o pino, eles somem em silêncio — merecem o mesmo tratamento que o
+      `calendar-day-mapper` recebeu._
 - [ ] **38** — `GROUP_ACTIVITY` imediato a partir do `ActivityEvent` + service worker
       (`push-handler.js`) + o `PushSender` de verdade. ⚠️ **A "tela de ativar notificações"
       saiu daqui**: ela é da **36b**, e deixá-la nas duas linhas daria dois donos para a mesma

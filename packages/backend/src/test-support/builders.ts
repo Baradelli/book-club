@@ -13,6 +13,7 @@ import type { Highlight } from '../domain/highlight';
 import type { Invite } from '../domain/invite';
 import { normalizeEmail } from '../domain/normalize-email';
 import type { Note, NoteDoc } from '../domain/note';
+import type { PushSubscription } from '../domain/push-subscription';
 import type { ReadingLog } from '../domain/reading-log';
 import type { Settings } from '../domain/settings';
 import { DEFAULT_SETTINGS } from '../domain/settings';
@@ -288,6 +289,34 @@ export function aSettings(overrides: Partial<Settings> = {}): Settings {
     id: `settings-${userId}`,
     userId,
     ...DEFAULT_SETTINGS,
+    ...overrides,
+  };
+}
+
+/**
+ * Uma inscrição de push já guardada (Tarefa 37).
+ *
+ * O id deriva da chave natural da entidade — que aqui é o `endpoint`, e não o
+ * `userId` (decisão E da Tarefa 36: o endpoint É a identidade da inscrição no
+ * protocolo). Dois aparelhos da mesma pessoa são dois endpoints.
+ *
+ * `disabledAt: null` = ATIVA, que é o caso comum e o único que o
+ * `byUserId` do port devolve.
+ */
+export function aPushSubscription(
+  overrides: Partial<PushSubscription> = {},
+): PushSubscription {
+  const endpoint = overrides.endpoint ?? 'https://push.test/aparelho-1';
+  return {
+    id: `push-${endpoint}`,
+    userId: 'user-1',
+    platform: 'web',
+    endpoint,
+    p256dh: 'fake-p256dh',
+    auth: 'fake-auth',
+    userAgent: 'Mozilla/5.0 (fixture)',
+    disabledAt: null,
+    createdAt: new Date(FIXED_ISO),
     ...overrides,
   };
 }

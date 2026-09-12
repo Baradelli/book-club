@@ -458,6 +458,19 @@ export const en: typeof pt = {
       },
     },
   },
+  /*
+    THE PUSH NOTIFICATION (Tarefa 37) — the only sentence in the system that
+    arrives without anyone opening a screen. See the pt catalogue for the two
+    reasons it lives here (the backend writes no raw prose, and the language is
+    the person's `Settings.locale`, because no browser is open when it goes
+    out), and for why it never nags.
+  */
+  notifications: {
+    readingReminder: {
+      title: "Today's reading",
+      body: '{{title}}',
+    },
+  },
   editor: {
     image: {
       uploading: 'Uploading image…',
