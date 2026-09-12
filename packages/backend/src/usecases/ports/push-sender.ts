@@ -52,16 +52,22 @@ export interface PushSendResult {
 }
 
 /**
- * ⚠️ **O PORT DE EFEITO EXTERNO DA FEATURE — e nesta fatia ele só tem FAKE.**
+ * ⚠️ **O PORT DE EFEITO EXTERNO DA FEATURE — e desde a Tarefa 38 ele tem DUAS
+ * implementações.**
  *
- * A implementação real (`web-push`, `vapidDetails`, o tratamento de
- * `WebPushError` 404/410) é a **Tarefa 38**, e o pacote `web-push` **não é
- * dependência de nenhum pacote deste monorepo**. É escolha de segurança, não de
- * escopo: a fatia que decide sozinha mandar mensagem para o celular de alguém é
- * testada contra um fake, e quem vê push de verdade é o dono, pelo roteiro do
- * `docs/COMO-TESTAR.md`.
+ * - **`PushSenderFake`** (`usecases/_fakes/push-sender-fake.ts`) — contra quem
+ *   tudo o que **decide** é testado: quem recebe (`NotifyGroupActivity`), o que
+ *   a frase diz, se hoje já foi (o claim do dispatcher). Nada sai da máquina.
+ * - **`WebPushSender`** (`notifications/web-push-sender.ts`) — o adaptador
+ *   real, com `web-push`, `vapidDetails` e o tratamento de `WebPushError`
+ *   404/410. Ele **entrega**, não decide, e é o **único** lugar do monorepo que
+ *   importa `web-push` — dependência de `packages/backend` e só dele, porque
+ *   `packages/shared` é empacotado no PWA.
  *
- * Se alguém sentir falta do pacote ao mexer aqui, escorregou para a 38.
+ * ⚠️ **Nem a implementação real precisa de rede para ser testada**: o cliente
+ * `web-push` entra nela por construtor, com dublê nos testes. Quem vê push
+ * chegando num celular é o **dono**, pelo roteiro do `docs/COMO-TESTAR.md` —
+ * nenhum agente deste projeto manda push contra inscrição de verdade.
  */
 export interface PushSender {
   /**
@@ -80,35 +86,37 @@ export interface PushSender {
    * falha **não desfaz** o claim: o lembrete daquele dia está gasto, e isso é
    * deliberado — o erro caro deste app é repetir, não perder.
    *
-   * ## ⚠️ PERGUNTA EM ABERTO PARA A TAREFA 38 — o CASO MISTO
+   * ## ⚠️ O CASO MISTO — DECIDIDO NA TAREFA 38: **desativa e RELANÇA**
    *
-   * **Isto é ambiguidade registrada, NÃO propriedade garantida hoje** (§7.10:
-   * não prometa o que o teste não sustenta). Nenhum teste desta fatia decide o
-   * que segue, porque o fake nunca chega lá: através deste port só existem duas
-   * condutas observáveis — devolver `{ sent, disabled }` ou **lançar**.
+   * O caso é uma pessoa com dois aparelhos em que os dois problemas acontecem
+   * na MESMA chamada: um morto (`WebPushError` 404/410, que a implementação
+   * desativa com `disabledAt` por dentro) e outro estourando rede. A pergunta
+   * era o que o chamador vê, e a resposta é: **a exceção** — com a desativação
+   * já gravada.
    *
-   * O caso que o contrato **não** responde é uma pessoa com dois aparelhos em
-   * que os dois problemas acontecem na MESMA chamada: um morto
-   * (`WebPushError` 404/410, que a implementação desativa com `disabledAt` por
-   * dentro) e outro estourando rede. O real pode ter **desativado uma inscrição
-   * e ainda assim lançar** — e nesse caminho a contagem `disabled` **se perde**:
-   * o chamador recebe exceção, não resultado, e nunca fica sabendo que um
-   * aparelho saiu da lista. O efeito no banco aconteceu; o número que o
-   * descreve, não.
+   * **A garantia, e ela é mais forte do que "acontece primeiro":** o
+   * `WebPushSender` percorre **todos** os aparelhos, desativa **todos** os
+   * mortos, guarda a primeira falha que não é aparelho morto e a relança **no
+   * fim**. Não é detalhe de implementação: com o `throw` dentro do laço, a
+   * desativação passava a depender da ORDEM em que o repositório devolvesse as
+   * linhas — e este port, como todos, **não promete ordem** (§7.2). Foi o
+   * mutante que o teste do caso misto pegou.
    *
-   * A Tarefa 38 tem de **decidir**, e as duas saídas são legítimas:
+   * **O que se perde, e é o preço escolhido:** a contagem `disabled` daquela
+   * chamada. O chamador recebe exceção, não resultado, e não fica sabendo que
+   * um aparelho saiu da lista — o efeito no banco aconteceu, o número que o
+   * descreve não chegou a ninguém.
    *
-   * - **(a) desativar e relançar** — o `disabledAt` já está gravado, o erro de
-   *   rede sobe, e a contagem daquela passada se perde. Mais simples, e o log
-   *   do script fica mudo sobre a desativação.
-   * - **(b) colecionar as falhas e devolver a contagem sem lançar** — o
-   *   `{ sent, disabled }` sai completo e o erro de rede vira, no máximo, um
-   *   log de dentro do sender. Preserva o número, mas apaga do chamador a
-   *   diferença entre "entregou a todos" e "um aparelho ficou sem".
+   * **Por que não a saída (b)** (colecionar e devolver sem lançar): ela
+   * preservaria o número ao custo de **apagar do chamador a diferença entre
+   * "entregou a todos" e "um aparelho ficou sem"** — e quem chama precisa dessa
+   * diferença (o dispatcher conta `sent` só quando alguém recebeu de verdade).
+   * Um terceiro contador para separar as duas coisas seria mudança de contrato,
+   * não detalhe de adaptador.
    *
-   * Quem decidir escreve a escolha aqui e o teste que a sustenta lá — e, se for
-   * (b), o `PushSendResult` provavelmente precisa de um terceiro contador, o
-   * que é mudança de contrato, não detalhe de adaptador.
+   * O teste que sustenta isto é
+   * `notifications/__tests__/web-push-sender.test.ts`, em
+   * *"deactivates the dead one and STILL rethrows when both happen at once"*.
    */
   send(userId: string, payload: PushPayload): Promise<PushSendResult>;
 }

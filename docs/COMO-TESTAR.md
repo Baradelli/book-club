@@ -29,6 +29,10 @@
 | **MVP 2 — O acervo do livro**: anotações **e** grifos num lugar, filtrável por pessoa, tipo, leitura e cor | `/books/:id/acervo` (§6.2) |
 | **MVP 2 — O filtro diz o NOME** (`Tudo · Minhas · De Maria`), com avatar | a mesma tela |
 | **MVP 2 — Buscar por texto** no acervo do clube inteiro, em qualquer livro | `/busca`, pela home (§6.3) |
+| **MVP 3 — Marcar "li hoje"**, e ver a marca de quem já leu, dia a dia | `/books/:id` (§6.4) |
+| **MVP 3 — O feed de atividade** do clube: quem, o quê, em que livro, quando | `/` (§6.5) |
+| **MVP 3 — Preferências**: horário do lembrete, ligar/desligar os dois avisos | `/preferencias`, pelo cabeçalho (§6.6) |
+| **MVP 3 — Ativar as notificações NESTE aparelho** | `/preferencias` (§6.6) — ⚠️ **exige contexto seguro**, ver a ressalva abaixo |
 | O estado "nenhum clube ainda" | `/` com um usuário sem membership |
 | Seletor de clube | `/` com **2+** clubes |
 | Tema claro/escuro e idioma pt/en | cabeçalho |
@@ -41,6 +45,15 @@
   (HTTPS ou `localhost`), e `http://192.168.0.83:5173` não é nenhum dos dois — o navegador
   não vai oferecer "instalar". Isso **não afeta** o teste de escrita sem conexão do §6.1: o
   rascunho e a fila vivem no IndexedDB, que funciona em `http` normalmente.
+- ⚠️ **ATIVAR NOTIFICAÇÃO PELO IP DA REDE — a MESMA limitação, e ela pega o caso principal.**
+  Push exige contexto seguro pelo mesmo motivo do PWA, então `http://192.168.0.83:5173` **não
+  vai funcionar no celular**: o botão "ativar neste aparelho" vai dizer, com todas as letras,
+  que o endereço não é seguro. A tela **explica** em vez de falhar calada — foi decisão de
+  desenho —, mas a consequência prática é que **testar push no celular pela rede local não
+  dá**. Os caminhos que funcionam: abrir pelo `localhost` da própria máquina, ou expor por um
+  túnel HTTPS. ⚠️ **E no iPhone há uma segunda condição**: push em PWA só funciona com o app
+  **adicionado à tela de início** — fora dela o navegador expõe a API e simplesmente nunca
+  concede a permissão. A tela também diz isso, com uma frase própria.
 - ⚠️ **BUSCAR SEM ACENTO.** Procurar `coracao` **não** acha "coração", e procurar `coração`
   não acha "coracao". A busca é `ILIKE` do Postgres: ela ignora **maiúscula** e respeita
   **acento** — é decisão fechada do MVP 2 e está pinada por teste contra o banco. Ligar a
@@ -72,7 +85,23 @@
 - **Arquivar grifo ou anotação sem conexão** → o mesmo motivo.
 - **Criar clube e convidar pela interface** → MVP 4 (Tarefas 42/43). Por API (§5).
 - **Desarquivar** qualquer coisa → MVP 4. Arquivado é invisível, inclusive para quem escreveu.
-- Marcar "li", feed, notificação → MVP 3.
+- ⚠️ **VER PROGRESSO COMO NÚMERO** — percentual, "12 de 30 dias", barra que enche. **Não
+  existe, e é decisão de produto, não fatia faltando.** O MVP 3 mostra progresso como
+  **presença**: uma marca por leitor, por dia. A rota **não devolve contagem nenhuma**, então o
+  número é impossível de renderizar por construção — a ideia é que o clube não vire placar. É a
+  **pergunta 1 do MVP 3** no `docs/ACEITE-MVP.md`: se depois de usar você quiser o número,
+  diga, e ele é fatia própria (e reabre a decisão, não só a tela).
+- ⚠️ **"CARREGAR MAIS" NO FEED** → de fora de propósito. Paginação convida a rolar o histórico
+  procurando quem fez mais, que é a mesma coisa que o placar. O feed mostra a atividade
+  recente e para.
+- ⚠️ **MARCAR OU DESMARCAR UM DIA QUE NÃO É HOJE** → **não dá pela tela**, e é bom saber antes
+  de procurar o botão. Medido: o toggle "li hoje" é renderizado **fora** da lista de dias,
+  só quando existe um item de plano para **hoje**; as linhas dos outros dias mostram apenas as
+  marcas de quem leu, que são leitura. Quem viajou e quer registrar sábado no domingo **não
+  tem como** — o backend sabe fazer isso (o registro é ancorado no **dia do plano**, não na
+  data em que você tocou), mas a tela não oferece. É a **pergunta 2 do MVP 3** no
+  `docs/ACEITE-MVP.md`. Se isso te incomodar no uso, diga: é fatia pequena, porque a metade
+  difícil já está pronta.
 
 ---
 
@@ -416,6 +445,155 @@ isso é mudança de contrato da API, fatia própria.
 
 ---
 
+## 6.4. Marcar "li hoje", e ver quem já leu (MVP 3, Tarefas 30–32c)
+
+Abra `/books/:id` (a tela do livro, pela estante da home).
+
+1. Acima do plano, no dia de hoje, há **"li hoje"** em primeira pessoa. Toque.
+2. O botão passa a oferecer a desfeita, e na **linha do dia**, no plano, aparece uma **marca
+   de leitura** — um **glifo** (✓), ao lado das **iniciais** de quem escreveu.
+3. Peça para a outra pessoa marcar também, no aparelho dela. **Recarregue.** Agora há **duas**
+   marcas naquele dia.
+4. Toque de novo para desmarcar. A marca some. (Desmarcar é **apagar o registro**, não
+   arquivá-lo — é a exceção documentada do projeto: `ReadingLog` é log imutável, e desmarcar é
+   dizer "isto nunca aconteceu".)
+
+⚠️ **O que conferir de propósito, porque é a decisão de produto do MVP 3:** em nenhum lugar
+desta tela aparece **número**. Nem "2 de 30", nem percentual, nem barra que enche. Progresso é
+**presença** — uma marca por leitor, por dia. Se você vir um número em qualquer canto, é bug
+(a rota nem devolve contagem, então seria preciso alguém tê-la inventado na tela).
+
+⚠️ **A marca de LEITURA é distinguível da de ESCRITA sem depender de cor**: quem **leu** vira
+um **glifo**; quem **escreveu** vira a **inicial** (letra). Se as duas te parecerem a mesma
+coisa no celular, diga — foi desenhado para não parecer.
+
+⚠️ **Só o dia de hoje se marca.** Ver a ressalva do §1.
+
+---
+
+## 6.5. O feed de atividade na home (MVP 3, Tarefas 33–35)
+
+Volte para `/`. Abaixo da estante há **a atividade do clube**: quem, o quê, em que livro, e
+quando — uma **frase** por linha, em ordem cronológica.
+
+1. Marque uma leitura, escreva uma anotação e registre um grifo.
+2. Recarregue a home. As três aparecem, **a mais recente em cima**.
+3. Toque numa linha: ela leva **ao lugar certo** — a anotação abre a anotação, o grifo abre o
+   grifo, a leitura abre a tela do livro.
+
+⚠️ **O que conferir, e é o mesmo princípio do §6.4:** o feed é **frase**, não tabela. Não há
+coluna de pessoa (que convidaria o olho a varrer e contar), não há agrupamento por pessoa
+(que **é** o placar), e não há "carregar mais" (que convidaria a rolar procurando quem fez
+mais). Se você sentir vontade de comparar quem fez mais, diga — o desenho falhou.
+
+⚠️ **Números NA LINHA são esperados e legítimos** — "há 2 horas", "há 3 dias", ou um livro
+chamado *1984*. O que não pode existir é número **que o app inventou**: "3 atividades",
+"+2", "12 dias lidos". Há uma guarda automática para isso, e ela sabe a diferença.
+
+---
+
+## 6.6. Preferências e ativar as notificações no aparelho (MVP 3, Tarefas 36–36b)
+
+No **cabeçalho**, ao lado do idioma e do tema, há um atalho para **`/preferencias`**.
+
+1. **Horário do lembrete** — um campo de hora. Mude e saia do campo: salva sozinho, sem botão
+   "Salvar". ⚠️ Se você **limpar** o campo, nada é enviado (campo vazio não é erro, é gesto).
+2. **"Quero o lembrete da leitura de hoje"** — liga e desliga, salva sozinho.
+3. **"Quero saber quando alguém do clube lê ou escreve"** — idem.
+4. Se uma gravação falhar (derrube a API no terminal 1 e tente), o controle **volta ao valor
+   anterior** e aparece um recado. ⚠️ Confira isso: um interruptor que fica ligado na tela e
+   desligado no banco é a pior forma desta tela errar — você acharia que vai ser lembrado, e
+   não seria.
+
+### Ativar no aparelho — e as quatro recusas
+
+Mais abaixo há **"ativar neste aparelho"**. Ele só aparece se o servidor tiver chave VAPID
+configurada (veja abaixo); sem chave, a seção diz que a função está indisponível — **não é
+erro**, é o estado normal de quem não configurou.
+
+⚠️ **Onde isso FUNCIONA, e a ressalva é grande:** push exige **contexto seguro**. Pelo
+`http://192.168.0.83:5173` da rede local **não vai funcionar** — a tela vai dizer, com todas
+as letras, que o endereço não é seguro. Os caminhos que funcionam:
+
+- **`http://localhost:5173` na sua própria máquina** — é o caminho mais rápido para ver o push
+  aparecer;
+- **um túnel HTTPS** para o celular, se você quiser testar no aparelho de verdade.
+
+⚠️ **E no iPhone há uma segunda condição:** push em PWA só funciona com o app **adicionado à
+tela de início**. Fora dela o Safari expõe a API e nunca concede a permissão — a tela tem uma
+frase própria para esse caso, diferente das outras três.
+
+As quatro recusas possíveis, cada uma com sua frase: **endereço não seguro** · **permissão
+negada** (você recusou antes, e aí tem de reverter nas configurações do navegador) ·
+**navegador sem suporte** · **iPhone fora da tela de início**. Se você vir uma frase genérica
+de "não deu", é bug.
+
+### Configurar a chave VAPID (uma vez só)
+
+Sem isto, nada de push funciona — e **o projeto roda normalmente assim**, por escolha.
+
+```bash
+# gera um par novo. A saída tem uma chave PÚBLICA e uma PRIVADA.
+npx web-push generate-vapid-keys
+```
+
+Cole as duas em `packages/backend/.env`:
+
+```
+VAPID_PUBLIC_KEY=<a pública>
+VAPID_PRIVATE_KEY=<a privada>
+VAPID_SUBJECT="mailto:voce@exemplo.com"
+```
+
+⚠️ **A privada nunca sai do backend.** Não a copie para `packages/app/.env`, não a mande por
+mensagem, não a cole em lugar nenhum — o front recebe a **pública** pela própria API, sem
+precisar de variável. O `.env.example` tem as duas linhas **vazias** de propósito, e há um
+teste automático que impede a privada de entrar no pacote que vai para o celular.
+
+Reinicie a API depois de editar o `.env`.
+
+---
+
+## 6.7. O lembrete diário — rodar o dispatcher à mão (MVP 3, Tarefa 37)
+
+O lembrete **não** roda sozinho: não existe cron dentro do servidor, de propósito. Quem chama
+é um cron externo — ou você, à mão:
+
+```bash
+pnpm --filter @clube/backend notifications:dispatch
+```
+
+Ele imprime **uma linha de JSON** e sai com código 0, inclusive quando não há ninguém a
+lembrar. As respostas possíveis:
+
+| `reason` | O que significa |
+|---|---|
+| `vapid-not-configured` | não há chave no `.env` — ele nem abre o banco |
+| `ok` | rodou; veja os quatro contadores |
+
+Os contadores: `considered` (quantas pessoas foram avaliadas), `sent` (quantas foram
+lembradas), `skipped` (quantas não foram, por **qualquer** motivo) e `disabled` (quantos
+**aparelhos** o envio descobriu mortos e desligou). ⚠️ `sent + skipped` sempre fecha com
+`considered`; o `disabled` conta aparelho, não pessoa.
+
+**Para ver um lembrete chegar:**
+
+1. Ative as notificações no aparelho (§6.6).
+2. Em `/preferencias`, ponha o **horário do lembrete** alguns minutos **no passado** (a janela
+   padrão é de **10 minutos** depois do horário).
+3. Garanta que **existe plano para hoje** no livro do clube — sem trecho do dia, não há do que
+   lembrar, e a pessoa conta como `skipped`.
+4. ⚠️ Garanta que você **não marcou "li hoje"** — quem já leu **não** recebe lembrete. Essa é
+   a regra anti-culpa, e ela é o ponto da feature.
+5. Rode o comando.
+
+⚠️ **Rodar duas vezes não manda duas vezes.** Há uma trava no banco (um registro por pessoa,
+por tipo, por dia no fuso dela), e é ela que deixa o cron rodar de cinco em cinco minutos sem
+incomodar ninguém. Se você quiser receber o lembrete **de novo no mesmo dia**, apague a linha —
+o comando está no §8.
+
+---
+
 ## 7. Testar o aceite de convite
 
 Este é o fluxo que a sua esposa vai viver, e vale testar **numa janela anônima** (para não
@@ -447,7 +625,15 @@ estrangeiras):
 ```bash
 docker exec -i clube_db psql -U clube -d clube <<'SQL'
 BEGIN;
--- O Highlight vem primeiro entre os de conteúdo: as três FKs dele (Club, Book,
+-- ⚠️ O MVP 3 acrescentou QUATRO tabelas, e duas delas entram AQUI EM CIMA.
+-- O ActivityEvent e o ReadingLog apontam para Club, Book, User E
+-- ReadingPlanItem, os quatro com ON DELETE RESTRICT (declarado no plano,
+-- herdado nos demais — relação obrigatória tem RESTRICT por padrão no Prisma).
+-- Se eles ficarem para depois, o DELETE do ReadingPlanItem falha e a limpeza
+-- inteira aborta no meio da transação.
+DELETE FROM "ActivityEvent";
+DELETE FROM "ReadingLog";
+-- O Highlight vem em seguida entre os de conteúdo: as três FKs dele (Club, Book,
 -- User) são ON DELETE RESTRICT, então o Book não sai antes dos grifos dele.
 DELETE FROM "Highlight";
 DELETE FROM "Note";
@@ -462,8 +648,32 @@ SQL
 ```
 
 Isso **preserva** o super-admin do seed (a tabela `User` não é tocada) e apaga clubes,
-membros, convites, livros, planos, anotações **e grifos**. Se você criou usuários pelo aceite de convite e
-quiser removê-los também, apague-os por e-mail **depois** do bloco acima.
+membros, convites, livros, planos, anotações, grifos, **marcas de leitura e atividade**.
+
+### E as outras duas tabelas do MVP 3 — quando apagar
+
+`PushSubscription` e `NotificationDelivery` **não entram no bloco acima de propósito**: as
+duas apontam **só para `User`**, que aquele bloco não toca, então elas não bloqueiam nada. Mas
+elas guardam duas coisas que você vai querer zerar em situações específicas:
+
+```bash
+docker exec -i clube_db psql -U clube -d clube <<'SQL'
+-- "Quero ativar as notificações neste aparelho DE NOVO, do zero."
+-- Apaga as inscrições. Depois disso, a tela de preferências volta a oferecer
+-- "ativar neste aparelho" — e o navegador pode ter de pedir permissão outra vez.
+DELETE FROM "PushSubscription";
+
+-- "Já recebi o lembrete hoje e quero recebê-lo de novo."
+-- Esta tabela É a idempotência: enquanto a linha do dia existir, o dispatcher
+-- conta a pessoa como `skipped` e não manda nada. Apagar a linha devolve o
+-- lembrete daquele dia.
+DELETE FROM "NotificationDelivery";
+SQL
+```
+
+⚠️ **Se você quiser apagar um USUÁRIO** (criado por aceite de convite, por exemplo), as duas
+tabelas acima passam a bloquear: as FKs delas para `User` são `RESTRICT`. Apague-as **antes**
+do usuário, junto com o `ActivityEvent` e o `ReadingLog` dele.
 
 ---
 

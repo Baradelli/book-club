@@ -746,4 +746,156 @@ describe('notification routes', () => {
       },
     );
   });
+
+  /**
+   * ⚠️⚠️ **`POST /notifications/test` — A PRIMEIRA ROTA DESTE PROJETO QUE MANDA
+   * ALGUMA COISA PARA FORA DA MÁQUINA** (Tarefa 38, decisões F e G).
+   *
+   * ⚠️ **E nenhum teste daqui manda push de verdade.** O único aparelho de
+   * fixture tem `p256dh` e `auth` que **não são chaves**, e endpoint em
+   * `127.0.0.1:1`: o `web-push` deriva a cifra do `p256dh` ANTES de abrir
+   * conexão, então ele estoura na criptografia e nenhum pacote sai desta
+   * máquina. Quem vê push chegando num celular é o dono, pelo
+   * `docs/COMO-TESTAR.md`.
+   */
+  describe('POST /notifications/test', () => {
+    function withVapid(): void {
+      const pair = generateEphemeralVapidKeys();
+      vi.stubEnv('VAPID_PUBLIC_KEY', pair.publicKey);
+      vi.stubEnv('VAPID_PRIVATE_KEY', pair.privateKey);
+      vi.stubEnv('VAPID_SUBJECT', 'mailto:dono@clube.test');
+    }
+
+    /**
+     * ⚠️ **400 SEM VAPID, e este é o ÚNICO lugar da feature em que "desligado"
+     * vira erro** (`NOTIFICACOES.md` §4).
+     *
+     * Aqui a pessoa **pediu** um envio: um 200 com `{ sent: 0 }` diria "mandei
+     * para nenhum aparelho" quando o certo é "não há como mandar". O
+     * `GET /config` continua com 200 e `enabled: false`, porque lá a pergunta é
+     * outra.
+     */
+    it('answers 400 when there is no VAPID configured', async () => {
+      vi.stubEnv('VAPID_PUBLIC_KEY', '');
+      vi.stubEnv('VAPID_PRIVATE_KEY', '');
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/notifications/test',
+        headers: { authorization: `Bearer ${mariaToken}` },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('answers 401 with no token', async () => {
+      withVapid();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/notifications/test',
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+
+    /**
+     * Sem aparelho inscrito, `{ sent: 0, disabled: 0 }` com **200** — não é
+     * erro: a tela diz "nenhum aparelho inscrito", e um 404 faria "não tenho
+     * aparelho" parecer "o endereço não existe".
+     */
+    it('answers 200 with zeros for someone with no device', async () => {
+      withVapid();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/notifications/test',
+        headers: { authorization: `Bearer ${mariaToken}` },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ sent: 0, disabled: 0 });
+    });
+
+    /** O `response` schema é fronteira (§6.1): dois campos, e nada mais. */
+    it('returns exactly the two declared keys', async () => {
+      withVapid();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/notifications/test',
+        headers: { authorization: `Bearer ${mariaToken}` },
+      });
+
+      expect(Object.keys(response.json<object>()).sort()).toEqual([
+        'disabled',
+        'sent',
+      ]);
+    });
+
+    /**
+     * ⚠️ **DECISÃO F — MANDA SÓ PARA OS APARELHOS DE QUEM CHAMOU.**
+     *
+     * *"Um endereço que manda push para outra pessoa é uma arma, mesmo dentro
+     * do clube"*: com um alvo no corpo, qualquer membro poderia fazer o celular
+     * de outro vibrar em loop — e não há `assertMembership` aqui para recusar
+     * (esta rota não tem clube, decisão F da Tarefa 36).
+     *
+     * O teste é o do §7.5 aplicado ao ENVIO: o **Marcos** chama, com o `userId`
+     * da **Maria** contrabandeado no corpo, e o aparelho da Maria — que é o
+     * único inscrito — **não é tentado**. Se ele fosse, o envio estouraria na
+     * criptografia da chave de mentira e a resposta não seria 200 com zeros.
+     */
+    it('never sends to another person, even with a smuggled userId', async () => {
+      withVapid();
+      await prisma.pushSubscription.create({
+        data: {
+          id: prefixedId('t36n', 'testpush'),
+          userId: MARIA_ID,
+          platform: 'web',
+          endpoint: anEndpoint('test-target'),
+          p256dh: 'isto-nao-e-uma-chave',
+          auth: 'nem-isto',
+        },
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/notifications/test',
+        headers: { authorization: `Bearer ${marcosToken}` },
+        payload: { userId: MARIA_ID },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ sent: 0, disabled: 0 });
+    });
+
+    /**
+     * ⚠️ **DECISÃO F, segunda metade: O TESTE NÃO GRAVA `NotificationDelivery`.**
+     *
+     * O claim é a reserva do aviso do dia (`@@unique([userId, kind,
+     * localDate])`), e gastá-lo aqui faria **testar o push consumir a
+     * idempotência do dia**: a pessoa apertaria o botão de manhã e ficaria sem o
+     * lembrete da noite. A asserção é sobre a TABELA, e é a única forma de
+     * vê-la — a resposta é idêntica nos dois desenhos.
+     */
+    it('writes no NotificationDelivery claim at all', async () => {
+      withVapid();
+      const before = await prisma.notificationDelivery.count({
+        where: { userId: MARIA_ID },
+      });
+
+      await app.inject({
+        method: 'POST',
+        url: '/notifications/test',
+        headers: { authorization: `Bearer ${mariaToken}` },
+      });
+
+      expect(
+        await prisma.notificationDelivery.count({
+          where: { userId: MARIA_ID },
+        }),
+      ).toBe(before);
+    });
+  });
 });

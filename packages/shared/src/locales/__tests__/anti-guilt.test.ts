@@ -120,6 +120,58 @@ describe('the anti-guilt principle is a property of the CATALOGS (plano §1)', (
     },
   );
 
+  /**
+   * ⚠️ **O MESMO MOLDE DA 37, PARA AS FRASES DA TAREFA 38 — e ele existe
+   * porque a 38 trouxe DUAS famílias novas que chegam sem ninguém abrir tela.**
+   *
+   * A `readingReminder` acima é a do cron. Estas duas são as da 38:
+   *
+   * - **`notifications.groupActivity.*`** — "um incentiva o outro"
+   *   (`CLAUDE.md`), disparado no mesmo caminho que grava o `ActivityEvent`
+   *   (`docs/NOTIFICACOES.md` §6). É a frase com o maior risco de virar
+   *   cobrança sem ninguém notar: ela fala do que **outra pessoa** fez, e a
+   *   distância entre "alguém do clube leu hoje" e "todo mundo leu hoje, menos
+   *   você" é uma palavra;
+   * - **`notifications.test.*`** — o corpo do `POST /notifications/test`, que a
+   *   pessoa dispara do botão de diagnóstico.
+   *
+   * Nenhuma das duas passa por tela nenhuma: as duas são montadas no backend
+   * (`notifications/group-activity-message.ts` e
+   * `notifications/diagnostic-message.ts`) e saem pela rede. **Se a guarda
+   * delas morasse numa tela, ela não existiria** — §7.9 na letra.
+   *
+   * ⚠️ **E este teste NÃO repete a varredura** (o `it.each` do topo já percorre
+   * os dois catálogos inteiros): ele prova que as chaves estão **dentro do
+   * conjunto varrido**, nos dois idiomas. Sem ele, alguém que escrevesse a
+   * frase no backend — uma string em `group-activity-message.ts` em vez de uma
+   * chave — teria as duas guardas verdes e nenhuma delas olhando a frase, que é
+   * exatamente o buraco que o §7.9 descreve.
+   */
+  it.each([
+    ['pt', pt],
+    ['en', en],
+  ])(
+    'puts the group-activity notice and the test push inside the swept set, in %s',
+    (_locale, catalog) => {
+      const swept = entries(catalog).map(([path]) => path);
+
+      expect(swept).toEqual(
+        expect.arrayContaining([
+          // A frase que o clube recebe quando alguém lê, escreve ou grifa —
+          // uma por nascimento, porque são notícias diferentes.
+          'notifications.groupActivity.title',
+          'notifications.groupActivity.planNote',
+          'notifications.groupActivity.freeNote',
+          'notifications.groupActivity.highlight',
+          'notifications.groupActivity.read',
+          // O "chegou?" do botão de diagnóstico.
+          'notifications.test.title',
+          'notifications.test.body',
+        ]),
+      );
+    },
+  );
+
   it('would catch the phrases the audit walked through, in both languages', () => {
     /*
       ⚠️ O LADO POSITIVO DO PAR, e ele é o que impede a lista de virar decoração:

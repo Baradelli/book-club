@@ -945,6 +945,52 @@ export const pt = {
       */
       body: '{{title}}',
     },
+    /*
+      O AVISO DE ATIVIDADE DO CLUBE (Tarefa 38) — "um incentiva o outro"
+      (`CLAUDE.md`), e é o oposto de uma cobrança: ele conta o que ALGUÉM fez,
+      nunca o que você deixou de fazer.
+
+      ⚠️ **NENHUMA DESTAS FRASES LEVA CONTEÚDO** (`docs/NOTIFICACOES.md` §1: *"o
+      push nunca leva o conteúdo"*). Nem trecho de anotação, nem título do dia,
+      nem nome de livro: a notificação aparece em TELA BLOQUEADA, e o que a
+      pessoa escreveu se lê no app, autenticado.
+
+      ⚠️ **E NENHUMA DELAS DIZ O NOME DE QUEM FEZ**, o que é uma ausência
+      deliberada e não um esquecimento. O `ActivityEvent` guarda REFERÊNCIA e
+      não conteúdo (Tarefa 33), o `listActivity` registra por extenso que "não
+      resolve nome de pessoa" — quem resolve é a TELA, pelo
+      `GET /clubs/:clubId/members` —, e `User.name` é anulável, então a frase
+      com nome precisaria de uma segunda frase para quem não tem nome. O aviso
+      diz que o clube está vivo; quem foi, o app conta quando a pessoa abre.
+
+      Uma frase por nascimento (os quatro `ActivityType`), porque "escreveu uma
+      anotação" e "guardou um grifo" são notícias diferentes para quem recebe.
+    */
+    groupActivity: {
+      /** O título é o mesmo nos quatro: quem agrupa é o `tag`, não o texto. */
+      title: 'O clube está lendo',
+      /** `PLAN_NOTE` — a anotação do dia de leitura. */
+      planNote: 'Alguém do clube escreveu sobre a leitura de hoje.',
+      /** `FREE_NOTE` — a anotação avulsa, que não tem dia. */
+      freeNote: 'Alguém do clube escreveu uma anotação.',
+      /** `HIGHLIGHT` — o grifo. */
+      highlight: 'Alguém do clube guardou um grifo.',
+      /** `READ` — alguém marcou que leu. */
+      read: 'Alguém do clube registrou a leitura de hoje.',
+    },
+    /*
+      O BOTÃO "ENVIAR NOTIFICAÇÃO DE TESTE" (`POST /notifications/test`).
+
+      É diagnóstico, e a frase tem de responder à única pergunta de quem aperta
+      o botão: "chegou?". Nada de conteúdo, nada de cobrança — e nenhum `TEST`
+      no `NOTIFICATION_KINDS`, porque aquela lista é o vocabulário de uma chave
+      de idempotência e um teste que só funciona uma vez por dia não testa nada
+      (decisão G da Tarefa 38).
+    */
+    test: {
+      title: 'Tudo certo',
+      body: 'Se você está vendo isto, os avisos do clube funcionam neste aparelho.',
+    },
   },
   editor: {
     image: {

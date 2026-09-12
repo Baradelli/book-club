@@ -470,6 +470,22 @@ export const en: typeof pt = {
       title: "Today's reading",
       body: '{{title}}',
     },
+    /*
+      The club activity notice (Tarefa 38). See the pt catalogue for why it
+      carries no content, and why it names nobody.
+    */
+    groupActivity: {
+      title: 'Your club is reading',
+      planNote: "Someone in the club wrote about today's reading.",
+      freeNote: 'Someone in the club wrote a note.',
+      highlight: 'Someone in the club saved a highlight.',
+      read: "Someone in the club logged today's reading.",
+    },
+    /* The "send a test notification" button (`POST /notifications/test`). */
+    test: {
+      title: 'All set',
+      body: 'If you can see this, club notifications work on this device.',
+    },
   },
   editor: {
     image: {

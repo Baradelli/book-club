@@ -514,6 +514,93 @@ clube estamos no livro. Recebo um lembrete no horário que eu escolhi — e não
 li. E quando ela lê, escreve ou grifa, meu celular avisa e a atividade aparece no feed da
 home."*
 
+## A. O roteiro de aceite
+
+Marque o que funcionou. O que falhar, escreva **o que você viu**, não o que acha que é.
+
+⚠️ **Antes de começar, uma coisa que muda o roteiro:** as duas metades do MVP 3 se testam em
+lugares diferentes. **Marcar leitura e o feed** funcionam no celular pelo IP da rede, como
+sempre. **Notificação não** — push exige contexto seguro (HTTPS ou `localhost`), a mesma
+limitação que impede o PWA de instalar pelo IP. Faça a parte A.1 no celular e a parte A.3 no
+`localhost` do computador (ou por um túnel HTTPS, se quiser ver no aparelho).
+
+### A.1 — O circuito do MVP 3, no celular
+
+- [ ] Abro a tela do livro, toco em **"li hoje"**, e a marca aparece na linha do dia →
+      `COMO-TESTAR.md` §6.4.
+- [ ] Ela marca no aparelho dela; eu recarrego e vejo **duas** marcas naquele dia.
+- [ ] Toco de novo e **desmarco**. A marca some e não volta ao recarregar.
+- [ ] A marca de **leitura** (glifo) é distinguível da de **escrita** (inicial) sem eu precisar
+      olhar a cor.
+- [ ] Na home, o **feed** mostra o que aconteceu: quem, o quê, em que livro, quando → §6.5.
+- [ ] Toco numa linha do feed e ela **cai na tela certa** — a anotação abre a anotação, o grifo
+      abre o grifo.
+
+### A.2 — ⚠️ A pergunta que decide o MVP, e ela não é técnica
+
+Este MVP tem um princípio no meio: **o clube não pode virar placar.** Tudo abaixo é para você
+julgar com o olho, não com o teste.
+
+- [ ] Em nenhum lugar aparece **número que o app inventou** — nem "2 de 30", nem percentual,
+      nem "+3", nem "12 dias lidos". (Números que vêm de **dado** são esperados: "há 2 horas",
+      ou um livro chamado *1984*.)
+- [ ] Olhando o feed, **eu não sinto vontade de comparar** quem fez mais. Se sentir, o desenho
+      falhou — e não é conserto de tela, é decisão de produto.
+- [ ] O texto das preferências fala em **primeira pessoa** e não cobra ("me lembre às", nunca
+      "você não leu hoje").
+- [ ] ⚠️ **O ponto que eu mais quero que você teste:** marque "li hoje", e depois rode o
+      lembrete (§6.7). **Ele não pode chegar.** Se chegar, a regra anti-culpa quebrou, e ela é
+      a razão de a feature existir.
+
+### A.3 — As notificações (no `localhost`, ou por túnel)
+
+- [ ] Gero o par VAPID e ponho no `.env` do backend → §6.6. Antes disso, a seção de
+      notificações diz **"indisponível"** — e isso **não é erro**.
+- [ ] Em `/preferencias`, **ativo neste aparelho**. O navegador pede permissão; eu concedo.
+- [ ] **Recuso** a permissão de propósito num navegador limpo: a tela diz **que foi a
+      permissão**, não uma frase genérica de "não deu".
+- [ ] Abro pelo **IP da rede** e tento ativar: a tela diz **que o endereço não é seguro**.
+      (É o caso que mais vai acontecer com você.)
+- [ ] Mudo o horário do lembrete para alguns minutos **atrás**, garanto que **não** marquei "li
+      hoje", e rodo `pnpm --filter @clube/backend notifications:dispatch` → §6.7.
+      **O lembrete chega.**
+- [ ] Rodo **de novo** no mesmo dia: **não chega segunda vez** (`skipped`).
+- [ ] Ela escreve uma anotação no aparelho dela. **Meu celular avisa.**
+- [ ] Desligo "quero saber quando alguém do clube lê ou escreve", ela escreve de novo, e **não
+      chega nada**.
+- [ ] **Desativo neste aparelho.** Ela escreve, e não chega nada.
+
+### A.4 — ⚠️ A frase "MVP 3 pronto", pedaço por pedaço — e o que NÃO tem dono
+
+Confiro a definição frase por frase, e digo o que está entregue e o que depende de você.
+
+| Pedaço da frase | Estado |
+| --- | --- |
+| *"Eu marco que li o trecho de hoje"* | ✅ **Entregue.** ⚠️ **Só o dia de hoje** — um dia passado não se marca pela tela (é a pergunta 2 desta seção) |
+| *"e vejo onde eu e o clube estamos no livro"* | ✅ **Entregue como PRESENÇA, não como número** — é a sua resposta à pergunta 1. ⚠️ **Este é o pedaço que mais pode significar outra coisa para você do que significou para mim.** Se "ver onde estamos" para você era uma barra que enche, ele **não** está entregue, e reabre a decisão |
+| *"Recebo um lembrete no horário que eu escolhi"* | ⚠️ **Entregue, mas NÃO AUTOMÁTICO — ver abaixo** |
+| *"e não recebo se eu já li"* | ✅ **Entregue**, e é o item que eu mais quero que você teste (A.2) |
+| *"quando ela lê, escreve ou grifa, meu celular avisa"* | ⚠️ **Entregue, com duas condições — ver abaixo** |
+| *"e a atividade aparece no feed da home"* | ✅ **Entregue** |
+
+⚠️ **O QUE NÃO TEM DONO — leia isto antes de dar o MVP por pronto:**
+
+1. **NINGUÉM CHAMA O LEMBRETE.** Não existe cron instalado, e é decisão de desenho
+   (`NOTIFICACOES.md` §6: não há agendador dentro do servidor). Hoje o lembrete só sai **se
+   você rodar o comando à mão**. Para ele virar automático, alguém tem de instalar um cron
+   externo (a cada 5–10 min) na máquina onde o backend roda — e isso **não é fatia de código**,
+   é operação. ⚠️ **É o maior buraco entre a frase e a realidade**, e eu o deixo explícito em
+   vez de escondê-lo atrás de "entregue".
+2. **PUSH NO CELULAR PELA REDE LOCAL NÃO FUNCIONA.** Contexto seguro. A frase diz "meu celular
+   avisa"; na sua rede, hoje, isso exige um túnel HTTPS ou rodar no `localhost`. Também é
+   operação, não código.
+3. **AS CHAVES VAPID NÃO ESTÃO CONFIGURADAS** e nunca estarão por padrão — elas são segredo, e
+   o projeto roda sem elas de propósito. Enquanto não estiverem no `.env`, a metade de
+   notificação do MVP 3 fica desligada e **a tela diz isso**, sem parecer erro.
+
+Os três são a mesma família: **o código está pronto e o ambiente não está.** Nenhum deles é
+dívida técnica escondida; os três estão escritos no `COMO-TESTAR.md` com o passo a passo.
+
 ## B. As perguntas — o que só você decide
 
 ### 1. ⚠️ Como você quer ver progresso? (a pergunta central do MVP 3)
@@ -622,3 +709,48 @@ capítulo é detalhe que o toque já entrega. Se incomodar, a saída barata é a
 uma mudança de contrato, não de arquitetura.
 
 **Resposta:**
+
+---
+
+## C. As perguntas dos MVPs 1 e 2 que continuam sem resposta
+
+Elas **afetaram** o MVP 3, e eu segui com o padrão conservador, sem decidir no seu lugar:
+
+- ⚠️ **Pergunta 5 do MVP 1** (abrir o app sem rede — cache de leitura) — **continua aberta, e
+  o MVP 3 também não a fez.** Pela terceira fase seguida, a regra do fechamento valeu: sem
+  resposta, não entra. ⚠️ **Ela agora encosta em coisa nova:** a notificação chega no celular,
+  a pessoa toca, e o app **abre pedindo rede**. Se vocês leem em transporte público, o toque na
+  notificação é exatamente o momento em que a falta do cache dói — e isso não existia antes do
+  MVP 3. **Continua sendo a coisa mais valiosa que está de fora.**
+- **Pergunta 1 do MVP 2** (busca sem acento, `unaccent`) — sem resposta, não entrou.
+- **Pergunta 2 do MVP 1** (entra mais gente no clube?) — o MVP 3 assumiu **"duas hoje, mais
+  amanhã"**, e desta vez com consequência medida: o feed é uma **frase por linha**, e o leque
+  de notificação percorre **todos os membros ativos** menos o autor. Nenhum dos dois assume
+  duas pessoas; mas **o desenho anti-placar é mais difícil com dez** do que com duas, e essa é
+  a hora de você dizer se o clube vai crescer.
+- **Pergunta 7 do MVP 1** (manter o inglês?) — sem resposta, e o custo dela **subiu**: o MVP 3
+  acrescentou o catálogo do lembrete e do aviso de atividade, nos dois idiomas. Se a resposta
+  for "não mantém", há mais coisa para apagar do que havia.
+- **Perguntas 3, 4, 6 e 8 do MVP 1** — sem resposta, e nenhuma bloqueou o MVP 3.
+
+---
+
+## D. Considerações do dono
+
+> Texto livre. O que te incomodou, o que te surpreendeu, o que você mudaria.
+
+_(a preencher)_
+
+---
+
+## E. Veredito
+
+- [ ] **MVP 3 fechado** — data: ____
+- [ ] Pendências que entram no MVP 4: ____
+
+⚠️ **Lembrete de quem executou:** o MVP 3 **não fecha comigo.** Eu escrevi as specs, despachei
+executor e revisor, verifiquei os gates e repeti por conta própria a mutação do achado mais
+grave de cada fatia. O que eu **não** posso fazer é dizer se "ver onde estamos no livro" como
+**presença** é o que você queria quando escreveu aquela frase. Isso é a pergunta 1, e é sua.
+
+---

@@ -51,8 +51,15 @@ const READING_REMINDER_TAG = 'reading_reminder';
  * O `encodeURIComponent` é o mesmo do `bookPath` do app, pelo mesmo motivo:
  * hoje os ids são `randomUUID()` e não há o que escapar, mas um id com `/`
  * deixaria de ser um segmento.
+ *
+ * ⚠️ **EXPORTADO na Tarefa 38, e é a decisão E dela:** o `GROUP_ACTIVITY` tem
+ * o mesmo problema (o clique tem de cair na tela do livro) e passa a **reusar
+ * este dono** em vez de escrever a segunda cópia de `/books/:bookId`. O
+ * argumento do parágrafo acima não mudou: o segundo endereço de push ainda não
+ * existe, e é o segundo ENDEREÇO — não o segundo chamador — que pagaria uma
+ * tabela de rotas em `@clube/shared`.
  */
-function bookUrl(bookId: string): string {
+export function bookUrl(bookId: string): string {
   return `/books/${encodeURIComponent(bookId)}`;
 }
 

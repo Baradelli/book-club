@@ -2,6 +2,7 @@ import {
   deletePushSubscriptionSchema,
   errorSchema,
   notificationConfigResponseSchema,
+  notificationSendResponseSchema,
   type PushSubscriptionResponse,
   pushSubscriptionResponseSchema,
   savePushSubscriptionSchema,
@@ -11,12 +12,15 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
 import type { PushSubscription } from '../domain/push-subscription';
+import { DEFAULT_SETTINGS } from '../domain/settings';
 import { handleDomainError } from '../http/handle-domain-error';
 import { buildRepositories } from '../http/repositories';
+import { buildTestNotification } from '../notifications/diagnostic-message';
 import {
   getVapidConfig,
   publicNotificationConfig,
 } from '../notifications/vapid';
+import { WebPushSender } from '../notifications/web-push-sender';
 import { DisablePushSubscription } from '../usecases/disable-push-subscription';
 import { SavePushSubscription } from '../usecases/save-push-subscription';
 
@@ -48,15 +52,15 @@ function toResponse(subscription: PushSubscription): PushSubscriptionResponse {
 }
 
 /**
- * "Este aparelho recebe push" — as três rotas do Bloco I que **não enviam
- * nada** (Tarefa 36).
+ * "Este aparelho recebe push" — as três rotas do Bloco I que não enviam nada
+ * (Tarefa 36), **mais a quarta, que envia** (Tarefa 38).
  *
- * ⚠️⚠️ **ESTA FATIA NÃO PRODUZ EFEITO FORA DA MÁQUINA, e é escolha de
- * segurança, não de escopo.** Aqui só se **lê** configuração e se **guarda**
- * inscrição. O `POST /notifications/test` do `docs/NOTIFICACOES.md` §4 **não
- * está aqui** porque ele **envia** — é a Tarefa 38, junto com o
- * `sendPushToUser`, o port `PushSender` e a dependência `web-push` (que hoje
- * não é dependência de pacote nenhum, e não precisa ser).
+ * ⚠️⚠️ **A TAREFA 36 ESCREVEU AQUI QUE ESTE ARQUIVO NÃO PRODUZIA EFEITO FORA DA
+ * MÁQUINA. NÃO É MAIS VERDADE, E A LINHA FOI TROCADA EM VEZ DE SOBREVIVER.**
+ * O `POST /notifications/test` do `docs/NOTIFICACOES.md` §4 chegou com a Tarefa
+ * 38, junto do `WebPushSender` e da dependência `web-push` — e ele **manda push
+ * de verdade**, para os aparelhos de quem chamou. As três primeiras continuam
+ * só lendo configuração e guardando inscrição.
  *
  * ⚠️⚠️ **O ENDEREÇO NÃO TEM `clubId`, E NÃO HÁ `assertMembership` — a decisão
  * F.** Push é da **PESSOA**, não do clube: a mesma pessoa em dois clubes tem
@@ -235,6 +239,128 @@ export const notificationRoutes: FastifyPluginAsyncZod<{
       } catch (error) {
         return handleDomainError(error, reply);
       }
+    },
+  );
+
+  /**
+   * ⚠️⚠️ **"CHEGOU?" — A PRIMEIRA ROTA DESTE PROJETO QUE PRODUZ EFEITO FORA DA
+   * MÁQUINA** (Tarefa 38).
+   *
+   * A Tarefa 36 escreveu aqui, por extenso, que esta rota ficava de fora
+   * *"porque ela **envia**"*. Ela chegou — e com as duas guardas que a decisão
+   * F pede:
+   *
+   * ⚠️ **1. MANDA SÓ PARA OS APARELHOS DE QUEM CHAMOU.** O `req.user.sub`, e
+   * não um `userId` de corpo ou de query — o corpo nem existe. *"Um endereço
+   * que manda push para outra pessoa é uma arma, mesmo dentro do clube"*: com
+   * um alvo no corpo, qualquer membro poderia fazer o celular de outro vibrar
+   * em loop, e nenhum `assertMembership` recusaria isso (não há clube nesta
+   * rota — decisão F da 36). Aqui não há alvo a contrabandear, então não há
+   * guard de autoria para alguém esquecer de escrever.
+   *
+   * ⚠️ **2. NÃO GRAVA `NotificationDelivery`.** É **diagnóstico, não entrega**:
+   * o claim é a reserva do aviso do dia (`@@unique([userId, kind, localDate])`),
+   * e gastá-lo aqui faria testar o push **consumir a idempotência do dia** — a
+   * pessoa apertaria o botão e ficaria sem o lembrete da noite. Pelo mesmo
+   * motivo `TEST` não entra no `NOTIFICATION_KINDS` (decisão G): aquela lista é
+   * o vocabulário da chave, e um `TEST` nela significaria "só dá para testar
+   * uma vez por dia".
+   *
+   * ⚠️ **400 quando não há VAPID** (`NOTIFICACOES.md` §4), e é o único lugar da
+   * feature em que "desligado" vira erro — porque aqui a pessoa **pediu** um
+   * envio, e um 200 com `{ sent: 0 }` diria "mandei para nenhum aparelho"
+   * quando o certo é "não há como mandar". O `GET /config` continua respondendo
+   * 200 com `enabled: false`: lá a pergunta é outra.
+   *
+   * **Sem `POST` de corpo e sem 404**: não ter aparelho inscrito devolve
+   * `{ sent: 0, disabled: 0 }` com 200 — é resposta honesta, e a tela diz
+   * "nenhum aparelho inscrito" sem tratar isso como falha.
+   *
+   * ⚠️⚠️ **E QUANDO O ENVIO FALHA, A RESPOSTA É 500 — DELIBERADAMENTE, E O 500
+   * NÃO ESTÁ NO MAPA `response`** (decisão da rodada de conserto da Tarefa 38).
+   *
+   * Não há `try/catch` em volta do `sender.send`, e é escolha: um erro que não
+   * seja 404/410 (o serviço de push fora do ar, um 500 do lado deles, a rede
+   * caindo) sobe, o `setErrorHandler` do `http/server.ts` o loga com
+   * `'unhandled error'` e responde `{ error }` genérico com **500**.
+   *
+   * **Não há vazamento** — quem troca a mensagem por uma pública é aquele
+   * handler, e o `response` schema não declarar 500 não abre buraco nenhum: o
+   * corpo do erro não passa por este mapa. O que se perde é **precisão**: o
+   * botão de diagnóstico diz "erro do servidor" para uma falha que é do
+   * **serviço de push**, e a pessoa que aperta não distingue "o clube está
+   * quebrado" de "o Google/Mozilla está fora do ar agora".
+   *
+   * ⚠️ **E mesmo assim NÃO declaramos 502/503 aqui.** Crescer o contrato da API
+   * na última fatia do MVP 3, sem o dono pedir, é a mudança que ninguém revisa
+   * — e um status novo tem cauda: a tela passa a ter um ramo a mais, o catálogo
+   * uma frase a mais, e o `POST /test` deixa de ser o endereço mais simples da
+   * feature. O log já leva a causa para quem for diagnosticar, que é para quem
+   * a distinção importa hoje.
+   *
+   * **Fatia futura, e o gatilho é o dono:** se ele disser que a frase confunde,
+   * o conserto é `try/catch` aqui + um status próprio (`502` ou `503`)
+   * declarado no `response` + a frase no catálogo. Está escrito para que a
+   * próxima pessoa encontre a decisão, e não o silêncio.
+   *
+   * ⚠️ **Sem teste do 500 NESTA rota, e o motivo é estrutural, não preguiça.**
+   * Ela monta o `WebPushSender` por dentro (`new WebPushSender(...)`, sem
+   * costura de injeção — decisão F: não há o que parametrizar num endereço que
+   * só fala do próprio ator), então a única forma de fazê-lo falhar num teste é
+   * dar-lhe uma inscrição com endpoint de mentira — e aí o pacote `web-push`
+   * **abre socket de verdade** contra um host inexistente. Seria a suíte deste
+   * projeto produzindo tráfego de rede, e instável fora de linha, para provar
+   * uma tradução de status que não é desta rota.
+   *
+   * ⚠️ **E o registro honesto do que EXISTE, para ninguém achar mais do que
+   * há:** a tradução "exceção que ninguém mapeia → 500 com corpo genérico" é do
+   * `setErrorHandler` do `http/server.ts` e vale para todas as rotas. O que tem
+   * teste é o lado de baixo dela — `http/__tests__/handle-domain-error.test.ts`
+   * prova que um erro fora do mapa é **relançado** em vez de virar um 400
+   * mentiroso —, e o 500 resultante já foi **observado** por medição em
+   * `routes/__tests__/book-routes.integration.test.ts` (`500`, corpo
+   * `{"error":"Internal Server Error"}`). Um teste ponta a ponta que force o
+   * 500 **por esta** rota não existe.
+   */
+  app.post(
+    '/notifications/test',
+    {
+      schema: {
+        summary:
+          'Manda uma notificação de teste para os aparelhos de quem chamou',
+        response: {
+          200: notificationSendResponseSchema,
+          400: errorSchema,
+          401: errorSchema,
+        },
+      },
+    },
+    async (req, reply) => {
+      // Lido no HANDLER, como no `GET /config` e pelo mesmo motivo: o estado da
+      // feature é o do ambiente naquele request, não o de quando as rotas foram
+      // montadas.
+      const vapid = getVapidConfig();
+      if (vapid === null) {
+        return reply
+          .status(400)
+          .send({ error: 'push notifications are not configured' });
+      }
+
+      // O idioma de quem vai receber — que aqui é quem chamou. Sem linha de
+      // `Settings` (ninguém abriu a tela de preferências), o padrão do projeto.
+      const settings = await repos.settings.byUserId(req.user.sub);
+      const sender = new WebPushSender(repos.pushSubscriptions, vapid);
+
+      const result = await sender.send(
+        // ⚠️ O ATOR, e não há outro caminho: esta rota não lê `userId` de lugar
+        // nenhum (§6.3, e a regra 12 da Tarefa 36 aplicada ao ENVIO).
+        req.user.sub,
+        buildTestNotification({
+          locale: settings?.locale ?? DEFAULT_SETTINGS.locale,
+        }),
+      );
+
+      return reply.status(200).send(result);
     },
   );
 };

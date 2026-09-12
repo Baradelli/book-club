@@ -4,6 +4,7 @@ import type { ActivityType } from '@clube/shared';
 
 import type { ActivityEvent } from '../domain/activity-event';
 import { assertActivityType } from '../domain/activity-event';
+import type { NotifyGroupActivity } from './notify-group-activity';
 import type { ActivityEventRepository } from './ports/activity-event-repository';
 
 export interface RecordActivityInput {
@@ -51,18 +52,43 @@ export interface RecordActivityInput {
  *   dele: o `upsertPlanNote` e o `markRead` só chamam no nascimento
  *   (`created === true`), senão o autosave da tela do dia — que dispara a cada
  *   1500 ms — afogaria o feed com dezenas de eventos por meia hora de escrita.
- * - **Não manda push.** O ADR 0006 diz que o `GROUP_ACTIVITY` *"sai no mesmo
- *   UseCase que grava o `ActivityEvent`"* — ou seja, **este** UseCase é a casa
- *   dele. Mas o envio só nasce com o port de push, na Tarefa 38: aqui fica o
- *   lugar, não o efeito. O debounce de 60 s (`docs/NOTIFICACOES.md` §6; o ADR
- *   0006 diz só "debounce curto") é do **envio**, não do registro — registrar é
- *   barato e o feed quer o histórico.
+ * - **Não manda push, nem na Tarefa 38.** O ADR 0006 diz que o
+ *   `GROUP_ACTIVITY` *"sai no mesmo UseCase que grava o `ActivityEvent`"* — e
+ *   ele sai: pelo `recordActivitySafely` lá embaixo, que é a outra metade deste
+ *   arquivo. O `execute` continua **gravando um evento e só** (decisão B da
+ *   38): enfiar aqui os repositórios do leque faria o UseCase de gravar
+ *   depender de metade do sistema, e o teste de "gravou o evento" passaria a
+ *   montar um mundo. O `groupActivityNotifier` abaixo é **carregado**, nunca
+ *   chamado daqui.
+ * - **Não faz debounce.** O de 60 s que o `docs/NOTIFICACOES.md` §6 esboça não
+ *   existe, e é a decisão D da Tarefa 38: quem agrupa é o `tag` do payload, no
+ *   aparelho, de graça e sem estado no servidor. Registrar, de todo jeito, é
+ *   barato — e o feed quer o histórico inteiro.
  * - **Não denormaliza nada.** Nem título do dia, nem nome do livro: o título
  *   muda, e um evento com título velho é uma tela que mente. O feed resolve na
  *   leitura (Tarefa 34).
  */
 export class RecordActivity {
-  constructor(private readonly events: ActivityEventRepository) {}
+  constructor(
+    private readonly events: ActivityEventRepository,
+    /**
+     * ⚠️ **O LEQUE DO `GROUP_ACTIVITY`, CARREGADO E NUNCA CHAMADO DAQUI** —
+     * decisões A e B da Tarefa 38, e a forma é consequência das duas juntas.
+     *
+     * A decisão A manda o disparo entrar **dentro do `recordActivitySafely`**
+     * (que é o dono único do `try/catch + log` dos quatro chamadores) e proíbe
+     * que os quatro UseCases de escrita mudem uma linha. Os quatro passam
+     * `this.recordActivity` e mais nada — então é por **este objeto** que a
+     * função alcança o notificador. Um terceiro parâmetro em
+     * `recordActivitySafely` seria a alternativa óbvia, e ela obrigaria os
+     * quatro a passá-lo: exatamente o que a decisão A recusa.
+     *
+     * ⚠️ **`null` é o padrão, e é o que mantém os testes dos quatro UseCases
+     * montando `new RecordActivity(events)`** — um clube sem push configurado,
+     * ou um teste que não é sobre push, não monta mundo nenhum.
+     */
+    readonly groupActivityNotifier: NotifyGroupActivity | null = null,
+  ) {}
 
   async execute(input: RecordActivityInput): Promise<ActivityEvent> {
     // O portão do tipo vem ANTES da escrita: um tipo fora da lista não deixa
@@ -135,17 +161,76 @@ export async function recordActivitySafely(
   try {
     await recordActivity.execute(input);
   } catch (error) {
-    console.error({
-      event: 'activity_event_not_recorded',
-      type: input.type,
-      clubId: input.clubId,
-      // QUEM — sem ele o log diz que "um evento se perdeu" e não de quem era,
-      // que é a primeira pergunta de quem for diagnosticar. É um id, não
-      // conteúdo: nenhum trecho, nenhum título, nenhum nome.
-      userId: input.actorUserId,
-      bookId: input.bookId,
-      subjectId: input.subjectId,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    logWithoutContent('activity_event_not_recorded', input, error);
+    // ⚠️ **Sem evento, sem aviso** (Tarefa 38): avisar o clube de uma anotação
+    // que não ficou registrada mandaria todo mundo abrir um livro à toa. A
+    // ordem — grava, depois avisa — é a mesma decisão I da Tarefa 33 um passo
+    // adiante, e a prova dela é o `sendCalls === 0` daqui.
+    return;
   }
+
+  /*
+    ⚠️ **O LEQUE DO `GROUP_ACTIVITY` — A DECISÃO A DA TAREFA 38, e ela é sobre
+    ONDE, não sobre o quê.**
+
+    `docs/NOTIFICACOES.md` §6, último parágrafo: o `GROUP_ACTIVITY` **não passa
+    pelo dispatcher** — é disparado no mesmo caminho que grava o
+    `ActivityEvent`. E "o mesmo caminho" é **este**, e não o `execute` acima:
+    aqui ele herda a rede que já existe (o `try/catch + log` que os quatro
+    chamadores compartilham), em vez de nascerem quatro `catch` novos dos quais
+    alguém esqueceria um.
+
+    ⚠️ **O SEGUNDO `try`, e por que ele não é uma cópia do primeiro.** É a
+    mesma regra ("a escrita da pessoa é o produto; o resto é acessório") com
+    **outro nome de evento**, e o nome é o ponto: reusar o
+    `activity_event_not_recorded` faria o log mentir — o evento FOI gravado, e
+    quem diagnosticasse procuraria o defeito na tabela errada.
+  */
+  const notifier = recordActivity.groupActivityNotifier;
+  if (notifier === null) return;
+
+  try {
+    await notifier.execute({
+      // Enumerado, nunca espalhado: o `input` tem `planItemId` e `subjectId`,
+      // que o leque não usa — e um spread os levaria para dentro do payload no
+      // dia em que alguém mudasse a forma do outro lado.
+      clubId: input.clubId,
+      actorUserId: input.actorUserId,
+      type: input.type,
+      bookId: input.bookId,
+    });
+  } catch (error) {
+    logWithoutContent('group_activity_not_notified', input, error);
+  }
+}
+
+/**
+ * O log estruturado das duas falhas — **um formato só**, com o nome do evento
+ * como única diferença.
+ *
+ * ⚠️ **E ele NÃO leva conteúdo** — nem trecho, nem título, nem nome: só
+ * **quem** (`userId`), de qual clube, de qual livro, e sobre qual id. É o mesmo
+ * desenho do push, e pelo mesmo motivo: *"o push nunca leva o conteúdo"* mora
+ * em `docs/NOTIFICACOES.md` **§1**, e um log de servidor é mais um destino para
+ * o texto do clube. Quem guarda a propriedade é a asserção por **lista fechada
+ * de chaves** em `record-activity.test.ts` — um `toMatchObject` ficaria verde
+ * com um campo a mais.
+ */
+function logWithoutContent(
+  event: 'activity_event_not_recorded' | 'group_activity_not_notified',
+  input: RecordActivityInput,
+  error: unknown,
+): void {
+  console.error({
+    event,
+    type: input.type,
+    clubId: input.clubId,
+    // QUEM — sem ele o log diz que "um evento se perdeu" e não de quem era,
+    // que é a primeira pergunta de quem for diagnosticar. É um id, não
+    // conteúdo: nenhum trecho, nenhum título, nenhum nome.
+    userId: input.actorUserId,
+    bookId: input.bookId,
+    subjectId: input.subjectId,
+    error: error instanceof Error ? error.message : String(error),
+  });
 }

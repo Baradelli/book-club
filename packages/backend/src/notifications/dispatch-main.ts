@@ -4,6 +4,7 @@ import { buildRepositories } from '../http/repositories';
 import type { OpenedDeps } from './dispatch-script';
 import { runDispatch, windowMinutesFromEnv } from './dispatch-script';
 import { getVapidConfig } from './vapid';
+import { WebPushSender } from './web-push-sender';
 
 /**
  * ⚠️ **A ENTRADA DO SCRIPT DE CRON — `pnpm --filter @clube/backend
@@ -18,13 +19,27 @@ import { getVapidConfig } from './vapid';
  * `runDispatch` (onde mora a decisão, e que é testado) e escolher o código de
  * saída. É o mesmo recorte que o `http/main.ts` faz do `buildServer`.
  *
- * ⚠️ **O `sender` é `null` nesta fatia**, e é escolha de segurança: o
- * `PushSender` real (`web-push`, `vapidDetails`, o `WebPushError` 404/410) é a
- * **Tarefa 38**, e o pacote não é dependência de pacote nenhum deste monorepo.
- * O `runDispatch` **recusa a passada** nesse estado em vez de rodá-la com um
- * sender de mentira — o claim é gasto ANTES do envio (decisão E), então uma
- * passada falsa queimaria a reserva do dia de todo mundo e ninguém receberia
- * nada, nem hoje nem amanhã. A 38 troca **uma** linha aqui.
+ * ⚠️⚠️ **A TRANSIÇÃO ACONTECEU NA TAREFA 38: ATÉ ELA, `sender: null`; A PARTIR
+ * DELA, ESTE SCRIPT GRAVA CLAIM NO BANCO E MANDA PUSH DE VERDADE.**
+ *
+ * Da Tarefa 37 até a 38 este script era **inofensivo por construção**: o
+ * `PushSender` real não existia, o `sender` era `null`, e o `runDispatch`
+ * **recusava a passada** (`reason: 'push-sender-not-provided'` — que na 37 se
+ * chamava `push-sender-not-implemented`, renomeado quando o sender passou a
+ * existir) em vez de
+ * rodá-la com um sender de mentira — o claim é gasto ANTES do envio (decisão E
+ * da 37), então uma passada falsa queimaria a reserva do dia de todo mundo e
+ * ninguém receberia nada, nem hoje nem amanhã.
+ *
+ * A **Tarefa 38** trocou a linha: o `sender` passou a ser um `WebPushSender`
+ * quando há VAPID configurado. **Uma chamada a `notifications:dispatch` deixou
+ * de ser um no-op** — ela reserva o dia de cada pessoa na tabela
+ * `NotificationDelivery` (e o claim daquele dia **não volta**, por decisão E) e
+ * entrega a mensagem ao serviço de push. Com `getVapidConfig()` devolvendo
+ * `null` ela continua inofensiva, e nem abre conexão de banco.
+ *
+ * Quem roda isto é o **dono**, pelo roteiro do `docs/COMO-TESTAR.md`. Nenhum
+ * agente deste projeto executa este script.
  *
  * ⚠️ **Sai com 0 em dia normal**, inclusive sem ninguém a lembrar e inclusive
  * com a feature desligada (regra 16): *"um script de cron que sai diferente de
@@ -34,13 +49,24 @@ import { getVapidConfig } from './vapid';
  */
 async function main(): Promise<void> {
   const prisma = new PrismaClient();
+  // Lido UMA vez: o mesmo `vapid` decide se a passada acontece e assina o
+  // envio. Duas leituras abririam a janela para um script que começa ligado e
+  // termina desligado.
+  const vapid = getVapidConfig();
 
   try {
     await runDispatch({
-      vapid: getVapidConfig(),
-      // ⚠️ Tarefa 38: aqui entra o `WebPushSender`. Até lá, `null` significa
-      // "não há como entregar", e o `runDispatch` não gasta claim de ninguém.
-      sender: null,
+      vapid,
+      // ⚠️ **A LINHA DA TRANSIÇÃO (Tarefa 38).** Era `sender: null`; agora é o
+      // envio de verdade. Sem VAPID continua `null`, e o `runDispatch` não
+      // gasta claim de ninguém.
+      sender:
+        vapid === null
+          ? null
+          : new WebPushSender(
+              buildRepositories(prisma).pushSubscriptions,
+              vapid,
+            ),
       open: async (): Promise<OpenedDeps> => {
         const repositories = buildRepositories(prisma);
         return {

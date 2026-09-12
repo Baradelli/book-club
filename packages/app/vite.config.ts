@@ -101,6 +101,30 @@ export default defineConfig({
         // no `pt` pela decisão G (sem tela de erro). O acusador é
         // `src/__tests__/service-worker-config.test.ts`.
         globIgnores: ['assets/en-*.js'],
+        // ⚠️ O HANDLER DE PUSH ENTRA NO SERVICE WORKER GERADO (Tarefa 38).
+        //
+        // ACRÉSCIMO DE CHAVE, e não troca de estratégia: o `generateSW`
+        // continua. Trocar para `injectManifest` seria passar a ser dono do
+        // service worker inteiro — e as quatro propriedades que
+        // `src/__tests__/service-worker-config.test.ts` pina (a denylist presa
+        // ao `DEFAULT_API_URL`, o `navigateFallback`, o `globIgnores` do `en` e
+        // "nenhuma resposta de API em cache") teriam de ser remedidas uma a uma
+        // contra um arquivo escrito à mão.
+        //
+        // O arquivo mora em `public/`, então ele NÃO entra no bundle: o
+        // `globPatterns` acima o encontra no `dist/` e o põe no manifesto de
+        // precache COM REVISÃO — que é o que faz o `sw.js` mudar quando só ele
+        // muda, e portanto o que faz uma correção no handler chegar a quem já
+        // tem o app instalado.
+        //
+        // ⚠️ NÃO ACRESCENTE `'push-handler.js'` AO `globIgnores` ACIMA. Medido:
+        // isso tira a entrada do manifesto, o `importScripts` continua
+        // funcionando, o push continua chegando — e nenhuma correção do handler
+        // alcança quem já instalou o app, em silêncio. O acusador é
+        // `src/__tests__/bundle-guard.test.ts`, que roda build de verdade e
+        // confere a revisão; o `service-worker-config.test.ts` só vê o texto
+        // deste arquivo e ficaria verde.
+        importScripts: ['push-handler.js'],
         navigateFallback: '/index.html',
         // Decisão D: offline é a Tarefa 21. O SW NÃO cacheia `/api` e o
         // navigateFallback NÃO engole chamada de API — devolver o index.html

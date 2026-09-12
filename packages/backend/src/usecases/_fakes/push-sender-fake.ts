@@ -37,7 +37,7 @@ export interface RecordedPush {
 export class PushSenderFake implements PushSender {
   sendCalls = 0;
   private readonly recorded: RecordedPush[] = [];
-  private readonly failures = new Map<string, Error>();
+  private readonly failures = new Map<string, unknown>();
   private readonly results = new Map<string, PushSendResult>();
 
   /** O padrão: um aparelho, entregue. */
@@ -47,8 +47,11 @@ export class PushSenderFake implements PushSender {
     this.sendCalls += 1;
     this.recorded.push({ userId, payload: { ...payload } });
 
-    const failure = this.failures.get(userId);
-    if (failure !== undefined) throw failure;
+    // `has`, e não `get(...) !== undefined`: com `unknown` no lugar de `Error`,
+    // `undefined` passou a ser um valor lançável legítimo — e `!== undefined`
+    // engoliria justamente esse caso, que é o mais fácil de chegar por engano
+    // de um `catch` alheio.
+    if (this.failures.has(userId)) throw this.failures.get(userId);
 
     return this.results.get(userId) ?? { ...this.defaultResult };
   }
@@ -66,10 +69,26 @@ export class PushSenderFake implements PushSender {
     return this.recorded.map((send) => send.userId);
   }
 
-  /** "O envio para esta pessoa LANÇA" — a rede caindo no meio da passada. */
+  /**
+   * "O envio para esta pessoa LANÇA" — a rede caindo no meio da passada.
+   *
+   * ⚠️ **`unknown`, e não `Error` — §7.1, direção RESTRITIVA** (corrigido na
+   * rodada de conserto da Tarefa 38). O tipo dizia `Error`, e a realidade
+   * lança outra coisa: o `WebPushSender.send` guarda a falha em
+   * `let failure: unknown` e **relança o que vier**, e os próprios testes de
+   * `isDeadSubscription` enumeram string, `null` e objeto avulso. Um fake que
+   * só aceita `Error` é o fake recusando o que o mundo faz — e o sintoma é o
+   * clássico do §7.1: a suíte fica **verde**, porque o teste do caso legítimo
+   * nunca chega a ser escrito.
+   *
+   * O que isso escondia, concretamente: o ramo `String(error)` do
+   * `logWithoutContent` (`record-activity.ts`) — o que o log escreve quando o
+   * que subiu **não** é um `Error` — não era alcançável pelo leque. Hoje é, e
+   * o acusador é `logs a push failure that is not an Error at all…`.
+   */
   failsFor(
     userId: string,
-    error: Error = new Error('push service is down'),
+    error: unknown = new Error('push service is down'),
   ): void {
     this.failures.set(userId, error);
   }

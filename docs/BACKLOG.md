@@ -2742,11 +2742,108 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       by CalendarDay equality`) **não pinam a precondição**, ao contrário dos do `app`. Se
       alguém trocar o pino, eles somem em silêncio — merecem o mesmo tratamento que o
       `calendar-day-mapper` recebeu._
-- [ ] **38** — `GROUP_ACTIVITY` imediato a partir do `ActivityEvent` + service worker
+- [x] **38** — `GROUP_ACTIVITY` imediato a partir do `ActivityEvent` + service worker
       (`push-handler.js`) + o `PushSender` de verdade. ⚠️ **A "tela de ativar notificações"
       saiu daqui**: ela é da **36b**, e deixá-la nas duas linhas daria dois donos para a mesma
       tela. O que sobra para cá é o que faz a notificação APARECER — nada na 36b exibe push.
-      → _a detalhar_
+      → `tasks/38-push-de-verdade.md`
+      _**602 shared** (era 600) **· 195 ui** (intocado) **· 1891 backend** (era 1826, +65)
+      **· 766 app** (era 744, +22). Integração **608** (era 601, +7). Chunk **430.252 B** (era
+      429.852, **+400**), folga **19.748**. Precache **16 entradas / 897,12 KiB** (era 15 /
+      892,48). `generateSW` intacto. Banco provado limpo por consulta, `NotificationDelivery`
+      em **0** antes e depois._
+      _**A ÚLTIMA FATIA DO MVP, E A ÚNICA QUE PODIA QUEBRAR O QUE JÁ ESTAVA ENTREGUE** — ela
+      mexe no service worker, que serve o app inteiro, e **liga pela primeira vez um efeito que
+      sai da máquina**. As quatro propriedades pinadas do SW foram remedidas **uma a uma**, e
+      todas continuam **com acusador** (não só verdes): tirar o `globIgnores` → 2 · tirar o
+      `navigateFallback` → 1 · mexer na denylist → 1 · pôr `runtimeCaching` de API → 1. A
+      quinta (o `importScripts`) → 1._
+      _**⚠️ O ACHADO PRINCIPAL É A TERCEIRA APARIÇÃO DO MESMO PADRÃO, E DESTA VEZ FOI PEGO
+      ANTES DE MACHUCAR.** A guarda do `importScripts` pinava o **TEXTO do config**, e o
+      `bundle-guard.test.ts` — o único teste que roda um **build real** — não olhava para o
+      handler (`grep -c push-handler` nele = **0**, confirmado pelo orquestrador). A
+      propriedade que ninguém guardava: o `push-handler.js` entra no manifesto de precache
+      **COM REVISÃO**, e é isso que faz o `sw.js` mudar quando o handler muda — e portanto faz
+      uma correção no handler **chegar a quem já tem o app instalado**. **Medido:** um
+      `globIgnores: [… , 'push-handler.js']` amanhã tirava o arquivo do manifesto; o
+      `importScripts` continuava funcionando, a suíte inteira ficava **verde (765/765, zero
+      acusadores)**, e nenhuma correção chegava a ninguém — **em silêncio**. É a **Tarefa 29a
+      outra vez** (lá a guarda pinava o texto e um `chunkFileNames` realista trazia o blocker
+      de volta com 619 verdes) e a **34b** (o texto `onDelete: Restrict` deixando o implícito
+      escapar)._
+      _**O conserto seguiu o molde da 29a: guarda no build real, identificando por CONTEÚDO.**
+      O `.js` da raiz do `dist/` é achado por ser **byte a byte** o `public/push-handler.js` —
+      o nome sai daí, não entra. Depois a revisão do manifesto é comparada com o **md5 do
+      conteúdo**. Reconfirmado pelo orquestrador: **1 acusador**, e o vermelho **nomeia a
+      propriedade** (`expected null to be 'f7f3380444ef9e91db362f21bacbaddd'`). E os dois lados
+      passaram a apontar um para o outro: o `service-worker-config.test.ts` diz por escrito que
+      é **declaração de intenção** e onde mora a guarda; o `vite.config.ts` diz "NÃO acrescente
+      `'push-handler.js'` ao `globIgnores`", nomeando o acusador._
+      _**⚠️ O SEGUNDO ACHADO: UM SOBREVIVENTE REAL ATRÁS DE UM DOCBLOCK QUE DIZIA "RAZÃO
+      MEDIDA".** O `isDeadSubscription` usa duck typing (`statusCode`), e o docblock dava duas
+      razões "medidas". Trocar por `instanceof webPush.WebPushError` passava **1886/1886, zero
+      acusadores** — reconfirmado pelo orquestrador. E a razão (1) era **factualmente
+      contrariada pelo teste ao lado**: ela dizia que o `instanceof` obrigaria o dublê a
+      construir a classe do pacote, e o `web-push-sender.test.ts` **já importava `WebPushError`
+      de `'web-push'` na primeira linha**. O custo que ela dizia evitar já estava pago.
+      Conserto: a razão falsa virou **errata explícita**, e a razão que fica (a forma sem a
+      classe) ganhou **3 acusadores**._
+      _**O caso misto, e um TESTE que corrigiu o executor.** A primeira versão do sender era
+      *fail-fast* e passou **22 de 23**. O que a derrubou foi o fake enumerar **invertido de
+      propósito** (§7.2): o aparelho de rede quebrada vinha primeiro e o morto **nunca chegava
+      a ser desativado**. Ou seja, a desativação dependia de uma ordem que o port **não
+      promete**. Guardando a primeira falha não-morta e relançando no fim, a decisão H passa a
+      valer sempre. ⚠️ **E o revisor mediu a dependência:** com o *fail-fast* de volta **e** sem
+      o `.reverse()` do fake, o teste do caso misto fica **VERDE** — quem o mata é a convenção
+      do §7.2, não a fixture. A convenção **pagou** nesta fatia._
+      _**O leque herdou a rede que já existia (decisão A):** ele entra **dentro** do
+      `recordActivitySafely`, dono único do `try/catch + log` nos quatro UseCases de escrita —
+      que **não mudaram uma linha**. Provado no unitário (2 acusadores) **e ponta a ponta**: com
+      o sender real estourando, a rota responde **201** e a nota **continua gravada**. ⚠️ E o
+      teste usa o `WebPushSender` **real** com par efêmero: o envio morre **na criptografia**
+      (o `p256dh` de fixture tem 15 bytes, não 65), antes de qualquer socket — o revisor
+      confirmou lendo o código do pacote, linha por linha. **Nenhum pacote saiu da máquina.**_
+      _**As três exclusões do leque**, com mutante cada: autor → **7** acusadores · quem
+      desligou `notifyGroupActivity` → **1** · membership não-ativo → **1**. E **404/410
+      desativam, 500 NÃO** — três mutantes no reconhecedor, **3 · 5 · 6** acusadores, quatro
+      deles só no lado do limite._
+      _**O log de falha não leva conteúdo, e a asserção é de LISTA FECHADA de chaves.** Medido:
+      acrescentar `title` ao log dá **2 acusadores**. Um `toMatchObject` ficaria verde com um
+      campo a mais; a lista fechada não ficou._
+      _**⚠️ A SPEC DO ORQUESTRADOR ERROU PELA SEXTA VEZ NESTE MVP, e o padrão ficou visível.** A
+      regra 5 afirmava que `pnpm lint` **não** olha para o `push-handler.js`. O `typecheck` de
+      fato não; o **lint VÊ** — o `eslint .` da raiz varre `.js`, e o arquivo entrou dando **5
+      erros `'self' is not defined`**. Conserto: um bloco no `eslint.config.js` com os globais
+      de service worker — **e é melhor assim**, porque este é o único arquivo do projeto que
+      roda **fora** do app, onde ninguém vê a exceção. ⚠️ **O padrão dos seis erros:** em todos,
+      a afirmação errada era **sobre a FERRAMENTA, não sobre o código** (`atob`, `eslint`,
+      `TZ=`, o Zod da Tarefa 03, o padding, o lint). O que o código faz eu leio; o que a
+      ferramenta faz eu **suponho**._
+      _**Um sobrevivente EQUIVALENTE, com inalcançabilidade provada:** `if (!event.data)
+      return;` no handler não tem acusador — sem ele, o `TypeError` de `null.json()` cai no
+      `catch` que já existe duas linhas abaixo, e o desfecho observável é idêntico para toda
+      entrada. A linha fica (o §2 a escreve, e push vazio é caso **normal** — não se quer o
+      caminho normal dependendo de exceção), registrada **como sem acusador** (§7.10), e o
+      comentário-âncora do teste foi corrigido para dizer que quem acusa aquele caso é o
+      `catch`._
+      _**Decisões de desenho que o executor tomou e mediu:** o `tag` **É** o debounce (três
+      atividades viram **uma** notificação no aparelho, sem estado no servidor — o resíduo são
+      três vibrações, registrado como limite conhecido, não escondido); a mensagem **não diz o
+      nome** de quem fez (o `listActivity` registra que não resolve nome, `User.name` é
+      anulável, e um `UserRepository` seria o quarto colaborador numa fatia que não podia
+      crescer — se o dono quiser, é meia hora); e o `POST /notifications/test` responde **500
+      deliberadamente** quando o envio falha, registrado por escrito em vez de crescer o
+      contrato da API na última fatia._
+      _**E o executor corrigiu uma afirmação falsa que ELE MESMO tinha acabado de escrever:**
+      ele registrara que "o `setErrorHandler` já tem teste próprio", foi conferir, **não tem** —
+      e reescreveu para o que existe de fato. §7.10 aplicado a si mesmo, sem ninguém pedir._
+      _**Gates:** os seis verificados pelo orquestrador — 602/195/1891/766, typecheck, lint e
+      prettier limpos, chunk **430.252 B**, precache **16/897,12 KiB**, `generateSW` intacto,
+      guarda da 29a de pé, e a revisão do handler no `sw.js` **idêntica ao md5 do arquivo**.
+      `prisma` e `ui` intocados; **nenhuma migration**; nenhum `.env` tocado; `web-push` só em
+      `packages/backend`; zero bytes de controle e zero invisíveis no diff (varredura própria do
+      executor **e** do revisor); e o **`notifications:dispatch` NÃO foi executado** — provado
+      pelo `NotificationDelivery` em 0._
 
 ## Definição de "MVP 3 pronto"
 

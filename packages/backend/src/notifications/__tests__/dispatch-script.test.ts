@@ -188,8 +188,17 @@ describe('runDispatch', () => {
    * mentira queimaria a reserva do dia de todo mundo e **ninguém receberia
    * nada** — nem hoje, nem amanhã, porque a reserva de hoje já estaria gasta.
    * Então o script recusa, explica por quê, e sai com 0.
+   *
+   * ⚠️ **E DESDE A TAREFA 38 ESTE TESTE É O ÚNICO CHAMADOR QUE ALCANÇA O
+   * RAMO.** O `dispatch-main.ts` só passa `sender: null` quando
+   * `vapid === null`, e esse caso já saiu antes, por `vapid-not-configured`. A
+   * propriedade continua valendo (um `null` é representável no tipo, e o que
+   * ele NÃO pode virar é uma passada que gasta claim sem enviar), e foi por
+   * isso que o motivo deixou de se chamar `push-sender-not-implemented`: o
+   * sender **está** implementado, e um nome que manda procurar o que não falta
+   * é a classe do `dayRange`.
    */
-  it('refuses the pass when there is no real sender yet (Tarefa 38)', async () => {
+  it('refuses the pass when no sender was provided (Tarefa 38)', async () => {
     const opened = openedDeps();
     const o = options({ sender: null, open: opened.open });
 
@@ -198,7 +207,7 @@ describe('runDispatch', () => {
     expect(report).toEqual({
       enabled: true,
       dispatched: false,
-      reason: 'push-sender-not-implemented',
+      reason: 'push-sender-not-provided',
       result: { considered: 0, sent: 0, disabled: 0, skipped: 0 },
     });
     // Nem abriu o banco: não há passada a preparar.

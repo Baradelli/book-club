@@ -110,6 +110,47 @@ describe('service worker config', () => {
     expect(config).toContain("'assets/en-*.js'");
   });
 
+  /**
+   * ⚠️ **A QUINTA PROPRIEDADE (Tarefa 38): O HANDLER DE PUSH É INJETADO NO
+   * SERVICE WORKER GERADO — e o `generateSW` CONTINUA.**
+   *
+   * Duas afirmações num teste só, porque elas são a mesma decisão:
+   *
+   * 1. **`importScripts: ['push-handler.js']` está no config.** Sem esta linha
+   *    o arquivo continua sendo servido em `/push-handler.js` e **ninguém o
+   *    executa**: o push chega ao navegador, o service worker não tem listener
+   *    de `push`, e a notificação não aparece. Nada fica vermelho — nem o
+   *    `push-handler.test.ts`, que roda o arquivo por fora.
+   * 2. **não há `injectManifest`.** Trocar a estratégia faria o service worker
+   *    passar a ser um arquivo NOSSO, e as quatro propriedades acima teriam de
+   *    ser remedidas uma a uma contra ele. O acréscimo de chave preserva as
+   *    quatro de graça — e é por isso que a regra 3 da fatia o exige por
+   *    escrito.
+   *
+   * ⚠️ **O que esta asserção NÃO cobre, e é de propósito:** que o arquivo
+   * EXISTA em `public/`. Isso é do `push-handler.test.ts`, que o lê do disco e
+   * estoura se ele sumir — e lá a falta vira um erro de leitura, não uma
+   * varredura vazia (§7.4).
+   *
+   * ⚠️⚠️ **E O QUE ELA NÃO COBRE PORQUE NÃO CONSEGUE: que o handler entre no
+   * MANIFESTO DE PRECACHE, COM REVISÃO.** Esta aqui é a **declaração de
+   * intenção** — ela lê o TEXTO do config, e o texto continua verdadeiro mesmo
+   * depois de a propriedade morrer. Medido na rodada de conserto da 38: um
+   * `globIgnores: ['assets/en-*.js', 'push-handler.js']` tira o arquivo do
+   * manifesto, o `importScripts` acima continua lá e continua funcionando, o
+   * precache cai de 16/897,12 KiB para 15/892,48 KiB — e a suíte do app passa
+   * **765/765, zero acusadores**. É a mesma armadilha em que o `globIgnores` do
+   * `en` caiu na Tarefa 29a, e a saída é a mesma: a guarda mora onde há **build
+   * real**, em `bundle-guard.test.ts`
+   * (`precaches the push handler WITH a revision…`), identificando o arquivo
+   * por CONTEÚDO. É lá que se conserta quando o precache quebrar; aqui, só
+   * quando o config mudar.
+   */
+  it('⚠️ injects the push handler into the GENERATED service worker (task 38)', () => {
+    expect(config).toContain("importScripts: ['push-handler.js']");
+    expect(config).not.toContain('injectManifest');
+  });
+
   it('caches no API response in this slice (decision D)', () => {
     // Offline é a Tarefa 21. Cachear resposta de API agora criaria dado velho
     // invisível — e o `runtimeCaching` é o único jeito de fazer isso pelo

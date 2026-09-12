@@ -24,6 +24,31 @@ export default tseslint.config(
     },
   },
   {
+    /**
+     * O `push-handler.js` RODA NUM SERVICE WORKER, e ali o `self` global
+     * existe — mas o ESLint só sabe disso se alguém disser.
+     *
+     * MEDIDO na Tarefa 38: a spec da fatia afirmava que `pnpm lint` NÃO olha
+     * para este arquivo (por ele não passar pelo TypeScript nem pelo bundler).
+     * Olha sim — o `eslint .` da raiz varre `.js` também, e o
+     * `js.configs.recommended` traz `no-undef`: sem este bloco, o arquivo dava
+     * **5 erros de `'self' is not defined`**.
+     *
+     * E é bom que olhe: este é o único arquivo do projeto que roda fora do app,
+     * onde uma exceção não aparece no console de ninguém. O lint é a segunda
+     * rede dele; a primeira é `packages/app/src/__tests__/push-handler.test.ts`,
+     * que o LÊ do disco e o executa com um `self` de mentira.
+     */
+    files: ['packages/app/public/*.js'],
+    languageOptions: {
+      globals: {
+        self: 'readonly',
+        clients: 'readonly',
+        registration: 'readonly',
+      },
+    },
+  },
+  {
     // O `code` do convite e o segredo de entrada no clube: nada no backend
     // sorteia com PRNG previsivel. Use randomInt/randomUUID de node:crypto.
     files: ['packages/backend/src/**/*.ts'],

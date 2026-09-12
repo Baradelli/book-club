@@ -1,5 +1,5 @@
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { buildServer } from '../../http/server';
 import {
@@ -8,6 +8,7 @@ import {
   prisma,
   removeFixtures,
 } from '../../repositories/__tests__/_db';
+import { generateEphemeralVapidKeys } from '../../test-support/ephemeral-vapid-keys';
 
 const CLUB_ID = prefixedId('t11r', 'club');
 const OTHER_CLUB_ID = prefixedId('t11r', 'otherclub');
@@ -1333,6 +1334,108 @@ describe('note routes', () => {
         'planItemId',
         'userIds',
       ]);
+    });
+  });
+
+  /**
+   * ⚠️⚠️ **REGRA 11 DA TAREFA 38 — A FALHA DE PUSH NUNCA DERRUBA A ESCRITA DA
+   * PESSOA, medida PONTA A PONTA.**
+   *
+   * O unitário já prova que `recordActivitySafely` captura; o que só a
+   * integração prova é o que a **pessoa** vê: um `201` e o parágrafo dela
+   * gravado, mesmo com o `WebPushSender` **real** estourando no meio do
+   * caminho. É o mesmo teste que a Tarefa 33 fez para o `ActivityEvent`,
+   * espelhado para o push.
+   *
+   * ## Como ele faz o envio falhar SEM MANDAR NADA PARA LUGAR NENHUM
+   *
+   * A inscrição de fixture tem `p256dh` e `auth` que **não são chaves** e um
+   * endpoint em `127.0.0.1:1`. O `web-push` deriva a cifra do `p256dh` **antes**
+   * de abrir qualquer conexão, então ele estoura no passo de criptografia: não
+   * há pacote saindo desta máquina, nem para o serviço de push nem para lugar
+   * nenhum. Um subagente deste projeto **não manda push de verdade** — quem vê
+   * push chegando é o dono, pelo `docs/COMO-TESTAR.md`.
+   *
+   * ## Por que um segundo servidor
+   *
+   * O `getVapidConfig()` do leque é lido no **registro** das rotas
+   * (`http/activity-recorder.ts` explica por quê), então o `app` de cima —
+   * construído sem VAPID — tem `sender: null` e nunca chegaria perto do
+   * `WebPushSender`. Este `describe` monta o seu, com o par efêmero no
+   * ambiente, e o fecha no fim.
+   */
+  describe('the push fan-out never brings the write down (task 38, rule 11)', () => {
+    const PUSH_ENDPOINT = `https://127.0.0.1:1/${prefixedId('t11r', 'deadpush')}`;
+    let pushApp: FastifyInstance;
+    let pushMariaToken: string;
+
+    beforeAll(async () => {
+      const keys = generateEphemeralVapidKeys();
+      vi.stubEnv('VAPID_PUBLIC_KEY', keys.publicKey);
+      vi.stubEnv('VAPID_PRIVATE_KEY', keys.privateKey);
+      vi.stubEnv('VAPID_SUBJECT', 'mailto:dono@clube.test');
+
+      pushApp = await buildServer({ logger: false });
+      await pushApp.ready();
+      pushMariaToken = pushApp.jwt.sign({ sub: MARIA_ID });
+
+      // O aparelho do MARCOS: é ele que recebe o aviso da anotação da Maria
+      // (o autor nunca recebe o próprio — decisão C).
+      await prisma.pushSubscription.create({
+        data: {
+          id: prefixedId('t11r', 'pushsub'),
+          userId: MARCOS_ID,
+          platform: 'web',
+          endpoint: PUSH_ENDPOINT,
+          p256dh: 'isto-nao-e-uma-chave',
+          auth: 'nem-isto',
+        },
+      });
+    });
+
+    afterAll(async () => {
+      // §6.6: a limpeza CONSULTA o banco. `PushSubscription_userId_fkey` é
+      // `ON DELETE RESTRICT`, e uma inscrição esquecida trava o `removeFixtures`
+      // do `afterAll` de fora.
+      const rows = await prisma.pushSubscription.findMany({
+        where: { userId: { in: [MARIA_ID, MARCOS_ID] } },
+        select: { id: true },
+      });
+      if (rows.length > 0) {
+        await prisma.pushSubscription.deleteMany({
+          where: { id: { in: rows.map((row) => row.id) } },
+        });
+      }
+      vi.unstubAllEnvs();
+      await pushApp.close();
+    });
+
+    it('answers 201 and keeps the note when the real sender blows up', async () => {
+      const response = await pushApp.inject({
+        method: 'POST',
+        url: `/books/${BOOK_ID}/notes`,
+        headers: auth(pushMariaToken),
+        payload: {
+          title: 'A que não pode se perder',
+          doc: aPlainDoc('o parágrafo que não pode se perder'),
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+
+      // E a LINHA GRAVADA, não só o corpo da resposta: um 201 com a escrita
+      // desfeita seria o mesmo status para a pessoa e nada no banco.
+      const saved = await prisma.note.findUnique({
+        where: { id: response.json<NoteBody>().id },
+      });
+      expect(saved?.plainText).toBe('o parágrafo que não pode se perder');
+
+      // E o evento também sobreviveu: o push é o ÚLTIMO passo, e falhar nele
+      // não desfaz nada do que veio antes.
+      const events = await prisma.activityEvent.findMany({
+        where: { subjectId: response.json<NoteBody>().id },
+      });
+      expect(events).toHaveLength(1);
     });
   });
 });

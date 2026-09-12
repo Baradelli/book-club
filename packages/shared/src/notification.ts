@@ -20,8 +20,12 @@ import { z } from 'zod';
  *
  * ⚠️ **E a TAREFA 37 CUMPRIU METADE DISSO:** o `NotificationDelivery` nasceu,
  * então o `NOTIFICATION_KINDS` desceu para cá, com o chamador que o pedia (o
- * domínio do backend e o `claim` do repositório). O
- * `notificationSendResponseSchema` continua fora — a rota que o devolve é a 38.
+ * domínio do backend e o `claim` do repositório).
+ *
+ * ⚠️ **A TAREFA 38 FECHOU A OUTRA METADE:** o `POST /notifications/test`
+ * nasceu, e com ele o `notificationSendResponseSchema` lá embaixo. O que
+ * **continua fora, e agora por decisão explícita**, é o `TEST` no
+ * `NOTIFICATION_KINDS`: ver a decisão G da 38, no docblock daquela constante.
  */
 
 /**
@@ -238,8 +242,37 @@ export const pushSubscriptionResponseSchema = z.object({
   createdAt: z.string(),
 });
 
+/**
+ * ⚠️ **O QUE UM ENVIO DEVOLVE — `{ sent, disabled }`, e os DOIS contam
+ * APARELHO, não pessoa** (`docs/NOTIFICACOES.md` §4 e §5).
+ *
+ * Ele nasce na **Tarefa 38**, com o chamador que o docblock do topo deste
+ * arquivo reservou para ele: o `POST /notifications/test`. Enquanto não havia
+ * rota que o devolvesse, ele teria sido vocabulário sem chamador — que é a
+ * decisão que a Tarefa 36 registrou por escrito ao deixá-lo de fora.
+ *
+ * Uma pessoa com três aparelhos e um morto recebe `{ sent: 2, disabled: 1 }`:
+ * o `disabled` são as inscrições que o envio **desativou** nesta tentativa
+ * (`WebPushError` 404/410 — a pessoa desinstalou ou limpou o navegador), e é
+ * por isso que ele não entra em conta nenhuma de gente.
+ *
+ * ⚠️ **`{ sent: 0, disabled: 0 }` é resposta legítima, e é a mais provável para
+ * quem aperta o botão de teste sem ter inscrito nenhum aparelho.** Não é erro:
+ * a tela diz "nenhum aparelho inscrito", e um 404 aqui faria "não tenho
+ * aparelho" parecer "o endereço não existe".
+ */
+export const notificationSendResponseSchema = z.object({
+  /** Quantos aparelhos receberam. */
+  sent: z.number(),
+  /** Quantas inscrições esta tentativa desativou por estarem mortas. */
+  disabled: z.number(),
+});
+
 export type BrowserPushSubscription = z.infer<
   typeof browserPushSubscriptionSchema
+>;
+export type NotificationSendResponse = z.infer<
+  typeof notificationSendResponseSchema
 >;
 export type SavePushSubscriptionBody = z.infer<
   typeof savePushSubscriptionSchema

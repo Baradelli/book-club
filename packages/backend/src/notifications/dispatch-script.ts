@@ -53,11 +53,13 @@ export interface RunDispatchOptions {
   /** `null` **desliga a feature inteira, limpo** (`NOTIFICACOES.md` §3). */
   vapid: VapidConfig | null;
   /**
-   * ⚠️ **O port de envio real — `null` até a Tarefa 38.**
+   * ⚠️ **O port de envio real — foi `null` até a Tarefa 38; hoje o
+   * `dispatch-main.ts` passa um `WebPushSender` sempre que há VAPID.**
    *
    * Ele entra por parâmetro (e não por import) porque é o único ponto de efeito
    * externo da feature: quem monta o script escolhe o que ele pode fazer, e o
-   * teste escolhe o fake.
+   * teste escolhe o fake. O `null` continua representável — e o ramo que o
+   * trata (`push-sender-not-provided`) está documentado no `runDispatch`.
    */
   sender: PushSender | null;
   /**
@@ -113,11 +115,25 @@ export function reportLine(report: DispatchReport): string {
  * 1. **`vapid-not-configured`** — `NOTIFICACOES.md` §3 e decisão G da Tarefa
  *    36: *"`null` desliga a feature inteira, limpo"*. Ninguém precisa de VAPID
  *    configurado para rodar o projeto, e nem a conexão de banco é aberta.
- * 2. ⚠️ **`push-sender-not-implemented`** — o `PushSender` real é a **Tarefa
- *    38**, e o `web-push` não é dependência de pacote nenhum. Rodar a passada
- *    com um sender de mentira seria **pior que não rodar**: o claim é gasto
- *    ANTES do envio (decisão E), então ela queimaria a reserva do dia de todo
- *    mundo e ninguém receberia nada — nem hoje, nem amanhã.
+ * 2. ⚠️ **`push-sender-not-provided`** — chegou um `sender: null`. Rodar a
+ *    passada com um sender de mentira seria **pior que não rodar**: o claim é
+ *    gasto ANTES do envio (decisão E), então ela queimaria a reserva do dia de
+ *    todo mundo e ninguém receberia nada — nem hoje, nem amanhã.
+ *
+ *    ⚠️⚠️ **NENHUM CHAMADOR DE PRODUÇÃO ALCANÇA ESTE RAMO DESDE A TAREFA 38.**
+ *    Até ela, o `PushSender` real não existia e o `dispatch-main.ts` passava
+ *    `sender: null` sempre — era **este** o motivo normal de o script não fazer
+ *    nada. A 38 trouxe o `WebPushSender`, e hoje o `dispatch-main.ts` só manda
+ *    `null` quando `vapid === null` — caso que o ramo 1 acima já devolveu antes
+ *    de chegar aqui. O ramo continua porque `runDispatch` recebe o sender por
+ *    parâmetro e um `null` é representável; quem o exercita é o teste.
+ *
+ *    ⚠️ **E foi por isso que ele foi RENOMEADO**: chamava-se
+ *    `push-sender-not-implemented`, e depois da 38 o sender **está**
+ *    implementado — o nome mandava o próximo leitor procurar uma implementação
+ *    que não faltava. É a classe do `dayRange` (`CLAUDE.md`, "Convenções"):
+ *    ponteiro que sobrevive à fatia que o resolveu faz inventar um terceiro
+ *    nome para a mesma coisa.
  *
  * O que ela **não** engole é erro de verdade: se o banco cair, a exceção sobe
  * (depois de fechar o que abriu) e o `main` sai diferente de 0. Alerta falso
@@ -152,7 +168,7 @@ export async function runDispatch(
     return report({
       enabled: true,
       dispatched: false,
-      reason: 'push-sender-not-implemented',
+      reason: 'push-sender-not-provided',
     });
   }
 

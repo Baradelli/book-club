@@ -5,9 +5,10 @@
 // `new TextEncoder().encode('') instanceof Uint8Array`, e o `TextEncoder` do
 // jsdom devolve um `Uint8Array` de OUTRO realm — a checagem dá falso e o
 // esbuild aborta com "your JavaScript environment is broken".
+import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { build } from 'vite';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -131,6 +132,11 @@ let entryScripts: Asset[] = [];
 let indexHtml = '';
 /** O `sw.js` emitido — é nele que mora o manifesto de precache do Workbox. */
 let serviceWorker = '';
+/**
+ * Os `.js` da RAIZ do `dist/` — que é onde o Vite copia o `public/` verbatim.
+ * O chunk do Rollup mora em `assets/`; o `push-handler.js` nunca passa por lá.
+ */
+let rootScripts: Asset[] = [];
 
 /** `assets/index-abc.js` → `index-abc.js`; ignora o que não é `.js` local. */
 function scriptFileName(reference: string): string | undefined {
@@ -190,6 +196,43 @@ function contaminated(assets: readonly Asset[]): string[] {
     .map((asset) => asset.name);
 }
 
+/**
+ * ⚠️ **O `push-handler.js` COMO ELE ESTÁ NO DISCO** (Tarefa 38, rodada de
+ * conserto).
+ *
+ * Ele é lido para servir de **identidade por CONTEÚDO**: o arquivo emitido na
+ * raiz do `dist/` é encontrado por ser byte a byte este, e não por alguém
+ * escrever o nome dele numa constante. Mesma disciplina da guarda do `en` logo
+ * acima, e pelo mesmo motivo — um nome escrito no teste é um nome que pode
+ * deixar de casar em silêncio.
+ */
+const pushHandlerSource = readFileSync(
+  resolve(process.cwd(), 'public/push-handler.js'),
+  'utf8',
+);
+
+/**
+ * A entrada do manifesto de precache daquele `url`, e a **revisão** dela.
+ *
+ * Devolve `null` quando não há entrada nenhuma **ou** quando ela vem sem
+ * revisão — os dois são a mesma falha para quem tem o app instalado, e é por
+ * isso que não se distinguem aqui.
+ *
+ * ⚠️ A leitura é por **regex sobre o objeto**, e não pela string
+ * `{url:"x",revision:"y"}` inteira: a ordem das chaves e os espaços são escolha
+ * do minificador, e pinar o texto minificado faria a guarda cair num upgrade de
+ * Workbox — por um motivo que não tem nada a ver com a propriedade.
+ */
+function precacheRevision(sw: string, url: string): string | null {
+  const escaped = url.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  const entry = new RegExp(
+    `\\{[^{}]*\\burl:\\s*"${escaped}"[^{}]*\\}`,
+    'u',
+  ).exec(sw);
+  if (entry === null) return null;
+  return /\brevision:\s*"([0-9a-f]{32})"/u.exec(entry[0])?.[1] ?? null;
+}
+
 beforeAll(async () => {
   /*
     ⚠️ `NODE_ENV=production` À MÃO, e é MEDIDO: o vitest põe
@@ -222,6 +265,12 @@ beforeAll(async () => {
 
   indexHtml = readFileSync(join(outDir, 'index.html'), 'utf8');
   serviceWorker = readFileSync(join(outDir, 'sw.js'), 'utf8');
+  rootScripts = readdirSync(outDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.js'))
+    .map((entry) => ({
+      name: entry.name,
+      code: readFileSync(join(outDir, entry.name), 'utf8'),
+    }));
   const eager = new Set(eagerScriptNames(indexHtml));
   entryScripts = scripts.filter((asset) => eager.has(asset.name));
 }, 300_000);
@@ -395,6 +444,63 @@ describe('the app bundle (rule 21)', () => {
     // install, em segundo plano. O preço combinado é a decisão G — trocar de
     // idioma OFFLINE cai no `pt`, sem tela de erro.
     for (const name of withCatalog) expect(serviceWorker).not.toContain(name);
+  });
+
+  it('⚠️ precaches the push handler WITH a revision, so a fix REACHES an installed app (task 38)', () => {
+    /*
+      ⚠️⚠️ **A PROPRIEDADE QUE FAZ UMA CORREÇÃO NO `push-handler.js` CHEGAR A
+      QUEM JÁ TEM O APP INSTALADO — e a TERCEIRA aparição, neste projeto, do
+      padrão "a guarda pina o TEXTO do config".**
+
+      O `service-worker-config.test.ts` afirma que `importScripts:
+      ['push-handler.js']` está escrito no `vite.config.ts`. Isso é a
+      **declaração de intenção**, e ela é verdadeira mesmo quando a propriedade
+      está morta — exatamente como o `globIgnores` do `en` era verdadeiro depois
+      de ter deixado de casar (Tarefa 29a: 619 testes verdes, zero acusadores).
+
+      A propriedade de verdade é OUTRA: o handler entra no **manifesto de
+      precache COM REVISÃO**. É a revisão que faz o `sw.js` mudar quando só o
+      handler muda; e é o `sw.js` mudar que faz o navegador buscar a versão
+      nova. Sem ela, `importScripts('push-handler.js')` continua funcionando —
+      o arquivo é servido, o listener é registrado, tudo verde — e quem já tem o
+      app instalado fica com o handler ANTIGO **para sempre**, porque o
+      service worker que ele já baixou é byte a byte o mesmo.
+
+      ⚠️ **O mutante medido, e ele é uma linha que qualquer fatia futura pode
+      escrever:** `globIgnores: ['assets/en-*.js', 'push-handler.js']`. Sem esta
+      guarda o build cai de **16 entradas / 897,12 KiB** para **15 / 892,48
+      KiB**, a entrada desaparece do `sw.js`, e a suíte do app passa **765/765,
+      ZERO acusadores**.
+
+      ⚠️ **E a identificação é por CONTEÚDO, não por nome** — a lição da 29a na
+      letra: o arquivo emitido é achado por ser byte a byte o
+      `public/push-handler.js`, e o nome sai daí. Um `push-handler.js` renomeado
+      (ou copiado para outra pasta) continua sendo pego.
+    */
+    const emitted = rootScripts.filter(
+      (asset) => asset.code === pushHandlerSource,
+    );
+
+    // ⚠️ O LADO POSITIVO (§7.4): sem esta linha, um build que não copiasse o
+    // handler deixaria o laço abaixo sem nenhuma iteração, e a guarda diria
+    // "está tudo certo" provando "o arquivo não existe".
+    expect(emitted).toHaveLength(1);
+
+    for (const asset of emitted) {
+      /*
+        A revisão É o `md5` do arquivo — medido neste build:
+        `md5sum public/push-handler.js` e o `revision` da entrada no `sw.js` são
+        a mesma string. Não é decoração: é ela que carrega a mudança do handler
+        para dentro dos bytes do service worker.
+
+        Um Workbox futuro que trocasse o digest deixaria esta linha vermelha.
+        **ATUALIZE o cálculo, não apague a asserção** — a propriedade continua
+        sendo "a revisão vem do conteúdo".
+      */
+      expect(precacheRevision(serviceWorker, asset.name)).toBe(
+        createHash('md5').update(asset.code, 'utf8').digest('hex'),
+      );
+    }
   });
 
   it('stays under a ceiling for the WHOLE build, editor chunk included', () => {

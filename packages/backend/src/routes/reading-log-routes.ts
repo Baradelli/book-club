@@ -9,11 +9,11 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
 import type { ReadingLog } from '../domain/reading-log';
+import { buildRecordActivity } from '../http/activity-recorder';
 import { handleDomainError } from '../http/handle-domain-error';
 import { buildRepositories } from '../http/repositories';
 import { AssertMembership } from '../usecases/assert-membership';
 import { MarkRead } from '../usecases/mark-read';
-import { RecordActivity } from '../usecases/record-activity';
 import { UnmarkRead } from '../usecases/unmark-read';
 
 function toReadingLogResponse(log: ReadingLog): ReadingLogResponse {
@@ -77,7 +77,7 @@ export const readingLogRoutes: FastifyPluginAsyncZod<{
     repos.readingLogs,
     // O gatilho de atividade (Tarefa 33): só MARCAR é notícia. O `unmarkRead`
     // é um NÃO-EVENTO (decisão B) e não recebe o recorder.
-    new RecordActivity(repos.activityEvents),
+    buildRecordActivity(repos),
   );
   const unmarkRead = new UnmarkRead(
     assertMembership,
