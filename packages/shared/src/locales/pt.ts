@@ -15,6 +15,10 @@ export const pt = {
   },
   nav: {
     signOut: 'Sair',
+    // O rótulo acessível da entrada de preferências no cabeçalho (Tarefa 36b,
+    // regra 3): o ícone do `lucide-react` é `aria-hidden`, e ícone sozinho não
+    // tem nome para quem ouve a tela.
+    settings: 'Preferências',
   },
   language: {
     label: 'Idioma',
@@ -840,6 +844,61 @@ export const pt = {
       title: 'Página não encontrada',
       description: 'O endereço que você abriu não existe neste clube.',
       backHome: 'Voltar para o início',
+    },
+    /*
+      AS PREFERÊNCIAS DA PESSOA (Tarefa 36b) — três controles e o aparelho.
+
+      ⚠️ **PRIMEIRA PESSOA E SEM COBRANÇA** (regra 12): "me lembre às", nunca
+      "você não leu hoje". O lembrete existe para ajudar, e a tela que o
+      configura é o último lugar onde cabe uma régua. A varredura que guarda
+      isto é a do VOCABULÁRIO (`anti-guilt.test.ts`), que percorre este catálogo
+      inteiro e o `en` — não uma guarda de dígito copiada do feed, porque aqui o
+      dígito é legítimo e obrigatório (`07:30` **é** um número).
+
+      ⚠️ **E A TELA NÃO PROMETE NOTIFICAÇÃO QUE AINDA NÃO EXISTE** (regra 17):
+      nada nesta fatia exibe push — o `push-handler.js` é a Tarefa 38. Por isso
+      `device.active` fala do APARELHO ("os avisos estão ativados neste
+      aparelho"), e não do futuro ("você vai receber um aviso agora").
+    */
+    settings: {
+      title: 'Preferências',
+      loading: 'Carregando suas preferências…',
+      failed: 'Não foi possível abrir suas preferências.',
+      retry: 'Tentar de novo',
+      saveFailed: 'Não foi possível guardar esta preferência. Tente de novo.',
+      reminderTime: 'Me lembre às',
+      reminderEnabled: 'Quero o lembrete da leitura de hoje',
+      notifyGroupActivity: 'Quero saber quando alguém do clube lê ou escreve',
+      device: {
+        title: 'Neste aparelho',
+        activate: 'Ativar os avisos neste aparelho',
+        deactivate: 'Desativar os avisos neste aparelho',
+        active: 'Os avisos estão ativados neste aparelho.',
+        inactive: 'Os avisos estão desativados neste aparelho.',
+        failed:
+          'Não foi possível mudar os avisos deste aparelho. Tente de novo.',
+        // ⚠️ `enabled: false` é o estado NORMAL de quem clona o projeto sem
+        // VAPID (decisão F): não é erro, e não pode parecer erro.
+        unavailable: 'Os avisos ainda não estão configurados neste servidor.',
+        /*
+          ⚠️ O TERCEIRO ESTADO: o `GET /notifications/config` não respondeu.
+          Não é `unavailable` (que é configuração ausente, e normal) e não é
+          sucesso — e o conserto é outro: aqui se tenta de novo, lá se
+          configura o servidor. As três preferências acima continuam
+          funcionando; só o aparelho ficou sem resposta.
+        */
+        configFailed:
+          'Não foi possível saber se os avisos estão disponíveis. Abra esta tela de novo daqui a pouco.',
+        // As QUATRO recusas da decisão G — quatro consertos diferentes.
+        insecureContext:
+          'Os avisos só funcionam num endereço seguro. Abra o clube por https, ou por localhost na sua própria máquina.',
+        unsupported:
+          'Este navegador não sabe receber avisos. Experimente abrir o clube em outro navegador.',
+        iosNotInstalled:
+          'No iPhone, os avisos só funcionam com o clube na tela de início. Toque em Compartilhar e em “Adicionar à Tela de Início”.',
+        permissionDenied:
+          'Os avisos estão bloqueados para este endereço. Libere a permissão nas configurações do navegador.',
+      },
     },
   },
   /*

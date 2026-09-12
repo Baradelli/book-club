@@ -30,7 +30,9 @@ import {
   HIGHLIGHT_NEW_PATH,
   HIGHLIGHT_PATH,
   SEARCH_PATH,
+  SETTINGS_PATH,
 } from './pages/paths';
+import { PreferenciasPage } from './pages/preferencias';
 
 /**
  * URL por página (`CLAUDE.md`). As telas de verdade chegam nas Tarefas 15–21;
@@ -160,6 +162,25 @@ export function AppRoutes() {
           acervo, e o backend faz o corte de tenant contra o `Membership`.
         */}
         <Route path={SEARCH_PATH} element={<BuscaPage />} />
+        {/*
+          AS PREFERÊNCIAS DA PESSOA (Tarefa 36b) — a primeira tela do projeto
+          que não é de clube nenhum.
+
+          ⚠️ **PRIMEIRO NÍVEL, SEGMENTO ESTÁTICO E SEM `:clubId`**: o `Settings`
+          é `unique(userId)` desde a Tarefa 03 e não tem `clubId` — um `:clubId`
+          aqui prometeria uma preferência por clube que o banco não tem. →
+          o docblock de `SETTINGS_PATH` em `pages/paths.ts`.
+
+          Não disputa ranking com nada: as outras rotas protegidas começam com
+          `/books/` ou `/clubs/`, e o outro primeiro nível é `/busca` — dois
+          segmentos estáticos distintos, sem parâmetro que possa casá-los.
+
+          ⚠️ **DENTRO do `RequireAuth`, e o corte é o próprio JWT**: as rotas
+          `/me/settings` e `/notifications/*` falam só do dono do token
+          (decisão A da Tarefa 36), então não há `assertMembership` a fazer —
+          mas também não há nada a mostrar para quem não tem sessão.
+        */}
+        <Route path={SETTINGS_PATH} element={<PreferenciasPage />} />
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />

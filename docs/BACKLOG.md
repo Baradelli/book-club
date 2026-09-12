@@ -2504,11 +2504,100 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       _**A metade de TELA virou a Tarefa 36b**, inserida: uma fatia que muda modelo, gera
       migration, cria duas tabelas, quatro rotas **e** desenha tela é uma fatia que ninguém
       consegue revisar._
-- [ ] **36b** — A tela mínima de preferências + "ativar neste aparelho". ⚠️ **FATIA
+- [x] **36b** — A tela mínima de preferências + "ativar neste aparelho". ⚠️ **FATIA
       INSERIDA**: a metade de TELA da 36 foi separada porque a metade de backend já era uma
       fatia inteira — migration, duas tabelas, quatro rotas e o **primeiro segredo do
       projeto**. Fatia que muda modelo, gera migration e ainda desenha tela é fatia que
       ninguém consegue revisar. → `tasks/36b-tela-de-preferencias.md`
+      _**577 shared** (era 575) **· 195 ui** (intocado) **· 1684 backend** (intocado) **· 744
+      app** (era 665, +79). Chunk **429.721 B** (era 421.961, **+7.760**), folga **20.279**.
+      Integração **não rodada** — a fatia não toca backend. Guarda da 29a de pé
+      (`grep 'assets/en-' dist/sw.js` = **0**)._
+      _Entregue: `/preferencias` pelo cabeçalho (onde já moram os controles da PESSOA — a home
+      é a tela do CLUBE, e é por isso que a busca mora nela), os três controles salvando
+      sozinhos com `PATCH` de **um campo**, e a seção do aparelho com as **quatro** recusas
+      distintas. `preferencias.tsx` **161** · `push-section.tsx` **132** · `push-device.ts`
+      **124**._
+      _**⚠️ O ACHADO ALTO: A COLA DO NAVEGADOR NÃO TINHA PAR POSITIVO, E O DOCBLOCK AFIRMAVA
+      QUE TINHA.** Medido pelo revisor e **reconfirmado pelo orquestrador com o protocolo
+      completo**: trocar `isSecureContext: window.isSecureContext` por `false` fixo passava
+      **728/728, ZERO acusadores** — o push ficaria bloqueado em **todo** navegador, com a
+      frase "abra por https", e nada acusaria. O mesmo com `hasServiceWorker: true`. E o
+      docblock do único teste da cola dizia textualmente que *"a cola monta um host de verdade
+      (em vez de constantes, ou de nada) é testado aqui"*. **A afirmação era falsa.** É a
+      classe §7.10 e a **terceira aparição no MVP** (o feed na 35, o texto do `onDelete` na
+      34b, esta)._
+      _**A causa, e ela é instrutiva:** em jsdom o `insecureContext` vence por **curto-
+      circuito**, então as outras **seis** leituras cruas ficavam inobserváveis atrás dela. Um
+      teste que passa pela primeira condição nunca exercita as outras — e o docblock leu isso
+      como força ("ele pina a ordem de prioridade") quando era cegueira. **Conserto:** um
+      instalador de navegador em jsdom com desfazedor (o descritor original guardado, apagando
+      a propriedade quando ela não existia — e ⚠️ **`window.isSecureContext` em jsdom 25 não é
+      `false`, é `undefined`**, outra afirmação do docblock antigo que a medição negou).
+      **Sete de sete** leituras cruas ganharam acusador, mais duas de lambuja (`matchMedia` e
+      `requestPermission`). Reconfirmado pelo orquestrador: **0 → 6 acusadores**, 738/744._
+      _**⚠️ O PRIMEIRO MÉDIO É O `writes NO NUMBER in the feed` OUTRA VEZ.** A guarda chamada
+      `reads no VITE_VAPID_* **anywhere in the app source**` lia **quatro arquivos à mão**:
+      plantar a variável no `router.tsx` — **arquivo que esta mesma fatia tocou** — passava
+      728/728. O nome do teste é parte da guarda (§7.9), e este nome prometia o que a asserção
+      não sustentava. Agora varre `src/**/*.{ts,tsx}` recursivamente (41 arquivos), e o
+      vermelho **diz onde**: `expected 'auth/require-auth.tsx: …' not to contain 'VITE_VAPID'`._
+      _**⚠️ O SEGUNDO MÉDIO É O §7.1 NA DIREÇÃO RESTRITIVA — OITAVA APARIÇÃO NO PROJETO.**
+      **Nenhum dos dois dublês sabia REJEITAR**, então um `catch` inteiro ficava sem acusador:
+      trocar `setState('inactive')` por `setState('active')` passava **728/728**. Consequência
+      num aparelho onde `navigator.serviceWorker.ready` rejeita: a tela diz **"os avisos estão
+      ativados neste aparelho"** e não chega aviso nenhum — exatamente o que a regra 10 da spec
+      chama de a pior forma desta tela errar. ⚠️ E o código **documentava por escrito** que "o
+      Chrome recusa a inscrição sem `userVisibleOnly`, e a recusa vem como **exceção**" — uma
+      afirmação que o dublê não sabia produzir. Ensinadas quatro rejeições; **duas
+      deliberadamente NÃO ensinadas, com motivo**: o `unsubscribe()` que devolve `false` (o
+      booleano é descartado por desenho — não há estado observável, o teste nasceria sem
+      acusador possível) e a rejeição do `unsubscribe` no dublê de tela (cairia no MESMO
+      `catch` que outro teste já acusa — seria cobrir duas vezes, a crítica da 32c)._
+      _**O `Promise.all` que derrubava a tela inteira** (BAIXO, consertado por decisão do
+      orquestrador): com `/notifications/config` em 500 e `/me/settings` em 200, o DOM colado
+      pelo revisor era *"Não foi possível abrir suas preferências"* — **sem campo de horário,
+      sem interruptores, zero `PATCH`**. As três preferências são o trabalho **principal** da
+      tela e o aparelho é o secundário; o secundário não leva o principal junto. Agora é
+      `allSettled` com um `configFailed` próprio, **distinto** tanto de `enabled: false` quanto
+      de sucesso — e a distinção virou propriedade do **catálogo** nos dois locales (§7.9), não
+      só da tela._
+      _**⚠️ A SPEC DO ORQUESTRADOR ERROU DE NOVO, E O EXECUTOR A CORRIGIU COM MEDIÇÃO —
+      quarta vez neste MVP.** A regra 15 afirmava que a conversão base64url "erra em silêncio"
+      e nomeava o padding `=` como parte da guarda. O executor apagou a reposição do `=`:
+      **728/728, zero acusadores**. O revisor então varreu **exaustivamente** todas as
+      **266.240** strings base64url de comprimento 2 e 3 e achou **zero** diferenças (e
+      `%4 === 1` lança dos dois lados): `atob` é *forgiving-base64*. **Mutante equivalente,
+      provado — não afirmado.** A linha ficou (é grátis), registrada no docblock **como sem
+      acusador** (§7.10). Quem carrega a propriedade de verdade é a troca `-_`→`+/` (**7**
+      acusadores) e o tipo `Uint8Array` (**1**) — e essa nem erra calada, ela **lança**._
+      _**⚠️ O `import()` FOI MEDIDO E RECUSADO, e o motivo importa para as fatias seguintes.**
+      O revisor mediu que passar a página para `lazy()` economizaria **4.798 B** na entrada
+      (folga iria a 25.408) e recomendou. O orquestrador foi conferir: o service worker
+      **precacheia os chunks de `assets/`** — o chunk lazy do **editor** está no precache. Ou
+      seja, dividir encolheria a **métrica do teto sem reduzir um byte** do que a pessoa baixa
+      na instalação. Seria jogar com o número, que é precisamente o erro que a 29a ensinou (lá
+      o conserto verdadeiro não foi mover chunk, foi `globIgnores`). **Reavaliar na 38**, e
+      então a pergunta certa não é "lazy?" e sim "lazy **e fora do precache**?"._
+      _**De que é feito o crescimento do chunk, medido por mutação:** a página inteira
+      **−5.128 B** (69%; dentro dela tela+seção ≈ 3.777 e a costura 1.351), as chaves novas do
+      catálogo `pt` **−988**, o ícone do `lucide-react` **−707**; o resto é fiação. E o `en`
+      continua em chunk próprio — prova de que as chaves novas **não** entraram na entrada._
+      _**Dois números corrigidos no registro:** o executor reportou 2 acusadores para o mutante
+      anti-culpa; o revisor mediu **1** (só o teste `pt`). E o revisor confirmou que a guarda
+      anti-culpa alcança as chaves novas **por construção** — o `entries()` é recursivo sobre o
+      objeto inteiro, sem lista de caminhos —, então a seção do aparelho está coberta nos dois
+      idiomas: plantas em três chaves diferentes acusaram todas._
+      _**⚠️ E UMA LIÇÃO DE PROTOCOLO QUE VALE MAIS QUE A FATIA:** um `cp -p` no meio de um laço
+      de mutantes **reverteu uma edição feita depois de o backup ser tirado**, e o `md5sum -c`
+      disse **"OK" justamente por isso**. O checksum prova que o arquivo voltou ao **backup**,
+      não que o backup é a versão **certa**. Quando houver edição de verdade entre mutantes:
+      retirar backup novo antes de cada um, e fechar a restauração com conferência **por
+      conteúdo**, não só por checksum._
+      _**Gates:** os cinco verificados pelo orquestrador — 577/195/1684/744, typecheck, lint e
+      prettier limpos, chunk **429.721 B** medido por mim. `backend`, `prisma` e `ui`
+      intocados; **nenhuma dependência nova**; nenhum `.env` tocado; nenhuma chave real em
+      lugar nenhum (a fixture é uma progressão inventada de 65 bytes, nomeada como falsa)._
 - [ ] **37** — `dispatchDueNotifications` (`READING_REMINDER`, janela, fuso, supressão de
       quem já leu, idempotência) — **TDD pesado** + script de cron. Luxon entra aqui, backend
       **only**. → `tasks/37-dispatcher-de-lembretes.md`

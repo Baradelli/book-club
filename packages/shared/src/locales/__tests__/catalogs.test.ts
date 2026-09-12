@@ -184,6 +184,64 @@ describe('catálogos de i18n', () => {
     ['pt', pt],
     ['en', en],
   ])(
+    '⚠️ says the FOUR device refusals differently, in %s (task 36b, decision G)',
+    (_locale, catalog) => {
+      /*
+        ⚠️ **QUATRO CAUSAS COM QUATRO CONSERTOS DIFERENTES** — abrir por
+        HTTPS/localhost · usar outro navegador · adicionar o PWA à tela de
+        início · reverter a permissão. Uma frase genérica de "não deu" manda a
+        pessoa adivinhar qual das quatro, e a quarta (o iPhone fora da tela de
+        início) é a mais cruel porque **não parece falha**: o `PushManager`
+        existe e o botão simplesmente não faria nada.
+
+        ⚠️ **E ELA MORA AQUI, NÃO NA TELA (§7.9)**, pelo mesmo motivo do par de
+        convite e dos quatro tipos do feed: "as quatro frases são distintas" é
+        propriedade de QUATRO VALORES do catálogo, percorre os DOIS locales, e
+        todo teste de tela pina `pt`. Quatro traduções `en` coladas uma na outra
+        passariam sem uma linha vermelha.
+
+        O que o catálogo NÃO decide, e por isso continua na tela: que a tela
+        escolha a chave certa para cada recusa. O acusador daquela metade é
+        `preferencias.test.tsx`.
+      */
+      const device = catalog.pages.settings.device;
+      const refusals = [
+        device.insecureContext,
+        device.unsupported,
+        device.iosNotInstalled,
+        device.permissionDenied,
+      ];
+
+      // O par positivo (§7.4): sem ele, quatro strings vazias seriam
+      // "distintas" só no dia em que o `new Set` mudasse de tamanho. E cada
+      // recusa diz o CONSERTO, então nenhuma delas cabe em três palavras.
+      for (const sentence of refusals) {
+        expect(sentence.length).toBeGreaterThan(20);
+      }
+      expect(new Set(refusals).size).toBe(4);
+
+      /*
+        ⚠️ E nenhuma delas é a frase de "ainda não configurado" (decisão F):
+        `enabled: false` é o estado NORMAL de quem clona o projeto sem VAPID, e
+        não pode falar a mesma língua de uma falha.
+      */
+      expect(refusals).not.toContain(device.unavailable);
+
+      /*
+        ⚠️ E o TERCEIRO estado do aparelho — o `GET /notifications/config` que
+        não respondeu — não fala a língua de nenhum dos outros dois. São
+        consertos diferentes: `unavailable` pede configurar o servidor,
+        `configFailed` pede tentar de novo.
+      */
+      expect(device.configFailed).not.toBe(device.unavailable);
+      expect(refusals).not.toContain(device.configFailed);
+    },
+  );
+
+  it.each([
+    ['pt', pt],
+    ['en', en],
+  ])(
     'has every key that apiErrorKey can return, in %s (rules 14 and 17)',
     (_locale, catalog) => {
       const keys = new Set(keyPaths(catalog));

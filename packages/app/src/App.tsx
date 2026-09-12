@@ -1,11 +1,14 @@
 import { loginResponseSchema } from '@clube/shared';
 import { isLocale, SUPPORTED_LOCALES } from '@clube/shared/locales';
+import { SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 
 import { useAuth } from './auth/auth-context';
 import { useActiveClub } from './club/active-club';
 import { changeLocale, persistLocale } from './i18n';
+import { SETTINGS_PATH } from './pages/paths';
 import { AppRoutes } from './router';
 import { isThemePreference, THEME_PREFERENCES, useTheme } from './theme';
 
@@ -158,13 +161,46 @@ export function App() {
           <LanguagePicker />
           <ThemePicker />
           {isAuthenticated ? (
-            <button
-              className="text-xs underline"
-              onClick={signOut}
-              type="button"
-            >
-              {t('nav.signOut')}
-            </button>
+            <>
+              {/*
+                A ENTRADA DAS PREFERÊNCIAS (Tarefa 36b, decisão A e regra 3).
+
+                ⚠️ **NO CABEÇALHO, E NÃO NA HOME.** O cabeçalho já é o lar dos
+                controles da PESSOA (idioma e tema); a home é a tela do CLUBE —
+                é por isso que a entrada da busca mora nela (Tarefa 29).
+                Preferência não pertence a clube nenhum, e o `Settings` é
+                `unique(userId)` sem `clubId` desde a Tarefa 03.
+
+                ⚠️ **`Link`, NUNCA `<a href>` cru**: âncora crua é navegação de
+                documento e recarrega o PWA inteiro (o `home.tsx` registra
+                isso) — perde a sessão em memória, o clube ativo e o chunk já
+                baixado.
+
+                ⚠️ **ÍCONE MAIS RÓTULO ACESSÍVEL**: ícone sozinho não tem nome.
+                O glifo vem do `lucide-react` (`CLAUDE.md`) e é `aria-hidden`;
+                quem nomeia o alvo é o `aria-label`, e é ele que o leitor de
+                tela fala. `min-h-11` = 44px, o piso de toque da Tarefa 13 — um
+                ícone de 16px sem alvo é toque errado garantido no celular.
+              */}
+              <Link
+                aria-label={t('nav.settings')}
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-control text-content"
+                to={SETTINGS_PATH}
+              >
+                <SlidersHorizontal
+                  aria-hidden="true"
+                  className="size-4"
+                  focusable="false"
+                />
+              </Link>
+              <button
+                className="text-xs underline"
+                onClick={signOut}
+                type="button"
+              >
+                {t('nav.signOut')}
+              </button>
+            </>
           ) : null}
         </div>
       </header>

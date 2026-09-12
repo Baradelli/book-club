@@ -146,6 +146,36 @@ export function searchPath(): string {
 }
 
 /**
+ * AS PREFERÊNCIAS DA PESSOA (Tarefa 36b) — decisão B.
+ *
+ * ⚠️ **PRIMEIRO NÍVEL, SEGMENTO ESTÁTICO, E SEM `:clubId`.** O `Settings` é
+ * `unique(userId)` desde a Tarefa 03 e **não tem `clubId`**: preferência é da
+ * PESSOA, e nenhuma escolha desta tela pertence a clube nenhum. Um `:clubId` no
+ * caminho prometeria uma preferência por clube que o banco não tem.
+ *
+ * ⚠️ **NÃO DISPUTA RANKING COM NADA.** Todas as outras rotas do grupo protegido
+ * começam com `/books/` ou `/clubs/`, e `/busca` é o único outro primeiro nível
+ * — dois segmentos estáticos distintos, sem parâmetro que possa casá-los. É
+ * exatamente o desenho do `SEARCH_PATH` da Tarefa 29.
+ *
+ * ⚠️ **O ENDEREÇO É PORTUGUÊS E A CONSTANTE É INGLÊS**, como o par
+ * `SEARCH_PATH`/`/busca`: `CLAUDE.md` manda código em inglês e conteúdo em
+ * português, e **URL é conteúdo que a pessoa vê e compartilha**.
+ *
+ * Ele mora AQUI, e não na tela, pelo motivo do docblock deste arquivo: o
+ * cabeçalho (`App.tsx`) linka para a tela, e um dia a tela linkará de volta —
+ * com a constante num módulo sem dependência, nenhum dos dois importa o outro e
+ * o ciclo que a auditoria da Tarefa 20 mediu não existe.
+ *
+ * ⚠️ **E NÃO HÁ `settingsPath()` ao lado dele**, ao contrário de todos os
+ * vizinhos: os outros constroem endereço a partir de um `id`, e este não tem
+ * parâmetro nenhum — uma função que devolve a constante seria um segundo nome
+ * para o mesmo valor, sem um caso de uso (§7.1: helper sem segundo chamador é
+ * especulação).
+ */
+export const SETTINGS_PATH = '/preferencias';
+
+/**
  * REGRA 1 (Tarefa 20) — QUEM ADMINISTRA **AQUELE** CLUBE.
  *
  * O papel vem do `/me`, **por clube**, e é por isso que esta função recebe o

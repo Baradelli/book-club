@@ -22,6 +22,7 @@ export const en: typeof pt = {
   },
   nav: {
     signOut: 'Sign out',
+    settings: 'Preferences',
   },
   language: {
     label: 'Language',
@@ -425,6 +426,36 @@ export const en: typeof pt = {
       title: 'Page not found',
       description: 'The address you opened does not exist in this club.',
       backHome: 'Back to the start',
+    },
+    settings: {
+      title: 'Preferences',
+      loading: 'Loading your preferences…',
+      failed: 'We could not open your preferences.',
+      retry: 'Try again',
+      saveFailed: 'We could not save this preference. Try again.',
+      reminderTime: 'Remind me at',
+      reminderEnabled: 'I want the reminder for the reading of the day',
+      notifyGroupActivity:
+        'I want to know when someone in the club reads or writes',
+      device: {
+        title: 'On this device',
+        activate: 'Turn the alerts on for this device',
+        deactivate: 'Turn the alerts off for this device',
+        active: 'The alerts are on for this device.',
+        inactive: 'The alerts are off for this device.',
+        failed: 'We could not change the alerts on this device. Try again.',
+        unavailable: 'The alerts are not configured on this server yet.',
+        configFailed:
+          'We could not check whether the alerts are available. Open this screen again in a moment.',
+        insecureContext:
+          'Alerts only work on a secure address. Open the club over https, or over localhost on your own machine.',
+        unsupported:
+          'This browser cannot receive alerts. Try opening the club in another browser.',
+        iosNotInstalled:
+          'On iPhone, alerts only work with the club on the Home Screen. Tap Share, then “Add to Home Screen”.',
+        permissionDenied:
+          'Alerts are blocked for this address. Allow them in your browser settings.',
+      },
     },
   },
   editor: {

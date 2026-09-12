@@ -120,6 +120,26 @@ discordar, discorde **com medição** (nomeie o segundo chamador), não por cita
     servidor de push aceita e nunca entrega. Ela é função pura, própria, testada com vetor
     conhecido nos dois sentidos, e com caso de **comprimento 65** (a chave P-256 descomprimida
     real tem 65 bytes e começa com `0x04`).
+
+    > ⚠️ **ESTA REGRA ESTAVA PARCIALMENTE ERRADA, e quem a corrigiu foi o executor, com
+    > medição.** A metade do **padding `=`** não é guarda nenhuma: `atob` implementa o
+    > *forgiving-base64* do WHATWG e **aceita entrada sem padding**. Medido duas vezes — o
+    > executor apagou a reposição do `=` e a suíte passou **728/728, zero acusadores**; o
+    > revisor então varreu **exaustivamente** todas as 266.240 strings base64url de
+    > comprimento 2 e 3 e achou **zero** diferenças entre decodificar com e sem padding
+    > (e `%4 === 1` lança dos dois lados). **Mutante equivalente, provado, não afirmado.**
+    >
+    > A linha ficou no código — é grátis e um decodificador estrito a exigiria — mas está
+    > registrada no docblock **como sem acusador**, nunca afirmada como guarda (§7.10).
+    >
+    > O que **de fato** erra em silêncio é a outra metade: a troca `-_` → `+/`. E mesmo essa
+    > não erra calada — ela **lança** `InvalidCharacterError`. Quem carrega a propriedade de
+    > verdade são os **7 acusadores** dessa troca e o **1** do tipo `Uint8Array`.
+    >
+    > Fica registrado porque é a quarta vez neste MVP que uma spec minha afirmou uma
+    > propriedade sem medi-la (a decisão E da 30, a premissa da regra 20 da 33, a regra 2 da
+    > 32c, a decisão D da 36). **Escrever "erra em silêncio" é afirmação forte e precisa da
+    > mesma medição que qualquer outra.**
 16. Desativar chama `registration.pushManager.getSubscription()`, manda o `endpoint` no
     `DELETE`, e **só então** desinscreve no navegador. Ordem importa: se desinscrever primeiro
     e o `DELETE` falhar, o backend fica com uma inscrição morta que o dispatcher da 37 vai
@@ -164,16 +184,16 @@ em vez de criar) · `packages/app/vite.config.ts` · `packages/app/public/**` ·
 
 ## Definição de pronto
 
-- [ ] `/preferencias` abre pelo cabeçalho, protegida, com as três preferências carregadas do
+- [x] `/preferencias` abre pelo cabeçalho, protegida, com as três preferências carregadas do
       `GET /me/settings`.
-- [ ] Cada controle salva sozinho com `PATCH` de um campo; falha volta o valor **e** avisa.
-- [ ] Limpar o horário **não** dispara requisição (medido por contagem de chamadas).
-- [ ] Com `enabled: false` a seção do push não aparece; com `true`, ativar e desativar
+- [x] Cada controle salva sozinho com `PATCH` de um campo; falha volta o valor **e** avisa.
+- [x] Limpar o horário **não** dispara requisição (medido por contagem de chamadas).
+- [x] Com `enabled: false` a seção do push não aparece; com `true`, ativar e desativar
       funcionam ponta a ponta contra o dublê, e o `DELETE` acontece **antes** do `unsubscribe`.
-- [ ] As **quatro** falhas da decisão G têm quatro frases distintas, e o dublê sabe produzir
+- [x] As **quatro** falhas da decisão G têm quatro frases distintas, e o dublê sabe produzir
       as quatro — inclusive a do iPhone fora da tela de início, que é a que NÃO parece falha.
-- [ ] A conversão base64url→`Uint8Array` tem teste com vetor conhecido e com o caso de 65
+- [x] A conversão base64url→`Uint8Array` tem teste com vetor conhecido e com o caso de 65
       bytes.
-- [ ] Chaves novas nos dois catálogos, dentro da varredura `GUILT_TERMS`.
-- [ ] Cinco gates verdes com números colados, chunk em bytes com o "antes" e o "depois", e
+- [x] Chaves novas nos dois catálogos, dentro da varredura `GUILT_TERMS`.
+- [x] Cinco gates verdes com números colados, chunk em bytes com o "antes" e o "depois", e
       nenhum arquivo da lista de "não tocar" modificado.
