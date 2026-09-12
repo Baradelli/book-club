@@ -154,6 +154,40 @@ export class PlanItemNotFoundError extends Error {
   override readonly name = 'PlanItemNotFoundError';
 }
 
+/**
+ * Preferência malformada da pessoa — vira **400** na borda.
+ *
+ * Hoje cobre um campo só: o `reminderTime` fora de `HH:mm` (decisão D da
+ * Tarefa 36). Um erro só para a família inteira de `Settings`, pelo mesmo
+ * motivo do `InvalidBookError` e do `InvalidNoteError`: na borda todos viram
+ * 400 igual, e é o `details` do `errorSchema` que diz qual campo está errado.
+ *
+ * ⚠️ **Não existe `SettingsNotFoundError`, e é decisão** (decisão B): não ter
+ * linha de `Settings` **não é erro** — o `getSettings` devolve o
+ * `DEFAULT_SETTINGS` e o `updateSettings` cria. O super-admin do seed é o caso
+ * real: ele nunca aceitou convite, então nunca teve a linha criada.
+ */
+export class InvalidSettingsError extends Error {
+  override readonly name = 'InvalidSettingsError';
+}
+
+/**
+ * Inscrição de push malformada — vira **400** na borda.
+ *
+ * Hoje cobre a `platform` fora do vocabulário de `@clube/shared`
+ * (`assertNotificationPlatform`), que é o portão de domínio do campo que o
+ * `CLAUDE.md` lista como `String` validado por `z.enum`.
+ *
+ * ⚠️ **Não existe `PushSubscriptionNotFoundError`, e é decisão**: desativar uma
+ * inscrição que não existe (ou que não é sua) **não é erro** — o
+ * `disablePushSubscription` é idempotente, e responder 404 obrigaria a tela a
+ * distinguir "desliguei" de "já estava desligado", que é a mesma coisa para
+ * quem olha. É a decisão C da Tarefa 32 outra vez.
+ */
+export class InvalidPushSubscriptionError extends Error {
+  override readonly name = 'InvalidPushSubscriptionError';
+}
+
 export class InvalidCredentialsError extends Error {
   override readonly name = 'InvalidCredentialsError';
 }

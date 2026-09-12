@@ -1,9 +1,9 @@
 // Schema dos Blocos A (Tarefa 03), B (Tarefa 07), C (Tarefa 11), E
-// (Tarefa 24), F (Tarefa 32) e G (Tarefa 34). Os modelos vêm do esqueleto de
-// referência em docs/plano-clube-do-livro.md §6, recortando as relações que
-// apontam para modelos que ainda não existem (NoteLink, Attachment,
-// PushSubscription, NotificationDelivery) — cada um nasce na sua tarefa, com a
-// sua migration.
+// (Tarefa 24), F (Tarefa 32), G (Tarefa 34) e I (Tarefa 36). Os modelos vêm do
+// esqueleto de referência em docs/plano-clube-do-livro.md §6, recortando as
+// relações que apontam para modelos que ainda não existem (NoteLink,
+// Attachment, NotificationDelivery) — cada um nasce na sua tarefa, com a sua
+// migration.
 //
 // Onde este arquivo divergir do §6, a divergência está registrada num ADR:
 // `ReadingPlanItem.order` tem @@index e não @@unique (ADR 0007), e
@@ -49,15 +49,18 @@ model User {
   isSuperAdmin Boolean  @default(false)
   createdAt    DateTime @default(now())
 
-  memberships  Membership[]
-  settings     Settings?
-  invitesMade  Invite[]     @relation("InviteCreator")
-  invitesUsed  Invite[]     @relation("InviteUser")
-  booksCreated Book[]       @relation("BookCreator")
-  notes        Note[]
-  highlights   Highlight[]
-  readingLogs  ReadingLog[]
-  activity     ActivityEvent[]
+  memberships       Membership[]
+  settings          Settings?
+  // Bloco I (Tarefa 36). Uma pessoa, N aparelhos — e NENHUM clube no meio: push
+  // é da pessoa (decisão F).
+  pushSubscriptions PushSubscription[]
+  invitesMade       Invite[]           @relation("InviteCreator")
+  invitesUsed       Invite[]           @relation("InviteUser")
+  booksCreated      Book[]             @relation("BookCreator")
+  notes             Note[]
+  highlights        Highlight[]
+  readingLogs       ReadingLog[]
+  activity          ActivityEvent[]
 }
 
 model Club {
@@ -377,7 +380,7 @@ model ReadingLog {
 //   velho é uma tela que mente. O feed resolve na leitura.
 // - SEM contagem de nada: `COUNTER_SHAPE` proíbe, e progresso é presença.
 model ActivityEvent {
-  id         String @id @default(cuid())
+  id         String   @id @default(cuid())
   clubId     String
   userId     String // o ATOR. Sempre o ator; nunca vem do input.
   // `String` e não enum Prisma, e é decisão do `CLAUDE.md`: ele lista
@@ -465,12 +468,110 @@ model ActivityEvent {
 // Quem impede a enxurrada do autosave não é o banco — é a decisão A da Tarefa
 // 33, no UseCase, que só dispara no nascimento (`created === true`).
 
+// Bloco I (Tarefa 36) — "este aparelho recebe push". NOVE colunas e nada mais:
+// o docblock de `src/domain/push-subscription.ts` é o dono de cada ausência, e
+// elas são decisão, não esquecimento.
+//
+// - SEM `clubId` (decisão F): push é da PESSOA, não do clube. A mesma pessoa em
+//   dois clubes tem UM aparelho, e pôr `clubId` obrigaria a decidir "qual
+//   clube" num dado que não tem clube. É a mesma família do `Settings`, e as
+//   duas são a exceção consciente ao "todo modelo de conteúdo carrega clubId"
+//   do `CLAUDE.md` — nenhuma das duas é conteúdo de clube.
+// - SEM `status`/`archivedAt`: a desativação é o `disabledAt`, e ela não é soft
+//   delete de conteúdo — é "este aparelho não recebe mais". O nome vem do
+//   `docs/NOTIFICACOES.md` §4 e do ADR 0006, que já o nomeiam, e dois nomes
+//   para o mesmo instante são a duplicação que a lição nº 3 proíbe.
+// - SEM `updatedAt`: nada reescreve a linha além do `disabledAt`, e esse
+//   instante já É o registro da mudança. Instante sem dono mente (ADR 0008).
+// - SEM `lastSentAt` e SEM contador de envio: a Tarefa 38 devolve
+//   `{ sent, disabled }` ao chamador para logar, e o `NotificationDelivery`
+//   (Tarefa 37) é o registro do que saiu.
+model PushSubscription {
+  id         String    @id @default(cuid())
+  userId     String // o DONO. Sempre o ator; nunca vem do input.
+  // `String` e não enum Prisma, e é decisão do `CLAUDE.md`: ele lista
+  // `PushSubscription.platform` entre os quatro campos "String validados por
+  // z.enum/regex (ainda evoluem)", ao lado de `ActivityEvent.type`,
+  // `NotificationDelivery.kind` e `Highlight.color`. O portão são o
+  // `z.enum(NOTIFICATION_PLATFORMS)` da borda e o
+  // `assertNotificationPlatform` do domínio — este último também na LEITURA do
+  // repositório, como o `assertActivityType`.
+  platform   String
+  // ⚠️ A IDENTIDADE da inscrição, e é do PROTOCOLO, não nossa: é a URL do
+  // serviço de push do fabricante (FCM, Mozilla, WNS), e é por ela que o
+  // aparelho é endereçado. Daí o `@@unique` abaixo e o upsert por ela.
+  endpoint   String
+  // As credenciais que cifram o payload daquele aparelho, como o navegador as
+  // entregou. NENHUMA das duas sai em resposta alguma — o
+  // `pushSubscriptionResponseSchema` não as declara, e o serializer do Zod
+  // corta o que não está declarado (§6.1).
+  p256dh     String
+  auth       String
+  // O que o navegador disse ser, quando disse. NULLABLE porque o corpo o
+  // declara `optional()`: é só para a tela da 36b poder listar "este aparelho".
+  userAgent  String?
+  // ⚠️ O ÚNICO CAMPO MUTÁVEL da linha (decisão I), e `null` = ATIVA.
+  //
+  // A desativação é SOFT: o `DELETE` grava `now()` e o `POST` reativa gravando
+  // `null` (`docs/NOTIFICACOES.md` §4). Soft e não hard porque a inscrição que
+  // volta é o caso comum — a pessoa desliga o push, muda de ideia e o navegador
+  // devolve o MESMO endpoint —, e um hard delete perderia `createdAt` e
+  // `userAgent` a cada vaivém. A Tarefa 38 escreve nesta coluna pelo outro
+  // caminho: `WebPushError` 404/410 (a pessoa desinstalou) marca `disabledAt`.
+  disabledAt DateTime?
+  // O `@default(now())` é rede de segurança, como os `@default(cuid())`: quem
+  // escreve o valor é o UseCase, com UMA leitura de relógio (ADR 0008).
+  createdAt  DateTime  @default(now())
+
+  // `onDelete: Restrict` EXPLÍCITO, e não herdado — a regra que saiu do susto do
+  // `Note.planItem`, onde o default de relação OPCIONAL é `SetNull`. Para
+  // relação OBRIGATÓRIA como esta o default do Prisma já é `Restrict` (lido do
+  // SQL gerado na Tarefa 24, não suposto), mas declarar é o que faz a
+  // convenção virar requisito: apagar uma pessoa que tem aparelho inscrito tem
+  // de FALHAR, não zerar coluna nenhuma — um `userId` nulo aqui seria uma
+  // inscrição sem dono, que nenhum UseCase produz e que o envio da Tarefa 38
+  // não saberia para quem mandar.
+  //
+  // ⚠️ **E a relação NÃO aponta para `ReadingPlanItem`** — de propósito, e é o
+  // que mantém a guarda estrutural da Tarefa 34b
+  // (`usecases/__tests__/plan-item-fk-guards.test.ts`) **verde sem uma linha de
+  // mudança**: ela cobra guarda de domínio no `replacePlanItems` para toda FK
+  // que recuse a remoção de um DIA DO PLANO, e esta recusa a remoção de uma
+  // PESSOA. Não há dia de leitura em push nenhum: o lembrete se resolve pelo
+  // `Settings.timezone` + `reminderTime` (ADR 0006), nunca por um vínculo com
+  // um item de plano.
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  // A chave natural, e é o que faz o `POST` ser upsert (decisão E): dois
+  // registros do mesmo endpoint fariam o mesmo aparelho receber duas vezes.
+  @@unique([endpoint])
+  // "as inscrições ATIVAS desta pessoa" — é a consulta do `byUserId`, que é a
+  // que o envio da Tarefa 38 faz a cada push. NADA de índice por `disabledAt`
+  // nem por `platform`: o conjunto por pessoa é de um punhado de linhas, e
+  // índice sem consulta é custo de escrita à toa (a mesma conta que deixou o
+  // `ReadingLog` com um índice só).
+  @@index([userId])
+}
+
 model Settings {
   id                  String  @id @default(cuid())
   userId              String  @unique
   timezone            String  @default("America/Sao_Paulo")
   locale              String  @default("pt")
-  reminderTime        String  @default("21:00") // HH:mm, validado por regex no Zod
+  // "HH:mm", 24 horas, zero à esquerda obrigatório — e a regra tem DOIS donos, que
+  // são o mesmo objeto: o `REMINDER_TIME_PATTERN` de `packages/shared/src/settings.ts`
+  // (a borda, usado pelo `updateSettingsSchema`) e o `assertReminderTime` de
+  // `src/domain/settings.ts`, que IMPORTA essa mesma constante. Duas barreiras, uma
+  // regra só — um segundo regex escrito à mão seria a divergência do dia em que um
+  // dos dois aceitasse "7:00".
+  //
+  // ⚠️ Este comentário dizia "validado por regex no Zod" desde a Tarefa 03, e era
+  // FALSO: não havia regex nenhum (`grep -rn 'reminderTime' packages/shared/src`
+  // voltava vazio), e a spec da 36 repetia a premissa. A Tarefa 36 o tornou
+  // verdadeiro ao criar o `REMINDER_TIME_PATTERN` — 33 tarefas depois. Ele passou a
+  // nomear os donos porque ponteiro sem dono faz o próximo agente procurar, não
+  // achar e inventar um segundo regex (a lição do `dayRange` no `CLAUDE.md`).
+  reminderTime        String  @default("21:00")
   reminderEnabled     Boolean @default(true)
   notifyGroupActivity Boolean @default(true)
 

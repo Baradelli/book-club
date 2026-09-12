@@ -28,8 +28,19 @@ export * from './invite';
 // desde a 12.
 export * from './local-day';
 export * from './note';
+// O contrato do push (MVP 3, Tarefa 36) — `docs/NOTIFICACOES.md` §4. Arquivo
+// próprio pelo mesmo motivo do `highlight.ts`: espelha a separação de arquivo
+// de rota que o backend fez (`notification-routes.ts`). A lista de plataformas
+// mora aqui pelo caminho da paleta do grifo: o domínio do backend, o `z.enum`
+// da borda e a tela da 36b precisam da MESMA lista.
+export * from './notification';
 // Os schemas de borda do registro de leitura (MVP 3, Tarefa 32). Arquivo
 // próprio pelo mesmo motivo do `highlight.ts`: espelha a separação de arquivo
 // de rota que o backend fez.
 export * from './reading-log';
 export * from './reading-plan-dates';
+// As preferências da PESSOA (MVP 3, Tarefa 36). Separado do `notification.ts`
+// porque `timezone` e `locale` não têm nada com push — quem os quer é a home e
+// o i18n —, e porque o backend tem `settings-routes.ts` ao lado do
+// `notification-routes.ts`.
+export * from './settings';

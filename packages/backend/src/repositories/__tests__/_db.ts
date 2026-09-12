@@ -42,6 +42,7 @@ export async function setupTestUser(
 }
 
 export interface Fixtures {
+  pushSubscriptionIds?: string[];
   settingsIds?: string[];
   inviteIds?: string[];
   membershipIds?: string[];
@@ -61,6 +62,7 @@ export interface Fixtures {
  */
 export async function removeFixtures(fixtures: Fixtures): Promise<void> {
   const {
+    pushSubscriptionIds = [],
     settingsIds = [],
     inviteIds = [],
     membershipIds = [],
@@ -74,6 +76,32 @@ export async function removeFixtures(fixtures: Fixtures): Promise<void> {
     userIds = [],
   } = fixtures;
 
+  // ⚠️ **A INSCRIÇÃO DE PUSH SAI ANTES DO USUÁRIO — e ela também se apaga POR
+  // ÂNCORA, não só por id** (Tarefa 36).
+  //
+  // `PushSubscription_userId_fkey` é `ON DELETE RESTRICT`, e a inscrição **não
+  // é criada por id conhecido** no caminho que importa: o
+  // `notification-routes.integration.test.ts` a cria pela ROTA, e o id sai de
+  // um `randomUUID()` dentro do UseCase que nenhum teste vê.
+  //
+  // É exatamente a forma que a Tarefa 34 aprendeu com o `ActivityEvent`: uma FK
+  // nova quebrou o `afterAll` de QUATRO arquivos de integração que já existiam,
+  // **com os testes verdes** — a limpeza estourando em
+  // `Foreign key constraint violated` e fixture vazando no banco de
+  // desenvolvimento do dono. A saída é a mesma, e num lugar só: o `OR` cobre
+  // apenas os `userIds` que o CHAMADOR já declarou como seus, então nada de
+  // outra pessoa é tocado e **não existe `deleteMany({})`** — com a lista vazia,
+  // o bloco inteiro é pulado.
+  if (pushSubscriptionIds.length > 0) {
+    await prisma.pushSubscription.deleteMany({
+      where: { id: { in: pushSubscriptionIds } },
+    });
+  }
+  if (userIds.length > 0) {
+    await prisma.pushSubscription.deleteMany({
+      where: { userId: { in: userIds } },
+    });
+  }
   if (settingsIds.length > 0) {
     await prisma.settings.deleteMany({ where: { id: { in: settingsIds } } });
   }

@@ -7,6 +7,7 @@ import { PrismaHighlightRepository } from '../repositories/prisma-highlight-repo
 import { PrismaInviteRepository } from '../repositories/prisma-invite-repository';
 import { PrismaMembershipRepository } from '../repositories/prisma-membership-repository';
 import { PrismaNoteRepository } from '../repositories/prisma-note-repository';
+import { PrismaPushSubscriptionRepository } from '../repositories/prisma-push-subscription-repository';
 import { PrismaReadingLogRepository } from '../repositories/prisma-reading-log-repository';
 import { PrismaReadingPlanItemRepository } from '../repositories/prisma-reading-plan-item-repository';
 import { PrismaSettingsRepository } from '../repositories/prisma-settings-repository';
@@ -35,6 +36,12 @@ export interface Repositories {
    * fatia é que o `grep` por ele em `packages/backend/src` volte VAZIO.)
    */
   activityEvents: PrismaActivityEventRepository;
+  /**
+   * Bloco I (Tarefa 36). Um aparelho inscrito é da PESSOA, não do clube
+   * (decisão F) — é o único repositório desta lista, junto com `settings`, que
+   * não conhece `clubId`.
+   */
+  pushSubscriptions: PrismaPushSubscriptionRepository;
 }
 
 /**
@@ -55,5 +62,6 @@ export function buildRepositories(prisma: PrismaClient): Repositories {
     highlights: new PrismaHighlightRepository(prisma),
     readingLogs: new PrismaReadingLogRepository(prisma),
     activityEvents: new PrismaActivityEventRepository(prisma),
+    pushSubscriptions: new PrismaPushSubscriptionRepository(prisma),
   };
 }

@@ -22,8 +22,10 @@ import { highlightRoutes } from '../routes/highlight-routes';
 import { inviteRoutes } from '../routes/invite-routes';
 import { meRoutes } from '../routes/me-routes';
 import { noteRoutes } from '../routes/note-routes';
+import { notificationRoutes } from '../routes/notification-routes';
 import { publicRoutes } from '../routes/public-routes';
 import { readingLogRoutes } from '../routes/reading-log-routes';
+import { settingsRoutes } from '../routes/settings-routes';
 import { publicMessageForStatus } from './handle-domain-error';
 
 declare module '@fastify/jwt' {
@@ -324,6 +326,24 @@ export async function buildServer(
     // dele, e nada mais no projeto notaria — quem acusa é o bloco
     // `authentication` do `activity-routes.integration.test.ts`.
     await api.register(activityRoutes, { prisma });
+    // DENTRO do escopo autenticado, pelo mesmo motivo das rotas de grifo, de
+    // leitura e do feed: as preferências da pessoa nasceriam PÚBLICAS se o
+    // registro fosse para fora dele, e nada mais no projeto notaria — quem
+    // acusa é o bloco `authentication` do
+    // `settings-routes.integration.test.ts`.
+    //
+    // ⚠️ E estas duas rotas NÃO têm `clubId` nem `assertMembership` (decisão A
+    // da Tarefa 36): o `Settings` é do USUÁRIO, e o corte de tenant é o próprio
+    // JWT. Ou seja, aqui o escopo autenticado é a ÚNICA barreira — motivo a
+    // mais para o registro estar dentro dele.
+    await api.register(settingsRoutes, { prisma });
+    // DENTRO do escopo autenticado, e pelo mesmo motivo. ⚠️ Aqui o preço de
+    // errar tem duas faces: um `GET /notifications/config` público entregaria a
+    // configuração do push a qualquer um, e um `POST` público deixaria qualquer
+    // um inscrever aparelho sem dono — que estouraria na FK, em 500. Quem acusa
+    // é o bloco `authentication` do
+    // `notification-routes.integration.test.ts`.
+    await api.register(notificationRoutes, { prisma });
   });
 
   return app;

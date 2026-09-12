@@ -11,6 +11,8 @@ import {
   InvalidHighlightError,
   InvalidInviteError,
   InvalidNoteError,
+  InvalidPushSubscriptionError,
+  InvalidSettingsError,
   InviteAlreadyUsedError,
   InviteExpiredError,
   InviteNotFoundError,
@@ -45,6 +47,21 @@ const STATUS_BY_ERROR: ReadonlyArray<
   // reusado sem renomear, Tarefa 22 decisão D) e cai no mesmo 400.
   [InvalidHighlightError, 400],
   [InvalidInviteError, 400],
+  // Tarefa 36, regra 18 — as duas classes novas entram no mapa no MESMO commit
+  // que as cria (a decisão H da Tarefa 22, repetida): o teste de exaustividade
+  // varre todas as classes exportadas de `domain/errors`, então uma classe nova
+  // sem status deixa a suíte VERMELHA. Não é escolha.
+  //
+  // `reminderTime` fora de `HH:mm` (o `assertReminderTime`, decisão D) — 400
+  // porque é o cliente que mandou errado, e a `message` é a única publicada
+  // (§6.2), dizendo o formato.
+  [InvalidSettingsError, 400],
+  // `platform` fora de `web`/`mobile` (o `assertNotificationPlatform`) — 400
+  // pelo mesmo motivo. ⚠️ NÃO há 404 nesta família: desativar inscrição
+  // inexistente ou alheia é **idempotente**, não erro (a decisão C da Tarefa
+  // 32 outra vez), e a inscrição de outra pessoa é inalcançável por
+  // construção — a busca é pelo par `(endpoint, ator)`.
+  [InvalidPushSubscriptionError, 400],
   [WeakPasswordError, 400],
   [InvalidCredentialsError, 401],
   [SessionUserNotFoundError, 401],

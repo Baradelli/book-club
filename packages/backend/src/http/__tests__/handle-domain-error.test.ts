@@ -14,6 +14,8 @@ import {
   InvalidHighlightError,
   InvalidInviteError,
   InvalidNoteError,
+  InvalidPushSubscriptionError,
+  InvalidSettingsError,
   InviteAlreadyUsedError,
   InviteExpiredError,
   InviteNotFoundError,
@@ -64,6 +66,12 @@ describe('handleDomainError', () => {
     [404, new PlanItemNotFoundError('detalhe-a3'), 'Not found'],
     [404, new NoteNotFoundError('detalhe-a4'), 'Not found'],
     [403, new NotTheAuthorError('detalhe-a5'), 'Forbidden'],
+    // Tarefa 36, regra 18 — as duas classes novas do Bloco I entram no mapa no
+    // MESMO commit que as cria, e as duas são 400: `reminderTime` fora de
+    // `HH:mm` e `platform` fora do vocabulário são erro do cliente, e a
+    // `message` é a única publicada (§6.2), dizendo o formato aceito.
+    [400, new InvalidSettingsError('detalhe-a8'), 'detalhe-a8'],
+    [400, new InvalidPushSubscriptionError('detalhe-a9'), 'detalhe-a9'],
     [400, new InvalidClubError('detalhe-a'), 'detalhe-a'],
     [400, new InvalidInviteError('detalhe-b'), 'detalhe-b'],
     [400, new WeakPasswordError('detalhe-c'), 'detalhe-c'],

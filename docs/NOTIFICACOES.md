@@ -198,8 +198,27 @@ function isInsideWindow(localNow: DateTime, target: string, windowMinutes: numbe
 }
 ```
 
-3. **Supressão anti-culpa:** se já existe `ReadingLog` da pessoa para a leitura de hoje
-   (via `dayRange` no fuso dela), o lembrete **não** é enviado.
+3. **Supressão anti-culpa:** se já existe `ReadingLog` da pessoa para a leitura de hoje, o
+   lembrete **não** é enviado.
+
+   > ⚠️ **CORRIGIDO ANTES DA TAREFA 37, e a correção muda a CONSULTA, não só um nome.**
+   > Este passo dizia *"via `dayRange` no fuso dela"*. Esse helper **nunca existiu** — é a
+   > mesma frase que o `CLAUDE.md` prometia e que o dono mandou corrigir na rodada de
+   > decisões do MVP 3 (a lição nº 3: regra que aponta para o que não existe faz o próximo
+   > agente procurar, não achar e inventar um terceiro nome para a mesma conta).
+   >
+   > E aqui ela não era só um ponteiro morto: ela descrevia um desenho que a **decisão 2 do
+   > MVP 3 substituiu**. O `ReadingLog` é ancorado em **`planItemId`**, não em data — "li o
+   > trecho do dia X do plano". Então **não há faixa de instantes a calcular**: o dispatcher
+   > traduz o "agora" da pessoa em **um dia de calendário** com `localDay(instant, timeZone)`
+   > (`packages/shared/src/local-day.ts`), acha o `ReadingPlanItem` **daquele dia** e pergunta
+   > se existe `ReadingLog` do par `(planItemId, userId)`. Um `range` de instantes só faria
+   > falta para consultar coluna de **instante** por dia, e nenhuma consulta do projeto faz
+   > isso — a coluna `ReadingPlanItem.date` é `@db.Date`, e quem a traduz é o
+   > `calendar-day-mapper.ts`.
+   >
+   > **Consequência para a Tarefa 37:** sem plano do dia, não há leitura de hoje — e sem
+   > leitura de hoje **não há do que lembrar**. Esse caso é `skipped`, não um lembrete vazio.
 4. **Idempotência por claim no banco** — não por lock, não por memória:
 
 ```sql

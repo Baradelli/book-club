@@ -2413,12 +2413,110 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
 
 ### Bloco I — Push
 
-- [ ] **36** — `Settings` de notificação (backend + tela) + `PushSubscription` (port, fake,
-      repo, rotas de config/subscribe/unsubscribe). → _a detalhar_
+- [x] **36** — `Settings` de notificação (**backend**) + `PushSubscription` inteiro (domínio,
+      port, fake, repo Prisma, contrato) + rotas de config/subscribe/unsubscribe.
+      → `tasks/36-settings-e-push-subscription.md`
+      _**A PRIMEIRA FATIA DO PROJETO QUE TOCA SEGREDO**, e o desenho todo saiu disso: ela
+      **guarda** inscrição e **lê** configuração, e **não envia nada**. O envio é a 38. Quem
+      mexe com chave pela primeira vez não produz efeito fora da máquina na mesma fatia._
+      _**575 shared** (era 480, +95) **· 195 ui** (intocado) **· 1684 backend** (era 1548,
+      +136) **· 665 app** (intocado). Integração **581** (era 491, +90). Chunk **421.961 B**
+      (era 421.232, +729), folga **28.039**. Migration `20260911225120_push_subscription`
+      gerada pelo Prisma. Banco provado limpo **por consulta**: `PushSubscription` em 0,
+      super-admin intacto, zero fixture com prefixo em tabela nenhuma._
+      _**⚠️ O SEGREDO, auditado mais duro que todo o resto, e por três instrumentos
+      independentes.** (1) A varredura de duas camadas em `packages/shared` — que **é**
+      empacotado no PWA — tem **antídoto real**: fazer a varredura devolver lista vazia deixa
+      **1 acusador** vermelho (`expected 0 to be greater than 20`), que é o padrão do §7.4.
+      (2) Um literal **falso** de 43 caracteres colado no `notification.ts` → **1 acusador**;
+      no `.env.example` → **2 acusadores**. (3) O revisor **construiu o bundle e o varreu**:
+      **zero** ocorrências da chave privada nos assets, `vapidPublicKey` presente. E o
+      orquestrador varreu o diff inteiro atrás de corrida base64url de 40+: **zero**.
+      `process.env.VAPID_PRIVATE_KEY` existe em **um** arquivo do backend._
+      _**⚠️ O MUTANTE DO §7.5 DEU "SOBREVIVEU" E A CLASSIFICAÇÃO CERTA ERA *EQUIVALENTE* —
+      e isso só vale porque foi PROVADO, não afirmado.** R12a (o fallback `?? req.user.sub`
+      com o `.strict()` intacto) passou **2265/2265**. Na Tarefa 30 **este mutante exato**
+      passou 1377/1377 e era **furo real** — então "sobreviveu" aqui não podia ser aceito
+      como equivalente sem prova. O orquestrador rodou sonda própria contra os três schemas
+      exportados: `DELETE +userId` **400**, `POST +userId` **400**, `PATCH +userId` **400**,
+      `POST` com `userId` **aninhado** aceito mas **stripado**. Não existe resultado de parse
+      em que `req.body.userId` seja definido → o ramo não é alcançável. A diferença para a 30
+      é **o `.strict()`**, que lá não existia naquele corpo. O mutante de verdade (R12b:
+      **declarar** o campo no schema + o fallback) tem **1 acusador já no unitário de
+      `shared`** — a primeira metade morre antes da integração._
+      _**⚠️ O ACHADO MÉDIO, E ELE VIROU UMA SÉRIE DE QUATRO.** O teste
+      `answers 400 …, and writes nothing` assertava o **status** antes de ler o banco: sob o
+      mutante a resposta vira 200, o teste morre no status, e as asserções que o **nome
+      promete** — as linhas do banco — **nunca rodam**. Ela pareceria provada sem nunca ter
+      sido exercitada. O executor já tinha achado e consertado **um** caso e **não olhou o
+      arquivo do lado**; a rodada de conserto achou o **terceiro e o quarto**. Medido nos
+      dois: antes o acusador é `expected 200 to be 400`; depois é `expected '06:15' to be
+      '05:00'` (e, no `POST`, `expected 1 to be +0` — a contagem de inscrições no nome do
+      outro). **O vermelho honesto é o que diz O QUE quebrou**, e aqui o que quebrou é
+      "escreveu no `Settings` de outra pessoa", não "o número do status"._
+      _**⚠️ E o quinto candidato foi examinado e DELIBERADAMENTE não mexido, com medição** —
+      tinha a forma, mas nenhum mutante único flipa o status ali: removido o `.regex` da
+      borda, os 8 casos continuam **verdes** porque o `assertReminderTime` do domínio (a
+      segunda barreira) recusa igual. Reordenar "por via das dúvidas" teria fingido conserto._
+      _**⚠️ UM DEFEITO DE CONTAGEM NO PRÓPRIO RELATÓRIO, pego pelo orquestrador:** o executor
+      disse ter varrido *"os 11 arquivos de integração do backend (todos)"*. São **23** — 11
+      de rota e **12 de contrato de repositório**, que ele não abriu. Medido: nos contratos o
+      defeito **não tem como existir**, porque ali o `rejects.toThrow()` e a ausência de
+      efeito são **o mesmo fato** (se o delete passou, a linha sumiu — morrer ali já é a
+      acusação certa), enquanto na rota são **dois fatos independentes**: um 400 **com**
+      escrita é possível, e foi exatamente o bug da Tarefa 32. Escopo certo, **denominador
+      errado** — e denominador errado num relatório de varredura é o que faz a próxima pessoa
+      achar que já olharam._
+      _**A premissa FALSA era da spec do orquestrador, e o executor a mediu.** A decisão D
+      dizia *"o regex `HH:mm` já existe no Zod da borda (Tarefa 03)"* — e o comentário do
+      `schema.prisma` dizia o mesmo. `grep -rn 'reminderTime' packages/shared/src` voltava
+      **vazio**: **nunca existiu**, por **33 tarefas**. É a mesma classe do `dayRange`. O
+      executor entregou as **duas** barreiras (borda e domínio) com **uma constante só** —
+      `REMINDER_TIME_PATTERN`, importada pelos dois, porque duas barreiras não podem ser duas
+      regras —, e o comentário do schema foi reescrito **nomeando os dois donos** e
+      registrando quando deixou de ser falso. Só comentário: md5 do schema **sem comentários**
+      idêntico, `migrate status` sem drift, `migrate diff` vazio._
+      _**O `.strict()` é a barreira, e a segunda é o `response` (§6.1).** As **5** rotas novas
+      declaram `response` por status enumerado, e nenhuma devolve objeto de domínio. Medido: um
+      `toResponse` que juntasse a chave privada dá **2 acusadores unitários** — e a integração
+      fica **VERDE**, porque o `serializerCompiler` corta o campo não declarado. Duas redes, e
+      a de fora não dispensa a de dentro._
+      _**Fidelidade do fake conferida nos SEIS eixos** (chave única, upsert, endpoint
+      duplicado, `disable`, `byUserId`, id inexistente) — bate em todos. E está **pinada por
+      teste**: tirar `disabledAt === null` do `byUserId` dá **4 acusadores**; trocar
+      `existing?.id ?? subscription.id` por `subscription.id` dá **1**. ⚠️ **Uma divergência
+      permissiva registrada e NÃO consertada:** o store indexado só por `endpoint` aceita dois
+      endpoints com o mesmo `id`, que o Postgres recusa na PK. Inalcançável hoje — **um**
+      chamador, com `existing?.id ?? randomUUID()` —, então não ganha rede: ganha registro no
+      docblock, como a 34b fez com o `planItemId` nulo._
+      _**Erro de domínio (§6.2):** as duas classes novas mapeadas **no mesmo commit**; remover
+      uma dá **2 acusadores**, um deles o **estrutural de exaustividade** — é vermelho, não 500
+      mudo. `NOT_YET_MAPPED` continua `[]`, e `error.message` só escapa na classe 400._
+      _**A guarda estrutural da 34b ficou verde sem uma linha de mudança, e pelo motivo LIDO no
+      schema:** a única FK do `PushSubscription` aponta para `User`, não para
+      `ReadingPlanItem` — push não tem dia de plano, o lembrete se resolve por
+      `timezone` + `reminderTime`. Escrito no comentário do modelo para a próxima pessoa não
+      precisar deduzir._
+      _**Gates:** os cinco verificados pelo orquestrador, não copiados — 575/195/1684/665,
+      typecheck, lint e prettier limpos, chunk **421.961 B** medido por mim, e a guarda da 29a
+      de pé (`grep 'assets/en-' dist/sw.js` = **0**). `app` e `ui` intocados; **nenhuma
+      dependência nova** — `web-push` **não** entrou, é da 38._
+      _**A metade de TELA virou a Tarefa 36b**, inserida: uma fatia que muda modelo, gera
+      migration, cria duas tabelas, quatro rotas **e** desenha tela é uma fatia que ninguém
+      consegue revisar._
+- [ ] **36b** — A tela mínima de preferências + "ativar neste aparelho". ⚠️ **FATIA
+      INSERIDA**: a metade de TELA da 36 foi separada porque a metade de backend já era uma
+      fatia inteira — migration, duas tabelas, quatro rotas e o **primeiro segredo do
+      projeto**. Fatia que muda modelo, gera migration e ainda desenha tela é fatia que
+      ninguém consegue revisar. → `tasks/36b-tela-de-preferencias.md`
 - [ ] **37** — `dispatchDueNotifications` (`READING_REMINDER`, janela, fuso, supressão de
-      quem já leu, idempotência) — **TDD pesado** + script de cron. → _a detalhar_
+      quem já leu, idempotência) — **TDD pesado** + script de cron. Luxon entra aqui, backend
+      **only**. → `tasks/37-dispatcher-de-lembretes.md`
 - [ ] **38** — `GROUP_ACTIVITY` imediato a partir do `ActivityEvent` + service worker
-      (`push-handler.js`) + tela de ativar notificações. → _a detalhar_
+      (`push-handler.js`) + o `PushSender` de verdade. ⚠️ **A "tela de ativar notificações"
+      saiu daqui**: ela é da **36b**, e deixá-la nas duas linhas daria dois donos para a mesma
+      tela. O que sobra para cá é o que faz a notificação APARECER — nada na 36b exibe push.
+      → _a detalhar_
 
 ## Definição de "MVP 3 pronto"
 

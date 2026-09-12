@@ -4,13 +4,29 @@ import type { SettingsRepository } from '../ports/settings-repository';
 export class SettingsRepositoryFake implements SettingsRepository {
   private store = new Map<string, Settings>();
 
+  /**
+   * Contadores de CHAMADA, nunca cronômetro (§7.3) — e eles nasceram na Tarefa
+   * 36 porque a **regra 1** exige prová-los: o `getSettings` devolve o
+   * `DEFAULT_SETTINGS` quando não há linha e **não escreve**, e isso se prova
+   * por `saveCalls === 0`, não por resultado. "Não chamou" e "chamou e não
+   * mudou nada" dão o MESMO `saved`, e a segunda é um `UPDATE` por request em
+   * toda abertura da tela de preferências.
+   *
+   * O contador conta a **chamada, não o sucesso**: uma escrita recusada pelo
+   * `unique(userId)` também foi uma tentativa, e é isso que o teste quer saber.
+   */
+  saveCalls = 0;
+  byUserIdCalls = 0;
+
   async save(settings: Settings): Promise<Settings> {
+    this.saveCalls += 1;
     this.assertUniqueUserId(settings);
     this.store.set(settings.id, this.clone(settings));
     return this.clone(settings);
   }
 
   async byUserId(userId: string): Promise<Settings | null> {
+    this.byUserIdCalls += 1;
     for (const settings of this.store.values()) {
       if (settings.userId === userId) return this.clone(settings);
     }
