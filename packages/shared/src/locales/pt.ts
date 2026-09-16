@@ -898,6 +898,31 @@ export const pt = {
           'No iPhone, os avisos só funcionam com o clube na tela de início. Toque em Compartilhar e em “Adicionar à Tela de Início”.',
         permissionDenied:
           'Os avisos estão bloqueados para este endereço. Libere a permissão nas configurações do navegador.',
+        /*
+          ⚠️ O BOTÃO DE TESTE, e as três frases dele NÃO CONTAM APARELHO.
+
+          A resposta da rota traz `{ sent, disabled }`, e seria fácil escrever
+          "mandei para 2 aparelhos". Num clube de duas pessoas isso é ruído: os
+          dois estados que mudam o que a pessoa FAZ são "saiu" e "não saiu para
+          ninguém". E a contagem cobraria plural em dois idiomas para não dizer
+          nada acionável.
+
+          Cada frase diz o CONSERTO, como as quatro recusas acima — uma
+          mensagem que só informa o fracasso deixa a pessoa adivinhando.
+        */
+        test: 'Enviar um aviso de teste',
+        testSent:
+          'Mandei o aviso. Se ele não aparecer em alguns segundos, quem o bloqueou foi o aparelho — confira as notificações do sistema.',
+        /*
+          ⚠️ O CASO QUE ESTE BOTÃO EXISTE PARA REVELAR, e ele é invisível sem
+          o botão: o navegador ainda tem a inscrição (por isso a tela diz
+          "ativado"), e o servidor não tem nenhuma viva. Sem o teste, a pessoa
+          só descobre isso na hora em que o lembrete NÃO chega — que é a hora
+          em que ela não está olhando.
+        */
+        testNobody:
+          'Nenhum aparelho recebeu. A inscrição deste aparelho não vale mais no servidor: desative e ative os avisos de novo.',
+        testFailed: 'Não consegui enviar o aviso de teste. Tente de novo.',
       },
     },
   },

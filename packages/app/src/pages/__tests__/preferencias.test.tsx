@@ -91,6 +91,9 @@ const FAKE_PUBLIC_KEY_NOT_A_REAL_ONE =
 
 const AN_ENDPOINT = 'https://push.exemplo.test/aparelho-do-marcos';
 
+/** A resposta feliz do `POST /notifications/test`: um aparelho recebeu. */
+const SENT_TO_ONE = { sent: 1, disabled: 0 };
+
 const A_SUBSCRIPTION: BrowserPushSubscription = {
   endpoint: AN_ENDPOINT,
   keys: { p256dh: 'p256dh-de-mentira', auth: 'auth-de-mentira' },
@@ -195,6 +198,8 @@ interface Setup {
   config?: Reply;
   /** A resposta do `POST`/`DELETE` de inscrição. */
   subscriptions?: Reply;
+  /** A resposta do `POST /notifications/test`. */
+  test?: Reply;
   /** Uma resposta, ou a FILA delas — para o servidor que volta. */
   patch?: Reply | readonly Reply[];
   device?: FakeDeviceOptions;
@@ -241,6 +246,19 @@ async function renderSettings(
         [
           '/notifications/config',
           setup.config ?? { status: 200, body: someConfig() },
+        ],
+        /*
+          ⚠️ ANTES de `/notifications/subscriptions`, e a ordem é deliberada
+          pelo mesmo motivo do `/me/settings` acima: o `replyByUrl` casa por
+          FRAGMENTO e o primeiro que casa ganha. Os dois fragmentos são
+          disjuntos hoje, então a ordem não muda nada — ela está aqui para o dia
+          em que alguém criar `/notifications/subscriptions/test`, que casaria
+          os dois. É a terceira aparição da classe "falso verde por substring"
+          neste projeto (Tarefa 35).
+        */
+        [
+          '/notifications/test',
+          setup.test ?? { status: 200, body: SENT_TO_ONE },
         ],
         [
           '/notifications/subscriptions',
@@ -1048,5 +1066,112 @@ describe('⚠️ o que esta fatia NÃO pode ter (regra 6)', () => {
     for (const source of sources) {
       expect(`${source.file}: ${source.text}`).not.toContain('VITE_VAPID');
     }
+  });
+});
+
+/**
+ * ⚠️ **O BOTÃO DE TESTE — e ele existe porque TESTAR PUSH É CARO.**
+ *
+ * Sem ele, a única forma de o dono saber se a notificação chega ao aparelho é
+ * pôr o horário do lembrete alguns minutos atrás, garantir que não marcou "li
+ * hoje", e rodar o dispatcher à mão (`COMO-TESTAR.md` §6.7) — quatro passos,
+ * três dos quais mexem em estado de produção. O botão troca isso por um toque.
+ *
+ * ⚠️ **ELE SÓ APARECE COM ESTE APARELHO INSCRITO**, e a razão não é estética:
+ * a rota manda para **todas** as inscrições ativas de quem chamou, então com
+ * este aparelho de fora o push sairia para os OUTROS e nada chegaria aqui. Um
+ * botão chamado "enviar notificação de teste" que não faz nada aparecer na tela
+ * de quem o tocou é o botão mentindo sobre o que faz.
+ */
+describe('o botão de testar a notificação', () => {
+  it('⚠️ só aparece com ESTE aparelho inscrito — sem inscrição, não existe', async () => {
+    await renderSettings({ device: { subscribed: false } });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', {
+          name: pt.pages.settings.device.activate,
+        }),
+      ).not.toBeNull();
+    });
+
+    expect(
+      screen.queryByRole('button', { name: pt.pages.settings.device.test }),
+    ).toBeNull();
+  });
+
+  it('manda o teste SEM CORPO, e avisa que o aviso saiu', async () => {
+    const { calls } = await renderSettings({ device: { subscribed: true } });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: pt.pages.settings.device.test }),
+      );
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(requestsTo(calls, '/notifications/test')).toHaveLength(1);
+    });
+
+    const post = requestsTo(calls, '/notifications/test')[0];
+    expect(post?.method).toBe('POST');
+    // ⚠️ Nenhum corpo: o dono do envio é o JWT (§6.3). Um `userId` aqui seria
+    // um endereço que manda push para outra pessoa.
+    expect(post?.body).toBeUndefined();
+
+    // ⚠️ E NÃO foi para o endereço de inscrição — a rota é outra. O
+    // `replyByUrl` casa por fragmento, e é assim que um teste destes já passou
+    // por acidente neste projeto (Tarefa 35).
+    expect(requestsTo(calls, '/notifications/subscriptions')).toHaveLength(0);
+
+    await waitFor(() => {
+      expect(readableText()).toContain(pt.pages.settings.device.testSent);
+    });
+  });
+
+  it('⚠️ diz que NINGUÉM recebeu quando o servidor não tem inscrição viva', async () => {
+    await renderSettings({
+      device: { subscribed: true },
+      test: { status: 200, body: { sent: 0, disabled: 1 } },
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: pt.pages.settings.device.test }),
+      );
+      await Promise.resolve();
+    });
+
+    /*
+      ⚠️ ESTE É O CASO QUE O BOTÃO EXISTE PARA REVELAR, e ele é INVISÍVEL sem
+      ele: o navegador acha que tem inscrição (por isso a tela diz "ativado"),
+      e o servidor não tem nenhuma viva — porque a linha foi apagada, ou porque
+      o serviço de push a matou e o envio a desativou (`disabled: 1`). Sem o
+      botão, a pessoa só descobriria isso na hora em que o lembrete NÃO
+      chegasse, que é a hora em que ela não está olhando.
+    */
+    await waitFor(() => {
+      expect(readableText()).toContain(pt.pages.settings.device.testNobody);
+    });
+    expect(readableText()).not.toContain(pt.pages.settings.device.testSent);
+  });
+
+  it('diz que não conseguiu quando o servidor recusa', async () => {
+    await renderSettings({
+      device: { subscribed: true },
+      test: { status: 500, body: { error: 'internal server error' } },
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: pt.pages.settings.device.test }),
+      );
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(readableText()).toContain(pt.pages.settings.device.testFailed);
+    });
   });
 });

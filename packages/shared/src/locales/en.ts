@@ -455,6 +455,12 @@ export const en: typeof pt = {
           'On iPhone, alerts only work with the club on the Home Screen. Tap Share, then “Add to Home Screen”.',
         permissionDenied:
           'Alerts are blocked for this address. Allow them in your browser settings.',
+        test: 'Send a test alert',
+        testSent:
+          'Sent. If it does not show up within a few seconds, the device blocked it — check your system notifications.',
+        testNobody:
+          'No device received it. This device is no longer registered on the server: turn the alerts off and on again.',
+        testFailed: 'We could not send the test alert. Try again.',
       },
     },
   },

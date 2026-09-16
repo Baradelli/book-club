@@ -528,6 +528,25 @@ negada** (você recusou antes, e aí tem de reverter nas configurações do nave
 **navegador sem suporte** · **iPhone fora da tela de início**. Se você vir uma frase genérica
 de "não deu", é bug.
 
+### ⚠️ "Enviar um aviso de teste" — o caminho curto
+
+Com o aparelho ativado aparece um segundo botão: **"Enviar um aviso de teste"**. Ele manda um
+push **para os seus aparelhos**, na hora, sem mexer em horário nem em plano de leitura. É o
+jeito rápido de responder *"o push chega neste celular?"* — o jeito longo é o §6.7.
+
+O botão **só aparece com este aparelho inscrito**, e não é preciosismo: a rota manda para
+**todas** as suas inscrições ativas, então com este aparelho de fora o aviso sairia para os
+**outros** e nada apareceria na sua tela. Um botão de teste que não faz nada aparecer para
+quem o tocou estaria mentindo.
+
+As três respostas:
+
+| O que aparece | O que significa, e o que fazer |
+|---|---|
+| *"Mandei o aviso…"* | saiu. Se não aparecer em alguns segundos, quem bloqueou foi o **aparelho** — confira as notificações do sistema para o navegador/PWA |
+| ⚠️ *"Nenhum aparelho recebeu…"* | o navegador acha que está inscrito e o **servidor não tem inscrição viva** (a linha foi apagada, ou o serviço de push a matou). **Desative e ative de novo.** Este é o caso que o botão existe para revelar: sem ele você só descobriria na hora em que o lembrete não chegasse — que é a hora em que você não está olhando |
+| *"Não consegui enviar…"* | o servidor recusou. Tente de novo; se insistir, olhe o terminal da API |
+
 ### Configurar a chave VAPID (uma vez só)
 
 Sem isto, nada de push funciona — e **o projeto roda normalmente assim**, por escolha.

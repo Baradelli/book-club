@@ -2845,6 +2845,53 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       executor **e** do revisor); e o **`notifications:dispatch` NÃO foi executado** — provado
       pelo `NotificationDelivery` em 0._
 
+- [x] **38b** — O botão "enviar um aviso de teste" na tela de preferências. ⚠️ **FATIA
+      INSERIDA depois do fechamento do MVP**, pedida pelo dono. Só tela: a rota
+      `POST /notifications/test` já existia desde a 38.
+      _**602 shared** (intocado) **· 195 ui** (intocado) **· 1891 backend** (intocado) **· 770
+      app** (era 766, +4). Chunk **431.094 B** (era 430.252, **+842** — as frases novas do
+      catálogo `pt`, que é *eager*), folga **18.906**. Precache 16 entradas / 897,95 KiB.
+      Integração **não rodada** — a fatia não toca backend._
+      _**POR QUE ELA EXISTE:** sem o botão, a única forma de saber se o push chega ao aparelho
+      era o roteiro do `COMO-TESTAR.md` §6.7 — pôr o horário do lembrete alguns minutos atrás,
+      garantir que não marcou "li hoje", e rodar o dispatcher à mão. Quatro passos, **três
+      deles mexendo em estado de produção**, para responder uma pergunta binária. O botão troca
+      isso por um toque._
+      _**⚠️ ELE SÓ APARECE COM ESTE APARELHO INSCRITO, e não é estética.** A rota manda para
+      **todas** as inscrições ativas de quem chamou: com este aparelho de fora, o aviso sairia
+      para os **outros** e nada apareceria na tela de quem tocou. Um botão chamado "enviar um
+      aviso de teste" que não faz nada aparecer para quem o tocou está mentindo sobre o que
+      faz. Medido: tirar a guarda → **1 acusador**._
+      _**⚠️ O ESTADO QUE O BOTÃO EXISTE PARA REVELAR, e ele era INVISÍVEL:** `sent: 0`. O
+      navegador ainda tem a inscrição (por isso a tela diz "ativado") e o servidor **não tem
+      nenhuma viva** — a linha foi apagada, ou o serviço de push a matou e o envio a desativou.
+      Sem o botão, a pessoa só descobriria isso **na hora em que o lembrete não chegasse**, que
+      é a hora em que ela não está olhando. Por isso `nobody` é **estado próprio, não um caso
+      de `failed`**: a requisição deu **200**, o servidor funcionou, e o conserto é outro
+      (desativar e ativar de novo) — fundir os dois mandaria a pessoa "tentar de novo" para
+      sempre. Medido: colapsar os dois → **1 acusador**._
+      _**O corpo vai VAZIO** (§6.3): o dono do envio é o JWT, e a rota não lê `userId` de lugar
+      nenhum. Um corpo aqui seria um endereço capaz de mandar push **para outra pessoa** —
+      arma, não diagnóstico. Medido com o mutante do contrabando (`{ userId: 'u-outra-pessoa' }`)
+      → **1 acusador**._
+      _**Três frases, três consertos**, e nenhuma delas conta aparelho: a resposta traz
+      `{ sent, disabled }` e seria fácil escrever "mandei para 2 aparelhos", mas num clube de
+      duas pessoas isso é ruído — os dois estados que mudam o que a pessoa **faz** são "saiu" e
+      "não saiu para ninguém", e a contagem cobraria plural em dois idiomas para não dizer nada
+      acionável. Cada frase diz o conserto, como as quatro recusas da 36b._
+      _**⚠️ E o docblock do `push-section.tsx` ficou FALSO com esta fatia** — ele afirmava
+      "ESTA FATIA NÃO EXIBE PUSH NENHUM … o `POST /notifications/test` é a Tarefa 38". Riscado,
+      não apagado, com o aviso de que **esta tela agora produz efeito no aparelho**: um toque
+      aqui faz o servidor mandar push de verdade. Contador canônico atualizado: **178** (era
+      132). É a mesma classe de ponteiro morto que o fechamento do MVP consertou em cinco
+      documentos — e ela reapareceu na primeira fatia depois._
+      _**A varredura anti-culpa alcança as frases novas — medido, não presumido:** planta de
+      cobrança em `pages.settings.device.testFailed` → **1 acusador**, e o vermelho **nomeia a
+      chave e o termo**._
+      _**Gates:** 602/195/1891/770, typecheck, lint e prettier limpos, chunk **431.094 B**
+      medido, guarda da 29a de pé e a revisão do `push-handler.js` no `sw.js` intacta.
+      `backend`, `prisma` e `ui` intocados; nenhuma dependência nova; nenhuma migration._
+
 ## Definição de "MVP 3 pronto"
 
 Eu marco que li o trecho de hoje e vejo onde eu e o clube estamos no livro. Recebo um

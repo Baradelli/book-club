@@ -557,6 +557,11 @@ julgar com o olho, não com o teste.
 - [ ] Gero o par VAPID e ponho no `.env` do backend → §6.6. Antes disso, a seção de
       notificações diz **"indisponível"** — e isso **não é erro**.
 - [ ] Em `/preferencias`, **ativo neste aparelho**. O navegador pede permissão; eu concedo.
+- [ ] ⚠️ **Toco em "Enviar um aviso de teste" e a notificação aparece.** É o teste mais curto
+      de todo este roteiro — se ele funcionar, o push está de pé ponta a ponta, e tudo o que
+      vem depois é sobre *quando* mandar, não sobre *se* chega. → `COMO-TESTAR.md` §6.6.
+- [ ] O botão de teste **não existe** quando o aparelho está desativado. (Se existir, ele
+      mandaria o aviso para os outros aparelhos e nada apareceria aqui.)
 - [ ] **Recuso** a permissão de propósito num navegador limpo: a tela diz **que foi a
       permissão**, não uma frase genérica de "não deu".
 - [ ] Abro pelo **IP da rede** e tento ativar: a tela diz **que o endereço não é seguro**.
