@@ -12,6 +12,7 @@ export class ReadingLogRepositoryFake implements ReadingLogRepository {
   private findCallCount = 0;
   private findFiltersSeen: ReadingLogFilter[] = [];
   private planItemIdsWithAnyReadingLogCallCount = 0;
+  private planItemIdsReadByCallCount = 0;
 
   /**
    * Upsert com o alvo em **`(planItemId, userId)`**, espelhando o
@@ -147,6 +148,30 @@ export class ReadingLogRepositoryFake implements ReadingLogRepository {
    * `ReadingLog.planItemId` é NOT NULL (não existe leitura avulsa), então não
    * há a linha "o `IN (...)` contra coluna nula é falso" para reproduzir.
    */
+  /**
+   * ⚠️ **O IRMÃO COM DONO**, e a fidelidade que importa aqui é o `userId`:
+   * um fake que ignorasse o dono devolveria a leitura do CLUBE como se fosse
+   * a da pessoa, e a corrente de quem nunca leu apareceria cheia — verde, e
+   * sem ninguém ver.
+   */
+  async planItemIdsReadBy(
+    userId: string,
+    planItemIds: readonly string[],
+  ): Promise<string[]> {
+    this.planItemIdsReadByCallCount += 1;
+
+    if (planItemIds.length === 0) return [];
+
+    const asked = new Set(planItemIds);
+    const found = new Set<string>();
+    for (const log of this.store.values()) {
+      if (log.userId === userId && asked.has(log.planItemId)) {
+        found.add(log.planItemId);
+      }
+    }
+    return [...found];
+  }
+
   async planItemIdsWithAnyReadingLog(
     planItemIds: readonly string[],
   ): Promise<string[]> {
@@ -288,6 +313,11 @@ export class ReadingLogRepositoryFake implements ReadingLogRepository {
    * malformado não chega a consultar. Sem contador, "recusou antes de ler" e
    * "leu e depois recusou" dão o mesmo erro para o cliente (§7.3).
    */
+  /** Quantas vezes `planItemIdsReadBy` foi chamado — uma por pessoa (§7.3). */
+  get planItemIdsReadByCalls(): number {
+    return this.planItemIdsReadByCallCount;
+  }
+
   get planItemIdsWithAnyReadingLogCalls(): number {
     return this.planItemIdsWithAnyReadingLogCallCount;
   }

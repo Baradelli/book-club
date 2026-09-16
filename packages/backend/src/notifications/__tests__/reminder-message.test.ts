@@ -192,3 +192,87 @@ describe('buildReadingReminder', () => {
     expect(en.notifications.readingReminder.body).toContain('{{title}}');
   });
 });
+
+/**
+ * A MOLDURA DE PERDA NO LEMBRETE — o "foguinho" (ADR 0010).
+ *
+ * ⚠️ Estas frases são as únicas do backend isentas da varredura anti-culpa, e o
+ * ADR registra a reversão: o dono pediu o mecanismo do Duolingo depois de a
+ * objeção ser levantada e medida.
+ */
+describe('buildReadingReminder com a corrente', () => {
+  const planItem = aPlanItem({ title: 'Cap. 3 — A promessa' });
+
+  /**
+   * ⚠️ **QUEM ESTÁ EM ZERO NÃO É COBRADO.** Não há o que perder, e a frase de
+   * perda ali seria o app cobrando quem ainda não começou. É o caso mais fácil
+   * de deixar passar, porque a cobrança "funciona" nos dois.
+   */
+  it.each([[0], [undefined]])(
+    '⚠️ NÃO cobra quem está em zero (streak %s)',
+    (streak) => {
+      const payload = buildReadingReminder({
+        locale: 'pt',
+        bookId: 'b',
+        planItem,
+        ...(streak === undefined ? {} : { streak }),
+      });
+
+      expect(payload.body).toBe('Cap. 3 — A promessa');
+      expect(payload.body).not.toContain('perder');
+    },
+  );
+
+  it('⚠️ diz "1 dia" no singular — o primeiro dia de alguém', () => {
+    const payload = buildReadingReminder({
+      locale: 'pt',
+      bookId: 'b',
+      planItem,
+      streak: 1,
+    });
+
+    expect(payload.body).toContain('sequência de 1 dia.');
+    expect(payload.body).not.toContain('1 dias');
+  });
+
+  it('cobra quem tem corrente, e ainda diz O QUE ler', () => {
+    const payload = buildReadingReminder({
+      locale: 'pt',
+      bookId: 'b',
+      planItem,
+      streak: 12,
+    });
+
+    expect(payload.body).toContain('12');
+    // ⚠️ O tema do dia continua lá: mesmo cobrando, o lembrete tem de dizer o
+    // que ler — senão vira só a cobrança.
+    expect(payload.body).toContain('Cap. 3 — A promessa');
+  });
+
+  it('cobra em inglês também', () => {
+    const payload = buildReadingReminder({
+      locale: 'en',
+      bookId: 'b',
+      planItem,
+      streak: 7,
+    });
+
+    expect(payload.body).toContain('7');
+    expect(payload.body).toContain('Cap. 3 — A promessa');
+  });
+
+  /** O antídoto do §7.4: as chaves têm os dois marcadores, senão os testes acima
+   * passariam sobre uma string constante. */
+  it('os dois catálogos interpolam a contagem E o tema', () => {
+    for (const catalog of [pt, en]) {
+      for (const key of ['streakBody_one', 'streakBody_other'] as const) {
+        expect(catalog.notifications.readingReminder[key]).toContain(
+          '{{count}}',
+        );
+        expect(catalog.notifications.readingReminder[key]).toContain(
+          '{{title}}',
+        );
+      }
+    }
+  });
+});

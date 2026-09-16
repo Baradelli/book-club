@@ -199,6 +199,8 @@ interface HomeSetup {
   me?: Reply;
   /** `GET /clubs/:clubId/activity?limit=…` — o feed (Tarefa 35). */
   activity?: Reply | Responder;
+  /** A resposta de `GET /clubs/:clubId/streaks` (ADR 0010). */
+  streaks?: Reply | Responder;
   /** `GET /clubs/:clubId/members` — o nome de quem aparece no feed. */
   members?: Reply | Responder;
 }
@@ -281,6 +283,14 @@ function homeResponder(setup: HomeSetup): Responder {
     [
       ['/auth/refresh', { status: 200, body: { token: 'token-renovado' } }],
       ['/activity', setup.activity ?? { status: 200, body: [] }],
+      /*
+        ⚠️ **ANTES de `/clubs/`, e é a quarta aparição da classe neste
+        projeto.** O `replyByUrl` casa por FRAGMENTO e o primeiro vencedor
+        ganha: `/clubs/c-casal/streaks` **contém** `/clubs/`, então com a ordem
+        trocada a corrente receberia o corpo da ESTANTE, o Zod recusaria, e o
+        foguinho sumiria da tela com o teste verde.
+      */
+      ['/streaks', setup.streaks ?? { status: 200, body: [] }],
       ['/members', setup.members ?? { status: 200, body: clubMembers() }],
       ['/me', setup.me ?? meReply({ clubs: [...(setup.clubs ?? [CASAL])] })],
       [
@@ -1949,5 +1959,146 @@ describe('the FIRST FRAME of a session never shows the empty state', () => {
     // E este estado também não cobra nada (regra 16). É o único que esta suíte
     // observa FORA do DOM, então a varredura é a mesma, sobre a string.
     expectNoGuiltInHtml(html);
+  });
+});
+
+/**
+ * A CORRENTE DE LEITURA na home — o "foguinho" (ADR 0010).
+ *
+ * ⚠️ **Este bloco testa uma feature que CONTRARIA o desenho do feed**, e o ADR
+ * registra a reversão: o feed nasceu sem coluna de pessoa e sem número porque
+ * uma coluna com número convida a comparar. Foi decisão do dono, tomada depois
+ * de a objeção ser levantada e medida.
+ */
+describe('a corrente de leitura (ADR 0010)', () => {
+  const MARIA_ID = 'u-maria';
+
+  it('mostra a corrente de cada pessoa do clube', async () => {
+    await renderHome({
+      streaks: {
+        status: 200,
+        body: [
+          { userId: ME_ID, streak: 12, readToday: true },
+          { userId: MARIA_ID, streak: 30, readToday: true },
+        ],
+      },
+    });
+
+    await waitFor(() => {
+      expect(readableText()).toContain(
+        pt.pages.home.streak.days_other.replace('{{count}}', '12'),
+      );
+    });
+    expect(readableText()).toContain(
+      pt.pages.home.streak.days_other.replace('{{count}}', '30'),
+    );
+  });
+
+  /**
+   * ⚠️ **O SINGULAR EXISTE, e é o plural do i18next fazendo o trabalho.** Sem
+   * as duas chaves (`days_one` e `days_other`), o primeiro dia de alguém diria
+   * "1 dias seguidos" — a tela errando no exato momento em que a pessoa começa.
+   */
+  it('⚠️ diz "1 dia seguido" no singular, não "1 dias seguidos"', async () => {
+    await renderHome({
+      streaks: {
+        status: 200,
+        body: [{ userId: ME_ID, streak: 1, readToday: true }],
+      },
+    });
+
+    await waitFor(() => {
+      expect(readableText()).toContain(
+        pt.pages.home.streak.days_one.replace('{{count}}', '1'),
+      );
+    });
+    expect(readableText()).not.toContain(
+      pt.pages.home.streak.days_other.replace('{{count}}', '1'),
+    );
+  });
+
+  /**
+   * ⚠️ **A FRASE DE PERDA — o mecanismo que o dono escolheu, e o único lugar do
+   * app isento da varredura anti-culpa.**
+   *
+   * Ela só aparece para quem TEM corrente e ainda não leu hoje. Os dois testes
+   * abaixo são o par: sem o negativo, um `atRisk` sempre verdadeiro passaria.
+   */
+  it('⚠️ avisa que a sequência vai se perder quando eu ainda não li hoje', async () => {
+    await renderHome({
+      streaks: {
+        status: 200,
+        body: [{ userId: ME_ID, streak: 12, readToday: false }],
+      },
+    });
+
+    await waitFor(() => {
+      expect(readableText()).toContain(pt.pages.home.streak.atRisk);
+    });
+  });
+
+  it('⚠️ NÃO avisa quando eu já li hoje', async () => {
+    await renderHome({
+      streaks: {
+        status: 200,
+        body: [{ userId: ME_ID, streak: 12, readToday: true }],
+      },
+    });
+
+    await waitFor(() => {
+      expect(readableText()).toContain(
+        pt.pages.home.streak.days_other.replace('{{count}}', '12'),
+      );
+    });
+    expect(readableText()).not.toContain(pt.pages.home.streak.atRisk);
+  });
+
+  /**
+   * ⚠️ **NÃO cobra quem está em ZERO.** Não há o que perder, e a frase de perda
+   * ali seria o app cobrando quem ainda não começou — o oposto do que o
+   * incentivo existe para fazer, e o caso mais fácil de deixar passar.
+   */
+  it('⚠️ não mostra o aviso de perda para quem está em zero', async () => {
+    await renderHome({
+      streaks: {
+        status: 200,
+        body: [{ userId: ME_ID, streak: 0, readToday: false }],
+      },
+    });
+
+    await waitFor(() => {
+      expect(readableText()).toContain(pt.pages.home.streak.none);
+    });
+    expect(readableText()).not.toContain(pt.pages.home.streak.atRisk);
+  });
+
+  /**
+   * ⚠️ A corrente é **enfeite ao lado do feed**: se ela cair, a atividade do
+   * clube continua na tela. Uma home que troca o feed por um erro de foguinho
+   * errou a prioridade.
+   */
+  it('⚠️ o feed sobrevive quando a corrente falha', async () => {
+    await renderHome({
+      streaks: { status: 500, body: { error: 'Internal Server Error' } },
+    });
+
+    await waitFor(() => {
+      expect(readableText()).toContain(pt.pages.home.feed.heading);
+    });
+  });
+
+  /**
+   * ⚠️ **A rota é `/streaks`, e NÃO a estante.** O `replyByUrl` casa por
+   * fragmento e `/clubs/c-casal/streaks` contém `/clubs/` — esta asserção é o
+   * que impede a corrente de receber o corpo da estante em silêncio.
+   */
+  it('⚠️ pede a corrente no endereço do clube, não no da estante', async () => {
+    const calls = await renderHome();
+
+    await waitFor(() => {
+      expect(requestsTo(calls, '/streaks')).toHaveLength(1);
+    });
+    const streaks = requestsTo(calls, '/streaks')[0];
+    expect(new URL(streaks?.url ?? '').pathname).toBe('/clubs/c-casal/streaks');
   });
 });

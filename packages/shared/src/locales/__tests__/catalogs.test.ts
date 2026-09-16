@@ -92,8 +92,26 @@ describe('catálogos de i18n', () => {
   it('names every key in English camelCase (rule 16)', () => {
     const segment = /^[a-z][A-Za-z0-9]*$/;
 
+    /*
+      ⚠️ **O SUFIXO DE PLURAL DO i18next NÃO É NOME EM SNAKE_CASE** — é
+      protocolo. A biblioteca escolhe entre `days_one` e `days_other` sozinha,
+      a partir do `count` e das regras do idioma; a chave que o código escreve
+      continua sendo `days`, em camelCase.
+
+      ⚠️ A lista é FECHADA de propósito (`one` e `other`, os dois que o `pt` e o
+      `en` usam): aceitar qualquer `_algo` reabriria a porta para snake_case de
+      verdade, que é o que esta regra existe para barrar. Quem precisar de
+      `_few`/`_many` (russo, polonês) acrescenta aqui, e o acréscimo aparece no
+      diff.
+    */
+    const PLURAL_SUFFIXES = ['_one', '_other'];
+    const withoutPluralSuffix = (part: string): string => {
+      const suffix = PLURAL_SUFFIXES.find((it) => part.endsWith(it));
+      return suffix === undefined ? part : part.slice(0, -suffix.length);
+    };
+
     const bad = keyPaths(pt).filter((path) =>
-      path.split('.').some((part) => !segment.test(part)),
+      path.split('.').some((part) => !segment.test(withoutPluralSuffix(part))),
     );
 
     expect(bad).toEqual([]);

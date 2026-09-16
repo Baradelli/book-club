@@ -2892,6 +2892,63 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       medido, guarda da 29a de pé e a revisão do `push-handler.js` no `sw.js` intacta.
       `backend`, `prisma` e `ui` intocados; nenhuma dependência nova; nenhuma migration._
 
+- [x] **39** — A corrente de leitura: o "foguinho". ⚠️ **FATIA PEDIDA PELO DONO depois do
+      fechamento do MVP 3, e ela REVERTE a decisão 1 — que era dele.**
+      → `docs/adr/0010-corrente-de-leitura-visivel.md`
+      _**605 shared** (era 602) **· 195 ui** (intocado) **· 1918 backend** (era 1891, +27)
+      **· 777 app** (era 770, +7). Integração **611** (era 608, +3). Chunk **433.129 B** (era
+      431.094, **+2.035**), folga **16.871**. **Nenhuma migration** — a corrente é calculada._
+      _**⚠️ A OBJEÇÃO FOI LEVANTADA ANTES DE QUALQUER LINHA, COM A MEDIÇÃO NA MÃO — e o dono
+      reafirmou, escolhendo a opção completa.** O termo `streak` estava **nominalmente
+      proibido** pela `GUILT_TERMS`, com o comentário *"o placar disfarçado de incentivo (§1:
+      nunca comparação)"* escrito no próprio código. E o mecanismo do Duolingo é enquadrado na
+      **perda**: o fogo não premia ter lido doze dias, ele ameaça perder os doze — é daí que
+      vem a eficácia. ⚠️ **Num clube de duas pessoas isso é pior que no Duolingo**, porque a
+      outra pessoa **vê o seu fogo apagar**: não é você contra um app, é você devendo
+      satisfação a quem dorme do seu lado. Tudo registrado no ADR 0010, com as alternativas
+      recusadas._
+      _**A decisão que mais importa não é técnica: DIAS DO PLANO, não do calendário.** Um plano
+      que pula domingo é normal, e contar por calendário quebraria a corrente de quem fez tudo
+      certo. E a corrente **atravessa livros** — uma que zerasse quando o clube termina o livro
+      do mês seria visivelmente errada para quem a olha._
+      _**⚠️ HOJE AINDA NÃO LIDO NÃO QUEBRA A CORRENTE**, e é o caso que decide se o fogo é
+      usável: sem essa regra ele apagaria **toda manhã**, e a primeira coisa que o app faria ao
+      ser aberto seria dar uma má notícia **falsa**. ⚠️ **E o par dela: o FUTURO não conta** —
+      o plano do mês inteiro é cadastrado no dia 1, e sem esse corte os vinte dias por vir
+      contariam como não lidos e a corrente seria sempre **zero**. A feature nasceria morta, e
+      **verde**. Os dois mutantes têm **1 acusador** cada._
+      _**`readToday` é campo do CONTRATO, não dedução da tela** — porque a tela **não consegue**
+      deduzi-lo: uma corrente de 2 pode ser "leu anteontem e ontem" ou "leu ontem e hoje", e as
+      duas contam 2. É ele que decide se a frase de perda aparece, e deduzi-lo errado mostraria
+      a cobrança **para quem acabou de ler**. Tem teste próprio, com os dois casos de corrente
+      igual e `readToday` diferente._
+      _**⚠️ A GUARDA ANTI-CULPA NÃO FOI DESLIGADA — a isenção é nominal e PINADA.** Remover
+      `streak`, `falta` e `perdeu` da lista (o que o texto da opção previa) entregaria o mesmo
+      produto e desprotegeria **trinta telas** para liberar quatro frases. ⚠️ **E o docblock da
+      própria guarda argumentava contra isenção por chave** — *"viraria uma lista de chaves que
+      alguém amplia para calar o teste"*. A objeção foi **resolvida, não ignorada**: a lista é
+      pinada por igualdade **exata**, então ampliá-la fica vermelho e quem ampliar tem de
+      escrever no teste que está ampliando. Medido: cobrança plantada **fora** da isenção
+      continua dando **1 acusador**, nomeando a chave e o termo._
+      _**Cinco mutantes, com acusador cada:** hoje-não-quebra (**1**) · o futuro conta (**1**) ·
+      cobrar quem está em zero, na tela (**1**) · cobrar quem já leu (**1**) · e o do lembrete,
+      que passa a cobrar todo mundo (**6**)._
+      _**⚠️ O §7.2 PEGOU O ORQUESTRADOR.** A primeira versão dos testes do UseCase assertava a
+      ordem `[MARCOS, MARIA]` e ficou vermelha: o `findByClub` **não promete ordem** e o fake
+      enumera invertido **de propósito**, justamente para derrubar quem depender dela. O teste
+      estava errado, não o código — a resposta é indexada por `userId`, sem promessa de ordem,
+      e quem precisa de uma ordem na tela a escolhe._
+      _**⚠️ E A QUARTA APARIÇÃO DA CLASSE "FALSO VERDE POR SUBSTRING":**
+      `/clubs/c-casal/streaks` **contém** `/clubs/`, e o stub da home casa por fragmento com o
+      primeiro vencedor. Sem pôr `/streaks` antes, a corrente receberia o corpo da **estante**,
+      o Zod recusaria, e o foguinho sumiria da tela **com o teste verde**._
+      _**O que a decisão 1 deixou de pé, e continua de pé:** a corrente é **calculada, nunca
+      guardada** (`CLAUDE.md`), não há coluna nem job noturno; e o lembrete **continua não
+      chegando para quem já leu** — cobrar quem leu seria absurdo em qualquer modelo._
+      _**Gates:** 605/195/1918/777, typecheck, lint e prettier limpos, chunk **433.129 B**
+      medido, integração **611**, e o banco provado **idêntico por consulta** — inclusive o
+      `ReadingLog` que o dono criou testando o app. Nenhuma dependência nova._
+
 ## Definição de "MVP 3 pronto"
 
 Eu marco que li o trecho de hoje e vejo onde eu e o clube estamos no livro. Recebo um

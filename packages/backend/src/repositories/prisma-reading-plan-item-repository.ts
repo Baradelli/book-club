@@ -132,7 +132,12 @@ export class PrismaReadingPlanItemRepository implements ReadingPlanItemRepositor
     const records = await this.prisma.readingPlanItem.findMany({
       where: {
         bookId: { in: [...filter.bookIds] },
-        date: calendarDayToDate(filter.date),
+        // Ausente = todos os dias (ADR 0010). `undefined` some do `where` do
+        // Prisma; escrever `date: undefined` seria o mesmo, mas o ternário diz
+        // a intenção a quem lê.
+        ...(filter.date === undefined
+          ? {}
+          : { date: calendarDayToDate(filter.date) }),
       },
     });
     return records.map(toDomain);

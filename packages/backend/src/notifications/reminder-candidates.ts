@@ -1,6 +1,7 @@
 import type { CalendarDay } from '@clube/shared';
 
 import type { ReadingPlanItem } from '../domain/book';
+import { computeReadingStreak } from '../domain/reading-streak';
 import type { BookRepository } from '../usecases/ports/book-repository';
 import type { MembershipRepository } from '../usecases/ports/membership-repository';
 import type { ReadingLogRepository } from '../usecases/ports/reading-log-repository';
@@ -121,6 +122,41 @@ function inStableOrder(items: ReadingPlanItem[]): ReadingPlanItem[] {
  * não precisa de faixa de instantes: a pergunta "ela leu o trecho de hoje?" é
  * literalmente a chave única do `ReadingLog`.
  */
+/**
+ * A CORRENTE DE LEITURA desta pessoa, para o lembrete (ADR 0010).
+ *
+ * ⚠️ **Só é chamada para quem VAI receber o lembrete** — ou seja, depois de a
+ * supressão já ter tirado quem leu. Calculá-la antes seria uma consulta de plano
+ * inteiro por pessoa em toda passada do cron, para um número que a maioria das
+ * passadas joga fora.
+ *
+ * Reusa o `computeReadingStreak`, que é puro e tem suíte própria: aqui só se
+ * junta o que ele precisa.
+ */
+export async function streakOf(
+  deps: ReminderCandidateDeps,
+  userId: string,
+  today: CalendarDay,
+): Promise<number> {
+  const bookIds = await activeBookIdsOf(deps, userId);
+  // Sem `date`: o plano inteiro, que é o que a corrente percorre.
+  const plan = await deps.planItems.find({ bookIds });
+  if (plan.length === 0) return 0;
+
+  const read = new Set(
+    await deps.readingLogs.planItemIdsReadBy(
+      userId,
+      plan.map((item) => item.id),
+    ),
+  );
+
+  return computeReadingStreak({
+    planDays: plan.map((item) => item.date),
+    readDays: plan.filter((item) => read.has(item.id)).map((it) => it.date),
+    today,
+  });
+}
+
 export async function readingOfTheDay(
   deps: ReminderCandidateDeps,
   userId: string,

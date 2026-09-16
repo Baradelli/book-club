@@ -661,6 +661,29 @@ furo **medido duas vezes** (`"12 dias lidos"` e `"3 atividades"` passam pela `CO
 **e** pela `GUILT_TERMS`). ⚠️ **Esta resposta continua aberta a revisão no aceite** — é para
 ver na tela, com o app usado, que ela se confirma.
 
+> ⚠️⚠️ **REVERTIDA PELO DONO EM 16/09/2026, ANTES DO ACEITE — ver `docs/adr/0010`.**
+>
+> O dono pediu um sistema de corrente ("foguinho") no molde do Duolingo. A objeção foi
+> levantada **antes de qualquer linha de código**, com a medição na mão: `streak` estava
+> **nominalmente proibido** pela `GUILT_TERMS` (com o comentário *"o placar disfarçado de
+> incentivo"* escrito no código); o mecanismo do Duolingo é enquadrado na **perda**, não no
+> ganho; e num clube de duas pessoas isso é pior do que no Duolingo, porque **a outra pessoa
+> vê o seu fogo apagar** — não é você contra um app, é você devendo satisfação a quem dorme
+> do seu lado.
+>
+> **O dono reafirmou, escolhendo a opção completa**, ciente do custo. A Tarefa 39 entregou:
+> contagem por pessoa na API, fogo visível para o clube no feed, frase de perda na tela e no
+> lembrete.
+>
+> **O que a resposta (a) deixou de pé, e continua de pé:** a corrente é **calculada, nunca
+> guardada**; o lembrete continua **não chegando para quem já leu**; e a `GUILT_TERMS` **não
+> foi desligada** — a isenção é nominal, por chave, e **pinada por teste de igualdade exata**,
+> então ampliá-la fica vermelho.
+>
+> ⚠️ **A pergunta que fica para o aceite não é mais "presença ou número".** É: *depois de usar
+> com o fogo aceso, o clube virou competição?* Se virou, a reversão é barata — nada foi
+> guardado, e o ADR 0010 diz exatamente o que desfazer.
+
 ### 2. Marcar que li um dia que já passou?
 
 **Como está:** o toque "li hoje" aparece **só no dia de hoje** do plano. Se você leu no

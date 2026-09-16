@@ -115,6 +115,27 @@ export const pt = {
       natural em português, e é exatamente a que a regra proíbe.
     */
     home: {
+      /*
+        ⚠️ **A CORRENTE DE LEITURA — o "foguinho" (ADR 0010).**
+
+        Estas cinco chaves são as ÚNICAS do projeto isentas da varredura
+        anti-culpa, e a isenção é nominal e **pinada por teste**: ampliá-la
+        fica vermelho. O ADR registra a reversão da decisão 1 do MVP 3, a
+        objeção levantada antes de qualquer linha, e o custo que o dono
+        aceitou.
+
+        ⚠️ O `atRisk` é, por construção, uma frase de PERDA — é o mecanismo
+        do Duolingo, e é o que o dono escolheu. Ele só aparece para quem TEM
+        corrente e ainda não leu hoje: para quem está em zero não há o que
+        perder, e mostrá-lo ali seria cobrar quem ainda não começou.
+      */
+      streak: {
+        days_one: '{{count}} dia seguido',
+        days_other: '{{count}} dias seguidos',
+        none: 'Comece a sua sequência hoje',
+        atRisk: 'Você vai perder a sua sequência!',
+        mine: 'A sua sequência',
+      },
       title: 'Início',
       /** Rótulo (só para leitor de tela) do seletor de clube no cabeçalho. */
       clubLabel: 'Clube',
@@ -969,6 +990,19 @@ export const pt = {
         sozinho é a frase mais curta que ainda diz o que ler.
       */
       body: '{{title}}',
+      /*
+        ⚠️ **A MOLDURA DE PERDA (ADR 0010).** Só é usada para quem TEM
+        corrente; quem está em zero recebe o `body` acima, sem moldura
+        nenhuma. Estas duas chaves são isentas da varredura anti-culpa, e a
+        isenção é nominal e pinada.
+
+        O `{{title}}` continua no fim: mesmo cobrando, o lembrete tem de
+        dizer O QUE ler — senão vira só a cobrança.
+      */
+      streakBody_one:
+        'Você vai perder a sua sequência de {{count}} dia. {{title}}',
+      streakBody_other:
+        'Você vai perder a sua sequência de {{count}} dias. {{title}}',
     },
     /*
       O AVISO DE ATIVIDADE DO CLUBE (Tarefa 38) — "um incentiva o outro"

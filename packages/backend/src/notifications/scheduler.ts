@@ -8,7 +8,7 @@ import type { PushSubscriptionRepository } from '../usecases/ports/push-subscrip
 import type { SettingsRepository } from '../usecases/ports/settings-repository';
 import { localMinutesOfDay } from './local-clock';
 import type { ReminderCandidateDeps } from './reminder-candidates';
-import { readingOfTheDay } from './reminder-candidates';
+import { readingOfTheDay, streakOf } from './reminder-candidates';
 import { buildReadingReminder } from './reminder-message';
 import { DEFAULT_WINDOW_MINUTES, isInsideWindow } from './reminder-window';
 
@@ -184,11 +184,22 @@ export async function dispatchDueNotifications(
       continue;
     }
 
+    /*
+      ⚠️ **A CORRENTE (ADR 0010) — e ela é consultada AQUI, depois de tudo.**
+
+      Neste ponto a pessoa já passou pela janela, pelo plano do dia, pela
+      supressão de quem leu e pelo claim: ela VAI receber o lembrete. Calcular
+      a corrente antes seria uma consulta de plano inteiro por pessoa em toda
+      passada do cron, para um número que a maioria das passadas joga fora.
+    */
+    const streak = await streakOf(deps, settings.userId, day);
+
     // Decisão I: o payload sai pronto daqui. O sender entrega.
     const payload = buildReadingReminder({
       locale: settings.locale,
       bookId: reading.bookId,
       planItem: reading.planItem,
+      streak,
     });
 
     try {

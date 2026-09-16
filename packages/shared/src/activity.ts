@@ -186,3 +186,41 @@ export const listActivityQuerySchema = z.object({
 export type ActivityEventResponse = z.infer<typeof activityEventResponseSchema>;
 export type ActivityResponse = z.infer<typeof activityResponseSchema>;
 export type ListActivityQuery = z.infer<typeof listActivityQuerySchema>;
+
+/**
+ * A CORRENTE DE LEITURA de cada pessoa do clube — o "foguinho" (ADR 0010).
+ *
+ * ⚠️ **ESTE SCHEMA REVERTE A DECISÃO 1 DO MVP 3, e é decisão do dono.** Até
+ * ele, nenhuma rota devolvia contagem: o placar era *irrenderizável por
+ * construção*, e não por confiança em quem escreve a tela. O ADR 0010 registra
+ * a reversão, a objeção que foi levantada antes e o custo aceito.
+ *
+ * ⚠️ **Indexado por `userId`, e SEM ordem prometida.** O port de membership não
+ * promete ordem e o fake enumera invertido de propósito (§7.2) — quem precisa
+ * de uma ordem na tela a escolhe. Prometer aqui seria prometer o que a camada
+ * de baixo não sustenta.
+ *
+ * ⚠️ **Nada de `name` aqui.** Quem resolve nome de pessoa é o
+ * `GET /clubs/:clubId/members`, e duplicá-lo criaria dois donos da mesma
+ * verdade — é o mesmo recorte que o `listActivity` já registra.
+ */
+export const clubStreaksResponseSchema = z.array(
+  z.object({
+    userId: z.string(),
+    /** Dias do PLANO seguidos, contando para trás a partir de hoje. */
+    streak: z.number().int().min(0),
+    /**
+     * ⚠️ **Se esta pessoa já leu o dia de HOJE** — e quem responde é o servidor,
+     * de propósito.
+     *
+     * A tela não consegue deduzir isto da `streak`: uma corrente de 2 pode ser
+     * "leu anteontem e ontem" ou "leu ontem e hoje", e as duas contam 2 (hoje
+     * não lido não quebra — ADR 0010). É este campo que decide se o aviso de
+     * perda aparece, e deduzi-lo errado mostraria a cobrança para quem acabou
+     * de ler.
+     */
+    readToday: z.boolean(),
+  }),
+);
+
+export type ClubStreaksResponse = z.infer<typeof clubStreaksResponseSchema>;

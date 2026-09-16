@@ -146,6 +146,20 @@ export class PrismaReadingLogRepository implements ReadingLogRepository {
    * A coluna é **NOT NULL** aqui (não existe leitura avulsa), então não há o
    * descarte de `null` que o irmão da nota precisa fazer depois do `IN`.
    */
+  async planItemIdsReadBy(
+    userId: string,
+    planItemIds: readonly string[],
+  ): Promise<string[]> {
+    if (planItemIds.length === 0) return [];
+
+    const rows = await this.prisma.readingLog.findMany({
+      where: { userId, planItemId: { in: [...planItemIds] } },
+      select: { planItemId: true },
+    });
+
+    return [...new Set(rows.map((row) => row.planItemId))];
+  }
+
   async planItemIdsWithAnyReadingLog(
     planItemIds: readonly string[],
   ): Promise<string[]> {

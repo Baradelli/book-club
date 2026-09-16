@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { en, pt } from '../index';
-import { GUILT_TERMS } from './guilt-terms';
+import { GUILT_TERMS, STREAK_KEYS } from './guilt-terms';
 
 /**
  * ⚠️ **O PRINCÍPIO ANTI-CULPA, GUARDADO NO CATÁLOGO** —
@@ -77,6 +77,9 @@ describe('the anti-guilt principle is a property of the CATALOGS (plano §1)', (
     expect(leaves.length).toBeGreaterThan(20);
 
     const offenders = leaves.flatMap(([path, text]) => {
+      // ⚠️ A ÚNICA isenção do projeto (ADR 0010), e ela é nominal e PINADA
+      // logo abaixo: ampliá-la fica vermelho.
+      if (STREAK_KEYS.includes(path)) return [];
       const normalized = withoutDiacritics(text);
       return GUILT_TERMS.filter((term) => normalized.includes(term)).map(
         (term) => `${path}: "${text}" (termo "${term}")`,
@@ -84,6 +87,42 @@ describe('the anti-guilt principle is a property of the CATALOGS (plano §1)', (
     });
 
     expect(offenders).toEqual([]);
+  });
+
+  /**
+   * ⚠️ **A ISENÇÃO NÃO PODE CRESCER EM SILÊNCIO — e é esta asserção que responde
+   * à objeção escrita no docblock acima** ("uma isenção por chave viraria uma
+   * lista de chaves que alguém amplia para calar o teste").
+   *
+   * Igualdade EXATA, não `toContain`: acrescentar uma chave aqui deixa este
+   * teste vermelho, e quem ampliar tem de escrever no teste que está ampliando.
+   * A objeção era contra a isenção que cresce sozinha; esta não cresce sozinha.
+   */
+  it('⚠️ isenta EXATAMENTE as chaves da corrente, e nada mais (ADR 0010)', () => {
+    expect([...STREAK_KEYS].sort()).toEqual(
+      [
+        'pages.home.streak.atRisk',
+        'pages.home.streak.days_one',
+        'pages.home.streak.days_other',
+        'pages.home.streak.mine',
+        'pages.home.streak.none',
+        'notifications.readingReminder.streakBody_one',
+        'notifications.readingReminder.streakBody_other',
+      ].sort(),
+    );
+  });
+
+  /**
+   * ⚠️ E as chaves isentas **existem de verdade** nos dois catálogos. Sem isto,
+   * uma isenção com o caminho errado (um `pages.hoome.') não isentaria nada e
+   * ninguém notaria — a guarda continuaria verde por não ter o que isentar.
+   */
+  it.each([
+    ['pt', pt],
+    ['en', en],
+  ])('as chaves isentas existem no catálogo %s', (_locale, catalog) => {
+    const paths = new Set(entries(catalog).map(([path]) => path));
+    for (const key of STREAK_KEYS) expect(paths.has(key)).toBe(true);
   });
 
   /**

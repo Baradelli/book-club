@@ -39,8 +39,16 @@ export interface ReadingPlanItemFilter {
    * não tem livro ativo — que é o estado normal do clube entre dois livros.
    */
   bookIds: readonly string[];
-  /** O dia de calendário, no fuso de quem vai receber o lembrete. */
-  date: CalendarDay;
+  /**
+   * O dia de calendário, no fuso de quem vai receber o lembrete.
+   *
+   * ⚠️ **OPCIONAL desde a corrente de leitura (ADR 0010):** ausente significa
+   * ``todos os dias destes livros``, que é o que a corrente precisa — ela
+   * percorre o plano inteiro do clube para trás. Com o campo obrigatório, o
+   * chamador teria de perguntar dia a dia, e a conta de uma corrente de 30
+   * dias viraria 30 consultas.
+   */
+  date?: CalendarDay;
 }
 
 /** O diff de um plano, como o `replacePlanItems` o calcula. */

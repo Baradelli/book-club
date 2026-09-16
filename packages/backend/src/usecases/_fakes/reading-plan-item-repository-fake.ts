@@ -68,7 +68,15 @@ export class ReadingPlanItemRepositoryFake implements ReadingPlanItemRepository 
 
     const wanted = new Set(filter.bookIds);
     return [...this.store.values()]
-      .filter((item) => wanted.has(item.bookId) && item.date === filter.date)
+      .filter(
+        (item) =>
+          wanted.has(item.bookId) &&
+          // Ausente = todos os dias (ADR 0010), como o `where` do Prisma sem
+          // a coluna. ⚠️ E a comparação continua sendo de STRING: o teste
+          // `matches the calendar day exactly` mede isso, e o fuso do pino do
+          // `vitest.workspace.ts` é o que o mantém com acusador.
+          (filter.date === undefined || item.date === filter.date),
+      )
       .reverse()
       .map((item) => this.clone(item));
   }

@@ -90,6 +90,13 @@ export interface ReadingReminderInput {
   bookId: string;
   /** O trecho de hoje, como o admin o cadastrou. */
   planItem: ReadingPlanItem;
+  /**
+   * ⚠️ **A corrente de leitura da pessoa (ADR 0010).** Zero (ou ausente) =
+   * lembrete sem moldura nenhuma, como era antes do foguinho. Só quem TEM
+   * corrente recebe a frase de perda: para quem está em zero não há o que
+   * perder, e cobrar quem ainda não começou é o oposto do incentivo.
+   */
+  streak?: number;
 }
 
 /**
@@ -107,9 +114,22 @@ export function buildReadingReminder(input: ReadingReminderInput): PushPayload {
     : FALLBACK_LOCALE;
   const catalog = CATALOGS[locale].notifications.readingReminder;
 
+  const streak = input.streak ?? 0;
+  // ⚠️ O plural é escolhido AQUI, e não pelo i18next: este catálogo é lido
+  // direto no backend, sem a biblioteca no meio.
+  const template =
+    streak <= 0
+      ? catalog.body
+      : streak === 1
+        ? catalog.streakBody_one
+        : catalog.streakBody_other;
+
   return {
     title: catalog.title,
-    body: interpolate(catalog.body, { title: input.planItem.title }),
+    body: interpolate(template, {
+      title: input.planItem.title,
+      count: String(streak),
+    }),
     tag: READING_REMINDER_TAG,
     url: bookUrl(input.bookId),
   };

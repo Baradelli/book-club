@@ -62,3 +62,34 @@ export const GUILT_TERMS: readonly string[] = [
   'missed',
   'streak', // o placar disfarçado de incentivo (§1: nunca comparação)
 ];
+
+/**
+ * ⚠️ **AS ÚNICAS CHAVES ISENTAS DA VARREDURA — a corrente de leitura (ADR 0010).**
+ *
+ * O dono pediu o "foguinho" do Duolingo e, avisado de que ele contraria o §1 do
+ * plano, **reafirmou o pedido**. O mecanismo do Duolingo é enquadrado na PERDA:
+ * o fogo não premia ter lido doze dias, ele ameaça perder os doze. Escrever isso
+ * exige as palavras que esta lista proíbe.
+ *
+ * ⚠️ **POR QUE ISENÇÃO NOMINAL, E NÃO REMOVER OS TERMOS DA LISTA.** Remover
+ * `streak`, `falta` e `perdeu` entregaria o mesmo produto e desprotegeria
+ * **trinta telas** para liberar quatro frases — a primeira cobrança escrita por
+ * engano em outra tela passaria sem ninguém ver.
+ *
+ * ⚠️ **E POR QUE ISSO NÃO É A "LISTA QUE ALGUÉM AMPLIA PARA CALAR O TESTE"**, que
+ * é a objeção escrita no docblock do `anti-guilt.test.ts` e que vale: esta lista
+ * é **pinada por um teste de igualdade exata**. Acrescentar uma chave aqui fica
+ * VERMELHO, e quem quiser ampliá-la tem de dizer por escrito, no teste, que
+ * está ampliando. A objeção original era contra uma isenção que cresce em
+ * silêncio; esta não cresce em silêncio.
+ */
+export const STREAK_KEYS: readonly string[] = [
+  'pages.home.streak.days_one',
+  'pages.home.streak.days_other',
+  'pages.home.streak.none',
+  'pages.home.streak.atRisk',
+  'pages.home.streak.mine',
+  // O corpo do LEMBRETE com a moldura de perda (a outra metade do ADR 0010).
+  'notifications.readingReminder.streakBody_one',
+  'notifications.readingReminder.streakBody_other',
+];

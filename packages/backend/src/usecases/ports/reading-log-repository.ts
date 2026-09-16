@@ -190,5 +190,22 @@ export interface ReadingLogRepository {
    * domínio, e a única pergunta que alguém faria com esse número
    * ("estava marcado?") já foi respondida pelo `byPlanItemAndUser`.
    */
+  /**
+   * Quais destes dias do plano **esta pessoa** leu (ADR 0010, a corrente).
+   *
+   * ⚠️ **Irmão do `planItemIdsWithAnyReadingLog`, e o nome diz a diferença:**
+   * aquele é "alguém leu" (a guarda do plano), este é "ELA leu". Dois métodos
+   * e não um com `userId?` opcional, porque as duas perguntas têm chamadores
+   * diferentes e um filtro opcional esquecido devolveria a leitura do clube
+   * inteiro como se fosse a da pessoa — o pior falso positivo possível numa
+   * feature que conta dias seguidos.
+   *
+   * Lista vazia devolve lista vazia **sem ida ao banco**.
+   */
+  planItemIdsReadBy(
+    userId: string,
+    planItemIds: readonly string[],
+  ): Promise<string[]>;
+
   delete(id: string): Promise<void>;
 }

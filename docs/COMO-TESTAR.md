@@ -490,6 +490,41 @@ mais). Se você sentir vontade de comparar quem fez mais, diga — o desenho fal
 chamado *1984*. O que não pode existir é número **que o app inventou**: "3 atividades",
 "+2", "12 dias lidos". Há uma guarda automática para isso, e ela sabe a diferença.
 
+⚠️ **A EXCEÇÃO, e ela é decisão sua:** a **corrente de leitura** (o foguinho) acima do feed
+**é** um número inventado pelo app, e é o único. Ver `docs/adr/0010`.
+
+---
+
+## 6.5.1. O foguinho — a corrente de leitura (ADR 0010)
+
+Acima do feed há uma linha com um **fogo por pessoa** do clube e quantos dias seguidos cada
+uma leu.
+
+**O que conferir:**
+
+- [ ] Marco "li hoje" e a minha corrente sobe.
+- [ ] A corrente **da outra pessoa** aparece ao lado da minha, com o nome dela.
+- [ ] No dia seguinte, **antes** de eu marcar, a corrente **continua** no número de ontem — e
+      aparece **"Você vai perder a sua sequência!"**.
+- [ ] Marco "li hoje" e o aviso some.
+- [ ] Quem está em **zero** vê *"Comece a sua sequência hoje"* e **não** vê o aviso de perda.
+
+**As regras que talvez surpreendam** — e as três são de propósito:
+
+1. ⚠️ **Conta dias do PLANO, não dias do calendário.** Se o plano pula domingo, o domingo não
+   quebra a corrente: não havia o que ler.
+2. ⚠️ **O dia de hoje ainda não lido NÃO quebra.** Você ainda tem o dia. O fogo só apaga
+   quando um dia **anterior a hoje** ficou sem leitura — senão ele apagaria toda manhã.
+3. ⚠️ **A corrente atravessa livros.** Ela é do clube: terminar o livro do mês não zera nada.
+
+⚠️ **O lembrete também cobra agora.** Quem tem corrente e ainda não leu recebe *"Você vai
+perder a sua sequência de N dias"* em vez do lembrete simples. Quem está em zero recebe o
+lembrete de sempre, sem moldura. Ver §6.7.
+
+> ⚠️ **Isto reverte a decisão 1 do MVP 3**, que era sua ("progresso é presença, sem
+> agregado"). A objeção está registrada no ADR 0010, com o custo. **Se depois de usar você
+> sentir que o clube virou competição, a reversão é barata** — nada foi guardado no banco.
+
 ---
 
 ## 6.6. Preferências e ativar as notificações no aparelho (MVP 3, Tarefas 36–36b)

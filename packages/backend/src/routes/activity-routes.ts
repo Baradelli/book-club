@@ -2,6 +2,7 @@ import {
   type ActivityEventResponse,
   activityResponseSchema,
   clubIdParamsSchema,
+  clubStreaksResponseSchema,
   errorSchema,
   listActivityQuerySchema,
 } from '@clube/shared';
@@ -12,6 +13,7 @@ import type { ActivityEvent } from '../domain/activity-event';
 import { handleDomainError } from '../http/handle-domain-error';
 import { buildRepositories } from '../http/repositories';
 import { AssertMembership } from '../usecases/assert-membership';
+import { GetClubStreaks } from '../usecases/get-club-streaks';
 import { ListActivity } from '../usecases/list-activity';
 
 /**
@@ -78,6 +80,51 @@ export const activityRoutes: FastifyPluginAsyncZod<{
   const listActivity = new ListActivity(
     new AssertMembership(repos.memberships),
     repos.activityEvents,
+  );
+  const getClubStreaks = new GetClubStreaks(
+    repos.memberships,
+    repos.books,
+    repos.planItems,
+    repos.readingLogs,
+    repos.settings,
+  );
+
+  /**
+   * ⚠️ **A CORRENTE DE LEITURA — o "foguinho" (ADR 0010).**
+   *
+   * Mora ao lado da atividade porque é a mesma pergunta do clube ("o que está
+   * acontecendo aqui?") e porque a tela que a mostra é a mesma. ⚠️ **NÃO entrou
+   * na resposta do livro**, que era o outro lugar possível: o livro é de um
+   * livro, e a corrente **atravessa livros** — pendurá-la lá faria a tela do
+   * Hobbit devolver um número que não é do Hobbit.
+   */
+  app.get(
+    '/clubs/:clubId/streaks',
+    {
+      schema: {
+        summary: 'A corrente de leitura de cada pessoa do clube',
+        params: clubIdParamsSchema,
+        response: {
+          200: clubStreaksResponseSchema,
+          400: errorSchema,
+          401: errorSchema,
+          404: errorSchema,
+        },
+      },
+    },
+    async (req, reply) => {
+      try {
+        const streaks = await getClubStreaks.execute({
+          clubId: req.params.clubId,
+          // ⚠️ O ator vem do JWT (§6.3). A corrente é do CLUBE, mas quem pode
+          // vê-la é quem é membro dele.
+          actorUserId: req.user.sub,
+        });
+        return reply.status(200).send(streaks);
+      } catch (error) {
+        return handleDomainError(error, reply);
+      }
+    },
   );
 
   app.get(

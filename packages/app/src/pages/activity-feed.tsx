@@ -4,6 +4,8 @@ import {
   type ActivityType,
   type BookResponse,
   clubMembersResponseSchema,
+  type ClubStreaksResponse,
+  clubStreaksResponseSchema,
 } from '@clube/shared';
 import { List, ListItem } from '@clube/ui';
 import { useEffect, useMemo, useState } from 'react';
@@ -22,6 +24,7 @@ import {
 import { dayNotePath } from './day-note';
 import { freeNotePath } from './free-note';
 import { bookPath, highlightPath } from './paths';
+import { StreakBar } from './streak-bar';
 
 /**
  * O FEED DE ATIVIDADE DA HOME (Tarefa 35) — "o clube está vivo", sem placar.
@@ -314,6 +317,38 @@ export function ActivityFeed({ books, clubId, me }: ActivityFeedProps) {
     };
   }, [api, clubId]);
 
+  /*
+    ⚠️ **A CORRENTE DE LEITURA (ADR 0010).** Ela mora AQUI, e não num componente
+    próprio que busque sozinho, porque este já carrega `members` — dois
+    componentes buscando os mesmos membros na mesma tela seriam duas
+    requisições para o mesmo dado.
+
+    Falha em silêncio: a corrente é enfeite ao lado do feed, e uma tela que
+    troca a atividade do clube por um erro de foguinho errou a prioridade.
+  */
+  const [streaks, setStreaks] = useState<ClubStreaksResponse>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStreaks([]);
+
+    void api
+      .get(
+        `/clubs/${encodeURIComponent(clubId)}/streaks`,
+        clubStreaksResponseSchema,
+      )
+      .then((list) => {
+        if (!cancelled) setStreaks(list);
+      })
+      .catch(() => {
+        // Ver o comentário acima: sem corrente, o feed continua inteiro.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, clubId]);
+
   /** `userId` → nome. O dono da regra é o `club-names.ts`. */
   const memberNames = useMemo(() => memberNamesOf(members), [members]);
 
@@ -417,6 +452,22 @@ export function ActivityFeed({ books, clubId, me }: ActivityFeedProps) {
       <h2 className="text-sm font-semibold text-muted">
         {t('pages.home.feed.heading')}
       </h2>
+      {/*
+        ⚠️ ACIMA das linhas, e é escolha: o foguinho é o que o dono quer ver
+        primeiro. ⚠️ E ele **contraria o desenho do feed de propósito** (ADR
+        0010) — o feed nasceu sem coluna de pessoa e sem número justamente
+        porque uma coluna com número convida a comparar.
+      */}
+      <StreakBar
+        me={me}
+        names={memberNames}
+        readToday={
+          me === null
+            ? false
+            : (streaks.find((row) => row.userId === me.id)?.readToday ?? false)
+        }
+        streaks={streaks}
+      />
       {lines()}
     </section>
   );

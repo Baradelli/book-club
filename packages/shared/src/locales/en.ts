@@ -66,6 +66,13 @@ export const en: typeof pt = {
       reintroduzir "you haven't", "overdue", "behind" ou "pending".
     */
     home: {
+      streak: {
+        days_one: '{{count}} day in a row',
+        days_other: '{{count}} days in a row',
+        none: 'Start your streak today',
+        atRisk: 'You are about to lose your streak!',
+        mine: 'Your streak',
+      },
       title: 'Home',
       clubLabel: 'Club',
       loading: 'Loading…',
@@ -475,6 +482,19 @@ export const en: typeof pt = {
     readingReminder: {
       title: "Today's reading",
       body: '{{title}}',
+      /*
+        ⚠️ **A MOLDURA DE PERDA (ADR 0010).** Só é usada para quem TEM
+        corrente; quem está em zero recebe o `body` acima, sem moldura
+        nenhuma. Estas duas chaves são isentas da varredura anti-culpa, e a
+        isenção é nominal e pinada.
+
+        O `{{title}}` continua no fim: mesmo cobrando, o lembrete tem de
+        dizer O QUE ler — senão vira só a cobrança.
+      */
+      streakBody_one:
+        'You are about to lose your {{count}}-day streak. {{title}}',
+      streakBody_other:
+        'You are about to lose your {{count}}-day streak. {{title}}',
     },
     /*
       The club activity notice (Tarefa 38). See the pt catalogue for why it

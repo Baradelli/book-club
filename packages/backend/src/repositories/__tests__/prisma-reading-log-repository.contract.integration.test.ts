@@ -629,6 +629,45 @@ describe('PrismaReadingLogRepository (contract)', () => {
    * leitores no mesmo dia dão duas), e é o `Set` do repositório que as colapsa
    * num id só; e a lista vazia não pode virar um `IN ()`.
    */
+  /**
+   * ⚠️ **O IRMÃO COM DONO (ADR 0010, a corrente de leitura).**
+   *
+   * O `...WithAnyReadingLog` é "alguém leu"; este é "ELA leu". A diferença é a
+   * feature inteira: uma corrente calculada com o método errado mostraria a
+   * leitura do clube como se fosse a da pessoa, e quem nunca leu apareceria com
+   * o fogo acesso — verde, e sem ninguém ver.
+   */
+  describe('planItemIdsReadBy', () => {
+    it('acha os dias que ESTA pessoa leu', async () => {
+      await repo.save(aLog('readby-mine'));
+
+      await expect(
+        repo.planItemIdsReadBy(READER_ID, [DAY_ONE, DAY_TWO]),
+      ).resolves.toEqual([DAY_ONE]);
+    });
+
+    /**
+     * ⚠️ **A asserção que separa os dois métodos.** A pré-condição garante que
+     * o dia TEM leitura — de outra pessoa —, então um `[]` aqui só pode vir do
+     * corte por `userId`. Sem a pré-condição, este teste passaria com a tabela
+     * vazia.
+     */
+    it('⚠️ NÃO devolve o dia que só a OUTRA pessoa leu', async () => {
+      await repo.save(aLog('readby-theirs', { userId: OTHER_READER_ID }));
+
+      await expect(
+        prisma.readingLog.count({ where: { planItemId: DAY_ONE } }),
+      ).resolves.toBe(1);
+      await expect(
+        repo.planItemIdsReadBy(READER_ID, [DAY_ONE]),
+      ).resolves.toEqual([]);
+    });
+
+    it('devolve vazio para lista vazia, sem ir ao banco', async () => {
+      await expect(repo.planItemIdsReadBy(READER_ID, [])).resolves.toEqual([]);
+    });
+  });
+
   describe('planItemIdsWithAnyReadingLog', () => {
     it('finds a day that somebody read', async () => {
       await repo.save(aLog('anylog-found'));
