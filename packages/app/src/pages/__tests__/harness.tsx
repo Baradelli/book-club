@@ -327,7 +327,7 @@ export function renderPage(ui: ReactNode, options: RenderOptions = {}): void {
   const storage = options.storage ?? memoryStorage();
 
   render(
-    <I18nextProvider i18n={createI18n(memoryStorage({ 'clube.locale': 'pt' }))}>
+    <I18nextProvider i18n={createI18n()}>
       <AuthProvider storage={storage} baseUrl="https://api.teste">
         {/*
           O MESMO `storage` do `AuthProvider`, e é o que faz o clube ativo ser

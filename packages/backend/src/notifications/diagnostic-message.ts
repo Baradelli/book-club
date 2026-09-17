@@ -1,5 +1,4 @@
-import type { Locale } from '@clube/shared/locales';
-import { en, FALLBACK_LOCALE, isLocale, pt } from '@clube/shared/locales';
+import { pt } from '@clube/shared/locales';
 
 import type { PushPayload } from '../usecases/ports/push-sender';
 
@@ -8,13 +7,10 @@ import type { PushPayload } from '../usecases/ports/push-sender';
  * produto que responde a uma pergunta em vez de contar um acontecimento:
  * *"chegou?"*.
  *
- * Ela vem do catálogo pelos mesmos dois motivos das irmãs (o backend não
- * escreve português cru, e a varredura anti-culpa mora no catálogo), e no
- * `Settings.locale` de quem apertou o botão — que aqui é também quem recebe,
- * porque **o teste só manda para os aparelhos de quem chamou** (decisão F).
+ * Ela vem do catálogo pelos mesmos dois motivos das irmãs: o backend não
+ * escreve português cru, e a varredura anti-culpa mora no catálogo. E ela só
+ * vai para os aparelhos de quem chamou (decisão F).
  */
-
-const CATALOGS: Record<Locale, typeof pt> = { pt, en };
 
 /**
  * ⚠️ **DECISÃO G — o `tag` é a string `'test'`, e `TEST` NÃO entra no
@@ -28,18 +24,22 @@ const CATALOGS: Record<Locale, typeof pt> = { pt, en };
  */
 export const TEST_NOTIFICATION_TAG = 'test';
 
-export interface TestNotificationInput {
-  /** O `Settings.locale` de quem apertou o botão. Desconhecido cai no `pt`. */
-  locale: string;
-}
-
-export function buildTestNotification(
-  input: TestNotificationInput,
-): PushPayload {
-  const locale: Locale = isLocale(input.locale)
-    ? input.locale
-    : FALLBACK_LOCALE;
-  const catalog = CATALOGS[locale].notifications.test;
+/**
+ * ⚠️ **UM IDIOMA SÓ, e por isso esta função NÃO RECEBE locale (Tarefa 38d).**
+ *
+ * Até aqui ela recebia o `Settings.locale` da pessoa e escolhia entre dois
+ * catálogos, caindo no `pt` para qualquer valor desconhecido (a coluna é
+ * `String` livre, e o caso medido era `'klingon'`). O dono respondeu à pergunta
+ * 7 do MVP 1 — *"só português"* —, o segundo catálogo saiu, e um parâmetro que
+ * chega e não muda nada é pior que um parâmetro que não existe: quem chama
+ * continua achando que escolhe.
+ *
+ * ⚠️ **A coluna `Settings.locale` fica no banco** (não há migration nesta
+ * fatia) e passa a não ter leitor nenhum. A nota está escrita ao lado dela, no
+ * `prisma/schema.prisma`.
+ */
+export function buildTestNotification(): PushPayload {
+  const catalog = pt.notifications.test;
 
   return {
     title: catalog.title,

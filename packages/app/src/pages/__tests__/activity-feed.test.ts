@@ -20,13 +20,21 @@ import {
  * isso que elas moram aqui e não no `home.test.tsx` (§7.9: a guarda mora onde a
  * propriedade é decidível).
  *
- * 1. **O tempo relativo não vira cobrança, em NENHUM idioma** (regra 13). Esta
- *    é a única superfície de texto do app que **não vem do catálogo**: o
+ * 1. **O tempo relativo não vira cobrança** (regra 13). Esta é a única
+ *    superfície de texto do app que **não vem do catálogo**: o
  *    `Intl.RelativeTimeFormat` escreve a frase, e a guarda de catálogo
  *    (`shared/src/locales/__tests__/anti-guilt.test.ts`) não a vê. A varredura
- *    de DOM também não bastaria: todo teste de tela pina `pt`, e `en` é metade
- *    dos idiomas que o app declara suportar — é exatamente a assimetria que a
- *    Tarefa 27 pagou caro para fechar no ADR 0002.
+ *    de DOM também não bastaria: ela só vê os degraus que a tela renderizar
+ *    naquele teste, e aqui a escada inteira é percorrida.
+ *
+ *    ⚠️ Até a Tarefa 38d a varredura rodava também em `en`, porque `en` era
+ *    metade dos idiomas que o app declarava suportar. O segundo catálogo saiu
+ *    (`docs/ACEITE-MVP.md`, MVP 1, pergunta 7), e uma guarda sobre um idioma
+ *    que o produto não entrega é uma guarda cujo NOME mente sobre o que o app
+ *    suporta (§7.9). ⚠️ **O `locale` continua sendo parâmetro de
+ *    `formatActivityMoment`**, e não foi pinado em `'pt'`: ele é uma tag de
+ *    `Intl` — dado do navegador, zero byte de bundle —, e o único chamador já
+ *    passa o `i18n.resolvedLanguage`, que hoje só pode ser `'pt'`.
  * 2. **Cada tipo abre o alvo dele** (regra 4). É uma função de um evento para um
  *    endereço; provar isso clicando em quatro linhas seria testar o
  *    `react-router` de novo.
@@ -93,22 +101,19 @@ describe('⚠️ the relative time of the feed never speaks the vocabulary of de
     }
   });
 
-  it.each(['pt', 'en'])(
-    'emits no guilt term and no counter shape in %s',
-    (locale) => {
-      const offenders = everyElapsedMs().flatMap((elapsed) => {
-        const text = formatActivityMoment(at(elapsed), NOW, locale);
-        const normalized = withoutDiacritics(text);
-        const guilt = GUILT_TERMS.filter((term) => normalized.includes(term));
-        const counter = COUNTER_SHAPE.test(text) ? ['(placar)'] : [];
-        return [...guilt, ...counter].map(
-          (reason) => `${String(elapsed)}ms → "${text}" (${reason})`,
-        );
-      });
+  it('emits no guilt term and no counter shape in pt', () => {
+    const offenders = everyElapsedMs().flatMap((elapsed) => {
+      const text = formatActivityMoment(at(elapsed), NOW, 'pt');
+      const normalized = withoutDiacritics(text);
+      const guilt = GUILT_TERMS.filter((term) => normalized.includes(term));
+      const counter = COUNTER_SHAPE.test(text) ? ['(placar)'] : [];
+      return [...guilt, ...counter].map(
+        (reason) => `${String(elapsed)}ms → "${text}" (${reason})`,
+      );
+    });
 
-      expect(offenders).toEqual([]);
-    },
-  );
+    expect(offenders).toEqual([]);
+  });
 
   it('would catch a phrase of debt dressed as a timestamp', () => {
     /*
@@ -129,9 +134,6 @@ describe('⚠️ the relative time of the feed never speaks the vocabulary of de
     // alguma coisa.
     expect(formatActivityMoment(at(2 * 60 * 60_000), NOW, 'pt')).toBe(
       'há 2 horas',
-    );
-    expect(formatActivityMoment(at(2 * 60 * 60_000), NOW, 'en')).toBe(
-      '2 hours ago',
     );
   });
 

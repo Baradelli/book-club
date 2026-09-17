@@ -1,6 +1,6 @@
 import type { ActivityType } from '@clube/shared';
 import { ACTIVITY_TYPES } from '@clube/shared';
-import { en, pt } from '@clube/shared/locales';
+import { pt } from '@clube/shared/locales';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -13,9 +13,10 @@ import {
  * as MESMAS duas propriedades** (decisão H da Tarefa 37, regra 13 da 38):
  *
  * 1. o texto vem do **catálogo compartilhado**, e é isso que o põe dentro da
- *    varredura anti-culpa dos dois idiomas;
- * 2. o idioma é o `Settings.locale` **de quem recebe** — não há navegador
- *    aberto quando o aviso sai.
+ *    varredura anti-culpa;
+ * 2. ⚠️ a segunda propriedade ERA "o idioma é o `Settings.locale` de quem
+ *    recebe", e ela **morreu na Tarefa 38d**: há um idioma só, e a função
+ *    deixou de receber locale.
  *
  * ⚠️ **E a propriedade que é só dela: NADA DE CONTEÚDO** (`NOTIFICACOES.md`
  * §1). O `ReadingPlanItem` do lembrete entra na frase porque o trecho de hoje
@@ -24,9 +25,8 @@ import {
  * alguém escreveu se lê no app.
  */
 describe('buildGroupActivityMessage', () => {
-  it('speaks pt by default', () => {
+  it('speaks pt, from the catalogue', () => {
     const payload = buildGroupActivityMessage({
-      locale: 'pt',
       bookId: 'book-1',
       type: 'PLAN_NOTE',
     });
@@ -35,37 +35,14 @@ describe('buildGroupActivityMessage', () => {
     expect(payload.body).toBe(pt.notifications.groupActivity.planNote);
   });
 
-  it('speaks en for who chose en', () => {
-    const payload = buildGroupActivityMessage({
-      locale: 'en',
-      bookId: 'book-1',
-      type: 'HIGHLIGHT',
-    });
-
-    expect(payload.title).toBe(en.notifications.groupActivity.title);
-    expect(payload.body).toBe(en.notifications.groupActivity.highlight);
-  });
-
-  /**
-   * ⚠️ **Locale desconhecido cai no `pt` e NÃO estoura** — o mesmo do
-   * `buildReadingReminder`, e pelo mesmo motivo: `Settings.locale` é `String`
-   * livre, então um valor inesperado é alcançável, e um aviso que deixasse de
-   * sair por causa disso falharia em silêncio, para sempre, só para aquela
-   * pessoa.
-   */
-  it.each([['klingon'], [''], ['pt-BR']])(
-    'falls back to pt for the unknown locale %j, instead of throwing',
-    (locale) => {
-      const payload = buildGroupActivityMessage({
-        locale,
-        bookId: 'book-1',
-        type: 'READ',
-      });
-
-      expect(payload.title).toBe(pt.notifications.groupActivity.title);
-      expect(payload.body).toBe(pt.notifications.groupActivity.read);
-    },
-  );
+  /*
+    ⚠️ **SAÍRAM AQUI NA TAREFA 38d:** `speaks en for who chose en` e o
+    `it.each(['klingon', '', 'pt-BR'])` do locale desconhecido. Os dois eram
+    sobre a escolha de idioma a partir do `Settings.locale` — uma coluna
+    `String` livre, daí o caso `'klingon'`. Sem segundo catálogo a função
+    deixou de RECEBER locale, e a coluna ficou sem leitor nenhum (a nota está
+    escrita no próprio `schema.prisma`).
+  */
 
   /**
    * ⚠️ **Decisão E — o `tag` é o `kind` em MINÚSCULAS**, a mesma string que o
@@ -78,7 +55,6 @@ describe('buildGroupActivityMessage', () => {
 
     for (const type of ACTIVITY_TYPES) {
       const payload = buildGroupActivityMessage({
-        locale: 'pt',
         bookId: 'book-1',
         type,
       });
@@ -95,7 +71,6 @@ describe('buildGroupActivityMessage', () => {
   it('points the click at the book, escaping the id like the app does', () => {
     expect(
       buildGroupActivityMessage({
-        locale: 'pt',
         bookId: 'book-99',
         type: 'FREE_NOTE',
       }).url,
@@ -103,7 +78,6 @@ describe('buildGroupActivityMessage', () => {
 
     expect(
       buildGroupActivityMessage({
-        locale: 'pt',
         bookId: 'a/b',
         type: 'FREE_NOTE',
       }).url,
@@ -121,8 +95,7 @@ describe('buildGroupActivityMessage', () => {
   it('says something different for each of the four births', () => {
     const bodies = ACTIVITY_TYPES.map(
       (type: ActivityType) =>
-        buildGroupActivityMessage({ locale: 'pt', bookId: 'book-1', type })
-          .body,
+        buildGroupActivityMessage({ bookId: 'book-1', type }).body,
     );
 
     expect(new Set(bodies).size).toBe(ACTIVITY_TYPES.length);
@@ -135,7 +108,6 @@ describe('buildGroupActivityMessage', () => {
    */
   it('carries the four fields of the payload and nothing else', () => {
     const payload = buildGroupActivityMessage({
-      locale: 'pt',
       bookId: 'book-1',
       type: 'PLAN_NOTE',
     });
@@ -157,27 +129,23 @@ describe('buildGroupActivityMessage', () => {
    * e que nenhuma lista de radicais veria: um "você" no sujeito. "Você ainda não
    * escreveu hoje" não tem um único termo da lista.
    */
-  it.each([
-    ['pt', pt],
-    ['en', en],
-  ])(
-    'never addresses the person who receives it, in %s',
-    (_locale, catalog) => {
-      const notice = catalog.notifications.groupActivity;
-      // As QUATRO frases, sem o `title`: o título em inglês é "**Your** club is
-      // reading", e ali o "your" fala do clube da pessoa, não dela.
-      const bodies = [
-        notice.planNote,
-        notice.freeNote,
-        notice.highlight,
-        notice.read,
-      ];
+  it('never addresses the person who receives it, in pt', () => {
+    const notice = pt.notifications.groupActivity;
+    // As QUATRO frases, sem o `title`.
+    const bodies = [
+      notice.planNote,
+      notice.freeNote,
+      notice.highlight,
+      notice.read,
+    ];
 
-      for (const body of bodies) {
-        for (const word of ['você', 'voce', 'you ', 'your ']) {
-          expect(body.toLowerCase()).not.toContain(word);
-        }
+    // ⚠️ As palavras inglesas ficam mesmo com um catálogo só: a frase é
+    // montada aqui, no backend, e nada impede alguém de escrever "you" numa
+    // moldura futura — é uma guarda que só pode melhorar.
+    for (const body of bodies) {
+      for (const word of ['você', 'voce', 'you ', 'your ']) {
+        expect(body.toLowerCase()).not.toContain(word);
       }
-    },
-  );
+    }
+  });
 });

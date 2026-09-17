@@ -8,7 +8,7 @@ import type {
 } from '@clube/shared';
 import { localDay, localTimeZone } from '@clube/shared';
 import { TOKEN_STORAGE_KEY } from '@clube/shared/client';
-import { en, pt } from '@clube/shared/locales';
+import { pt } from '@clube/shared/locales';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -495,8 +495,8 @@ async function press(element: HTMLElement): Promise<void> {
  *
  * ⚠️ **A PARTIÇÃO É A DO §7.9, E ELA NÃO SE REABRE AQUI.** O **vocabulário** é
  * propriedade do CATÁLOGO, e a guarda dele é
- * `packages/shared/src/locales/__tests__/anti-guilt.test.ts`, que percorre `pt`
- * **e** `en` inteiros. O que **não** é catálogo é DOM — cor, número renderizado
+ * `packages/shared/src/locales/__tests__/anti-guilt.test.ts`, que percorre o
+ * catálogo `pt` inteiro. O que **não** é catálogo é DOM — cor, número renderizado
  * a partir de dado, e a palavra que entrou na tela sem passar pelo `t()` —, e é
  * o que a `expectNoGuilt` de `./anti-guilt-dom` varre.
  *
@@ -1933,81 +1933,43 @@ describe('the source of the book screen (rules 5, 15, 16)', () => {
     expect(source).not.toContain('@tiptap');
   });
 
-  it('has the new keys in pt AND in en, actually translated (rule 15)', () => {
+  it('⚠️ keeps the keys the screen reads, and the ones it must NOT have back', () => {
     /*
-      A paridade recursiva de `pt`/`en` é provada no catálogo
-      (`shared/src/locales/__tests__/catalogs.test.ts`) e pelo compilador (o `en`
-      é declarado `typeof pt`). O que ESTE teste acrescenta é o par que nenhum
-      dos dois pega: um bloco copiado e colado do `pt` para o `en`, que passa na
-      paridade de CHAVES e embarca português no idioma inglês.
+      ⚠️ **O QUE ESTE TESTE ERA, e por que ele encolheu na Tarefa 38d.** Ele
+      se chamava `has the new keys in pt AND in en, actually translated (rule
+      15)` e o trabalho dele era pegar o único defeito que nem a paridade
+      recursiva de chaves nem o compilador pegavam: um bloco COPIADO do `pt`
+      para o `en`, que passa na paridade e embarca português no idioma inglês.
+      Sem segundo catálogo esse defeito não existe — e a metade das asserções
+      que sobrou não é a metade "fraca": são as três propriedades que sempre
+      foram de `pt` sozinho.
     */
-    expect(Object.keys(en.pages.book)).toEqual(Object.keys(pt.pages.book));
-    expect(en.pages.book.bookUnavailable).not.toBe(
-      pt.pages.book.bookUnavailable,
-    );
-    expect(en.pages.book.plan.empty.title).not.toBe(
-      pt.pages.book.plan.empty.title,
-    );
 
     /*
       ⚠️ **AS CHAVES QUE MORRERAM, E A LINHAGEM DELAS.** `tabs.highlightsSoon`
       ("os grifos chegam no MVP 2") morreu na Tarefa 25, quando deixou de ser
       verdade; `tabs.notes`/`tabs.highlights` e o bloco `notes` inteiro morreram
       na Tarefa 28, quando o acervo saiu desta tela (as chaves dele estão em
-      `pages.acervo`, com par próprio em `acervo.test.tsx`). O que sobra do lado
-      da navegação é UM link, e é ele que este par confere.
+      `pages.acervo`, com par próprio em `acervo.test.tsx`).
     */
-    expect(en.pages.book.acervoLink).not.toBe(pt.pages.book.acervoLink);
     expect(pt.pages.book).not.toHaveProperty('tabs');
     expect(pt.pages.book).not.toHaveProperty('notes');
 
-    // A chave nomeada da sobreposição do plano, no mesmo par — ela é a regra 15
-    // desta fatia, e é a que NÃO podia sair junto com o acervo.
-    expect(Object.keys(en.pages.book.plan)).toEqual(
-      Object.keys(pt.pages.book.plan),
-    );
-    expect(en.pages.book.plan.writerNamed).not.toBe(
-      pt.pages.book.plan.writerNamed,
-    );
-    expect(en.pages.book.plan.writer).not.toBe(pt.pages.book.plan.writer);
-
-    // ⚠️ E o `{{name}}` sobrevive à tradução: um `en` que perdesse o
-    // interpolador mostraria o rótulo sem o nome de ninguém — o defeito que a
-    // Tarefa 27 consertou, de volta pelo outro idioma.
+    // ⚠️ E o `{{name}}` sobrevive: um rótulo que perdesse o interpolador
+    // mostraria o nome de ninguém — o defeito que a Tarefa 27 consertou.
     for (const label of [
       pt.pages.book.plan.writerNamed,
-      en.pages.book.plan.writerNamed,
       pt.pages.book.plan.readerNamed,
-      en.pages.book.plan.readerNamed,
     ]) {
       expect(label).toContain('{{name}}');
     }
 
     /*
-      ⚠️ **AS CHAVES DA TAREFA 32b, NOS DOIS IDIOMAS.** O par pt≠en é o que
-      pega o bloco copiado e colado — que passa na paridade de CHAVES do
-      catálogo e embarca português no inglês.
-    */
-    expect(Object.keys(en.pages.book.read)).toEqual(
-      Object.keys(pt.pages.book.read),
-    );
-    for (const [ptText, enText] of [
-      [pt.pages.book.read.mark, en.pages.book.read.mark],
-      [pt.pages.book.read.unmark, en.pages.book.read.unmark],
-      [pt.pages.book.read.failed, en.pages.book.read.failed],
-      [pt.pages.book.plan.reader, en.pages.book.plan.reader],
-      [pt.pages.book.plan.readerNamed, en.pages.book.plan.readerNamed],
-    ]) {
-      expect(enText).not.toBe(ptText);
-    }
-
-    /*
-      ⚠️ **E OS DOIS ESTADOS DO BOTÃO NÃO DIZEM A MESMA COISA, nos dois
-      idiomas.** O rótulo É o estado (decisão D: sem `aria-pressed`), então
-      dois rótulos iguais apagariam a informação inteira — e o teste de tela
-      que procura o botão pelo nome passaria a achar o mesmo nos dois casos.
+      ⚠️ **E OS DOIS ESTADOS DO BOTÃO NÃO DIZEM A MESMA COISA.** O rótulo É o
+      estado (decisão D: sem `aria-pressed`), então dois rótulos iguais
+      apagariam a informação inteira — e o teste de tela que procura o botão
+      pelo nome passaria a achar o mesmo nos dois casos.
     */
     expect(pt.pages.book.read.mark).not.toBe(pt.pages.book.read.unmark);
-    expect(en.pages.book.read.mark).not.toBe(en.pages.book.read.unmark);
   });
 });

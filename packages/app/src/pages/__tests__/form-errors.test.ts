@@ -11,7 +11,6 @@ import {
   type MessageKey,
   resolveApiError,
 } from '../form-errors';
-import { memoryStorage } from './harness';
 
 /**
  * O TRADUTOR DE ERRO DA API — §6.2 e §6.8, o assunto central da Tarefa 15.
@@ -23,7 +22,7 @@ import { memoryStorage } from './harness';
 
 /** O `t` de verdade, com o catálogo `pt` — não um dublê que devolve a chave. */
 function translator() {
-  return createI18n(memoryStorage({ 'clube.locale': 'pt' })).t;
+  return createI18n().t;
 }
 
 /** Fixture é factory (§7.7). */

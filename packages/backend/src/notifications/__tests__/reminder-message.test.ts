@@ -1,23 +1,23 @@
 import { GUILT_TERMS } from '@clube/shared/anti-culpa';
-import { en, pt } from '@clube/shared/locales';
+import { pt } from '@clube/shared/locales';
 import { describe, expect, it } from 'vitest';
 
 import { aPlanItem } from '../../test-support/builders';
 import { buildReadingReminder } from '../reminder-message';
 
 /**
- * ⚠️ **REGRAS 15 e H DA TAREFA 37 — A MENSAGEM NÃO COBRA, E O IDIOMA É O DELA.**
+ * ⚠️ **REGRA 15 DA TAREFA 37 — A MENSAGEM NÃO COBRA.**
  *
  * Esta é a única frase do sistema que chega **sem a pessoa abrir a tela**:
- * nenhuma varredura de DOM a alcança, e o i18n do navegador não está lá para
- * ser perguntado. Por isso as duas metades:
+ * nenhuma varredura de DOM a alcança. Por isso o texto vem do **catálogo
+ * compartilhado** (`CLAUDE.md`: não se escreve português cru no backend), e é
+ * ele que a varredura anti-culpa de
+ * `packages/shared/src/locales/__tests__/anti-guilt.test.ts` percorre.
  *
- * - o texto vem do **catálogo compartilhado** (`CLAUDE.md`: não se escreve
- *   português cru no backend), e é ele que a varredura anti-culpa de
- *   `packages/shared/src/locales/__tests__/anti-guilt.test.ts` percorre nos
- *   DOIS idiomas;
- * - o idioma é o **`Settings.locale` da pessoa** (decisão H), porque não há
- *   navegador aberto quando o lembrete sai.
+ * ⚠️ **A DECISÃO H da Tarefa 37 — "o idioma é o `Settings.locale` da pessoa,
+ * e não o do servidor" — morreu na Tarefa 38d**, junto com o segundo catálogo.
+ * Ela continua escrita aqui porque era metade da razão de este arquivo existir:
+ * quem a reabrir reabre também a pergunta 7 do MVP 1.
  *
  * ⚠️ **E o payload sai PRONTO daqui** (decisão I): o dispatcher decide, o
  * `PushSender` entrega. Se o sender montasse a frase, a regra anti-culpa ficaria
@@ -38,9 +38,22 @@ function guiltTermsIn(text: string): string[] {
 }
 
 describe('buildReadingReminder', () => {
+  /*
+    ⚠️ **SAÍRAM AQUI NA TAREFA 38d:** `speaks the language of the person, not
+    of the server` (a decisão H da Tarefa 37) e o
+    `it.each(['fr', '', 'PT', 'pt-BR'])` que provava a queda no `pt` para um
+    locale desconhecido. Os dois mediam a escolha de idioma a partir do
+    `Settings.locale` — coluna `String` livre, daí os quatro casos esquisitos.
+
+    Com um catálogo só, `buildReadingReminder` deixou de RECEBER locale: um
+    parâmetro que chega e não muda nada é pior que um parâmetro que não existe,
+    porque quem chama continua achando que escolhe. A coluna fica no banco,
+    vestigial e com a nota escrita no `schema.prisma` (não há migration nesta
+    fatia).
+  */
+
   it('says the topic of the day, and the title comes from the catalogue', () => {
     const payload = buildReadingReminder({
-      locale: 'pt',
       bookId: 'book-1',
       planItem: aPlanItem({ title: 'Cap. 3 — A promessa' }),
     });
@@ -48,39 +61,6 @@ describe('buildReadingReminder', () => {
     expect(payload.title).toBe(pt.notifications.readingReminder.title);
     expect(payload.body).toBe('Cap. 3 — A promessa');
   });
-
-  /** ⚠️ Decisão H: o idioma é o da PESSOA, e o `en` é um idioma de verdade aqui. */
-  it('speaks the language of the person, not of the server', () => {
-    const planItem = aPlanItem({ title: 'Ch. 3 — The promise' });
-
-    expect(
-      buildReadingReminder({ locale: 'en', bookId: 'b', planItem }).title,
-    ).toBe(en.notifications.readingReminder.title);
-    // E o par que impede "sempre o mesmo texto": os dois títulos DIFEREM.
-    expect(en.notifications.readingReminder.title).not.toBe(
-      pt.notifications.readingReminder.title,
-    );
-  });
-
-  /**
-   * ⚠️ **Locale desconhecido cai no `pt`, o `FALLBACK_LOCALE` do projeto** — e
-   * não estoura. A coluna `Settings.locale` é `String` livre (não há
-   * `z.enum(SUPPORTED_LOCALES)` no `updateSettingsSchema`), então um valor
-   * inesperado é alcançável — e um lembrete que não sai por causa disso seria a
-   * pior forma de falhar: silenciosa e permanente.
-   */
-  it.each(['fr', '', 'PT', 'pt-BR'])(
-    'falls back to pt for the unknown locale %p',
-    (locale) => {
-      const payload = buildReadingReminder({
-        locale,
-        bookId: 'b',
-        planItem: aPlanItem({ title: 'Cap. 1' }),
-      });
-
-      expect(payload.title).toBe(pt.notifications.readingReminder.title);
-    },
-  );
 
   /**
    * ⚠️ **O CLIQUE CAI NA TELA CERTA** (`NOTIFICACOES.md` §2: *"o clique tem de
@@ -94,7 +74,6 @@ describe('buildReadingReminder', () => {
   it('points at the book, with the id escaped', () => {
     expect(
       buildReadingReminder({
-        locale: 'pt',
         bookId: 'a/b',
         planItem: aPlanItem(),
       }).url,
@@ -109,7 +88,6 @@ describe('buildReadingReminder', () => {
   it('tags the notification by kind, so a new one replaces the old', () => {
     expect(
       buildReadingReminder({
-        locale: 'pt',
         bookId: 'b',
         planItem: aPlanItem(),
       }).tag,
@@ -117,16 +95,15 @@ describe('buildReadingReminder', () => {
   });
 
   /**
-   * ⚠️ **REGRA 15 — A MENSAGEM PRONTA NÃO COBRA, NOS DOIS IDIOMAS.**
+   * ⚠️ **REGRA 15 — A MENSAGEM PRONTA NÃO COBRA.**
    *
    * A varredura do catálogo já guarda as frases; esta guarda o **resultado da
    * interpolação**, que é outra coisa: é aqui que uma moldura ("não se esqueça
    * de", "faltam N páginas") apareceria se alguém a escrevesse em código, fora
    * do catálogo, onde varredura nenhuma a veria.
    */
-  it.each(['pt', 'en'])('never nags, in %s', (locale) => {
+  it('never nags, in pt', () => {
     const payload = buildReadingReminder({
-      locale,
       bookId: 'b',
       planItem: aPlanItem({ title: 'Cap. 3 — A promessa' }),
     });
@@ -160,7 +137,6 @@ describe('buildReadingReminder', () => {
    */
   it('adds no counter of its own around what the club wrote', () => {
     const payload = buildReadingReminder({
-      locale: 'pt',
       bookId: 'b',
       planItem: aPlanItem({ title: 'Cap. 3 — A promessa' }),
     });
@@ -176,20 +152,16 @@ describe('buildReadingReminder', () => {
    * não está vazio" acusaria isso.
    */
   it('never leaks the {{title}} placeholder', () => {
-    for (const locale of ['pt', 'en']) {
-      const payload = buildReadingReminder({
-        locale,
-        bookId: 'b',
-        planItem: aPlanItem({ title: 'Cap. 1' }),
-      });
+    const payload = buildReadingReminder({
+      bookId: 'b',
+      planItem: aPlanItem({ title: 'Cap. 1' }),
+    });
 
-      expect(payload.body).not.toContain('{{');
-      expect(payload.body).not.toContain('}}');
-    }
+    expect(payload.body).not.toContain('{{');
+    expect(payload.body).not.toContain('}}');
     // E a precondição: o catálogo REALMENTE tem um placeholder para interpolar
     // — senão este teste passaria sobre uma string constante.
     expect(pt.notifications.readingReminder.body).toContain('{{title}}');
-    expect(en.notifications.readingReminder.body).toContain('{{title}}');
   });
 });
 
@@ -212,7 +184,6 @@ describe('buildReadingReminder com a corrente', () => {
     '⚠️ NÃO cobra quem está em zero (streak %s)',
     (streak) => {
       const payload = buildReadingReminder({
-        locale: 'pt',
         bookId: 'b',
         planItem,
         ...(streak === undefined ? {} : { streak }),
@@ -225,7 +196,6 @@ describe('buildReadingReminder com a corrente', () => {
 
   it('⚠️ diz "1 dia" no singular — o primeiro dia de alguém', () => {
     const payload = buildReadingReminder({
-      locale: 'pt',
       bookId: 'b',
       planItem,
       streak: 1,
@@ -237,7 +207,6 @@ describe('buildReadingReminder com a corrente', () => {
 
   it('cobra quem tem corrente, e ainda diz O QUE ler', () => {
     const payload = buildReadingReminder({
-      locale: 'pt',
       bookId: 'b',
       planItem,
       streak: 12,
@@ -249,30 +218,12 @@ describe('buildReadingReminder com a corrente', () => {
     expect(payload.body).toContain('Cap. 3 — A promessa');
   });
 
-  it('cobra em inglês também', () => {
-    const payload = buildReadingReminder({
-      locale: 'en',
-      bookId: 'b',
-      planItem,
-      streak: 7,
-    });
-
-    expect(payload.body).toContain('7');
-    expect(payload.body).toContain('Cap. 3 — A promessa');
-  });
-
   /** O antídoto do §7.4: as chaves têm os dois marcadores, senão os testes acima
    * passariam sobre uma string constante. */
-  it('os dois catálogos interpolam a contagem E o tema', () => {
-    for (const catalog of [pt, en]) {
-      for (const key of ['streakBody_one', 'streakBody_other'] as const) {
-        expect(catalog.notifications.readingReminder[key]).toContain(
-          '{{count}}',
-        );
-        expect(catalog.notifications.readingReminder[key]).toContain(
-          '{{title}}',
-        );
-      }
+  it('o catálogo interpola a contagem E o tema', () => {
+    for (const key of ['streakBody_one', 'streakBody_other'] as const) {
+      expect(pt.notifications.readingReminder[key]).toContain('{{count}}');
+      expect(pt.notifications.readingReminder[key]).toContain('{{title}}');
     }
   });
 });

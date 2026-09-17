@@ -1512,7 +1512,7 @@ describe('the activity feed of the club (rules 1 to 10)', () => {
     /*
       ⚠️ **A LIÇÃO Nº 16 DO MVP 2: duas coisas que falam a mesma frase são
       indistinguíveis pela varredura.** O catálogo garante que as quatro frases
-      são diferentes entre si, nos dois locales (`catalogs.test.ts`, §7.9) — o
+      são diferentes entre si (`catalogs.test.ts`, §7.9) — o
       que ELE não consegue garantir é que a TELA escolha uma chave diferente
       para cada tipo. Quatro frases distintas lidas por uma chave só ficariam
       verdes lá e mentiriam aqui.
@@ -1938,9 +1938,7 @@ describe('the FIRST FRAME of a session never shows the empty state', () => {
     const storage = memoryStorage({ ...SESSION });
 
     const html = renderToString(
-      <I18nextProvider
-        i18n={createI18n(memoryStorage({ 'clube.locale': 'pt' }))}
-      >
+      <I18nextProvider i18n={createI18n()}>
         <AuthProvider storage={storage} baseUrl="https://api.teste">
           <ActiveClubProvider storage={storage}>
             <MemoryRouter initialEntries={['/']}>

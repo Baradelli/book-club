@@ -1,6 +1,6 @@
 import type { NoteDocBody, NoteResponse } from '@clube/shared';
 import { TOKEN_STORAGE_KEY } from '@clube/shared/client';
-import { en, pt } from '@clube/shared/locales';
+import { pt } from '@clube/shared/locales';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -990,30 +990,5 @@ describe('the standalone note when the address points at nothing (rule 21)', () 
     ).not.toBeNull();
     expect(readableText()).not.toContain('Boom');
     expectNoGuilt();
-  });
-});
-
-describe('the catalog of the standalone note (rule 22)', () => {
-  it('has the new keys in pt AND in en, actually translated', () => {
-    /*
-      A paridade recursiva de chaves é do catálogo
-      (`shared/src/locales/__tests__/catalogs.test.ts`) e do compilador (o `en`
-      é `typeof pt`). O que ESTE teste acrescenta é o par que nenhum dos dois
-      pega: um bloco copiado do `pt` para o `en`, que passa na paridade e
-      embarca português no idioma inglês.
-    */
-    expect(Object.keys(en.pages.freeNote)).toEqual(
-      Object.keys(pt.pages.freeNote),
-    );
-    expect(en.pages.freeNote.create).not.toBe(pt.pages.freeNote.create);
-    expect(en.pages.freeNote.fields.titleRequired).not.toBe(
-      pt.pages.freeNote.fields.titleRequired,
-    );
-    expect(en.pages.freeNote.archive.description).not.toBe(
-      pt.pages.freeNote.archive.description,
-    );
-    expect(en.pages.freeNote.save.unavailable).not.toBe(
-      pt.pages.freeNote.save.unavailable,
-    );
   });
 });

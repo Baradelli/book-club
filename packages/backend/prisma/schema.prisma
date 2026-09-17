@@ -642,6 +642,27 @@ model Settings {
   id                  String  @id @default(cuid())
   userId              String  @unique
   timezone            String  @default("America/Sao_Paulo")
+  // ⚠️⚠️ **COLUNA VESTIGIAL DESDE A TAREFA 38d — NINGUÉM A LÊ, EM LUGAR NENHUM.**
+  //
+  // Ela nasceu para o segundo idioma: o `reminder-message.ts`, o
+  // `group-activity-message.ts` e o `diagnostic-message.ts` escolhiam o catálogo
+  // por ela (o front nunca a leu — a escolha de idioma morava no
+  // `localStorage`, sob `clube.locale`). O dono respondeu à pergunta 7 do MVP 1
+  // em 2026-09-17 — *"só português — apagar o inglês"* (`docs/ACEITE-MVP.md`)
+  // —, o catálogo `en` foi apagado e as três funções deixaram de RECEBER locale.
+  //
+  // ⚠️ **POR QUE ELA FICA:** a Tarefa 38d **não tem migration**. Derrubar a
+  // coluna mexeria no banco para ganhar zero — ela já não tinha leitor no front
+  // antes da fatia, e agora não tem em lugar nenhum. O `updateSettingsSchema`
+  // ainda a aceita (`z.string().min(1)`) e o `GET /settings` ainda a devolve:
+  // é uma preferência que a API guarda e que nada consome.
+  //
+  // ⚠️ **QUEM A DERRUBAR** gera a migration com `prisma migrate dev` (nunca
+  // SQL à mão, `CLAUDE.md`) e tira junto: o campo de `domain/settings.ts`, o
+  // `DEFAULT_SETTINGS.locale`, o `settingsResponseSchema`/`updateSettingsSchema`
+  // de `packages/shared/src/settings.ts` e o mapeamento do
+  // `prisma-settings-repository.ts`. Coluna sem dono e sem explicação é o
+  // ponteiro morto do MVP que vem — esta tem a explicação.
   locale              String  @default("pt")
   // "HH:mm", 24 horas, zero à esquerda obrigatório — e a regra tem DOIS donos, que
   // são o mesmo objeto: o `REMINDER_TIME_PATTERN` de `packages/shared/src/settings.ts`

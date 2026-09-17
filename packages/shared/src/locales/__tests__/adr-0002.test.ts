@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { en, pt } from '../index';
+import { pt } from '../index';
 import { mentionsPrivacyTerm, PRIVACY_TERMS } from './privacy-terms';
 
 /**
@@ -19,14 +19,30 @@ import { mentionsPrivacyTerm, PRIVACY_TERMS } from './privacy-terms';
  * | `pt` | `person: 'De {{name}} (só você vê)'` | **12** |
  * | `en` | `person: 'By {{name}} (only you can see this)'` | **0** de 1.146 |
  *
- * A causa é a do §7.9, e é de LOCALE, não de lista: **todo teste de tela pina
- * `pt`** (o `navigator.language` do jsdom é `en-US`), então a varredura de DOM
- * nunca vê o catálogo `en` — metade dos idiomas que o app declara suportar. Uma
- * guarda que depende do locale de quem escreveu o teste não é guarda.
+ * A causa era a do §7.9, e era de LOCALE, não de lista: **todo teste de tela
+ * pinava `pt`** (o `navigator.language` do jsdom é `en-US`), então a varredura
+ * de DOM nunca via o catálogo `en` — metade dos idiomas que o app declarava
+ * suportar. Uma guarda que depende do locale de quem escreveu o teste não é
+ * guarda. ⚠️ **Tudo isso é história desde a Tarefa 38d** — há um catálogo só;
+ * o que mantém esta guarda aqui está escrito no fim deste bloco.
  *
- * Aqui os dois catálogos são varridos INTEIROS, sem renderizar nada:
- * independente de estado, de tela e de locale, e impossível de esquecer num
- * estado novo.
+ * Aqui o catálogo é varrido INTEIRO, sem renderizar nada: independente de
+ * estado e de tela, e impossível de esquecer num estado novo.
+ *
+ * ⚠️⚠️ **TAREFA 38d — O SEGUNDO CATÁLOGO NÃO EXISTE MAIS, E METADE DO
+ * ARGUMENTO ACIMA MORREU COM ELE.** A medição registrada continua sendo história
+ * verdadeira (foi ela que mudou o lugar da guarda), mas a **razão de locale**
+ * deixou de valer: com um idioma só, a varredura de DOM vê o mesmo catálogo que
+ * esta aqui. O que ainda faz esta guarda morar no catálogo, e não na tela, são
+ * as outras duas razões do §7.9: ela independe de **estado** (a tela só é
+ * varrida nos estados que alguém lembrar de renderizar) e alcança as frases que
+ * **não passam por tela nenhuma** — as do push, montadas no backend.
+ *
+ * ⚠️ **E a rede que se perdeu, registrada:** o segundo catálogo era o que
+ * pegava texto solto (*"se a frase não existe em dois lugares, ela não passou
+ * pelo `t()`"*). No lugar dela sobraram a varredura de FONTE das telas e estas
+ * varreduras de vocabulário — nenhuma das duas pega uma frase em português
+ * escrita direto no JSX de uma tela que a varredura de fonte não cubra.
  *
  * O que continua na tela: o que **não** vem de catálogo — a frase que entrou no
  * JSX sem passar pelo `t()`, o desenho (`<svg>` inline) e o ícone importado do
@@ -50,12 +66,9 @@ function entries(value: unknown, prefix = ''): Array<[string, string]> {
   );
 }
 
-describe('the ADR 0002 is a property of the CATALOGS, in BOTH locales', () => {
-  it.each([
-    ['pt', pt],
-    ['en', en],
-  ])('promises no restricted visibility in %s', (_locale, catalog) => {
-    const leaves = entries(catalog);
+describe('the ADR 0002 is a property of the CATALOG', () => {
+  it('promises no restricted visibility in pt', () => {
+    const leaves = entries(pt);
 
     /*
       ⚠️ A GUARDA CONTRA A VARREDURA VAZIA (§7.4): sem esta linha, um `entries`
@@ -75,7 +88,7 @@ describe('the ADR 0002 is a property of the CATALOGS, in BOTH locales', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('would catch the phrase the audit measured, in both languages', () => {
+  it('would catch the phrase the audit measured, English included', () => {
     /*
       ⚠️ O LADO POSITIVO DO PAR (§7.3): uma lista esvaziada — ou um matcher
       invertido — deixaria o teste acima verde para sempre. A terceira frase é a

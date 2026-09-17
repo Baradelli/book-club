@@ -122,16 +122,17 @@ export class NotifyGroupActivity {
       if (!preferences.notifyGroupActivity) continue;
 
       /*
-        Decisão I da Tarefa 37, do outro lado: **o payload sai pronto daqui**, e
-        no locale de QUEM RECEBE — o sender entrega, não monta frase. Se ele
-        montasse, a frase ficaria dentro do adaptador de rede, onde nenhum teste
-        de UseCase a alcança e onde a varredura anti-culpa do catálogo não a
-        veria.
+        Decisão I da Tarefa 37, do outro lado: **o payload sai pronto daqui** —
+        o sender entrega, não monta frase. Se ele montasse, a frase ficaria
+        dentro do adaptador de rede, onde nenhum teste de UseCase a alcança e
+        onde a varredura anti-culpa do catálogo não a veria.
+
+        ⚠️ Até a Tarefa 38d ele saía também **no locale de QUEM RECEBE**; com
+        um idioma só, `buildGroupActivityMessage` deixou de receber locale.
       */
       await sender.send(
         membership.userId,
         buildGroupActivityMessage({
-          locale: preferences.locale,
           bookId: input.bookId,
           type: input.type,
         }),

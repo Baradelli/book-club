@@ -12,7 +12,6 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 
 import type { PushSubscription } from '../domain/push-subscription';
-import { DEFAULT_SETTINGS } from '../domain/settings';
 import { handleDomainError } from '../http/handle-domain-error';
 import { buildRepositories } from '../http/repositories';
 import { buildTestNotification } from '../notifications/diagnostic-message';
@@ -346,18 +345,16 @@ export const notificationRoutes: FastifyPluginAsyncZod<{
           .send({ error: 'push notifications are not configured' });
       }
 
-      // O idioma de quem vai receber — que aqui é quem chamou. Sem linha de
-      // `Settings` (ninguém abriu a tela de preferências), o padrão do projeto.
-      const settings = await repos.settings.byUserId(req.user.sub);
+      // ⚠️ Até a Tarefa 38d esta rota lia o `Settings` só para descobrir o
+      // idioma de quem ia receber. Com um idioma só, `buildTestNotification`
+      // não recebe locale e não há mais nada a ler aqui.
       const sender = new WebPushSender(repos.pushSubscriptions, vapid);
 
       const result = await sender.send(
         // ⚠️ O ATOR, e não há outro caminho: esta rota não lê `userId` de lugar
         // nenhum (§6.3, e a regra 12 da Tarefa 36 aplicada ao ENVIO).
         req.user.sub,
-        buildTestNotification({
-          locale: settings?.locale ?? DEFAULT_SETTINGS.locale,
-        }),
+        buildTestNotification(),
       );
 
       return reply.status(200).send(result);

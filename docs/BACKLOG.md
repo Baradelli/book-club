@@ -2954,7 +2954,7 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       medido, integração **611**, e o banco provado **idêntico por consulta** — inclusive o
       `ReadingLog` que o dono criou testando o app. Nenhuma dependência nova._
 
-- [ ] **38d** — Só português: apagar o catálogo `en` e a maquinaria que só existe por causa
+- [x] **38d** — Só português: apagar o catálogo `en` e a maquinaria que só existe por causa
       dele. ⚠️ **FATIA GERADA PELA RESPOSTA DO DONO à pergunta 7 do MVP 1** (2026-09-17):
       *"só português — apagar o inglês"*. → `docs/ACEITE-MVP.md`, MVP 1, pergunta 7.
       _⚠️ **Ela é maior do que "apagar um arquivo", e a razão é a Tarefa 29a**: aquela fatia
@@ -2971,6 +2971,41 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       _**Ganho previsto:** ~11 KiB de precache, e a dívida dos **33 textos do editor** que só
       existem em português deixa de ser dívida (era a pergunta 6 do MVP 2). **A perda,
       registrada:** o segundo catálogo era a rede que pegava texto solto na tela._
+      _**⚠️⚠️ O GANHO DE PRECACHE PREVISTO NÃO ACONTECEU, e o número certo é o medido: 1,60 KiB,
+      não ~11.** Motivo, e ele é uma lição sobre ler a fatia anterior: o chunk do `en` **já
+      estava fora do precache** desde a 29a — era exatamente para isso que o `globIgnores`
+      existia. Apagar o catálogo devolve os **12.524 B** que **não** eram baixados no install
+      (só por quem trocava de idioma) e **1.637 B** do chunk de entrada, que são os únicos que
+      o precache sentia. Entradas: **16 → 16** (o `en` nunca esteve na lista)._
+      _**⚠️ A PERDA, MEDIDA em vez de suposta:** a rede que o segundo catálogo era — *"se a
+      frase não existe em dois lugares, ela não passou pelo `t()`"* — **nunca foi automatizada**.
+      Um `<p>Resumo do mês do clube</p>` plantado no JSX da home dá **ZERO acusadores** em
+      749 testes, e daria zero antes da fatia também: nenhum teste do repositório compara o que
+      a tela renderiza com o conjunto de chaves do catálogo. Era uma rede de **revisão humana**
+      (escrever a frase duas vezes incomodava), não de teste. O que sobrou no lugar: a varredura
+      de FONTE de `packages/ui` (`no-hardcoded-ui-text.test.ts`, teto que só cai) e as varreduras
+      de vocabulário do catálogo — e as duas continuam mordendo (1 acusador cada, medido com
+      frase plantada no `pt.ts`)._
+      _**⚠️⚠️ RODADA DE CORREÇÃO — 1 ALTO e 4 MÉDIOs, e o ALTO é a QUARTA aparição da classe
+      "a guarda pina o TEXTO do config em vez do COMPORTAMENTO" (29a, 34b, 38, esta).** Ao
+      apagar o teste `keeps the en catalog OUT of the service worker PRECACHE`, a fatia levou de
+      carona a única linha que pinava o **chunk de entrada dentro do `sw.js`** — e o bloco de
+      comentário que ficou no lugar afirmava um dono que não existia (a asserção do
+      `push-handler` só olha `rootScripts`). Medido: `globIgnores: ['assets/**']` derruba o
+      precache de **16 entradas / 898,33 KiB para 13 / 11,84 KiB** — o app deixa de abrir
+      offline — com a suíte **33/33 verde, ZERO acusadores**. Consertado com asserção própria
+      (`⚠️ precaches the FIRST LOAD, so an installed app opens offline`), que cobre o chunk de
+      entrada **e o CSS** (sem ele o app abre em branco) e hoje dá **1 acusador**. Daí
+      `749 → 750` no `app`._
+      _**Os quatro MÉDIOs:** (1) o docblock do `i18n.test.ts` prometia acusador para o `lng` e
+      para o `initReactI18next` — **medido, os dois dão ZERO** (o `fallbackLng` cobre um, o
+      `<I18nextProvider>` cobre o outro), e só o `resources` tem dono (405 de 749); reescrito com
+      os números, sem guarda nova; (2) `has only string leaves in pt` era varredura vazia (§7.4):
+      com `leaves()` devolvendo `[]` passava — ganhou o par positivo e agora acusa; (3)
+      `docs/NOTIFICACOES.md` ainda mandava RECRIAR o `globIgnores` do `en` e falava em quatro
+      propriedades no `service-worker-config.test.ts` (são três) — riscado com data; (4)
+      docblocks apontando para um `it.each` que não existe mais, e o `describe` do
+      `anti-guilt.test.ts` no plural._
 
 - [ ] **38e** — O tema do dia na linha do feed. ⚠️ **FATIA GERADA PELA RESPOSTA DO DONO à
       pergunta 3 do MVP 3** (2026-09-17): *"quero o tema do dia na linha"*.

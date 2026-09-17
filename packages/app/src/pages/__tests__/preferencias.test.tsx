@@ -44,7 +44,7 @@ import {
  * `push-device.test.ts`, contra um host falso.
  *
  * ⚠️ **A VARREDURA ANTI-CULPA DESTA TELA É A DO VOCABULÁRIO, E ELA NÃO MORA
- * AQUI** (regra 11, §7.9): `GUILT_TERMS` percorre `pt` **e** `en` inteiros em
+ * AQUI** (regra 11, §7.9): `GUILT_TERMS` percorre o catálogo inteiro em
  * `packages/shared/src/locales/__tests__/anti-guilt.test.ts`, e as chaves desta
  * fatia entram nela por construção. **Não** existe aqui a guarda de "nenhum
  * dígito" do feed (Tarefa 35): nesta tela o dígito é legítimo e obrigatório

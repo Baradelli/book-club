@@ -1,5 +1,4 @@
 import { loginResponseSchema } from '@clube/shared';
-import { isLocale, SUPPORTED_LOCALES } from '@clube/shared/locales';
 import { SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,7 +6,6 @@ import { Link } from 'react-router-dom';
 
 import { useAuth } from './auth/auth-context';
 import { useActiveClub } from './club/active-club';
-import { changeLocale, persistLocale } from './i18n';
 import { SETTINGS_PATH } from './pages/paths';
 import { AppRoutes } from './router';
 import { isThemePreference, THEME_PREFERENCES, useTheme } from './theme';
@@ -38,35 +36,17 @@ function useSessionRefresh(): void {
   }, [token, api, signIn]);
 }
 
-function LanguagePicker() {
-  const { t, i18n } = useTranslation();
+/*
+  ⚠️ **O SELETOR DE IDIOMA SAIU NA TAREFA 38d**, e com ele o `changeLocale`,
+  o `persistLocale` e as chaves `language.*` do catálogo. O dono respondeu à
+  pergunta 7 do MVP 1 (`docs/ACEITE-MVP.md`, 2026-09-17): *"só português —
+  apagar o inglês"*. Um `<select>` de um item só é ruído puro — o mesmo
+  argumento que já vale para o `ClubPicker` logo abaixo, que só aparece com
+  2+ clubes.
 
-  return (
-    <label className="flex items-center gap-1 text-xs">
-      <span className="sr-only">{t('language.label')}</span>
-      <select
-        className="rounded border border-line bg-surface px-1 py-0.5"
-        value={i18n.resolvedLanguage ?? 'pt'}
-        onChange={(event) => {
-          const next = event.target.value;
-          if (!isLocale(next)) return;
-          // ⚠️ `changeLocale`, e NÃO `i18n.changeLanguage` (Tarefa 29a): o
-          // catálogo `en` não vem mais no chunk de entrada, então é preciso
-          // buscá-lo antes de trocar a língua — senão a tela fica em `pt` e
-          // parece que a tradução não existe.
-          void changeLocale(i18n, next);
-          persistLocale(next);
-        }}
-      >
-        {SUPPORTED_LOCALES.map((locale) => (
-          <option key={locale} value={locale}>
-            {t(`language.${locale}`)}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
+  O `ThemePicker` FICA: ele tem três opções de verdade, e nenhuma delas tem
+  a ver com idioma.
+*/
 
 /**
  * O SELETOR DE CLUBE ATIVO — regra 6 e decisão F.
@@ -158,7 +138,6 @@ export function App() {
         <span className="text-sm font-semibold">{t('app.name')}</span>
         <div className="flex items-center gap-3">
           <ClubPicker />
-          <LanguagePicker />
           <ThemePicker />
           {isAuthenticated ? (
             <>

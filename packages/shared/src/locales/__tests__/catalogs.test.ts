@@ -1,19 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
 import { API_ERROR_KEYS } from '../../client/api-error-key';
-import {
-  DEFAULT_LOCALE,
-  eagerResources,
-  en,
-  FALLBACK_LOCALE,
-  isLocale,
-  type Locale,
-  pt,
-  SUPPORTED_LOCALES,
-} from '../index';
+import { pt, resources } from '../index';
 
 /** `a.b.c` de cada folha do catálogo — é a chave que o `t()` recebe. */
 function keyPaths(value: unknown, prefix = ''): string[] {
@@ -29,46 +20,48 @@ function leaves(value: unknown): unknown[] {
 }
 
 describe('catálogos de i18n', () => {
-  it('has pt as the default and en as the second locale (rule 13)', () => {
-    expect(DEFAULT_LOCALE).toBe('pt');
-    expect(FALLBACK_LOCALE).toBe('pt');
-    expect(SUPPORTED_LOCALES).toEqual(['pt', 'en']);
+  it('⚠️ has ONE catalog, and the en one does not exist (task 38d)', () => {
+    /*
+      ⚠️ **A DECISÃO DO DONO, PINADA NO DISCO** (`docs/ACEITE-MVP.md`, MVP 1,
+      pergunta 7, 2026-09-17): *"só português — apagar o inglês"*.
+
+      Ela é pinada aqui, e não só pela ausência de `export { en }`, porque um
+      `en.ts` que voltasse ao disco **compila e passa** enquanto ninguém o
+      importar — e aí o catálogo morto volta a pedir manutenção (a fatia
+      seguinte escreve uma chave nova e alguém "conserta a paridade").
+
+      ⚠️ O par positivo (§7.4): o `pt.ts` ESTÁ lá. Sem ele, um caminho errado
+      deixaria as duas linhas verdes provando "esta pasta não existe".
+    */
+    const catalogPath = (name: string): string =>
+      fileURLToPath(new URL(`../${name}.ts`, import.meta.url));
+
+    expect(existsSync(catalogPath('pt'))).toBe(true);
+    expect(existsSync(catalogPath('en'))).toBe(false);
   });
 
   /*
-    ⚠️ **A ASSERÇÃO TROCADA, NÃO APAGADA (Tarefa 29a, decisão D).** O nome
-    antigo era `exposes both catalogs in resources (rule 13)`, e ele descrevia a
-    verdade de então: os DOIS catálogos iam no `i18next.init`, ou seja, no chunk
-    de entrada do PWA. A partir da 29a só o `pt` é eager — o `en` chega por
-    `import()` quando alguém escolhe inglês —, e a asserção antiga passaria a
-    afirmar o oposto do que o produto faz.
+    ⚠️ **A ASSERÇÃO TROCADA DUAS VEZES, NUNCA APAGADA.** Ela já foi
+    `exposes both catalogs in resources (rule 13)` (os DOIS catálogos no
+    `i18next.init`) e depois `ships ONLY pt eagerly, because en is fetched on
+    demand` (Tarefa 29a: só o `pt` eager, o `en` por `import()`).
 
-    A substituta pina a verdade nova pelos DOIS lados: o que está lá dentro
-    (`pt`) e o que NÃO está (`en`). Um `toEqual` do objeto inteiro já reprova o
-    `en` de volta; a segunda linha existe para o vermelho DIZER isso.
+    A Tarefa 38d apagou o segundo catálogo, e com ele a distinção
+    eager/preguiçoso — por isso `eagerResources` voltou a se chamar `resources`:
+    com um idioma só, "eager" prometia um irmão preguiçoso que não existe mais.
+    O que sobra é a Única verdade que resta: o que o `i18next.init` recebe é o
+    catálogo `pt`, e só ele.
+
+    A paridade recursiva `pt` ↔ `en` (`has exactly the same key set…`) saiu
+    junto, e não foi afrouxada: ela comparava dois conjuntos, e só há um.
   */
-  it('ships ONLY pt eagerly, because en is fetched on demand (rules 4 and 13)', () => {
-    expect(eagerResources).toEqual({ pt: { translation: pt } });
-    expect(Object.keys(eagerResources)).toEqual(['pt']);
+  it('puts the pt catalog, and nothing else, in what i18next receives', () => {
+    expect(resources).toEqual({ pt: { translation: pt } });
+    expect(Object.keys(resources)).toEqual(['pt']);
   });
 
-  it('has exactly the same key set in pt and en, compared recursively (rule 14)', () => {
-    const ptKeys = keyPaths(pt).sort();
-    const enKeys = keyPaths(en).sort();
-
-    // Sem esta linha, um `keyPaths` quebrado devolvendo `[]` faria o teste
-    // passar comparando nada com nada.
-    expect(ptKeys.length).toBeGreaterThan(20);
-    // Chave faltando não quebra nada em runtime: o i18next renderiza a
-    // PRÓPRIA chave na tela, em inglês, e ninguém percebe. Este é o teste que
-    // acusa.
-    expect(ptKeys).toEqual(enKeys);
-  });
-
-  it.each([
-    ['pt', pt],
-    ['en', en],
-  ])('has no empty value in %s (rule 15)', (_locale, catalog) => {
+  it('has no empty value in pt (rule 15)', () => {
+    const catalog = pt;
     const empty = keyPaths(catalog).filter((path) => {
       const value = path
         .split('.')
@@ -82,11 +75,18 @@ describe('catálogos de i18n', () => {
     expect(empty).toEqual([]);
   });
 
-  it.each([
-    ['pt', pt],
-    ['en', en],
-  ])('has only string leaves in %s (rule 15)', (_locale, catalog) => {
-    for (const leaf of leaves(catalog)) expect(typeof leaf).toBe('string');
+  it('has only string leaves in pt (rule 15)', () => {
+    /*
+      ⚠️ **O PAR POSITIVO (§7.4), acrescentado na rodada de correção da 38d.**
+      O laço abaixo é uma varredura, e varredura sobre lista vazia é verde para
+      sempre: medido, com `leaves()` devolvendo `[]` o teste rodava **zero
+      asserções** e passava (586/586, zero acusadores). O buraco vinha do
+      `it.each` que este teste substituiu — herdado, não criado, mas herdado na
+      mão de quem o reescreveu.
+    */
+    expect(leaves(pt).length).toBeGreaterThan(20);
+
+    for (const leaf of leaves(pt)) expect(typeof leaf).toBe('string');
   });
 
   it('names every key in English camelCase (rule 16)', () => {
@@ -98,8 +98,8 @@ describe('catálogos de i18n', () => {
       a partir do `count` e das regras do idioma; a chave que o código escreve
       continua sendo `days`, em camelCase.
 
-      ⚠️ A lista é FECHADA de propósito (`one` e `other`, os dois que o `pt` e o
-      `en` usam): aceitar qualquer `_algo` reabriria a porta para snake_case de
+      ⚠️ A lista é FECHADA de propósito (`one` e `other`, os dois que o `pt`
+      usa): aceitar qualquer `_algo` reabriria a porta para snake_case de
       verdade, que é o que esta regra existe para barrar. Quem precisar de
       `_few`/`_many` (russo, polonês) acrescenta aqui, e o acréscimo aparece no
       diff.
@@ -117,232 +117,147 @@ describe('catálogos de i18n', () => {
     expect(bad).toEqual([]);
   });
 
-  it.each([
-    ['pt', pt],
-    ['en', en],
-  ])(
-    'says a missing invite and an invalid invite differently, in %s',
-    (_locale, catalog) => {
-      /*
-        A regra 15 da Tarefa 15 vive AQUI, e não na tela: "404 e 410 têm frases
-        diferentes" é propriedade DO CATÁLOGO — dois valores distintos — e não
-        comportamento de um componente. O teste de tela que a afirmava
-        (`expect(pt.pages.acceptInvite.inviteNotFound).not.toBe(...)` dentro do
-        `accept-invite.test.tsx`) era §7.2 na letra: propriedade do catálogo
-        dentro de teste de tela, que passaria igual com a tela desmontada.
-
-        E as duas precisam ser diferentes NOS DOIS locales: uma tradução
-        copiada e colada mataria a distinção só em `en`.
-      */
-      const invite = catalog.pages.acceptInvite;
-
-      expect(invite.inviteNotFound).not.toBe(invite.inviteExpired);
-      expect(invite.alreadyInClub).not.toBe(invite.inviteExpired);
-      expect(invite.alreadyInClub).not.toBe(invite.inviteNotFound);
-    },
-  );
-
-  it.each([
-    ['pt', pt],
-    ['en', en],
-  ])(
-    '⚠️ says the FOUR activity types differently in the feed, in %s (task 35, rule 3)',
-    (_locale, catalog) => {
-      /*
-        ⚠️ **A LIÇÃO Nº 16 DO MVP 2 ESCRITA COMO TESTE: duas coisas que falam a
-        MESMA frase são indistinguíveis pela varredura.** O feed da home tem
-        quatro nascimentos (`ACTIVITY_TYPES`), e se dois deles dissessem a mesma
-        coisa a pessoa não teria como saber se a outra escreveu ou grifou — e
-        nenhuma varredura de DOM acusaria, porque a tela estaria renderizando
-        texto legítimo.
-
-        ⚠️ **E ELA MORA AQUI, NÃO NA TELA (§7.9).** "As quatro frases são
-        distintas" é propriedade de QUATRO VALORES do catálogo: independe de
-        estado, independe de tela, e — o que decide — percorre os DOIS locales.
-        Um teste de tela pina `pt` (o `navigator.language` do jsdom é `en-US`),
-        então duas traduções `en` coladas uma na outra passariam sem uma linha
-        vermelha. É o mesmo motivo, e o mesmo lugar, do par de convite acima.
-
-        O que o catálogo NÃO decide, e por isso continua na tela: que a tela
-        escolha a chave certa para cada tipo. Quatro frases distintas num
-        catálogo que a tela lê por uma chave só ficariam verdes aqui. O acusador
-        daquela metade é `home.test.tsx`.
-      */
-      const feed = catalog.pages.home.feed;
-      const sentences = [
-        feed.planNote,
-        feed.freeNote,
-        feed.highlight,
-        feed.read,
-      ];
-
-      // O par positivo: as quatro existem e falam de alguém e de um livro. Sem
-      // ele, quatro strings vazias seriam "distintas" só no dia em que o
-      // `new Set` mudasse de tamanho (§7.4).
-      for (const sentence of sentences) {
-        expect(sentence).toContain('{{name}}');
-        expect(sentence).toContain('{{book}}');
-      }
-      expect(new Set(sentences).size).toBe(4);
-
-      /*
-        E os DOIS estados sem linha nenhuma também são distintos entre si — a
-        lição das Tarefas 19/25/28, e a decisão G desta fatia: "ainda não há
-        atividade" é constatação, "não foi possível carregar" é falha nossa, e
-        uma frase só para os dois faz a pessoa achar que o clube está parado
-        quando o que caiu foi a rede.
-      */
-      expect(feed.empty).not.toBe(feed.failed);
-      expect(feed.loading).not.toBe(feed.empty);
-      expect(feed.loading).not.toBe(feed.failed);
-    },
-  );
-
-  it.each([
-    ['pt', pt],
-    ['en', en],
-  ])(
-    '⚠️ says the FOUR device refusals differently, in %s (task 36b, decision G)',
-    (_locale, catalog) => {
-      /*
-        ⚠️ **QUATRO CAUSAS COM QUATRO CONSERTOS DIFERENTES** — abrir por
-        HTTPS/localhost · usar outro navegador · adicionar o PWA à tela de
-        início · reverter a permissão. Uma frase genérica de "não deu" manda a
-        pessoa adivinhar qual das quatro, e a quarta (o iPhone fora da tela de
-        início) é a mais cruel porque **não parece falha**: o `PushManager`
-        existe e o botão simplesmente não faria nada.
-
-        ⚠️ **E ELA MORA AQUI, NÃO NA TELA (§7.9)**, pelo mesmo motivo do par de
-        convite e dos quatro tipos do feed: "as quatro frases são distintas" é
-        propriedade de QUATRO VALORES do catálogo, percorre os DOIS locales, e
-        todo teste de tela pina `pt`. Quatro traduções `en` coladas uma na outra
-        passariam sem uma linha vermelha.
-
-        O que o catálogo NÃO decide, e por isso continua na tela: que a tela
-        escolha a chave certa para cada recusa. O acusador daquela metade é
-        `preferencias.test.tsx`.
-      */
-      const device = catalog.pages.settings.device;
-      const refusals = [
-        device.insecureContext,
-        device.unsupported,
-        device.iosNotInstalled,
-        device.permissionDenied,
-      ];
-
-      // O par positivo (§7.4): sem ele, quatro strings vazias seriam
-      // "distintas" só no dia em que o `new Set` mudasse de tamanho. E cada
-      // recusa diz o CONSERTO, então nenhuma delas cabe em três palavras.
-      for (const sentence of refusals) {
-        expect(sentence.length).toBeGreaterThan(20);
-      }
-      expect(new Set(refusals).size).toBe(4);
-
-      /*
-        ⚠️ E nenhuma delas é a frase de "ainda não configurado" (decisão F):
-        `enabled: false` é o estado NORMAL de quem clona o projeto sem VAPID, e
-        não pode falar a mesma língua de uma falha.
-      */
-      expect(refusals).not.toContain(device.unavailable);
-
-      /*
-        ⚠️ E o TERCEIRO estado do aparelho — o `GET /notifications/config` que
-        não respondeu — não fala a língua de nenhum dos outros dois. São
-        consertos diferentes: `unavailable` pede configurar o servidor,
-        `configFailed` pede tentar de novo.
-      */
-      expect(device.configFailed).not.toBe(device.unavailable);
-      expect(refusals).not.toContain(device.configFailed);
-    },
-  );
-
-  it.each([
-    ['pt', pt],
-    ['en', en],
-  ])(
-    'has every key that apiErrorKey can return, in %s (rules 14 and 17)',
-    (_locale, catalog) => {
-      const keys = new Set(keyPaths(catalog));
-
-      // O elo que ninguém confere à mão: `apiErrorKey` devolve uma chave, e
-      // uma chave ausente do catálogo aparece na tela como `errors.conflict`.
-      expect(API_ERROR_KEYS.filter((key) => !keys.has(key))).toEqual([]);
-    },
-  );
-
-  it('accepts every supported locale and nothing else (rule 13)', () => {
-    // O teste anterior aqui era `const locales: Locale[] = [...SUPPORTED_LOCALES]`
-    // seguido de `toHaveLength(2)`: o `expect` afirmava o que o próprio
-    // fixture garantia, e um `isLocale` que devolvesse `true` para tudo
-    // passava. Este mede a função.
-    expect(SUPPORTED_LOCALES.filter(isLocale)).toEqual([...SUPPORTED_LOCALES]);
-
-    for (const notALocale of [
-      'fr',
-      // Com região: é por isso que `pickInitialLocale` corta o `-BR` antes de
-      // perguntar. Se `pt-BR` passasse aqui, o i18next procuraria um catálogo
-      // que não existe.
-      'pt-BR',
-      // Maiúscula: idem, o `toLowerCase` do `pickInitialLocale`.
-      'PT',
-      '',
-      null,
-      undefined,
-      42,
-      {},
-      ['pt'],
-    ]) {
-      expect(isLocale(notALocale)).toBe(false);
-    }
-  });
-
-  /*
-    ⚠️ **A SEGUNDA ASSERÇÃO TROCADA (decisão D).** O nome antigo era
-    `narrows to a key of resources, so a catalog is never indexed by a language
-    we do not have`, e o corpo dele provava, pelo COMPILADOR, que `Locale` e as
-    chaves de `resources` eram o MESMO conjunto (`resources[locale]` só compila
-    se forem).
-
-    Essa identidade quebrou por decisão: `eagerResources` passou a ser um
-    SUBCONJUNTO de `Locale`. Apagar o teste deixaria o conjunto `Locale` sem
-    nenhum acusador estrutural — o `Record<Locale, true>` abaixo é quem assume
-    esse papel: acrescentar ou tirar um locale do `SUPPORTED_LOCALES` deixa de
-    compilar aqui, exatamente como o `resources[locale]` deixava antes.
-
-    E a relação nova entre os dois conjuntos é afirmada em runtime, nos dois
-    sentidos: quem é eager (`pt`) e quem é sob demanda (`en`).
-  */
-  it('narrows to a supported locale, of which the eager resources are a strict SUBSET', () => {
-    const fromTheOutsideWorld: unknown = 'en';
-
-    if (!isLocale(fromTheOutsideWorld)) throw new Error('unreachable');
-    // Só compila porque `isLocale` é um type guard sobre `Locale`.
-    const locale: Locale = fromTheOutsideWorld;
-
-    // O acusador ESTRUTURAL de `Locale`: chave a mais ou a menos aqui é erro de
-    // compilação, não de runtime.
-    const everyLocale: Record<Locale, true> = { pt: true, en: true };
-    expect(Object.keys(everyLocale).sort()).toEqual(
-      [...SUPPORTED_LOCALES].sort(),
-    );
-
-    // `en` é um locale de verdade...
-    expect(SUPPORTED_LOCALES).toContain(locale);
-    // ...e é justamente o que NÃO vem no pacote eager.
-    expect(SUPPORTED_LOCALES.filter((l) => l in eagerResources)).toEqual([
-      'pt',
-    ]);
-    expect(SUPPORTED_LOCALES.filter((l) => !(l in eagerResources))).toEqual([
-      'en',
-    ]);
-  });
-
-  it('exports the en catalog under a subpath of its OWN, so the bundler can cut there (rule 1)', () => {
+  it('says a missing invite and an invalid invite differently, in pt', () => {
+    const catalog = pt;
     /*
-      Sem este subpath o único alvo do `import()` seria o BARRIL, que já está
-      inteiro no chunk de entrada: o Rollup veria o binding `en` usado e o
-      traria de volta para a entrada, desfazendo a fatia em silêncio. O subpath
-      é o que dá ao bundler uma fronteira para cortar (Tarefa 29a, decisão A).
+      A regra 15 da Tarefa 15 vive AQUI, e não na tela: "404 e 410 têm frases
+      diferentes" é propriedade DO CATÁLOGO — dois valores distintos — e não
+      comportamento de um componente. O teste de tela que a afirmava
+      (`expect(pt.pages.acceptInvite.inviteNotFound).not.toBe(...)` dentro do
+      `accept-invite.test.tsx`) era §7.2 na letra: propriedade do catálogo
+      dentro de teste de tela, que passaria igual com a tela desmontada.
+
+      ⚠️ Até a Tarefa 38d este era um `it.each` sobre `pt` e `en`, porque
+      uma tradução copiada e colada mataria a distinção só em `en`. Com um
+      catálogo só ele volta a ser um teste direto — e o nome diz qual, porque
+      o nome é parte da guarda (§7.9).
+    */
+    const invite = catalog.pages.acceptInvite;
+
+    expect(invite.inviteNotFound).not.toBe(invite.inviteExpired);
+    expect(invite.alreadyInClub).not.toBe(invite.inviteExpired);
+    expect(invite.alreadyInClub).not.toBe(invite.inviteNotFound);
+  });
+
+  it('⚠️ says the FOUR activity types differently in the feed, in pt (task 35, rule 3)', () => {
+    const catalog = pt;
+    /*
+      ⚠️ **A LIÇÃO Nº 16 DO MVP 2 ESCRITA COMO TESTE: duas coisas que falam a
+      MESMA frase são indistinguíveis pela varredura.** O feed da home tem
+      quatro nascimentos (`ACTIVITY_TYPES`), e se dois deles dissessem a mesma
+      coisa a pessoa não teria como saber se a outra escreveu ou grifou — e
+      nenhuma varredura de DOM acusaria, porque a tela estaria renderizando
+      texto legítimo.
+
+      ⚠️ **E ELA MORA AQUI, NÃO NA TELA (§7.9).** "As quatro frases são
+      distintas" é propriedade de QUATRO VALORES do catálogo: independe de
+      estado e independe de tela. Até a Tarefa 38d ela também percorria os
+      dois locales — esse era o argumento mais forte para ela morar aqui, e
+      ele morreu com o segundo catálogo. Os outros dois continuam de pé: o
+      feed tem treze estados, e uma varredura de tela só vê os que alguém
+      lembrar de renderizar.
+
+      O que o catálogo NÃO decide, e por isso continua na tela: que a tela
+      escolha a chave certa para cada tipo. Quatro frases distintas num
+      catálogo que a tela lê por uma chave só ficariam verdes aqui. O acusador
+      daquela metade é `home.test.tsx`.
+    */
+    const feed = catalog.pages.home.feed;
+    const sentences = [feed.planNote, feed.freeNote, feed.highlight, feed.read];
+
+    // O par positivo: as quatro existem e falam de alguém e de um livro. Sem
+    // ele, quatro strings vazias seriam "distintas" só no dia em que o
+    // `new Set` mudasse de tamanho (§7.4).
+    for (const sentence of sentences) {
+      expect(sentence).toContain('{{name}}');
+      expect(sentence).toContain('{{book}}');
+    }
+    expect(new Set(sentences).size).toBe(4);
+
+    /*
+      E os DOIS estados sem linha nenhuma também são distintos entre si — a
+      lição das Tarefas 19/25/28, e a decisão G desta fatia: "ainda não há
+      atividade" é constatação, "não foi possível carregar" é falha nossa, e
+      uma frase só para os dois faz a pessoa achar que o clube está parado
+      quando o que caiu foi a rede.
+    */
+    expect(feed.empty).not.toBe(feed.failed);
+    expect(feed.loading).not.toBe(feed.empty);
+    expect(feed.loading).not.toBe(feed.failed);
+  });
+
+  it('⚠️ says the FOUR device refusals differently, in pt (task 36b, decision G)', () => {
+    const catalog = pt;
+    /*
+      ⚠️ **QUATRO CAUSAS COM QUATRO CONSERTOS DIFERENTES** — abrir por
+      HTTPS/localhost · usar outro navegador · adicionar o PWA à tela de
+      início · reverter a permissão. Uma frase genérica de "não deu" manda a
+      pessoa adivinhar qual das quatro, e a quarta (o iPhone fora da tela de
+      início) é a mais cruel porque **não parece falha**: o `PushManager`
+      existe e o botão simplesmente não faria nada.
+
+      ⚠️ **E ELA MORA AQUI, NÃO NA TELA (§7.9)**, pelo mesmo motivo do par de
+      convite e dos quatro tipos do feed: "as quatro frases são distintas" é
+      propriedade de QUATRO VALORES do catálogo, e a tela só mostra uma recusa
+      por vez — a varredura teria de reproduzir os quatro ambientes.
+
+      O que o catálogo NÃO decide, e por isso continua na tela: que a tela
+      escolha a chave certa para cada recusa. O acusador daquela metade é
+      `preferencias.test.tsx`.
+    */
+    const device = catalog.pages.settings.device;
+    const refusals = [
+      device.insecureContext,
+      device.unsupported,
+      device.iosNotInstalled,
+      device.permissionDenied,
+    ];
+
+    // O par positivo (§7.4): sem ele, quatro strings vazias seriam
+    // "distintas" só no dia em que o `new Set` mudasse de tamanho. E cada
+    // recusa diz o CONSERTO, então nenhuma delas cabe em três palavras.
+    for (const sentence of refusals) {
+      expect(sentence.length).toBeGreaterThan(20);
+    }
+    expect(new Set(refusals).size).toBe(4);
+
+    /*
+      ⚠️ E nenhuma delas é a frase de "ainda não configurado" (decisão F):
+      `enabled: false` é o estado NORMAL de quem clona o projeto sem VAPID, e
+      não pode falar a mesma língua de uma falha.
+    */
+    expect(refusals).not.toContain(device.unavailable);
+
+    /*
+      ⚠️ E o TERCEIRO estado do aparelho — o `GET /notifications/config` que
+      não respondeu — não fala a língua de nenhum dos outros dois. São
+      consertos diferentes: `unavailable` pede configurar o servidor,
+      `configFailed` pede tentar de novo.
+    */
+    expect(device.configFailed).not.toBe(device.unavailable);
+    expect(refusals).not.toContain(device.configFailed);
+  });
+
+  it('has every key that apiErrorKey can return, in pt (rules 14 and 17)', () => {
+    const keys = new Set(keyPaths(pt));
+
+    // O elo que ninguém confere à mão: `apiErrorKey` devolve uma chave, e
+    // uma chave ausente do catálogo aparece na tela como `errors.conflict`.
+    expect(API_ERROR_KEYS.filter((key) => !keys.has(key))).toEqual([]);
+  });
+
+  it('⚠️ exports NO subpath for a second catalog (task 38d)', () => {
+    /*
+      ⚠️ **O SUBPATH `./locales/en` SAI, E ELE ERA A FRONTEIRA DE CORTE DO
+      BUNDLER** (Tarefa 29a, decisão A): era dele que o `import()` dinâmico
+      carregava o segundo catálogo, e era ele que dava ao Rollup um lugar por
+      onde separar o chunk. Sem segundo catálogo não há o que carregar nem o
+      que cortar.
+
+      ⚠️ A asserção é de IGUALDADE do mapa inteiro, e não um
+      `not.toHaveProperty`: um subpath a mais aqui é uma porta de entrada nova
+      para o pacote, e ela tem de aparecer no diff de quem a abrir. Os quatro
+      que sobram são os que já existiam antes da 29a.
     */
     const manifest: unknown = JSON.parse(
       readFileSync(
@@ -353,33 +268,12 @@ describe('catálogos de i18n', () => {
     const exportsField = (manifest as { exports: Record<string, string> })
       .exports;
 
-    expect(exportsField['./locales/en']).toBe('./src/locales/en.ts');
-    // E os subpaths que já existiam não mudam — o barril continua onde estava.
     expect(exportsField).toEqual({
       '.': './src/index.ts',
       './client': './src/client/index.ts',
       './locales': './src/locales/index.ts',
-      './locales/en': './src/locales/en.ts',
       './anti-culpa': './src/locales/__tests__/guilt-terms.ts',
       './adr-0002': './src/locales/__tests__/privacy-terms.ts',
     });
-  });
-
-  it('imports pt as a TYPE in en.ts, so the en chunk carries no pt (rule 2)', () => {
-    /*
-      `import { pt }` num arquivo que só usa `typeof pt` é elidido pelo `tsc`,
-      mas NÃO por um bundler que respeite `isolatedModules` sem enxergar o uso:
-      o chunk do `en` passaria a arrastar o catálogo `pt` inteiro junto, e a
-      pessoa que troca de idioma baixaria os dois. O `import type` tira o
-      binding da mesa antes de qualquer bundler ter opinião.
-    */
-    const source = readFileSync(
-      fileURLToPath(new URL('../en.ts', import.meta.url)),
-      'utf8',
-    );
-
-    expect(source).toMatch(/^import type \{ pt \} from '\.\/pt';$/mu);
-    // O lado positivo do par: nenhum import de VALOR sobrou no arquivo.
-    expect(source).not.toMatch(/^import (?!type )/mu);
   });
 });

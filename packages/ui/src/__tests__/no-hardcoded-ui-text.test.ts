@@ -36,11 +36,29 @@ import { describe, expect, it } from 'vitest';
  * arquivos são o editor e os dois popups dele, e o conserto é um só — um objeto
  * `labels` por prop, como o `FilterChip.label` já faz.
  *
- * ⚠️ **POR QUE NÃO SE CONSERTA AGORA, e a razão é boa.** A **pergunta 7** do
- * `docs/ACEITE-MVP.md` — ainda sem resposta — é *"manter o inglês?"*. Se o dono
- * responder **não**, o conserto certo é **apagar** o segundo catálogo, e as
- * ~48 entradas que esta fatia teria criado (24 chaves × 2 locales) seriam
- * trabalho na direção oposta à decisão dele. Fazer agora é apostar na resposta.
+ * ⚠️⚠️ **A RAZÃO ORIGINAL DESTA GUARDA MORREU NA TAREFA 38d — E ELA FICA, POR
+ * OUTRA.** O parágrafo aqui dizia: *"a pergunta 7 do `docs/ACEITE-MVP.md` —
+ * ainda sem resposta — é 'manter o inglês?'. Se o dono responder não, o conserto
+ * certo é apagar o segundo catálogo, e as ~48 entradas que esta fatia teria
+ * criado (24 chaves × 2 locales) seriam trabalho na direção oposta."*
+ *
+ * **O dono respondeu, em 2026-09-17: *"só português — apagar o inglês"*.** O
+ * catálogo `en` foi apagado, o seletor de idioma saiu, e o parágrafo acima
+ * acertou a aposta: o conserto era deletar. **Os 33 textos deixaram de ser
+ * dívida de tradução** — eles falam a mesma língua que o resto da tela.
+ *
+ * ⚠️ **MAS A GUARDA NÃO SAI, e o motivo dela é outro e continua inteiro:**
+ * `packages/ui` **não é dono de texto de interface** (decisão B da Tarefa 13,
+ * com `no-i18n.test.ts` ao lado) — texto entra por **prop, vindo da tela**. Com
+ * um idioma só isso continua valendo: quem lê o rótulo no `RichEditor` não o
+ * acha no catálogo, e o time perde a única lista de todas as frases do produto.
+ * O teto de 33 continua **só podendo cair**, e a segunda asserção (nenhuma
+ * string fora dos quatro arquivos do editor) continua impedindo a 34ª nascer
+ * em outro componente.
+ *
+ * ⚠️ **A tabela e os números acima são HISTÓRICOS e ficam**: eles registram o
+ * tamanho medido do buraco, e o *"mesmo com o app em inglês"* do parágrafo do
+ * topo descreve um app que não existe mais.
  *
  * Então o que esta guarda faz é **impedir o crescimento**, com duas asserções
  * que se completam:

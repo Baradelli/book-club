@@ -89,27 +89,28 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
-        // ⚠️ O CHUNK DO `en` FICA FORA DO PRECACHE (Tarefa 29a).
+        // ⚠️ **NÃO EXISTE `globIgnores` AQUI, e a ausência é uma DECISÃO
+        // (Tarefa 38d).**
         //
-        // Sem isto, tirar o `en` do chunk de entrada não economiza byte
-        // nenhum de rede: o `globPatterns` acima varre todo `.js` do `dist/`,
-        // e o install baixava o catálogo do mesmo jeito — medido, o precache
-        // ia de 15 entradas / 887,15 KiB (antes da fatia) para 16 / 887,79
-        // KiB. O download só mudava de momento.
+        // Havia um — `globIgnores: ['assets/en-*.js']` —, e ele existia por um
+        // motivo só: tirar do precache o chunk do catálogo `en`, que a Tarefa
+        // 29a tinha separado. O `en` foi apagado (`docs/ACEITE-MVP.md`, MVP 1,
+        // pergunta 7), o chunk deixou de ser emitido, e um glob que não casa
+        // com nada é pior que nenhum: ele fica verde para sempre e faz o
+        // próximo leitor achar que alguém está cuidando do precache.
         //
-        // O preço, combinado: trocar para inglês SEM REDE não funciona, e cai
-        // no `pt` pela decisão G (sem tela de erro). O acusador é
-        // `src/__tests__/service-worker-config.test.ts`.
-        globIgnores: ['assets/en-*.js'],
+        // ⚠️ **E é justamente esta chave que NÃO pode voltar com o
+        // `push-handler.js` dentro** — o parágrafo abaixo explica por quê, e
+        // ele já custou uma rodada de conserto.
         // ⚠️ O HANDLER DE PUSH ENTRA NO SERVICE WORKER GERADO (Tarefa 38).
         //
         // ACRÉSCIMO DE CHAVE, e não troca de estratégia: o `generateSW`
         // continua. Trocar para `injectManifest` seria passar a ser dono do
-        // service worker inteiro — e as quatro propriedades que
+        // service worker inteiro — e as propriedades que
         // `src/__tests__/service-worker-config.test.ts` pina (a denylist presa
-        // ao `DEFAULT_API_URL`, o `navigateFallback`, o `globIgnores` do `en` e
-        // "nenhuma resposta de API em cache") teriam de ser remedidas uma a uma
-        // contra um arquivo escrito à mão.
+        // ao `DEFAULT_API_URL`, o `navigateFallback` e "nenhuma resposta de API
+        // em cache") teriam de ser remedidas uma a uma contra um arquivo
+        // escrito à mão.
         //
         // O arquivo mora em `public/`, então ele NÃO entra no bundle: o
         // `globPatterns` acima o encontra no `dist/` e o põe no manifesto de
@@ -117,7 +118,7 @@ export default defineConfig({
         // muda, e portanto o que faz uma correção no handler chegar a quem já
         // tem o app instalado.
         //
-        // ⚠️ NÃO ACRESCENTE `'push-handler.js'` AO `globIgnores` ACIMA. Medido:
+        // ⚠️ NÃO CRIE UM `globIgnores` COM `'push-handler.js'` DENTRO. Medido:
         // isso tira a entrada do manifesto, o `importScripts` continua
         // funcionando, o push continua chegando — e nenhuma correção do handler
         // alcança quem já instalou o app, em silêncio. O acusador é

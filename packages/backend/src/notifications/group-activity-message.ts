@@ -1,6 +1,5 @@
 import type { ActivityType } from '@clube/shared';
-import type { Locale } from '@clube/shared/locales';
-import { en, FALLBACK_LOCALE, isLocale, pt } from '@clube/shared/locales';
+import { pt } from '@clube/shared/locales';
 
 import type { PushPayload } from '../usecases/ports/push-sender';
 import { bookUrl } from './reminder-message';
@@ -11,12 +10,10 @@ import { bookUrl } from './reminder-message';
  *
  * 1. o texto vem do **catálogo compartilhado**, nunca escrito em português cru
  *    aqui (`CLAUDE.md`) — é o que o põe dentro da varredura anti-culpa de
- *    `packages/shared/src/locales/__tests__/anti-guilt.test.ts`, que percorre
- *    os DOIS idiomas. Uma guarda de tela nunca veria esta frase, porque ela não
- *    passa por tela nenhuma (§7.9);
- * 2. o idioma é o `Settings.locale` **de quem RECEBE**, e não o de quem
- *    escreveu: não há navegador aberto quando o aviso sai, e o autor pode ler
- *    em português enquanto o resto do clube lê em inglês.
+ *    `packages/shared/src/locales/__tests__/anti-guilt.test.ts`. Uma guarda de
+ *    tela nunca veria esta frase, porque ela não passa por tela nenhuma (§7.9);
+ * 2. ⚠️ a segunda ERA "o idioma é o `Settings.locale` de quem RECEBE", e ela
+ *    **morreu na Tarefa 38d** junto com o segundo catálogo: há um idioma só.
  *
  * ⚠️ **E a propriedade que é só desta: NADA DE CONTEÚDO** (`NOTIFICACOES.md`
  * §1 — *"o push nunca leva o conteúdo"*). O lembrete pode dizer o trecho de
@@ -32,9 +29,6 @@ import { bookUrl } from './reminder-message';
  * frase para quem não tem nome. O aviso diz que o clube está vivo; quem foi, o
  * app conta quando a pessoa abrir.
  */
-
-/** Os catálogos por locale. `pt` é o padrão e o fallback (`CLAUDE.md`). */
-const CATALOGS: Record<Locale, typeof pt> = { pt, en };
 
 /**
  * O `kind` em minúsculas — é o `tag` do `showNotification` (§2) e o `topic` do
@@ -67,8 +61,6 @@ const BODY_KEY: Record<
 };
 
 export interface GroupActivityMessageInput {
-  /** O `Settings.locale` de quem RECEBE. Valor desconhecido cai no `pt`. */
-  locale: string;
   /** O livro em que a atividade aconteceu — é para ele que o clique leva. */
   bookId: string;
   /** Qual dos quatro nascimentos aconteceu. */
@@ -78,19 +70,23 @@ export interface GroupActivityMessageInput {
 /**
  * "O clube está lendo."
  *
- * ⚠️ **Locale desconhecido cai no `pt` e NÃO estoura**, como no lembrete: a
- * coluna `Settings.locale` é `String` livre (o `updateSettingsSchema` pede
- * `z.string().min(1)`, não um `z.enum`), então um valor inesperado é
- * alcançável — e um aviso que deixasse de sair por causa disso falharia do pior
- * jeito: em silêncio, para sempre, e só para aquela pessoa.
+ * ⚠️ **UM IDIOMA SÓ, e por isso esta função NÃO RECEBE locale (Tarefa 38d).**
+ *
+ * Até aqui ela recebia o `Settings.locale` da pessoa e escolhia entre dois
+ * catálogos, caindo no `pt` para qualquer valor desconhecido (a coluna é
+ * `String` livre, e o caso medido era `'klingon'`). O dono respondeu à pergunta
+ * 7 do MVP 1 — *"só português"* —, o segundo catálogo saiu, e um parâmetro que
+ * chega e não muda nada é pior que um parâmetro que não existe: quem chama
+ * continua achando que escolhe.
+ *
+ * ⚠️ **A coluna `Settings.locale` fica no banco** (não há migration nesta
+ * fatia) e passa a não ter leitor nenhum. A nota está escrita ao lado dela, no
+ * `prisma/schema.prisma`.
  */
 export function buildGroupActivityMessage(
   input: GroupActivityMessageInput,
 ): PushPayload {
-  const locale: Locale = isLocale(input.locale)
-    ? input.locale
-    : FALLBACK_LOCALE;
-  const catalog = CATALOGS[locale].notifications.groupActivity;
+  const catalog = pt.notifications.groupActivity;
 
   return {
     title: catalog.title,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { en, pt } from '../index';
+import { pt } from '../index';
 import { GUILT_TERMS, STREAK_KEYS } from './guilt-terms';
 
 /**
@@ -25,8 +25,23 @@ import { GUILT_TERMS, STREAK_KEYS } from './guilt-terms';
  *    — e `en` é metade dos idiomas que o app declara suportar.
  *
  * O vocabulário da cobrança é propriedade **do catálogo**: são strings, não
- * comportamento. Aqui ele é varrido inteiro, nos DOIS locales, sem renderizar
- * nada — independente de estado, independente de tela, e impossível de esquecer.
+ * comportamento. Aqui ele é varrido inteiro, sem renderizar nada — independente
+ * de estado, independente de tela, e impossível de esquecer.
+ *
+ * ⚠️⚠️ **TAREFA 38d — O SEGUNDO CATÁLOGO NÃO EXISTE MAIS, E METADE DO
+ * ARGUMENTO ACIMA MORREU COM ELE.** A medição registrada continua sendo história
+ * verdadeira (foi ela que mudou o lugar da guarda), mas a **razão de locale**
+ * deixou de valer: com um idioma só, a varredura de DOM vê o mesmo catálogo que
+ * esta aqui. O que ainda faz esta guarda morar no catálogo, e não na tela, são
+ * as outras duas razões do §7.9: ela independe de **estado** (a tela só é
+ * varrida nos estados que alguém lembrar de renderizar) e alcança as frases que
+ * **não passam por tela nenhuma** — as do push, montadas no backend.
+ *
+ * ⚠️ **E a rede que se perdeu, registrada:** o segundo catálogo era o que
+ * pegava texto solto (*"se a frase não existe em dois lugares, ela não passou
+ * pelo `t()`"*). No lugar dela sobraram a varredura de FONTE das telas e estas
+ * varreduras de vocabulário — nenhuma das duas pega uma frase em português
+ * escrita direto no JSX de uma tela que a varredura de fonte não cubra.
  *
  * O que continua na tela: o que **não** vem de catálogo. Um "0 de 30 dias"
  * renderizado a partir de dado, e a COR (um ponto vermelho ao lado do dia sem
@@ -62,12 +77,9 @@ function entries(value: unknown, prefix = ''): Array<[string, string]> {
   );
 }
 
-describe('the anti-guilt principle is a property of the CATALOGS (plano §1)', () => {
-  it.each([
-    ['pt', pt],
-    ['en', en],
-  ])('has no word of debt, delay or streak in %s', (_locale, catalog) => {
-    const leaves = entries(catalog);
+describe('the anti-guilt principle is a property of the CATALOG (plano §1)', () => {
+  it('has no word of debt, delay or streak in pt', () => {
+    const leaves = entries(pt);
 
     /*
       ⚠️ A GUARDA CONTRA A VARREDURA VAZIA (§7.4): sem esta linha, um `entries`
@@ -113,15 +125,12 @@ describe('the anti-guilt principle is a property of the CATALOGS (plano §1)', (
   });
 
   /**
-   * ⚠️ E as chaves isentas **existem de verdade** nos dois catálogos. Sem isto,
-   * uma isenção com o caminho errado (um `pages.hoome.') não isentaria nada e
+   * ⚠️ E as chaves isentas **existem de verdade** no catálogo. Sem isto, uma
+   * isenção com o caminho errado (um `pages.hoome.') não isentaria nada e
    * ninguém notaria — a guarda continuaria verde por não ter o que isentar.
    */
-  it.each([
-    ['pt', pt],
-    ['en', en],
-  ])('as chaves isentas existem no catálogo %s', (_locale, catalog) => {
-    const paths = new Set(entries(catalog).map(([path]) => path));
+  it('as chaves isentas existem no catálogo pt', () => {
+    const paths = new Set(entries(pt).map(([path]) => path));
     for (const key of STREAK_KEYS) expect(paths.has(key)).toBe(true);
   });
 
@@ -136,28 +145,22 @@ describe('the anti-guilt principle is a property of the CATALOGS (plano §1)', (
    * e sai pela rede. Se a guarda dela morasse numa tela, ela não existiria —
    * §7.9 na letra: a guarda mora onde a propriedade é DECIDÍVEL.
    *
-   * Este teste não repete a varredura (o `it.each` acima já percorre os dois
-   * catálogos inteiros): ele prova que as chaves novas **estão dentro do
-   * conjunto varrido**, nos dois idiomas. Sem ele, alguém que pusesse a
+   * Este teste não repete a varredura (o `has no word of debt, delay or streak
+   * in pt` acima já percorre o catálogo inteiro): ele prova que as chaves novas
+   * **estão dentro do conjunto varrido**. Sem ele, alguém que pusesse a
    * mensagem fora do catálogo — uma string no backend — teria as duas guardas
    * verdes e nenhuma delas olhando a frase.
    */
-  it.each([
-    ['pt', pt],
-    ['en', en],
-  ])(
-    'puts the reading reminder itself inside the swept set, in %s',
-    (_locale, catalog) => {
-      const swept = entries(catalog).map(([path]) => path);
+  it('puts the reading reminder itself inside the swept set, in pt', () => {
+    const swept = entries(pt).map(([path]) => path);
 
-      expect(swept).toEqual(
-        expect.arrayContaining([
-          'notifications.readingReminder.title',
-          'notifications.readingReminder.body',
-        ]),
-      );
-    },
-  );
+    expect(swept).toEqual(
+      expect.arrayContaining([
+        'notifications.readingReminder.title',
+        'notifications.readingReminder.body',
+      ]),
+    );
+  });
 
   /**
    * ⚠️ **O MESMO MOLDE DA 37, PARA AS FRASES DA TAREFA 38 — e ele existe
@@ -179,45 +182,45 @@ describe('the anti-guilt principle is a property of the CATALOGS (plano §1)', (
    * `notifications/diagnostic-message.ts`) e saem pela rede. **Se a guarda
    * delas morasse numa tela, ela não existiria** — §7.9 na letra.
    *
-   * ⚠️ **E este teste NÃO repete a varredura** (o `it.each` do topo já percorre
-   * os dois catálogos inteiros): ele prova que as chaves estão **dentro do
-   * conjunto varrido**, nos dois idiomas. Sem ele, alguém que escrevesse a
+   * ⚠️ **E este teste NÃO repete a varredura** (o `has no word of debt, delay
+   * or streak in pt` do topo já percorre o catálogo inteiro): ele prova que as
+   * chaves estão **dentro do conjunto varrido**. Sem ele, alguém que escrevesse
+   * a
    * frase no backend — uma string em `group-activity-message.ts` em vez de uma
    * chave — teria as duas guardas verdes e nenhuma delas olhando a frase, que é
    * exatamente o buraco que o §7.9 descreve.
    */
-  it.each([
-    ['pt', pt],
-    ['en', en],
-  ])(
-    'puts the group-activity notice and the test push inside the swept set, in %s',
-    (_locale, catalog) => {
-      const swept = entries(catalog).map(([path]) => path);
+  it('puts the group-activity notice and the test push inside the swept set, in pt', () => {
+    const swept = entries(pt).map(([path]) => path);
 
-      expect(swept).toEqual(
-        expect.arrayContaining([
-          // A frase que o clube recebe quando alguém lê, escreve ou grifa —
-          // uma por nascimento, porque são notícias diferentes.
-          'notifications.groupActivity.title',
-          'notifications.groupActivity.planNote',
-          'notifications.groupActivity.freeNote',
-          'notifications.groupActivity.highlight',
-          'notifications.groupActivity.read',
-          // O "chegou?" do botão de diagnóstico.
-          'notifications.test.title',
-          'notifications.test.body',
-        ]),
-      );
-    },
-  );
+    expect(swept).toEqual(
+      expect.arrayContaining([
+        // A frase que o clube recebe quando alguém lê, escreve ou grifa —
+        // uma por nascimento, porque são notícias diferentes.
+        'notifications.groupActivity.title',
+        'notifications.groupActivity.planNote',
+        'notifications.groupActivity.freeNote',
+        'notifications.groupActivity.highlight',
+        'notifications.groupActivity.read',
+        // O "chegou?" do botão de diagnóstico.
+        'notifications.test.title',
+        'notifications.test.body',
+      ]),
+    );
+  });
 
-  it('would catch the phrases the audit walked through, in both languages', () => {
+  it('would catch the phrases the audit walked through, English included', () => {
     /*
       ⚠️ O LADO POSITIVO DO PAR, e ele é o que impede a lista de virar decoração:
       um `GUILT_TERMS` esvaziado (ou um `includes` invertido) deixaria o teste
       acima verde para sempre. Estas são as frases MEDIDAS que passaram pela
-      varredura antiga — as duas primeiras em português, e a terceira é a que
-      embarcava em `en` porque nenhum teste de tela sai do `pt`.
+      varredura antiga.
+
+      ⚠️ **As duas em INGLÊS ficam, mesmo sem catálogo `en` (Tarefa 38d)**, e
+      a razão é que o `GUILT_TERMS` não serve só a este arquivo: ele é a mesma
+      lista da varredura de DOM e da de fonte do `app`, onde uma frase em
+      inglês escrita direto no JSX continua alcançável. Apagar os radicais
+      ingleses aqui desprotegeria lá — e nada acusaria.
     */
     const planted = [
       'Você deixou 3 dias para trás',

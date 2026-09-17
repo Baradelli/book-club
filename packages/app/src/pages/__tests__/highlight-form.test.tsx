@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 
 import type { HighlightResponse, NoteDocBody } from '@clube/shared';
 import { TOKEN_STORAGE_KEY } from '@clube/shared/client';
-import { en, pt } from '@clube/shared/locales';
+import { pt } from '@clube/shared/locales';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -991,31 +991,5 @@ describe('the source of the form (rules 20, 21)', () => {
     expect(source).toContain('lazy(');
     expect(source).not.toMatch(/^import .*@clube\/ui\/editor/mu);
     expect(source).not.toContain('@tiptap');
-  });
-});
-
-describe('the catalog of the form (rule 22)', () => {
-  it('has the new keys in pt AND in en, actually translated', () => {
-    expect(Object.keys(en.pages.highlightForm)).toEqual(
-      Object.keys(pt.pages.highlightForm),
-    );
-    expect(Object.keys(en.pages.highlightForm.fields)).toEqual(
-      Object.keys(pt.pages.highlightForm.fields),
-    );
-    expect(en.pages.highlightForm.create).not.toBe(
-      pt.pages.highlightForm.create,
-    );
-    expect(en.pages.highlightForm.notYours).not.toBe(
-      pt.pages.highlightForm.notYours,
-    );
-    expect(en.pages.highlightForm.fields.quoteRequired).not.toBe(
-      pt.pages.highlightForm.fields.quoteRequired,
-    );
-    expect(en.pages.highlightForm.fields.pageInvalid).not.toBe(
-      pt.pages.highlightForm.fields.pageInvalid,
-    );
-    expect(en.pages.highlightForm.failed).not.toBe(
-      pt.pages.highlightForm.failed,
-    );
   });
 });

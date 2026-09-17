@@ -156,7 +156,7 @@ import { highlightNewPath, highlightPath } from './paths';
  * ⚠️ **E NADA AQUI COBRA NINGUÉM** (`docs/plano-clube-do-livro.md` §1): nenhum
  * contador ("3 de 30"), nenhum vermelho fora de erro real, e o acervo vazio
  * fala do que dá para fazer — nunca do que a pessoa deixou de registrar. O
- * acusador da palavra é o catálogo (nos DOIS locales); o da cor e do número é a
+ * acusador da palavra é o catálogo; o da cor e do número é a
  * varredura de DOM de `__tests__/acervo.test.tsx`, que roda em todos os estados
  * desta tela.
  */

@@ -65,50 +65,22 @@ describe('service worker config', () => {
     expect(config).toContain("navigateFallback: '/index.html'");
   });
 
-  it('⚠️ DECLARES the intent of keeping the en catalog out of the precache (task 29a)', () => {
-    /*
-      ⚠️ **ESTA NÃO É A GUARDA — ela é a DECLARAÇÃO DE INTENÇÃO no config.** A
-      guarda de verdade é `bundle-guard.test.ts > keeps the en catalog OUT of
-      the service worker PRECACHE`, que lê o `sw.js` EMITIDO e identifica o
-      chunk do `en` por CONTEÚDO.
+  /*
+    ⚠️ **A TERCEIRA PROPRIEDADE SAIU NA TAREFA 38d, e está escrito aqui em vez
+    de apagado em silêncio porque esta guarda tem CINCO propriedades e a lição
+    da fatia foi que tirar uma não pode derrubar as outras quatro.**
 
-      A diferença é medida, e é a razão de as duas existirem: esta afirma que
-      a string `'assets/en-*.js'` está escrita aqui, e a propriedade que
-      importa não mora no texto — o glob está acoplado a um nome de arquivo
-      que o Rollup escolheu. Com o `globIgnores` intacto e um
-      `chunkFileNames: 'assets/chunk-[name]-[hash].js'` no `rollupOptions`, o
-      precache voltava a 16 entradas / 887,85 KiB e **esta asserção continuava
-      verde**. Ela sobrevive porque é barata e porque documenta a decisão no
-      lugar onde alguém vai mexer; não porque cobre alguma coisa sozinha.
-    */
-    /*
-      ⚠️ **O BLOQUEADOR DA RODADA DE CORREÇÃO DA 29a, e ele é o motivo de esta
-      asserção existir.** Tirar o `en` do chunk de entrada não basta: o
-      `globPatterns: ['**\/*.{js,...}']` do Workbox varre o `dist/` inteiro e
-      põe TODO `.js` emitido no manifesto de precache. Medido no build:
+    Era `⚠️ DECLARES the intent of keeping the en catalog out of the precache
+    (task 29a)`, e ela afirmava que a string `'assets/en-*.js'` estava escrita
+    no `vite.config.ts`. O `globIgnores` existia para tirar o chunk do segundo
+    catálogo do manifesto de precache do Workbox — sem catálogo `en` não há
+    chunk, e um glob que não casa com nada é a guarda verde da lição nº 1.
 
-        antes da fatia (HEAD 613b7e4)   precache  15 entries (887.15 KiB)
-        com o chunk do `en` precacheado precache  16 entries (887.79 KiB)
-
-      Ou seja: o install passava a baixar **+0,64 KiB**, e o objetivo escrito
-      na spec ("quem abre o app em português para de baixar o catálogo em
-      inglês") continuava sem ser entregue — o download só tinha mudado de
-      momento, do primeiro paint para o segundo plano. A fatia ficava líquida
-      NEGATIVA em bytes transferidos.
-
-      ⚠️ **A consequência, que é decisão e não descuido: trocar para inglês
-      OFFLINE não funciona.** O `import()` rejeita, e a decisão G já manda cair
-      no `pt` sem tela de erro. É o preço combinado: o segundo idioma é
-      sob demanda, e "sob demanda" pressupõe rede.
-
-      ⚠️ E o que esta asserção NÃO cobre, de propósito: o chunk do EDITOR
-      (453.606 B) também está no precache. É pré-existente, é maior que tudo
-      isto junto, e entra em fatia própria — misturá-lo aqui tornaria a
-      medição desta ilegível.
-    */
-    expect(config).toContain('globIgnores');
-    expect(config).toContain("'assets/en-*.js'");
-  });
+    ⚠️ **E ela sai SEM substituta, de propósito.** A propriedade "o precache
+    não tem o que não deve" continua com dono, e o dono é o outro lado do par:
+    `bundle-guard.test.ts`, que lê o `sw.js` EMITIDO. O que morreu foi a
+    declaração de intenção sobre um arquivo que não é mais emitido.
+  */
 
   /**
    * ⚠️ **A QUINTA PROPRIEDADE (Tarefa 38): O HANDLER DE PUSH É INJETADO NO
@@ -122,10 +94,10 @@ describe('service worker config', () => {
    *    de `push`, e a notificação não aparece. Nada fica vermelho — nem o
    *    `push-handler.test.ts`, que roda o arquivo por fora.
    * 2. **não há `injectManifest`.** Trocar a estratégia faria o service worker
-   *    passar a ser um arquivo NOSSO, e as quatro propriedades acima teriam de
-   *    ser remedidas uma a uma contra ele. O acréscimo de chave preserva as
-   *    quatro de graça — e é por isso que a regra 3 da fatia o exige por
-   *    escrito.
+   *    passar a ser um arquivo NOSSO, e as outras propriedades desta guarda
+   *    teriam de ser remedidas uma a uma contra ele. O acréscimo de chave as
+   *    preserva de graça — e é por isso que a regra 3 da Tarefa 38d o exige
+   *    por escrito.
    *
    * ⚠️ **O que esta asserção NÃO cobre, e é de propósito:** que o arquivo
    * EXISTA em `public/`. Isso é do `push-handler.test.ts`, que o lê do disco e
@@ -139,9 +111,12 @@ describe('service worker config', () => {
    * `globIgnores: ['assets/en-*.js', 'push-handler.js']` tira o arquivo do
    * manifesto, o `importScripts` acima continua lá e continua funcionando, o
    * precache cai de 16/897,12 KiB para 15/892,48 KiB — e a suíte do app passa
-   * **765/765, zero acusadores**. É a mesma armadilha em que o `globIgnores` do
-   * `en` caiu na Tarefa 29a, e a saída é a mesma: a guarda mora onde há **build
-   * real**, em `bundle-guard.test.ts`
+   * **765/765, zero acusadores**. ⚠️ **A Tarefa 38d apagou o `globIgnores`
+   * inteiro** (ele só existia para o chunk do `en`), então o mutante que uma
+   * fatia futura escreveria hoje é mais curto — `globIgnores:
+   * ['push-handler.js']` — e faz exatamente a mesma coisa. É a mesma armadilha
+   * em que o `globIgnores` do `en` caiu na Tarefa 29a, e a saída é a mesma: a
+   * guarda mora onde há **build real**, em `bundle-guard.test.ts`
    * (`precaches the push handler WITH a revision…`), identificando o arquivo
    * por CONTEÚDO. É lá que se conserta quando o precache quebrar; aqui, só
    * quando o config mudar.

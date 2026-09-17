@@ -47,7 +47,10 @@
  * em minúscula — quem varre passa o texto por `withoutDiacritics` primeiro.
  *
  * Os dois idiomas, porque o vocabulário do ADR não é do `pt`: uma tela que
- * escrevesse "Only you can see this" erraria igual.
+ * escrevesse "Only you can see this" erraria igual. ⚠️ **Os radicais ingleses
+ * ficam depois da Tarefa 38d**, que apagou o catálogo `en`: esta lista também é
+ * a da varredura de DOM e a da de FONTE do `app`, e lá uma frase em inglês
+ * escrita direto no JSX continua alcançável.
  *
  * ⚠️ **CADA RADICAL FOI MEDIDO CONTRA OS DOIS CATÁLOGOS INTEIROS** antes de
  * fechar, e a razão é a lição da Tarefa 19: o radical `tras` (largo demais)

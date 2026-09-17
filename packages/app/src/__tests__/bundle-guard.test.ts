@@ -71,36 +71,6 @@ const outDir = join(tmpdir(), 'clube-bundle-guard');
 const EDITOR_MARKERS = /prosemirror|tiptap/iu;
 
 /**
- * AS FRASES QUE DENUNCIAM O CATÁLOGO `en` (Tarefa 29a, regras 15 e 16).
- *
- * São **valores** do `en.ts`, escolhidos por leitura, e cada uma é exclusiva
- * dele — o `pt` diz outra coisa no mesmo lugar, e nenhuma tela as escreve à
- * mão (`CLAUDE.md`: nenhum texto solto). Frase de catálogo sobrevive à
- * minificação inteira: não é identificador, é conteúdo.
- *
- * | chave | `en` (aqui) | `pt` |
- * |---|---|---|
- * | `app.name` | `Book Club` | `Clube do Livro` |
- * | `errors.network` | `No connection to the server…` | `Sem conexão com o servidor…` |
- *
- * Duas, e não uma, porque uma frase é uma string que alguém reescreve num
- * conserto de tradução; as duas caírem juntas é bem menos provável. Se uma
- * delas mudar no catálogo, ATUALIZE a lista — não apague a asserção.
- */
-const EN_CATALOG_MARKERS = [
-  'Book Club',
-  'No connection to the server. Check your internet.',
-] as const;
-
-function withEnCatalog(assets: readonly Asset[]): string[] {
-  return assets
-    .filter((asset) =>
-      EN_CATALOG_MARKERS.some((phrase) => asset.code.includes(phrase)),
-    )
-    .map((asset) => asset.name);
-}
-
-/**
  * O TETO DO QUE A PESSOA BAIXA PARA VER O LOGIN.
  *
  * Medido nesta fatia: **357.489 B** antes do editor entrar, e o mesmo número
@@ -166,6 +136,27 @@ function eagerScriptNames(html: string): string[] {
 }
 
 /**
+ * Os `.css` que o `index.html` manda buscar no primeiro carregamento.
+ *
+ * O irmão do `eagerScriptNames`, e ele existe pela mesma razão: o que a pessoa
+ * baixa antes de a tela pintar é o que o `index.html` DECLARA, não o que o nome
+ * do arquivo sugere. Sem a folha de estilo o app abre offline **em branco**,
+ * que é indistinguível de "não abriu".
+ */
+function eagerStyleNames(html: string): string[] {
+  const names = new Set<string>();
+
+  for (const match of html.matchAll(/<link\b[^>]*\bhref="([^"]+\.css)"/gu)) {
+    const reference = match[1];
+    if (reference === undefined) continue;
+    const name = reference.split(/[?#]/u)[0]?.split('/').pop();
+    if (name !== undefined) names.add(name);
+  }
+
+  return [...names];
+}
+
+/**
  * ⚠️ **BYTES DE VERDADE, E NÃO `String.length`** — correção medida na rodada da
  * Tarefa 27.
  *
@@ -202,9 +193,9 @@ function contaminated(assets: readonly Asset[]): string[] {
  *
  * Ele é lido para servir de **identidade por CONTEÚDO**: o arquivo emitido na
  * raiz do `dist/` é encontrado por ser byte a byte este, e não por alguém
- * escrever o nome dele numa constante. Mesma disciplina da guarda do `en` logo
- * acima, e pelo mesmo motivo — um nome escrito no teste é um nome que pode
- * deixar de casar em silêncio.
+ * escrever o nome dele numa constante. É a disciplina que a guarda do `en`
+ * inaugurou (Tarefa 29a, e ela saiu na 38d), pelo motivo que continua valendo:
+ * um nome escrito no teste é um nome que pode deixar de casar em silêncio.
  */
 const pushHandlerSource = readFileSync(
   resolve(process.cwd(), 'public/push-handler.js'),
@@ -355,95 +346,90 @@ describe('the app bundle (rule 21)', () => {
     }
   });
 
-  it('⚠️ ships no en CATALOG in the FIRST LOAD (rule 16)', () => {
+  /*
+    ⚠️⚠️ **TRÊS ASSERÇÕES DO `en` SAÍRAM NA TAREFA 38d — e este bloco existe
+    para dizer QUAIS, porque duas delas eram par positivo uma da outra.**
+
+    Elas eram:
+
+    1. `⚠️ ships no en CATALOG in the FIRST LOAD (rule 16)` — nenhuma frase
+       exclusiva do `en` no que o `index.html` manda buscar;
+    2. `⚠️ puts the en catalog in a chunk of its OWN, which the first load does
+       not fetch (rule 15)` — o par positivo da primeira: sem ele, APAGAR o
+       catálogo deixaria a (1) verde por omissão;
+    3. `⚠️ keeps the en catalog OUT of the service worker PRECACHE (task 29a)`
+       — a guarda de verdade do `globIgnores`, lendo o `sw.js` emitido.
+
+    ⚠️ **A (2) é o motivo de as três saírem JUNTAS, e não é detalhe.** Ela foi
+    escrita exatamente para o estado em que estamos agora — "o catálogo não
+    está na entrada porque não está em lugar nenhum" — e foi o dono quem
+    decidiu que esse estado passa a ser o certo. Manter a (1) e a (3) sem a (2)
+    seria a asserção vazia do §7.4 em duas cópias: duas varreduras verdes sobre
+    um conjunto que nunca mais tem elemento.
+
+    ⚠️⚠️ **O QUE ESTE PARÁGRAFO DIZIA, E ERA FALSO — achado pela auditoria da
+    rodada de correção da 38d:** *"o `entryScripts` continua pinado dentro do
+    `sw.js` pela asserção do `push-handler` abaixo"*. **Não continuava.** A
+    asserção do `push-handler` só olha `rootScripts` e a revisão dele; a linha
+    que pinava a entrada morava DENTRO da (3), e saiu com ela:
+
+      expect(entryScripts.filter((a) => serviceWorker.includes(a.name)))
+        .toHaveLength(entryScripts.length)
+
+    Ou seja: a fatia apagou um teste do `en` e levou junto, de carona, a
+    propriedade **"o app abre offline"** — que não tem nada a ver com idioma. O
+    parágrafo é pior que o silêncio porque desliga quem vier depois: ele nomeia
+    um dono que não existe. Fica riscado, e a propriedade ganhou **asserção
+    própria** logo abaixo (§7.9: uma guarda, uma razão de cair).
+  */
+
+  it('⚠️ precaches the FIRST LOAD, so an installed app opens offline (task 38d)', () => {
     /*
-      ⚠️ Falhou? Alguém pôs o `en` de volta em `eagerResources`, ou apontou o
-      `import()` para o BARRIL (`@clube/shared/locales`) em vez do subpath
-      `@clube/shared/locales/en`. As duas desfazem a fatia SEM ERRO NENHUM: o
-      Rollup vê o binding usado e traz o catálogo para a entrada, e todo mundo
-      que lê em português volta a baixar 9,5 kB de inglês.
+      ⚠️⚠️ **A PROPRIEDADE ÓRFÃ, COM DONO — e ela é a QUARTA aparição da classe
+      "a guarda pina o TEXTO do config em vez do COMPORTAMENTO"** (29a, 34b, 38,
+      e a rodada de correção desta).
 
-      É a guarda do tipo "só pode melhorar" (decisão H), o mesmo padrão que o
-      MVP 2 usou para as strings cravadas em `ui`: pina o fato e deixa a
-      asserção só poder cair.
+      O `service-worker-config.test.ts` diz o que está ESCRITO no
+      `vite.config.ts`. Nada lá sabe o que o Workbox de fato pôs no manifesto —
+      e o mutante que mede isso é de uma linha:
+
+        globIgnores: ['assets/**']
+
+        suite do app   33/33 arquivos verdes, ZERO acusadores
+        precache       16 entradas / 898,33 KiB  →  13 entradas / 11,84 KiB
+
+      O chunk de entrada (431 kB), o CSS (22 kB) e o chunk do editor saem do
+      precache: **o app deixa de abrir offline**, e a única coisa que muda na
+      suíte é nada. Um `globPatterns` mais estreito, um `manifestTransform`, um
+      upgrade de plugin — qualquer um chega no mesmo lugar.
+
+      ⚠️ **O CSS entra junto, e não é zelo:** sem a folha de estilo o app abre
+      offline **em branco**, que para quem está no metrô é indistinguível de não
+      abrir. As duas listas saem do `index.html` do build (o que o navegador
+      DECLARA buscar), nunca de um nome de arquivo adivinhado.
+
+      ⚠️ **O que esta asserção NÃO cobre, de propósito:** o chunk do EDITOR, que
+      o `index.html` não pede (é `lazy()`). Ele está no precache hoje e isso é
+      pré-existente e discutido no teste do editor acima — pô-lo aqui faria esta
+      guarda cair no dia em que alguém o tirasse do precache DE PROPÓSITO, que é
+      uma fatia de performance legítima.
     */
-    expect(withEnCatalog(entryScripts)).toEqual([]);
-  });
+    const styleNames = eagerStyleNames(indexHtml);
 
-  it('⚠️ puts the en catalog in a chunk of its OWN, which the first load does not fetch (rule 15)', () => {
     /*
-      A terceira asserção do par, pelo mesmo motivo do chunk do editor: sem
-      ela, APAGAR o catálogo `en` (ou trocar as frases acima) deixaria a
-      asserção de cima verde por omissão — "não está na entrada" seria verdade
-      porque ele não está em lugar nenhum, e ninguém saberia que o segundo
-      idioma do app deixou de ser entregue.
+      ⚠️ O PAR POSITIVO (§7.4), e aqui ele é obrigatório: os dois laços abaixo
+      são varreduras, e uma lista vazia os deixa verdes provando "o
+      `index.html` não pede nada".
     */
-    const lazyScripts = scripts.filter(
-      (asset) => !entryScripts.includes(asset),
-    );
-    const withCatalog = withEnCatalog(lazyScripts);
+    expect(entryScripts.length).toBeGreaterThan(0);
+    expect(styleNames.length).toBeGreaterThan(0);
 
-    expect(withCatalog).toHaveLength(1);
-    // E é o catálogo INTEIRO que está lá, não um módulo de fachada com uma
-    // frase dentro: o `en.ts` tem ~9,5 kB de conteúdo.
-    expect(
-      totalBytes(
-        lazyScripts.filter((asset) => withCatalog.includes(asset.name)),
-      ),
-    ).toBeGreaterThan(5_000);
-
-    // E o `index.html` não o pede — nem por `src`, nem por `modulepreload`.
-    for (const name of withCatalog) expect(indexHtml).not.toContain(name);
-  });
-
-  it('⚠️ keeps the en catalog OUT of the service worker PRECACHE (task 29a)', () => {
-    /*
-      ⚠️ **ESTA É A GUARDA DO PRECACHE; a de `service-worker-config.test.ts` é
-      a declaração de intenção.** As duas existem, e a distinção decide qual
-      delas você conserta quando uma ficar vermelha.
-
-      A de lá afirma que a string `'assets/en-*.js'` está escrita no
-      `vite.config.ts`. É barata e documenta a decisão — mas a propriedade que
-      importa NÃO mora no texto do config: o glob está acoplado a um nome de
-      arquivo que **o Rollup escolheu**, e nada pina esse nome. Medido na
-      rodada de correção, com o `globIgnores` intacto e um
-      `chunkFileNames: 'assets/chunk-[name]-[hash].js'` acrescentado ao
-      `rollupOptions` — a linha que qualquer fatia futura de performance pode
-      escrever:
-
-        dist/assets/chunk-en-DQfkl5UE.js       9.55 kB
-        precache  16 entries (887.85 KiB)      ← o bloqueador de volta, inteiro
-        suíte do app: 619 passed               ← ZERO acusadores
-
-      Ou seja: o glob continuava lá, verdinho, e tinha deixado de casar.
-      Guarda verde não é guarda (lição nº 1 do MVP 1).
-
-      Por isso esta olha o ARTEFATO EMITIDO — o `sw.js` que este mesmo
-      `beforeAll` já gera de graça — e identifica o chunk do `en` **por
-      conteúdo** (as frases exclusivas do catálogo), nunca por nome. O nome
-      pode mudar à vontade.
-    */
-    const lazyScripts = scripts.filter(
-      (asset) => !entryScripts.includes(asset),
-    );
-    const withCatalog = withEnCatalog(lazyScripts);
-
-    // O chunk existe e é UM (o mesmo par das regras 15/16): sem esta linha, um
-    // build que não emitisse o catálogo deixaria o `not.toContain` abaixo
-    // verde por omissão.
-    expect(withCatalog).toHaveLength(1);
-
-    // ⚠️ O LADO POSITIVO, e ele é o que impede a asserção de baixo de passar
-    // com um `sw.js` vazio, sem manifesto, ou lido do lugar errado: o precache
-    // LISTA o chunk de entrada, que é justamente o que ele deve trazer.
-    expect(
-      entryScripts.filter((asset) => serviceWorker.includes(asset.name)),
-    ).toHaveLength(entryScripts.length);
-
-    // E não lista o do `en`: quem lê em português não baixa inglês nem no
-    // install, em segundo plano. O preço combinado é a decisão G — trocar de
-    // idioma OFFLINE cai no `pt`, sem tela de erro.
-    for (const name of withCatalog) expect(serviceWorker).not.toContain(name);
+    for (const asset of entryScripts) {
+      expect(serviceWorker).toContain(asset.name);
+    }
+    for (const name of styleNames) {
+      expect(serviceWorker).toContain(name);
+    }
   });
 
   it('⚠️ precaches the push handler WITH a revision, so a fix REACHES an installed app (task 38)', () => {

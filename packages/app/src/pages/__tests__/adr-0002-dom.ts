@@ -37,7 +37,7 @@ import { readableText, withoutDiacritics } from './harness';
  *   espelho exata do que `ui/src/__tests__/adr-0002-iconography.test.ts` faz no
  *   design system, e ela consome a `PRIVACY_TERMS` **desta** lista, não uma
  *   cópia;
- * - **vocabulário de CATÁLOGO** é do catálogo (nos dois locales);
+ * - **vocabulário de CATÁLOGO** é do catálogo;
  * - **vocabulário RENDERIZADO** é o que está aqui: texto e os atributos que
  *   carregam texto (`readableText()`, §7.6.1 — o `aria-label` é justamente o
  *   que o leitor de tela fala), inclusive a frase que entrou na tela sem passar
@@ -55,11 +55,12 @@ import { readableText, withoutDiacritics } from './harness';
  * teste do app os importam deste módulo.
  *
  * Por que subiram: faltava a terceira guarda da partição — a de **CATÁLOGO**.
- * Medido: `person: 'By {{name}} (only you can see this)'` plantado no `en` dava
+ * Medido (antes de o catálogo `en` ser apagado na Tarefa 38d):
+ * `person: 'By {{name}} (only you can see this)'` plantado no `en` dava
  * **0 acusadores em 1.146 testes**, e a mesma frase em `pt` dava **12**, porque
  * todo teste de tela pina `pt`. A varredura de catálogo
- * (`shared/src/locales/__tests__/adr-0002.test.ts`) percorre `pt` **e** `en`
- * inteiros com **esta mesma lista** — importada, nunca copiada, que é a lição
+ * (`shared/src/locales/__tests__/adr-0002.test.ts`) percorre o catálogo inteiro
+ * com **esta mesma lista** — importada, nunca copiada, que é a lição
  * nº 3 do MVP 1 e o que o `guilt-terms.ts` já fazia pelo eixo anti-culpa.
  */
 export { mentionsPrivacyTerm, PRIVACY_TERMS };

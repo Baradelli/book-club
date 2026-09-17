@@ -1,6 +1,6 @@
 import type { BookResponse, PlanItemResponse } from '@clube/shared';
 import { TOKEN_STORAGE_KEY } from '@clube/shared/client';
-import { en, pt } from '@clube/shared/locales';
+import { pt } from '@clube/shared/locales';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -864,24 +864,22 @@ describe('THE 400 OF THE SERVER: which row, and whose sentence (rules 11, 12, 17
   });
 });
 
-describe('THE CATALOG CARRIES EVERY NEW KEY, IN BOTH LOCALES (rule 17)', () => {
-  it('has no empty leaf and no leaf that is the key itself, in pt and en', () => {
+describe('THE CATALOG CARRIES EVERY NEW KEY (rule 17)', () => {
+  it('has no empty leaf and no leaf that is the key itself, in pt', () => {
     /*
-      ⚠️ O NOME É O QUE ELE PROVA, e a versão anterior prometia "a mesma forma
-      em pt e en" — que este teste NÃO confere: a forma é do compilador
-      (`en: typeof pt` reprova chave a mais ou a menos, antes de qualquer
-      teste). Nome que promete mais do que a asserção entrega é como uma guarda
-      morre: o próximo leitor confia nele e não escreve a que falta (§7.9).
+      ⚠️ O NOME É O QUE ELE PROVA, e duas versões anteriores prometeram mais:
+      "a mesma forma em pt e en" (a forma era do compilador, `en: typeof pt`) e
+      depois "em pt e en" quando o `en` já tinha saído (Tarefa 38d). Nome que
+      promete mais do que a asserção entrega é como uma guarda morre: o próximo
+      leitor confia nele e não escreve a que falta (§7.9).
 
       O que ele acrescenta é o outro sintoma: folha vazia, ou folha com o nome
       da chave dentro — que é o que o i18next renderiza quando alguém esquece
       uma tradução.
     */
-    for (const catalog of [pt.pages.bookForm, en.pages.bookForm]) {
-      const leaves = JSON.stringify(catalog);
-      expect(leaves).not.toContain('""');
-      expect(leaves).not.toContain('bookForm.');
-    }
+    const leaves = JSON.stringify(pt.pages.bookForm);
+    expect(leaves).not.toContain('""');
+    expect(leaves).not.toContain('bookForm.');
   });
 });
 

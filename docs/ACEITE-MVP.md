@@ -218,8 +218,26 @@ de atividade (`Settings.locale`).
 
 ⚠️ **O que se perde, e é justo registrar porque era o argumento da recomendação:** o segundo
 catálogo era a rede que pegava texto solto na tela — *"se a frase não existe em dois lugares,
-ela não passou pelo `t()`"*. Com um catálogo só, essa rede some. ✅ **O que sobra no lugar:** a
-varredura de fonte das telas e as guardas de vocabulário do catálogo, que continuam de pé.
+ela não passou pelo `t()`"*. Com um catálogo só, essa rede some. ~~✅ **O que sobra no lugar:**
+a varredura de fonte das telas e as guardas de vocabulário do catálogo, que continuam de pé.~~
+
+⚠️⚠️ **ESSA FRASE FOI ESCRITA ANTES DA FATIA E A MEDIÇÃO DA TAREFA 38d A DESMENTE PELA
+METADE.** A regra 9 da spec pedia a perda **medida**, e ela foi:
+
+- **a rede nunca foi automatizada.** Um `<p>Resumo do mês do clube</p>` plantado direto no JSX
+  da home — texto solto, em português, renderizado de verdade — dá **ZERO acusadores em 749
+  testes**. E daria zero antes da fatia também: nenhum teste do repositório compara o que a tela
+  renderiza com o conjunto de chaves do catálogo (a paridade `pt`↔`en` comparava **chaves com
+  chaves**, e uma frase no JSX não cria chave nenhuma). Era uma rede de **revisão humana** —
+  escrever a frase duas vezes incomodava quem a escrevia —, não de teste;
+- **"a varredura de fonte das telas" não existe.** A varredura de fonte que existe é a de
+  `packages/ui` (`no-hardcoded-ui-text.test.ts`), e ela guarda o **design system**, não as
+  telas;
+- ✅ **o que sobra de verdade, e sobra medido:** as guardas de **vocabulário** do catálogo
+  (anti-culpa e ADR 0002). Uma frase de cobrança e uma de privacidade plantadas no `pt.ts` dão
+  **1 acusador cada**, mesmo numa chave que tela nenhuma renderiza — que é exatamente a
+  propriedade pela qual elas moram no catálogo. Elas pegam **o que a frase diz**; nenhuma delas
+  pega **onde a frase foi escrita**.
 
 ✅ **E uma dívida conhecida morre junto:** os **33 textos da barra do editor** que só existiam
 em português deixam de ser dívida — eles eram a pergunta 6 do MVP 2.
@@ -480,22 +498,28 @@ do parágrafo acima, seria "relaxar a guarda". **Não foi isso que se fez, e a d
   busca corta em **500** e **não avisa** que cortou. O conserto honesto é o **servidor** dizer
   que truncou. Isso continua de fora.
 
-### 6. A barra do editor está só em português. Isso conserta agora ou espera você?
+### 6. ~~A barra do editor está só em português. Isso conserta agora ou espera você?~~
 
-**Como está:** trocar o idioma para inglês traduz o app inteiro **menos** os rótulos dos botões
-do editor ("Negrito", "Citação", "Grifo amarelo") e os do menu `/`. São **33 textos** cravados
-em `packages/ui`, medidos, e existe um teste que impede esse número de **crescer**.
+✅ **FECHADA SEM CONSERTO EM 2026-09-17, pela resposta à pergunta 7 do MVP 1** — e a fatia que
+a fechou é a **Tarefa 38d**.
 
-**Por quê não consertei:** o conserto é conhecido e não é caro (o editor recebe os rótulos por
-prop, como os outros componentes já fazem). Mas ele depende da **pergunta 7 do MVP 1**, que
-continua sem resposta: *"manter o inglês?"*. Se a resposta for **não**, o certo é **apagar** o
-segundo catálogo — e as 32 entradas novas que esse conserto criaria seriam trabalho na direção
-oposta à sua decisão.
+~~**Como está:** trocar o idioma para inglês traduz o app inteiro **menos** os rótulos dos
+botões do editor ("Negrito", "Citação", "Grifo amarelo") e os do menu `/`.~~ ⚠️ **NÃO SE TROCA
+MAIS O IDIOMA:** o seletor saiu, o catálogo `en` foi apagado e o app é só português. Os **33
+textos** cravados em `packages/ui` **continuam lá, e continuam em português** — só que agora
+eles falam a mesma língua que o resto da tela.
 
-**Recomendação:** responda a pergunta 7 do MVP 1 primeiro. Se o inglês fica, esta é uma fatia
-curta; se sai, o conserto é deletar.
+~~**Por quê não consertei:** … depende da **pergunta 7 do MVP 1**, que continua sem resposta.~~
+A pergunta foi respondida (*"só português — apagar o inglês"*), e a resposta escolheu o caminho
+que o próprio parágrafo previa: **o conserto era deletar**, e deletar não é traduzir os 33.
 
-**Resposta:**
+⚠️ **O que NÃO morreu junto, e por isso o riscado não é apagado:** a guarda
+`packages/ui/src/__tests__/no-hardcoded-ui-text.test.ts` **fica**, com o teto de 33 que **só
+pode cair**. O motivo dela mudou de "texto não traduzido" para "`packages/ui` não é dono de
+texto de interface" (decisão B da Tarefa 13) — que continua valendo com um idioma só, e é o
+que impede o próximo componente de acrescentar a 34ª.
+
+**Resposta (2026-09-17):** ✅ **Não precisa consertar — a pergunta 7 do MVP 1 a dissolveu.**
 
 ### 7. Alguma coisa que você esperava do MVP 2 e não está aqui?
 

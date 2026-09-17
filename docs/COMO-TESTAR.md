@@ -64,12 +64,12 @@
   endpoint de upload no backend. As duas são "capability-gated" por prop — ligar depois é
   passar a prop. (A busca de anotação para as menções apontarem **agora existe** — o §6.3 —,
   mas ligar a menção ao acervo é fatia própria.)
-- ⚠️ **A barra do editor está só em PORTUGUÊS.** Trocar o idioma para inglês traduz o app
-  inteiro **menos** os rótulos dos botões do editor ("Negrito", "Citação", "Grifo amarelo") e
-  os do menu `/`. São **33 textos** cravados em `packages/ui`, medidos, e há um teste que
-  impede o número de **crescer**. O conserto é conhecido e não é caro — mas ele depende da
-  **pergunta 7 do MVP 1** ("manter o inglês?"): se a resposta for "não", o certo é apagar o
-  segundo catálogo, e traduzir agora seria trabalho na direção oposta.
+- ~~⚠️ **A barra do editor está só em PORTUGUÊS.** Trocar o idioma para inglês traduz o app
+  inteiro **menos** os rótulos dos botões do editor …~~ ✅ **DEIXOU DE SER DÍVIDA em 2026-09-17
+  (Tarefa 38d).** A **pergunta 7 do MVP 1** foi respondida — *"só português — apagar o
+  inglês"* —, **não existe mais seletor de idioma** e o app inteiro fala português. Os **33
+  textos** cravados em `packages/ui` continuam lá e continuam medidos, com um teste que impede
+  o número de **crescer**; o que mudou é que eles não são mais uma tradução faltando.
 - ⚠️ **ABRIR O APP DO ZERO SEM CONEXÃO** (o "cold start" no metrô) → **ainda não**, e esta é a
   confusão mais provável. A Tarefa 21 fez a **escrita** sobreviver à queda da rede; a
   **leitura** (`/me`, o livro, as anotações, os grifos) continua indo ao servidor, então abrir

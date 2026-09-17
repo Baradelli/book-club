@@ -455,7 +455,11 @@ numeração inventada. Escreva a pergunta **primeiro**, ou aponte para a spec da
 5. **contador de resultados** — ⚠️ **esta se cruza com o §6.1**: se o dono disser que quer
    número na tela, isso muda a guarda anti-culpa **para o MVP 3 inteiro**. Leia a resposta antes
    de escrever a spec da 32;
-6. **traduzir a barra do editor** (33 strings cravadas em `ui`) — depende da pergunta 7 do MVP 1;
+6. ~~**traduzir a barra do editor** (33 strings cravadas em `ui`) — depende da pergunta 7 do
+   MVP 1;~~ ✅ **DISSOLVIDA em 2026-09-17** (Tarefa 38d): a pergunta 7 do MVP 1 foi respondida
+   com *"só português"*, o catálogo `en` saiu, e os 33 textos deixaram de ser dívida de
+   tradução. A guarda de teto em `ui` continua de pé, por outro motivo (`ui` não é dono de
+   texto de interface);
 7. **o que faltou no MVP 2.**
 
 **Do MVP 1:** a **pergunta 5** (cache de leitura) é a única que ainda muda escopo — ver §6.

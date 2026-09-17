@@ -187,9 +187,16 @@ export function activityMoment(createdAt: string, now: Date): ActivityMoment {
  * nada por ele.
  *
  * ⚠️ **O QUE ELE ESCREVE NÃO PASSA PELO `t()`**, e é a única superfície de texto
- * do app assim. A guarda de catálogo não a vê e a varredura de DOM só a vê em
- * `pt`; quem a guarda nos dois idiomas é `__tests__/activity-feed.test.ts`
- * (regra 13). **Medido: zero ofensores** em `pt` e `en`, em todos os degraus.
+ * do app assim. A guarda de catálogo não a vê, e a varredura de DOM só vê os
+ * degraus que a tela renderizar naquele teste; quem a guarda é
+ * `__tests__/activity-feed.test.ts` (regra 13), que percorre a escada inteira.
+ * **Medido: zero ofensores**, em todos os degraus.
+ *
+ * ⚠️ **O parâmetro `locale` fica, e ele NÃO é resíduo do segundo catálogo
+ * (Tarefa 38d):** é uma tag de `Intl`, dado que vive no navegador e custa zero
+ * byte de bundle. O único chamador passa o `i18n.resolvedLanguage`, que hoje só
+ * pode ser `'pt'` — e a varredura acima roda em `pt`, que é o que o produto
+ * entrega.
  */
 export function formatActivityMoment(
   createdAt: string,

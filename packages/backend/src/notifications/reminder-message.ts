@@ -1,31 +1,27 @@
-import type { Locale } from '@clube/shared/locales';
-import { en, FALLBACK_LOCALE, isLocale, pt } from '@clube/shared/locales';
+import { pt } from '@clube/shared/locales';
 
 import type { ReadingPlanItem } from '../domain/book';
 import type { PushPayload } from '../usecases/ports/push-sender';
 
 /**
- * ⚠️ **A FRASE QUE CHEGA AO CELULAR — montada aqui, no idioma DA PESSOA
- * (decisão H da Tarefa 37).**
+ * ⚠️ **A FRASE QUE CHEGA AO CELULAR — montada aqui, a partir do catálogo.**
  *
  * Ela é a única do produto que chega **sem a pessoa abrir a tela**, e daí as
  * duas consequências que decidem este arquivo:
  *
  * 1. **o texto vem do catálogo compartilhado**, nunca escrito em português cru
  *    aqui (`CLAUDE.md`). É o que põe a frase dentro da varredura anti-culpa de
- *    `packages/shared/src/locales/__tests__/anti-guilt.test.ts`, que percorre os
- *    dois idiomas — uma guarda de tela **nunca** a veria, porque ela não passa
- *    por tela nenhuma (§7.9: a guarda mora onde a propriedade é decidível);
- * 2. **o idioma é o `Settings.locale`**, e não o do navegador: não há navegador
- *    aberto quando o lembrete sai.
+ *    `packages/shared/src/locales/__tests__/anti-guilt.test.ts` — uma guarda de
+ *    tela **nunca** a veria, porque ela não passa por tela nenhuma (§7.9: a
+ *    guarda mora onde a propriedade é decidível);
+ * 2. ⚠️ a segunda metade ERA **"o idioma é o `Settings.locale`, e não o do
+ *    navegador"** (decisão H da Tarefa 37), e ela **morreu na Tarefa 38d**:
+ *    há um idioma só.
  *
  * ⚠️ **E o payload sai PRONTO** (decisão I): o dispatcher decide, o
  * `PushSender` entrega. Montar a frase dentro do adaptador de rede poria a
  * regra anti-culpa onde nenhum teste de UseCase a alcança.
  */
-
-/** Os catálogos por locale. `pt` é o padrão e o fallback (`CLAUDE.md`). */
-const CATALOGS: Record<Locale, typeof pt> = { pt, en };
 
 /**
  * O `kind` em minúsculas — é o `tag` do `showNotification` (§2) e o `topic` do
@@ -84,8 +80,6 @@ function interpolate(template: string, values: Record<string, string>): string {
 }
 
 export interface ReadingReminderInput {
-  /** O `Settings.locale` da pessoa. Valor desconhecido cai no `pt`. */
-  locale: string;
   /** O livro do trecho de hoje — é para ele que o clique leva. */
   bookId: string;
   /** O trecho de hoje, como o admin o cadastrou. */
@@ -102,17 +96,21 @@ export interface ReadingReminderInput {
 /**
  * "A leitura de hoje é o Cap. 3."
  *
- * ⚠️ **Locale desconhecido cai no `pt` e NÃO estoura.** A coluna
- * `Settings.locale` é `String` livre — o `updateSettingsSchema` pede
- * `z.string().min(1)`, não um `z.enum(SUPPORTED_LOCALES)` —, então um valor
- * inesperado é alcançável. E um lembrete que deixasse de sair por causa disso
- * falharia do pior jeito: em silêncio, para sempre, e só para aquela pessoa.
+ * ⚠️ **UM IDIOMA SÓ, e por isso esta função NÃO RECEBE locale (Tarefa 38d).**
+ *
+ * Até aqui ela recebia o `Settings.locale` da pessoa e escolhia entre dois
+ * catálogos, caindo no `pt` para qualquer valor desconhecido (a coluna é
+ * `String` livre, e o caso medido era `'klingon'`). O dono respondeu à pergunta
+ * 7 do MVP 1 — *"só português"* —, o segundo catálogo saiu, e um parâmetro que
+ * chega e não muda nada é pior que um parâmetro que não existe: quem chama
+ * continua achando que escolhe.
+ *
+ * ⚠️ **A coluna `Settings.locale` fica no banco** (não há migration nesta
+ * fatia) e passa a não ter leitor nenhum. A nota está escrita ao lado dela, no
+ * `prisma/schema.prisma`.
  */
 export function buildReadingReminder(input: ReadingReminderInput): PushPayload {
-  const locale: Locale = isLocale(input.locale)
-    ? input.locale
-    : FALLBACK_LOCALE;
-  const catalog = CATALOGS[locale].notifications.readingReminder;
+  const catalog = pt.notifications.readingReminder;
 
   const streak = input.streak ?? 0;
   // ⚠️ O plural é escolhido AQUI, e não pelo i18next: este catálogo é lido

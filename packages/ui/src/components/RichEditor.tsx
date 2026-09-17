@@ -141,7 +141,7 @@ export interface RichEditorProps {
    * Eles entram por PROP, e não por `t()`, porque o `@clube/ui` não traduz
    * (decisão B da Tarefa 13 — se ele traduzisse, passaria a ser dono de chave
    * de catálogo e o `CustomTypeOptions` tipado, que vive em `packages/app`,
-   * deixaria de valer para ele). As chaves existem nos dois catálogos:
+   * deixaria de valer para ele). As chaves existem no catálogo:
    * `editor.image.uploading` e `editor.image.uploadFailed`.
    *
    * O default é português, como todo rótulo interno do editor (§10): assim uma

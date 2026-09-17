@@ -94,7 +94,7 @@ function renderAt(
   render(
     // O idioma é PINADO em `pt`: o `navigator.language` do jsdom é `en-US`, e
     // sem isto as asserções de texto mudariam com o ambiente.
-    <I18nextProvider i18n={createI18n(memoryStorage({ 'clube.locale': 'pt' }))}>
+    <I18nextProvider i18n={createI18n()}>
       <AuthProvider storage={storage} baseUrl="https://api.teste">
         {/*
           O `ActiveClubProvider` entra aqui porque a HOME passou a existir de

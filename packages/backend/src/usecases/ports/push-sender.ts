@@ -17,7 +17,13 @@
  * bloqueada.
  */
 export interface PushPayload {
-  /** O título da notificação. Vem do catálogo, no `locale` da pessoa. */
+  /**
+   * O título da notificação. Vem do catálogo.
+   *
+   * ⚠️ Dizia *"no `locale` da pessoa"* até a Tarefa 38d — e passou a
+   * contradizer os três montadores de frase, que deixaram de RECEBER locale
+   * quando o segundo catálogo saiu.
+   */
   title: string;
   /** O corpo: o trecho de hoje, e nada em volta. */
   body: string;

@@ -9,7 +9,7 @@ import type {
   NoteResponse,
 } from '@clube/shared';
 import { TOKEN_STORAGE_KEY } from '@clube/shared/client';
-import { en, pt } from '@clube/shared/locales';
+import { pt } from '@clube/shared/locales';
 import { act, fireEvent, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -49,8 +49,8 @@ import {
  *
  * ⚠️ **AS VARREDURAS SÃO AS ÚNICAS, E O `expectNoGuilt()` JÁ EMBUTE A DE
  * PRIVACIDADE** (conserto da Tarefa 25) — **nunca a chame duas vezes**. A de
- * **catálogo** (as duas: anti-culpa e ADR 0002) percorre `pt` **e** `en`
- * inteiros em `packages/shared/src/locales/__tests__/`, desde a Tarefa 27, e as
+ * **catálogo** (as duas: anti-culpa e ADR 0002) percorre o catálogo `pt`
+ * inteiro em `packages/shared/src/locales/__tests__/`, desde a Tarefa 27, e as
  * chaves novas desta fatia entram nela por construção — sem uma linha aqui.
  *
  * ⚠️ **O DEBOUNCE SE PROVA POR CONTAGEM, com timers FALSOS** (§7.3): um tique
@@ -1093,23 +1093,15 @@ describe('the states that are not the list (rules 11 and 14)', () => {
     expectNoGuilt();
   });
 
-  // A propriedade do catálogo, afirmada onde ela é decidível: as duas frases
-  // são diferentes NOS DOIS locales. Uma tradução copiada mataria a distinção
-  // só em `en` — e todo teste de tela pina `pt` (§7.9).
-  it.each([
-    ['pt', pt],
-    ['en', en],
-  ])(
-    'says the initial state and the empty one differently, in %s',
-    (_locale, catalog) => {
-      expect(catalog.pages.busca.start.title).not.toBe(
-        catalog.pages.busca.empty.title,
-      );
-      expect(catalog.pages.busca.start.description).not.toBe(
-        catalog.pages.busca.empty.description,
-      );
-    },
-  );
+  // A propriedade do catálogo, afirmada onde ela é decidível (§7.9): o estado
+  // inicial e o vazio são DUAS frases, e uma só faria a pessoa achar que a
+  // busca não achou nada antes de ela ter buscado.
+  it('says the initial state and the empty one differently, in pt', () => {
+    expect(pt.pages.busca.start.title).not.toBe(pt.pages.busca.empty.title);
+    expect(pt.pages.busca.start.description).not.toBe(
+      pt.pages.busca.empty.description,
+    );
+  });
 
   /**
    * ⚠️ **REGRA 14 — A FALHA DE UMA LISTAGEM É FALHA DA BUSCA.**

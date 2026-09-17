@@ -10,7 +10,7 @@ import type {
 } from '@clube/shared';
 import { HIGHLIGHT_COLORS } from '@clube/shared';
 import { TOKEN_STORAGE_KEY } from '@clube/shared/client';
-import { en, pt } from '@clube/shared/locales';
+import { pt } from '@clube/shared/locales';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -60,8 +60,8 @@ import {
  *
  * ⚠️ **AS VARREDURAS SÃO AS ÚNICAS, E O `expectNoGuilt()` JÁ EMBUTE A DE
  * PRIVACIDADE** (conserto da Tarefa 25) — nunca a chame duas vezes. A de
- * **catálogo** (as duas: anti-culpa e ADR 0002) percorre `pt` **e** `en`
- * inteiros em `packages/shared/src/locales/__tests__/`, desde a Tarefa 27.
+ * **catálogo** (as duas: anti-culpa e ADR 0002) percorre o catálogo `pt`
+ * inteiro em `packages/shared/src/locales/__tests__/`, desde a Tarefa 27.
  */
 vi.mock('@clube/ui/editor', () => ({
   RichEditor: () => <div data-testid="editor" />,
@@ -2214,53 +2214,7 @@ describe('the source of the collection screen (rules 6, 18)', () => {
 });
 
 describe('the catalog of the collection (rule 17)', () => {
-  it('has the new keys in pt AND in en, actually translated', () => {
-    /*
-      A paridade recursiva de chaves é do catálogo
-      (`shared/src/locales/__tests__/catalogs.test.ts`) e do compilador (o `en`
-      é `typeof pt`). O que ESTE teste acrescenta é o par que nenhum dos dois
-      pega: um bloco copiado do `pt` para o `en`, que passa na paridade e
-      embarca português no idioma inglês.
-    */
-    expect(Object.keys(en.pages.acervo)).toEqual(Object.keys(pt.pages.acervo));
-    expect(en.pages.acervo.title).not.toBe(pt.pages.acervo.title);
-    expect(en.pages.acervo.empty.description).not.toBe(
-      pt.pages.acervo.empty.description,
-    );
-    expect(en.pages.acervo.empty.filtered).not.toBe(
-      pt.pages.acervo.empty.filtered,
-    );
-    expect(en.pages.acervo.archive.description).not.toBe(
-      pt.pages.acervo.archive.description,
-    );
-    expect(en.pages.acervo.item.archive).not.toBe(pt.pages.acervo.item.archive);
-
-    // As três palavras do TIPO, traduzidas nas duas — e é o `en` que o teste
-    // de tela nunca vê, porque toda suíte pina `pt`.
-    expect(Object.keys(en.pages.acervo.kind)).toEqual(
-      Object.keys(pt.pages.acervo.kind),
-    );
-    expect(en.pages.acervo.kind.plan).not.toBe(pt.pages.acervo.kind.plan);
-    expect(en.pages.acervo.kind.free).not.toBe(pt.pages.acervo.kind.free);
-    expect(en.pages.acervo.kind.highlight).not.toBe(
-      pt.pages.acervo.kind.highlight,
-    );
-
-    // As quatro dimensões, com rótulo de grupo em cada uma.
-    expect(Object.keys(en.pages.acervo.filters)).toEqual(
-      Object.keys(pt.pages.acervo.filters),
-    );
-    for (const dimension of ['person', 'type', 'color', 'reading'] as const) {
-      expect(en.pages.acervo.filters[dimension].label).not.toBe(
-        pt.pages.acervo.filters[dimension].label,
-      );
-      expect(en.pages.acervo.filters[dimension].all).not.toBe(
-        pt.pages.acervo.filters[dimension].all,
-      );
-    }
-  });
-
-  it('⚠️ gives every dimension a DISTINCT neutral label, in both locales', () => {
+  it('⚠️ gives every dimension a DISTINCT neutral label', () => {
     /*
       ⚠️ **TRÊS GRUPOS DE CHIPS NA MESMA TELA, e dois "Tudo" seriam DOIS BOTÕES
       COM O MESMO NOME ACESSÍVEL.** Para quem usa leitor de tela isso é a mesma
@@ -2269,42 +2223,29 @@ describe('the catalog of the collection (rule 17)', () => {
       *"found multiple elements"* — o defeito aparece como erro de teste, não
       como bug de produto, e é por isso que ele tem guarda própria.
     */
-    for (const catalog of [pt, en]) {
-      const neutral = [
-        catalog.pages.acervo.filters.person.all,
-        catalog.pages.acervo.filters.type.all,
-        catalog.pages.acervo.filters.color.all,
-        catalog.pages.acervo.filters.reading.all,
-      ];
-      expect(new Set(neutral).size).toBe(neutral.length);
+    const neutral = [
+      pt.pages.acervo.filters.person.all,
+      pt.pages.acervo.filters.type.all,
+      pt.pages.acervo.filters.color.all,
+      pt.pages.acervo.filters.reading.all,
+    ];
+    expect(new Set(neutral).size).toBe(neutral.length);
 
-      // E os rótulos de GRUPO também: eles são o nome acessível de cada
-      // `role="group"`, e dois iguais tornariam o grupo inencontrável.
-      const labels = [
-        catalog.pages.acervo.filters.person.label,
-        catalog.pages.acervo.filters.type.label,
-        catalog.pages.acervo.filters.color.label,
-        catalog.pages.acervo.filters.reading.label,
-      ];
-      expect(new Set(labels).size).toBe(labels.length);
-    }
+    // E os rótulos de GRUPO também: eles são o nome acessível de cada
+    // `role="group"`, e dois iguais tornariam o grupo inencontrável.
+    const labels = [
+      pt.pages.acervo.filters.person.label,
+      pt.pages.acervo.filters.type.label,
+      pt.pages.acervo.filters.color.label,
+      pt.pages.acervo.filters.reading.label,
+    ];
+    expect(new Set(labels).size).toBe(labels.length);
   });
 
-  it('⚠️ keeps the {{name}} interpolator alive in both locales', () => {
-    // Um `en` que perdesse o interpolador mostraria o chip sem o nome de
-    // ninguém — o defeito que a Tarefa 27 consertou, de volta pelo outro
-    // idioma.
-    for (const label of [
-      pt.pages.acervo.filters.person.person,
-      en.pages.acervo.filters.person.person,
-    ]) {
-      expect(label).toContain('{{name}}');
-    }
-    for (const label of [
-      pt.pages.acervo.item.page,
-      en.pages.acervo.item.page,
-    ]) {
-      expect(label).toContain('{{number}}');
-    }
+  it('⚠️ keeps the {{name}} interpolator alive', () => {
+    // Um rótulo que perdesse o interpolador mostraria o chip sem o nome de
+    // ninguém — o defeito que a Tarefa 27 consertou.
+    expect(pt.pages.acervo.filters.person.person).toContain('{{name}}');
+    expect(pt.pages.acervo.item.page).toContain('{{number}}');
   });
 });

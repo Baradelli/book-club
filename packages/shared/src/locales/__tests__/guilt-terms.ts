@@ -8,8 +8,8 @@
  *
  * Duas guardas usam este vocabulário, em superfícies diferentes:
  *
- * - **o catálogo** (`./anti-guilt.test.ts`): varre `pt` e `en` inteiros, sem
- *   renderizar nada — independente de tela, de estado e de locale pinado;
+ * - **o catálogo** (`./anti-guilt.test.ts`): varre o `pt` inteiro — o único que
+ *   existe desde a Tarefa 38d —, sem renderizar nada e independente de estado;
  * - **o DOM** (`packages/app/src/pages/__tests__/anti-guilt-dom.ts`): varre o
  *   que **não** vem de catálogo — o número renderizado a partir de dado, a cor,
  *   e a palavra que entrou na tela sem passar pelo `t()`.
@@ -57,6 +57,11 @@ export const GUILT_TERMS: readonly string[] = [
   'falta', // faltam 3 dias · em falta
   'perdeu', // "você perdeu 2 leituras"
   // Inglês
+  //
+  // ⚠️ **FICAM, mesmo sem catálogo `en` (Tarefa 38d).** Esta lista também é a
+  // da varredura de DOM e a da de fonte do `app`, e lá uma frase em inglês
+  // escrita direto no código continua alcançável — nomes de variável, `aria-*`
+  // e texto de placeholder são escritos em inglês neste projeto por convenção.
   'behind', // "you're 3 days behind"
   'overdue',
   'missed',

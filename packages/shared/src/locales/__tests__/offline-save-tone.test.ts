@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { TranslationCatalog } from '../index';
-import { en, pt } from '../index';
+import { pt } from '../index';
 
 /**
  * ⚠️ **O TOM DOS DOIS ESTADOS QUE A TAREFA 21 CRIOU — GUARDADO NO CATÁLOGO.**
@@ -14,9 +14,13 @@ import { en, pt } from '../index';
  * obtido, que é a asserção que se autoajusta do §7.8.
  *
  * ⚠️ **E ELE MORA AQUI, NÃO NA TELA** (§7.9: a guarda mora onde a propriedade é
- * decidível). Vocabulário é propriedade **do catálogo**: independe de estado,
- * roda nos DOIS locales — e todo teste de tela pina `pt`, então uma frase de
- * alarme em `en` embarcaria sem uma linha vermelha.
+ * decidível). Vocabulário é propriedade **do catálogo**: independe de estado, e
+ * os dois estados só aparecem na tela com a rede fora do ar.
+ *
+ * ⚠️ Até a Tarefa 38d ele rodava nos DOIS locales, e esse era o argumento
+ * mais forte (todo teste de tela pinava `pt`, então um alarme em `en`
+ * embarcaria sem uma linha vermelha). O segundo catálogo saiu; o argumento de
+ * ESTADO ficou.
  *
  * É a mesma disciplina do `anti-guilt.test.ts` ao lado. A diferença é o
  * vocabulário proibido: lá é o da **cobrança**, aqui é o do **alarme** e o da
@@ -93,7 +97,7 @@ const DEMAND_TERMS: readonly string[] = [
   'reload',
 ];
 
-/** Os dois estados novos, nos dois locales. */
+/** Os dois estados novos do salvamento offline. */
 function offlinePhrases(
   catalog: TranslationCatalog,
 ): Array<[key: string, phrase: string]> {
@@ -104,51 +108,45 @@ function offlinePhrases(
   ];
 }
 
-const catalogs: ReadonlyArray<readonly [string, TranslationCatalog]> = [
-  ['pt', pt],
-  ['en', en],
-];
+const catalog: TranslationCatalog = pt;
 
-describe.each(catalogs)(
-  '⚠️ the two offline save states never alarm and never demand — %s',
-  (_locale, catalog) => {
-    it('says something, in both keys', () => {
-      // O lado positivo do par: sem ele, apagar as frases deixaria toda
-      // varredura abaixo verde sobre a string vazia (§7.4).
-      for (const [key, phrase] of offlinePhrases(catalog)) {
-        expect(phrase.length, key).toBeGreaterThan(10);
+describe('⚠️ the two offline save states never alarm and never demand — pt', () => {
+  it('says something, in both keys', () => {
+    // O lado positivo do par: sem ele, apagar as frases deixaria toda
+    // varredura abaixo verde sobre a string vazia (§7.4).
+    for (const [key, phrase] of offlinePhrases(catalog)) {
+      expect(phrase.length, key).toBeGreaterThan(10);
+    }
+  });
+
+  it('never says that something went wrong', () => {
+    for (const [key, phrase] of offlinePhrases(catalog)) {
+      const spoken = withoutDiacritics(phrase);
+      for (const term of ALARM_TERMS) {
+        expect(spoken, `${key} · ${term}`).not.toContain(term);
       }
-    });
+    }
+  });
 
-    it('never says that something went wrong', () => {
-      for (const [key, phrase] of offlinePhrases(catalog)) {
-        const spoken = withoutDiacritics(phrase);
-        for (const term of ALARM_TERMS) {
-          expect(spoken, `${key} · ${term}`).not.toContain(term);
-        }
+  it('never asks the person to do anything', () => {
+    for (const [key, phrase] of offlinePhrases(catalog)) {
+      const spoken = withoutDiacritics(phrase);
+      for (const term of DEMAND_TERMS) {
+        expect(spoken, `${key} · ${term}`).not.toContain(term);
       }
-    });
+    }
+  });
 
-    it('never asks the person to do anything', () => {
-      for (const [key, phrase] of offlinePhrases(catalog)) {
-        const spoken = withoutDiacritics(phrase);
-        for (const term of DEMAND_TERMS) {
-          expect(spoken, `${key} · ${term}`).not.toContain(term);
-        }
-      }
-    });
-
-    it('is NOT the phrase of the save that failed', () => {
-      // O mutante mais barato de todos: copiar `failed` para as duas chaves.
-      // Ele passaria pelas varreduras de vocabulário só se alguém reescrevesse
-      // o `failed` — e aí este par é quem acusa.
-      const { failed, queued, unavailable, unconfirmed } =
-        catalog.pages.dayNote.save;
-      expect(queued).not.toBe(failed);
-      expect(queued).not.toBe(unavailable);
-      expect(unconfirmed).not.toBe(failed);
-      expect(unconfirmed).not.toBe(unavailable);
-      expect(queued).not.toBe(unconfirmed);
-    });
-  },
-);
+  it('is NOT the phrase of the save that failed', () => {
+    // O mutante mais barato de todos: copiar `failed` para as duas chaves.
+    // Ele passaria pelas varreduras de vocabulário só se alguém reescrevesse
+    // o `failed` — e aí este par é quem acusa.
+    const { failed, queued, unavailable, unconfirmed } =
+      catalog.pages.dayNote.save;
+    expect(queued).not.toBe(failed);
+    expect(queued).not.toBe(unavailable);
+    expect(unconfirmed).not.toBe(failed);
+    expect(unconfirmed).not.toBe(unavailable);
+    expect(queued).not.toBe(unconfirmed);
+  });
+});

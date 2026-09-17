@@ -152,17 +152,21 @@ describe('dispatchDueNotifications', () => {
    * ⚠️ **DECISÃO I — o dispatcher decide, o sender entrega: o payload sai
    * PRONTO.**
    *
-   * E ele diz o trecho de hoje, no idioma DELA (decisão H), sem contar nada
-   * (regra 15).
+   * E ele diz o trecho de hoje, sem contar nada (regra 15).
+   *
+   * ⚠️ Até a Tarefa 38d este teste pinava `locale: 'en'` no `Settings` e
+   * esperava `"Today's reading"` — era ele o acusador da decisão H ("o idioma é
+   * o da PESSOA, não o do servidor"). Com um catálogo só a decisão H morreu, e
+   * o que sobra é a decisão I: o payload sai PRONTO daqui, com os quatro
+   * campos, e o sender não monta frase nenhuma.
    */
-  it('hands the sender a ready payload, with the topic of the day and her language', async () => {
+  it('hands the sender a ready payload, with the topic of the day', async () => {
     const s = await aScenario();
     await s.settings.save(
       aSettings({
         userId: MARIA,
         timezone: SAO_PAULO,
         reminderTime: '21:00',
-        locale: 'en',
       }),
     );
 
@@ -172,7 +176,9 @@ describe('dispatchDueNotifications', () => {
       {
         userId: MARIA,
         payload: {
-          title: "Today's reading",
+          // Literal à mão, e não `pt.notifications…`: o esperado não pode
+          // vir da mesma fonte que o obtido (§7.8).
+          title: 'A leitura de hoje',
           body: 'Cap. 3 — A promessa',
           tag: 'reading_reminder',
           url: `/books/${BOOK}`,

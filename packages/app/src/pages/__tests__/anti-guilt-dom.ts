@@ -24,10 +24,12 @@ import { readableText, withoutDiacritics } from './harness';
  * ⚠️ **E ELA NÃO É A GUARDA DO VOCABULÁRIO.** A partição do §7.9 continua:
  *
  * - **palavra de CATÁLOGO** é propriedade do catálogo, e vive em
- *   `packages/shared/src/locales/__tests__/anti-guilt.test.ts`, que percorre
- *   `pt` **e** `en` inteiros — independe de estado, independe de locale (todo
- *   teste de tela pina `pt`, e um `"You're 3 days behind"` embarcaria sem uma
- *   linha vermelha);
+ *   `packages/shared/src/locales/__tests__/anti-guilt.test.ts`, que percorre o
+ *   catálogo inteiro — independe de estado e de qual tela alguém lembrou de
+ *   renderizar. ⚠️ Até a Tarefa 38d ele percorria também o `en`, e esse era o
+ *   argumento mais forte: todo teste de tela pinava `pt`, e um
+ *   `"You're 3 days behind"` no segundo catálogo embarcava sem uma linha
+ *   vermelha;
  * - **o que NÃO é catálogo é DOM**, e é o que está aqui: a COR, o NÚMERO
  *   renderizado a partir de dado (um "0 de 30 dias" não está em catálogo
  *   nenhum), e a palavra que entrou na tela **sem** passar pelo `t()`.

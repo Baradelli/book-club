@@ -20,11 +20,6 @@ export const pt = {
     // tem nome para quem ouve a tela.
     settings: 'Preferências',
   },
-  language: {
-    label: 'Idioma',
-    pt: 'Português',
-    en: 'Inglês',
-  },
   theme: {
     label: 'Tema',
     light: 'Claro',
@@ -180,7 +175,7 @@ export const pt = {
 
         ⚠️ **AS QUATRO SÃO DISTINGUÍVEIS, e isso é teste** (lição nº 16 do MVP
         2: duas coisas que falam a mesma frase são indistinguíveis pela
-        varredura). O acusador é o `catalogs.test.ts`, nos DOIS locales.
+        varredura). O acusador é o `catalogs.test.ts`.
 
         ⚠️ **E NENHUMA DELAS CONTA NADA.** Não há "e mais N", não há "3
         atividades de Maria", não há agrupamento por pessoa — a `COUNTER_SHAPE`
@@ -541,7 +536,7 @@ export const pt = {
       ⚠️ **E NENHUMA FRASE DAQUI COBRA.** É um formulário, então há mensagem
       de campo — mas ela fala do CAMPO ("escreva o tema deste dia"), nunca da
       pessoa nem de dia nenhum que ficou sem anotação. O acusador de palavra é
-      `locales/__tests__/anti-guilt.test.ts`, nos dois locales.
+      `locales/__tests__/anti-guilt.test.ts`.
     */
     bookForm: {
       /** O nome da TELA em cada modo (decisão A: uma tela, dois modos). */
@@ -873,7 +868,7 @@ export const pt = {
       "você não leu hoje". O lembrete existe para ajudar, e a tela que o
       configura é o último lugar onde cabe uma régua. A varredura que guarda
       isto é a do VOCABULÁRIO (`anti-guilt.test.ts`), que percorre este catálogo
-      inteiro e o `en` — não uma guarda de dígito copiada do feed, porque aqui o
+      inteiro — não uma guarda de dígito copiada do feed, porque aqui o
       dígito é legítimo e obrigatório (`07:30` **é** um número).
 
       ⚠️ **E A TELA NÃO PROMETE NOTIFICAÇÃO QUE AINDA NÃO EXISTE** (regra 17):
@@ -925,7 +920,7 @@ export const pt = {
           A resposta da rota traz `{ sent, disabled }`, e seria fácil escrever
           "mandei para 2 aparelhos". Num clube de duas pessoas isso é ruído: os
           dois estados que mudam o que a pessoa FAZ são "saiu" e "não saiu para
-          ninguém". E a contagem cobraria plural em dois idiomas para não dizer
+          ninguém". E a contagem custaria uma regra de plural para não dizer
           nada acionável.
 
           Cada frase diz o CONSERTO, como as quatro recusas acima — uma
@@ -977,8 +972,8 @@ export const pt = {
     antes de acreditar nesta frase. Ela diz **o trecho de hoje** e para por aí —
     o mesmo texto do `home.today.heading`, que é o que a pessoa vê ao abrir o
     app. Quem guarda isso é a varredura de `__tests__/anti-guilt.test.ts`, que
-    percorre os DOIS catálogos: uma guarda de tela nunca veria esta frase, porque
-    ela não passa por tela nenhuma.
+    percorre o catálogo inteiro: uma guarda de tela nunca veria esta frase,
+    porque ela não passa por tela nenhuma.
 
     ⚠️ **A RESSALVA (ADR 0010, pedido do dono e reafirmado por ele):** existem
     agora DUAS frases de lembrete, e a diferença importa. O `body` é o de sempre

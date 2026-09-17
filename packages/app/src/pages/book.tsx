@@ -100,7 +100,7 @@ import { ReadMarks, TodayReading } from './reading-marks';
  *   destacar o futuro não serve para nada.
  *
  * O acusador da palavra é o catálogo (`shared/src/locales/__tests__/
- * anti-guilt.test.ts`, os DOIS locales); o acusador da **cor** e do **número**
+ * anti-guilt.test.ts`); o acusador da **cor** e do **número**
  * é a varredura de DOM de `__tests__/book.test.tsx`, que roda em **todos** os
  * estados desta tela.
  *

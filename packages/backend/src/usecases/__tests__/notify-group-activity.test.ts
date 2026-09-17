@@ -148,17 +148,17 @@ describe('NotifyGroupActivity', () => {
   });
 
   /**
-   * ⚠️ **Regra 13 — o idioma é o de quem RECEBE, nunca o de quem escreveu.**
+   * ⚠️ **A REGRA 13 DA TAREFA 38 — "o idioma é o de quem RECEBE, nunca o de
+   * quem escreveu" — MORREU NA TAREFA 38d**, com o segundo catálogo. O teste
+   * que a provava pinava `locale: 'en'` no `Settings` do Marcos e esperava
+   * *"Your club is reading"*; hoje há um idioma só, e
+   * `buildGroupActivityMessage` não recebe locale.
    *
-   * A autora escreve em português e o Marcos lê em inglês: o aviso dele sai em
-   * inglês. É a única frase do sistema que chega sem a pessoa abrir a tela, e
-   * portanto a única que não pode perguntar ao i18n do navegador.
+   * ⚠️ **O que sobrou, e é o que este teste passou a provar:** o título chega
+   * PRONTO ao sender, igual para todo mundo do clube. A propriedade que morreu
+   * não foi enfraquecida — ela deixou de existir com a escolha de idioma.
    */
-  it('speaks the language of the person who RECEIVES, not the one who wrote', async () => {
-    await settings.save(aSettings({ userId: MARIA_ID, locale: 'en' }));
-    await settings.save(aSettings({ userId: MARCOS_ID, locale: 'en' }));
-    await settings.save(aSettings({ userId: JOANA_ID, locale: 'pt' }));
-
+  it('hands every recipient the same ready title, from the catalogue', async () => {
     await useCase.execute(validInput({ actorUserId: MARIA_ID }));
 
     const toMarcos = required(
@@ -168,7 +168,9 @@ describe('NotifyGroupActivity', () => {
       sender.sends.find((send) => send.userId === JOANA_ID),
     );
 
-    expect(toMarcos.payload.title).toBe('Your club is reading');
+    // Literal à mão, e não `pt.notifications…`: o esperado não pode vir da
+    // mesma fonte que o obtido (§7.8).
+    expect(toMarcos.payload.title).toBe('O clube está lendo');
     expect(toJoana.payload.title).toBe('O clube está lendo');
   });
 

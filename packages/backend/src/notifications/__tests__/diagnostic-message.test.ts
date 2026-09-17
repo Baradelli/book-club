@@ -1,4 +1,4 @@
-import { en, pt } from '@clube/shared/locales';
+import { pt } from '@clube/shared/locales';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -11,21 +11,20 @@ import {
  * responde a uma pergunta e não a um acontecimento: *"chegou?"*.
  */
 describe('buildTestNotification', () => {
-  it.each([
-    ['pt', pt],
-    ['en', en],
-  ])('speaks %s, from the catalogue', (locale, catalog) => {
-    const payload = buildTestNotification({ locale });
+  /*
+    ⚠️ **ATÉ A TAREFA 38d ESTE ERA UM `it.each` SOBRE `pt` E `en`, e havia um
+    irmão (`falls back to pt instead of throwing`) para o valor desconhecido.**
+    Os dois mediam a escolha de idioma a partir do `Settings.locale`, que era
+    `String` livre — daí o caso `'klingon'`. Sem segundo catálogo,
+    `buildTestNotification` deixou de RECEBER locale: parâmetro que chega e não
+    muda nada é pior que parâmetro que não existe, porque quem chama continua
+    achando que escolhe.
+  */
+  it('speaks pt, from the catalogue', () => {
+    const payload = buildTestNotification();
 
-    expect(payload.title).toBe(catalog.notifications.test.title);
-    expect(payload.body).toBe(catalog.notifications.test.body);
-  });
-
-  /** Locale desconhecido cai no `pt`, como no lembrete e no aviso de grupo. */
-  it('falls back to pt instead of throwing', () => {
-    expect(buildTestNotification({ locale: 'klingon' }).title).toBe(
-      pt.notifications.test.title,
-    );
+    expect(payload.title).toBe(pt.notifications.test.title);
+    expect(payload.body).toBe(pt.notifications.test.body);
   });
 
   /**
@@ -40,7 +39,7 @@ describe('buildTestNotification', () => {
    */
   it('tags the test notification with a string that is NOT a notification kind', () => {
     expect(TEST_NOTIFICATION_TAG).toBe('test');
-    expect(buildTestNotification({ locale: 'pt' }).tag).toBe('test');
+    expect(buildTestNotification().tag).toBe('test');
   });
 
   /**
@@ -49,12 +48,15 @@ describe('buildTestNotification', () => {
    * a ver com o que ela apertou.
    */
   it('points the click at the root, because a test is about no book', () => {
-    expect(buildTestNotification({ locale: 'pt' }).url).toBe('/');
+    expect(buildTestNotification().url).toBe('/');
   });
 
   it('carries the four fields of the payload and nothing else', () => {
-    expect(Object.keys(buildTestNotification({ locale: 'pt' })).sort()).toEqual(
-      ['body', 'tag', 'title', 'url'],
-    );
+    expect(Object.keys(buildTestNotification()).sort()).toEqual([
+      'body',
+      'tag',
+      'title',
+      'url',
+    ]);
   });
 });

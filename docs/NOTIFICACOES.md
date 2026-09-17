@@ -48,18 +48,32 @@ VitePWA({
 >
 > 1. **`globPatterns` termina em `webmanifest`, não em `woff2`** — o projeto não tem fonte
 >    própria, e o manifesto do PWA precisa entrar.
-> 2. ⚠️ **Falta o `globIgnores: ['assets/en-*.js']`**, que é a entrega inteira da **Tarefa
+> 2. ~~⚠️ **Falta o `globIgnores: ['assets/en-*.js']`**, que é a entrega inteira da **Tarefa
 >    29a**. Sem ele o catálogo `en` volta ao precache e o install baixa o que a fatia tirou —
->    medido lá: 15 entradas / 887,15 KiB → 16 / 887,79 KiB, *mais* download, não menos.
+>    medido lá: 15 entradas / 887,15 KiB → 16 / 887,79 KiB, *mais* download, não menos.~~
+>    ⚠️⚠️ **MORTO EM 2026-09-17 (Tarefa 38d) — NÃO RECRIE ESTA LINHA.** O dono respondeu à
+>    pergunta 7 do MVP 1 (*"só português — apagar o inglês"*), o catálogo `en` foi apagado e
+>    o chunk `assets/en-*.js` **não é mais emitido**. Um glob que não casa com nada é a guarda
+>    verde da lição nº 1. Ficou riscado em vez de apagado porque este texto era **instrução
+>    ativa**: quem o lesse hoje acrescentaria de volta uma linha morta.
 > 3. **`navigateFallback` é `'/index.html'` com a barra**, e existe uma
 >    `navigateFallbackDenylist` que o esboço não tem — sem ela o service worker devolve HTML
 >    para `GET /api/...`, que é o bug clássico de PWA.
 >
-> **A fonte da verdade é o `vite.config.ts`**, e as cinco propriedades daquele bloco têm
-> acusador medido em `packages/app/src/__tests__/service-worker-config.test.ts` (quatro) e
-> `bundle-guard.test.ts` (a quinta, que roda **build real** e exige o `push-handler.js` no
-> precache **com revisão** — é ela que faz uma correção no handler chegar a quem já tem o app
-> instalado).
+> **A fonte da verdade é o `vite.config.ts`**, e as propriedades daquele bloco têm acusador
+> medido em **dois** lugares, com a divisão de trabalho que a Tarefa 38d deixou explicada em
+> ambos os arquivos:
+>
+> - `packages/app/src/__tests__/service-worker-config.test.ts` — **três** (eram quatro até a
+>   38d; a do `globIgnores` saiu com o catálogo `en`): a denylist presa ao `DEFAULT_API_URL`,
+>   o `navigateFallback` existir, e o par "`importScripts` está escrito / não há
+>   `injectManifest`". ⚠️ Todas leem o **TEXTO** do config: são declaração de intenção;
+> - `bundle-guard.test.ts` — **duas**, e as duas rodam **build real**: o `push-handler.js` no
+>   precache **com revisão** (é ela que faz uma correção no handler chegar a quem já tem o app
+>   instalado) e o **primeiro carregamento inteiro** (chunk de entrada + CSS) no precache —
+>   sem esta, um `globIgnores: ['assets/**']` tira o app do precache, ele deixa de abrir
+>   offline e a suíte passa 33/33 (medido na rodada de correção da 38d: precache de 16
+>   entradas / 898,33 KiB para 13 / 11,84 KiB, **zero acusadores** antes do conserto).
 
 `packages/app/public/push-handler.js` — arquivo pequeno, sem build, sem imports:
 

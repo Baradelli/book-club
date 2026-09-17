@@ -18,12 +18,15 @@ import { PushSection } from './push-section';
  * AS PREFERÊNCIAS DA PESSOA (Tarefa 36b) — **três controles e o aparelho**.
  *
  * ⚠️ **TRÊS DE CINCO CAMPOS, E OS OUTROS DOIS FICAM FORA DE PROPÓSITO.** O
- * `Settings` tem `timezone` e `locale` também, e nenhum dos dois se edita aqui:
- * o `LanguagePicker` do cabeçalho guarda a escolha de idioma com
- * `persistLocale` (local), e `Settings.locale` **não tem um leitor sequer no
- * front hoje**. Editá-lo aqui criaria DOIS donos de "em que língua eu falo", e o
- * segundo ganharia às vezes. Unificar os dois é a Tarefa 46, inteira; fazer
- * metade é pior que não fazer.
+ * `Settings` tem `timezone` e `locale` também, e nenhum dos dois se edita aqui.
+ *
+ * ⚠️ **O caso do `locale` MUDOU na Tarefa 38d, e para melhor:** até ali havia
+ * dois donos possíveis de "em que língua eu falo" (o `LanguagePicker` do
+ * cabeçalho, que gravava local, e a coluna `Settings.locale`, sem leitor no
+ * front). O dono respondeu à pergunta 7 do MVP 1 — *"só português"* —, o
+ * seletor saiu e a coluna ficou **sem leitor nenhum, em lugar nenhum**: ela é
+ * vestigial e está marcada como tal no `prisma/schema.prisma`. Não há mais
+ * "unificar os dois" a fazer.
  *
  * ⚠️ **CADA CONTROLE SALVA SOZINHO, com um `PATCH` de UM campo** (decisão C).
  * Não há botão "Salvar", e a razão não é gosto: um botão mandaria os cinco

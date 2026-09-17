@@ -196,7 +196,6 @@ export async function dispatchDueNotifications(
 
     // Decisão I: o payload sai pronto daqui. O sender entrega.
     const payload = buildReadingReminder({
-      locale: settings.locale,
       bookId: reading.bookId,
       planItem: reading.planItem,
       streak,
