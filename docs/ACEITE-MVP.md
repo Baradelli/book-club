@@ -595,7 +595,12 @@ limitação que impede o PWA de instalar pelo IP. Faça a parte A.1 no celular e
 - [ ] Toco de novo e **desmarco**. A marca some e não volta ao recarregar.
 - [ ] A marca de **leitura** (glifo) é distinguível da de **escrita** (inicial) sem eu precisar
       olhar a cor.
-- [ ] Na home, o **feed** mostra o que aconteceu: quem, o quê, em que livro, quando → §6.5.
+- [ ] Na home, o **feed** mostra o que aconteceu: quem, o quê, **sobre que dia**, em que livro,
+      quando → §6.5.
+- [ ] ⚠️ **O tema do dia na linha** (Tarefa 38e, a sua pergunta 3): a linha diz *"escreveu sobre
+      Cap. 3 — A promessa"*, e a avulsa e o grifo continuam dizendo só o livro → §6.5.
+- [ ] ⚠️ **Corrijo o título de um dia no plano e a linha ANTIGA do feed passa a dizer o título
+      novo** — o feed nunca repete um texto velho → §6.5.
 - [ ] Toco numa linha do feed e ela **cai na tela certa** — a anotação abre a anotação, o grifo
       abre o grifo.
 

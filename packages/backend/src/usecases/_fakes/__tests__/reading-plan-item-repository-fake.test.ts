@@ -696,6 +696,104 @@ describe('ReadingPlanItemRepositoryFake', () => {
     });
   });
 
+  /**
+   * ⚠️ **O RECORTE POR ID — o que o feed pede (Tarefa 38e).**
+   *
+   * O `ListActivity` tem uma lista de `planItemId` (os dias que os eventos
+   * citam) e quer os títulos **de agora**, numa consulta só. Sem este filtro,
+   * ou seria um `byId` por evento, ou o plano inteiro de cada livro carregado
+   * para descartar quase tudo — o §7.3 na letra.
+   */
+  describe('find({ bookIds, ids })', () => {
+    beforeEach(async () => {
+      await plan.saveMany([
+        aPlanItem({ id: 'dia-1', bookId: 'book-a', date: '2026-10-01' }),
+        aPlanItem({ id: 'dia-2', bookId: 'book-a', date: '2026-10-02' }),
+        aPlanItem({ id: 'dia-3', bookId: 'book-b', date: '2026-10-03' }),
+      ]);
+    });
+
+    it('brings only the items asked for by id', async () => {
+      const found = await plan.find({
+        bookIds: ['book-a', 'book-b'],
+        ids: ['dia-1', 'dia-3'],
+      });
+
+      // Ordenado antes de comparar: o assunto NÃO é a ordem (§7.2).
+      expect(found.map((item) => item.id).sort()).toEqual(['dia-1', 'dia-3']);
+    });
+
+    /**
+     * ⚠️ **A SEGUNDA BARREIRA (decisão D): o `bookIds` continua cortando, mesmo
+     * com o id na mão.**
+     *
+     * Um filtro só por id seria uma regra de tenant a menos para manter em dia
+     * — o erro que o `ReadingLogFilter` recusou na Tarefa 32. O par positivo
+     * está junto: o mesmo id, com o livro certo no recorte, vem.
+     */
+    it('never brings an item outside the books asked for, even by id', async () => {
+      await expect(
+        plan.find({ bookIds: ['book-a'], ids: ['dia-3'] }),
+      ).resolves.toEqual([]);
+
+      await expect(
+        plan.find({ bookIds: ['book-b'], ids: ['dia-3'] }),
+      ).resolves.toHaveLength(1);
+    });
+
+    /** Chave ausente = todos os ids daqueles livros — o que o dispatcher usa. */
+    it('brings every item of the books when no id is asked for', async () => {
+      const found = await plan.find({ bookIds: ['book-a', 'book-b'] });
+
+      expect(found.map((item) => item.id).sort()).toEqual([
+        'dia-1',
+        'dia-2',
+        'dia-3',
+      ]);
+    });
+
+    /**
+     * ⚠️ **Lista VAZIA de ids devolve vazio, e não "tudo"** — o espelho exato
+     * do `IN ()` que a implementação Prisma evita, e a diferença que separa
+     * "não pedi nada" de "pedi tudo". Um feed sem dia nenhum (só avulsas e
+     * grifos) cai aqui.
+     */
+    it('answers empty for an empty list of ids, never the whole plan', async () => {
+      await expect(
+        plan.find({ bookIds: ['book-a', 'book-b'], ids: [] }),
+      ).resolves.toEqual([]);
+    });
+
+    /**
+     * Id inexistente não é erro: some da resposta, e o resto vem.
+     *
+     * ⚠️ **O ESPELHO do caso homônimo do teste de contrato** — ele nasceu lá
+     * primeiro, e a fidelidade que falta é sempre a do lado onde ninguém
+     * escreveu o análogo (§7.1, o furo nº 1 deste projeto). Aqui ele importa
+     * mais do que parece: é **o caminho de todo dia** da junção do feed, porque
+     * um `planItemId` que saiu do plano chega nesta lista.
+     */
+    it('ignores an id that is not in the plan, and brings the rest', async () => {
+      const found = await plan.find({
+        bookIds: ['book-a'],
+        ids: ['dia-1', 'dia-que-nunca-existiu'],
+      });
+
+      expect(found.map((item) => item.id)).toEqual(['dia-1']);
+    });
+
+    /** O filtro novo entra na CÓPIA que o `findFilters` guarda (§7.3). */
+    it('records the ids in the copy of the filter', async () => {
+      const ids = ['dia-1'];
+      await plan.find({ bookIds: ['book-a'], ids });
+      ids.push('dia-invadido');
+
+      expect(plan.findFilters).toEqual([
+        { bookIds: ['book-a'], ids: ['dia-1'] },
+      ]);
+    });
+  });
+
   // Contrato do fake, não regra de domínio: quem cair aqui escreveu um plano
   // que o Postgres recusaria, e isso é bug de código, não entrada do usuário.
   it('signals an index violation with a raw Error, never a domain error', async () => {

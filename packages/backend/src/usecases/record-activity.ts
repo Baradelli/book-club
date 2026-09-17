@@ -66,7 +66,10 @@ export interface RecordActivityInput {
  *   barato — e o feed quer o histórico inteiro.
  * - **Não denormaliza nada.** Nem título do dia, nem nome do livro: o título
  *   muda, e um evento com título velho é uma tela que mente. O feed resolve na
- *   leitura (Tarefa 34).
+ *   leitura (**Tarefa 38e**). ⚠️ Este ponteiro dizia "Tarefa 34" e estava
+ *   errado desde que foi escrito: a 34 **recusou** resolver o título dentro da
+ *   resposta, e quem resolve é o `ListActivity` desde a 38e. A frase ficou
+ *   verdadeira e o número continuava mandando o leitor ao lugar errado.
  */
 export class RecordActivity {
   constructor(

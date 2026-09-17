@@ -9,36 +9,39 @@ import {
 import type { PrismaClient } from '@prisma/client';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
-import type { ActivityEvent } from '../domain/activity-event';
 import { handleDomainError } from '../http/handle-domain-error';
 import { buildRepositories } from '../http/repositories';
 import { AssertMembership } from '../usecases/assert-membership';
 import { GetClubStreaks } from '../usecases/get-club-streaks';
+import type { ActivityFeedEntry } from '../usecases/list-activity';
 import { ListActivity } from '../usecases/list-activity';
 
 /**
  * ⚠️ **REFERÊNCIA, NUNCA CONTEÚDO** (decisão G da Tarefa 33): os oito campos da
- * entidade e nada mais. Nem nome de quem fez, nem título do dia, nem nome do
- * livro, nem trecho.
+ * entidade. Nem nome de quem fez, nem nome do livro, nem trecho — a tela resolve
+ * nome pelo `GET /clubs/:clubId/members` (usa isso desde a 26a) e já tem o
+ * livro na estante que carregou.
  *
- * A tela resolve nome pelo `GET /clubs/:clubId/members` (usa isso desde a 26a)
- * e já tem o livro. Fazer o backend juntar tudo seria um segundo
- * `getBookWithPlan` com outra forma — e o título do dia MUDA (o `editBook`
- * ressincroniza até o título da nota), então um evento com título velho seria
- * uma tela que mente.
+ * ⚠️ **O `planItemTitle` é a NONA chave, e ela não é campo da entidade**
+ * (Tarefa 38e): o `ActivityEvent` **não ganhou coluna**. O título é resolvido
+ * pelo `ListActivity` na leitura, contra o plano ATUAL — por isso ele não
+ * envelhece, e por isso ele não desfaz a recusa da Tarefa 35 de denormalizá-lo
+ * dentro do evento. É o `ActivityFeedEntry` que chega aqui, não o
+ * `ActivityEvent` cru.
  */
-function toActivityResponse(event: ActivityEvent): ActivityEventResponse {
+function toActivityResponse(entry: ActivityFeedEntry): ActivityEventResponse {
   return {
-    id: event.id,
-    clubId: event.clubId,
+    id: entry.id,
+    clubId: entry.clubId,
     // O ATOR sai na resposta: dentro do clube não há conteúdo privado, e o feed
     // mostra autoria. → ADR 0002.
-    userId: event.userId,
-    type: event.type,
-    bookId: event.bookId,
-    planItemId: event.planItemId,
-    subjectId: event.subjectId,
-    createdAt: event.createdAt.toISOString(),
+    userId: entry.userId,
+    type: entry.type,
+    bookId: entry.bookId,
+    planItemId: entry.planItemId,
+    planItemTitle: entry.planItemTitle,
+    subjectId: entry.subjectId,
+    createdAt: entry.createdAt.toISOString(),
   };
 }
 
@@ -80,6 +83,9 @@ export const activityRoutes: FastifyPluginAsyncZod<{
   const listActivity = new ListActivity(
     new AssertMembership(repos.memberships),
     repos.activityEvents,
+    // O plano — de onde sai o TEMA de cada dia (Tarefa 38e). Uma consulta a
+    // mais por carga de feed, indexada por id.
+    repos.planItems,
   );
   const getClubStreaks = new GetClubStreaks(
     repos.memberships,

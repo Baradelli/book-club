@@ -57,6 +57,7 @@ interface ActivityBody {
   type: string;
   bookId: string;
   planItemId: string | null;
+  planItemTitle: string | null;
   subjectId: string;
   createdAt: string;
 }
@@ -401,15 +402,17 @@ describe('activity routes', () => {
     });
 
     /**
-     * ⚠️ **A RESPOSTA TEM OITO CAMPOS E NADA MAIS** — o `response` schema é
+     * ⚠️ **A RESPOSTA TEM NOVE CAMPOS E NADA MAIS** — o `response` schema é
      * fronteira de segurança (§6.1), e é o serializer do Zod que corta o que
      * não está declarado.
      *
-     * E ela leva **referência, nunca conteúdo** (decisão G da Tarefa 33): sem
-     * título do dia, sem nome de quem fez, sem trecho. A tela resolve nome pelo
+     * Os oito são os da entidade; o nono é o `planItemTitle` da Tarefa 38e, que
+     * **não** é campo dela: ele é resolvido na leitura, contra o plano atual.
+     * Fora ele, ela continua levando **referência, nunca conteúdo** (decisão G
+     * da Tarefa 33): sem nome de quem fez e sem trecho. A tela resolve nome pelo
      * `GET /clubs/:clubId/members`.
      */
-    it('gives exactly the eight fields of the entity, and no content', async () => {
+    it('gives exactly the nine fields the feed reads, and no content', async () => {
       const at = new Date('2026-10-01T18:30:45.123Z');
       await seedEvents([{ id: orderedId(1), createdAt: at }]);
 
@@ -422,6 +425,9 @@ describe('activity routes', () => {
         type: 'PLAN_NOTE',
         bookId: BOOK_ID,
         planItemId: DAY_1,
+        // O tema daquele dia, como o plano o diz AGORA (o `seedPlan` escreve
+        // `Cap. ${order + 1}`, e o DAY_1 é o primeiro).
+        planItemTitle: 'Cap. 1',
         subjectId: `subject-${orderedId(1)}`,
         createdAt: at.toISOString(),
       });
@@ -438,7 +444,90 @@ describe('activity routes', () => {
         },
       ]);
 
-      expect(bodyOf(await listActivity())[0]?.planItemId).toBeNull();
+      const [event] = bodyOf(await listActivity());
+      expect(event?.planItemId).toBeNull();
+      // ⚠️ Sem dia, sem tema: é o PRIMEIRO dos dois `null` da decisão C da
+      // Tarefa 38e, e a tela cai na frase que só diz o livro.
+      expect(event?.planItemTitle).toBeNull();
+    });
+
+    /**
+     * ⚠️ **O TÍTULO VEM DO PLANO DE AGORA — a propriedade que separa esta fatia
+     * da recusa da Tarefa 35** (Tarefa 38e, regra 2), provada ponta a ponta.
+     *
+     * O evento nasce, o admin **corrige o plano**, o feed é lido de novo — e o
+     * que sai na resposta é o título NOVO. Um `planItemTitle` gravado dentro do
+     * `ActivityEvent` devolveria o velho, e o feed passaria a mentir sobre o
+     * passado.
+     *
+     * O dia usado é o `DAY_2` de propósito: nenhum outro teste deste arquivo
+     * afirma o título dele, então a correção não precisa ser desfeita.
+     */
+    it('⚠️ says the title the plan says NOW, not the one it said when the event was born', async () => {
+      await seedEvents([
+        {
+          id: orderedId(1),
+          createdAt: new Date('2026-10-02T10:00:00Z'),
+          planItemId: DAY_2,
+        },
+      ]);
+
+      /*
+        ⚠️ **O TÍTULO CORRIGIDO NÃO CONTÉM O ANTIGO, e isso é escolha de
+        fixture.** O `seedPlan` grava `Cap. 2`, e uma correção do tipo
+        `'Cap. 2 — A promessa'` **contém** o texto velho — aí a asserção
+        negativa não teria como existir, e o par viraria uma asserção só
+        disfarçada de duas. Reescrevendo o título por inteiro, as duas metades
+        são de verdade: o novo está, e o velho sumiu.
+      */
+      const AS_SEEDED = 'Cap. 2';
+      const AS_CORRECTED = 'Capítulo dois — A promessa';
+
+      // O admin corrige o plano DEPOIS de o evento ter nascido.
+      await prisma.readingPlanItem.update({
+        where: { id: DAY_2 },
+        data: { title: AS_CORRECTED },
+      });
+
+      const [event] = bodyOf(await listActivity());
+
+      expect(event?.planItemTitle).toContain(AS_CORRECTED);
+      // A outra metade, que falha sozinha: um título gravado dentro do evento
+      // devolveria exatamente o que o plano dizia quando ele nasceu.
+      expect(event?.planItemTitle).not.toContain(AS_SEEDED);
+    });
+
+    /**
+     * ⚠️ **O CORTE DE TENANT DA JUNÇÃO, COM O ATOR LEGÍTIMO** (§7.5 e regra 4 da
+     * Tarefa 38e).
+     *
+     * Quem pede é a **Maria**, membro do clube — um forasteiro levaria 404 antes
+     * da consulta e o teste provaria a barreira errada. O que não pode chegar é
+     * o título de um dia do livro do OUTRO clube: o par `bookIds` + `ids` da
+     * decisão D é o que corta, porque os livros do filtro saem dos eventos que o
+     * corte de clube já devolveu.
+     *
+     * ⚠️ E a linha **continua no feed**, sem título: sumir com ela seria apagar
+     * do passado do clube um evento que é dele.
+     */
+    it('⚠️ never lets the title of another club day into the feed, asked by a MEMBER', async () => {
+      await seedEvents([
+        {
+          id: orderedId(1),
+          createdAt: new Date('2026-10-01T10:00:00Z'),
+          // O evento é do clube e do livro do clube; só o DIA é de fora. É o
+          // contrabando que a segunda barreira existe para barrar.
+          planItemId: OTHER_DAY_1,
+        },
+      ]);
+
+      const body = bodyOf(await listActivity());
+
+      expect(body.map((event) => event.id)).toEqual([orderedId(1)]);
+      expect(body[0]?.planItemTitle).toBeNull();
+      // O `planItemId` continua lá: o log é imutável, e a resposta não reescreve
+      // o que foi gravado.
+      expect(body[0]?.planItemId).toBe(OTHER_DAY_1);
     });
 
     /**

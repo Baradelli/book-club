@@ -40,6 +40,27 @@ export interface ReadingPlanItemFilter {
    */
   bookIds: readonly string[];
   /**
+   * ⚠️ **Os itens que se quer, por id — o recorte do feed (Tarefa 38e).**
+   *
+   * O `ListActivity` chega com os `planItemId` que os eventos citam e quer os
+   * títulos **de agora**, numa consulta só. Sem ele, seriam um `byId` por
+   * evento (N idas ao banco para enfeitar N frases) ou o `findByBook` de cada
+   * livro do feed, que traz ~30 dias para descartar 29 — o §7.3 na letra.
+   *
+   * ⚠️ **E o `bookIds` continua OBRIGATÓRIO ao lado dele, de propósito**
+   * (decisão D da Tarefa 38e). Os livros já chegam **cortados por tenant** pelo
+   * chamador, e é isso que faz deste par uma **segunda barreira**: um id de
+   * outro clube que entrasse na lista não casaria o recorte de livro. Um filtro
+   * só por id seria uma regra de tenant a menos para manter em dia com aquela —
+   * o erro que o `ReadingLogFilter` recusou na Tarefa 32.
+   *
+   * **Ausente** significa ``todos os itens destes livros`` (o que a corrente de
+   * leitura pede), e **lista vazia devolve lista vazia sem ida ao banco** —
+   * exatamente como o `bookIds`: um `IN ()` por feed sem dia nenhum (só
+   * avulsas e grifos) é consulta garantidamente vazia.
+   */
+  ids?: readonly string[];
+  /**
    * O dia de calendário, no fuso de quem vai receber o lembrete.
    *
    * ⚠️ **OPCIONAL desde a corrente de leitura (ADR 0010):** ausente significa

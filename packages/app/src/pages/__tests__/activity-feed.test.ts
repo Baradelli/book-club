@@ -6,6 +6,7 @@ import {
   ACTIVITY_TIME_FLOOR,
   ACTIVITY_TIME_LADDER,
   activityMoment,
+  activitySentenceKey,
   activityTarget,
   formatActivityMoment,
 } from '../activity-feed';
@@ -210,6 +211,7 @@ function anEvent(
     type: 'PLAN_NOTE',
     bookId: 'b-hobbit',
     planItemId: 'p-hoje',
+    planItemTitle: null,
     subjectId: 's-1',
     createdAt: at(60 * 60_000),
     ...overrides,
@@ -264,6 +266,93 @@ describe('each kind of activity opens ITS target (rule 4)', () => {
     expect(ACTIVITY_TYPES.length).toBe(4);
     for (const type of ACTIVITY_TYPES satisfies readonly ActivityType[]) {
       expect(activityTarget(anEvent({ type }))).toMatch(/^\/books\/b-hobbit/u);
+    }
+  });
+});
+
+/**
+ * ⚠️ **QUAL FRASE A LINHA USA — a metade que o catálogo NÃO decide** (§7.9).
+ *
+ * O `catalogs.test.ts` prova que as seis frases são distintas entre si; ele não
+ * consegue provar que a tela escolhe a certa. Essa escolha é uma função pura do
+ * evento — tipo + tem tema ou não —, e por isso ela é decidível aqui, sem
+ * montar tela nenhuma.
+ */
+describe('which sentence a line uses (task 38e)', () => {
+  it('uses the sentence WITH the theme when the event carries one', () => {
+    expect(
+      activitySentenceKey(
+        anEvent({ type: 'PLAN_NOTE', planItemTitle: 'Cap. 3 — A promessa' }),
+      ),
+    ).toBe('pages.home.feed.planNoteOnTheme');
+    expect(
+      activitySentenceKey(
+        anEvent({
+          type: 'READ',
+          subjectId: 'log-1',
+          planItemTitle: 'Cap. 3 — A promessa',
+        }),
+      ),
+    ).toBe('pages.home.feed.readOnTheme');
+  });
+
+  /**
+   * ⚠️ **OS DOIS `null` DA DECISÃO C CAEM NA MESMA FRASE, e é decisão** — o
+   * evento sem dia (avulsa, grifo) e o dia que o admin tirou do plano. A tela
+   * não inventa uma frase de "dia removido": seria ruído sobre uma correção de
+   * plano que não é da conta de quem lê o feed.
+   */
+  it('⚠️ falls back to the sentence that only says the book, for BOTH kinds of null', () => {
+    // (1) o evento não tem dia.
+    expect(
+      activitySentenceKey(
+        anEvent({ type: 'FREE_NOTE', planItemId: null, subjectId: 'n-7' }),
+      ),
+    ).toBe('pages.home.feed.freeNote');
+    // (2) o dia existia e sumiu: o `planItemId` continua lá, o título não.
+    expect(
+      activitySentenceKey(anEvent({ type: 'PLAN_NOTE', planItemTitle: null })),
+    ).toBe('pages.home.feed.planNote');
+    expect(
+      activitySentenceKey(
+        anEvent({ type: 'READ', subjectId: 'log-1', planItemTitle: null }),
+      ),
+    ).toBe('pages.home.feed.read');
+  });
+
+  /**
+   * ⚠️ O grifo e a avulsa **não têm** frase com tema, porque não têm dia — e um
+   * título que chegasse neles mesmo assim não pode virar chave inexistente na
+   * tela. A queda é para a frase de sempre.
+   */
+  it('keeps the plain sentence for the types that have no day, even with a title', () => {
+    for (const type of ['FREE_NOTE', 'HIGHLIGHT'] as const) {
+      expect(
+        activitySentenceKey(
+          anEvent({ type, planItemId: null, planItemTitle: 'Cap. 3' }),
+        ),
+      ).toBe(
+        type === 'FREE_NOTE'
+          ? 'pages.home.feed.freeNote'
+          : 'pages.home.feed.highlight',
+      );
+    }
+  });
+
+  /**
+   * ⚠️ A precondição que impede esta suíte de envelhecer em silêncio, irmã da do
+   * `activityTarget`: um quinto tipo em `ACTIVITY_TYPES` tem de continuar
+   * achando uma frase, com tema e sem.
+   */
+  it('gives every type of the contract a sentence, with and without a theme', () => {
+    expect(ACTIVITY_TYPES.length).toBe(4);
+    for (const type of ACTIVITY_TYPES satisfies readonly ActivityType[]) {
+      expect(activitySentenceKey(anEvent({ type }))).toMatch(
+        /^pages\.home\.feed\./u,
+      );
+      expect(
+        activitySentenceKey(anEvent({ type, planItemTitle: 'Cap. 3' })),
+      ).toMatch(/^pages\.home\.feed\./u);
     }
   });
 });

@@ -139,18 +139,20 @@ describe('catálogos de i18n', () => {
     expect(invite.alreadyInClub).not.toBe(invite.inviteNotFound);
   });
 
-  it('⚠️ says the FOUR activity types differently in the feed, in pt (task 35, rule 3)', () => {
+  it('⚠️ says the SIX feed sentences differently, in pt (task 35 rule 3, task 38e)', () => {
     const catalog = pt;
     /*
       ⚠️ **A LIÇÃO Nº 16 DO MVP 2 ESCRITA COMO TESTE: duas coisas que falam a
       MESMA frase são indistinguíveis pela varredura.** O feed da home tem
-      quatro nascimentos (`ACTIVITY_TYPES`), e se dois deles dissessem a mesma
-      coisa a pessoa não teria como saber se a outra escreveu ou grifou — e
-      nenhuma varredura de DOM acusaria, porque a tela estaria renderizando
-      texto legítimo.
+      quatro nascimentos (`ACTIVITY_TYPES`) e **seis frases** — os dois tipos
+      que têm dia de leitura ganharam uma irmã COM o tema na Tarefa 38e —, e se
+      duas delas dissessem a mesma coisa a pessoa não teria como saber se a
+      outra escreveu ou grifou (nem se o tema entrou na linha) — e nenhuma
+      varredura de DOM acusaria, porque a tela estaria renderizando texto
+      legítimo.
 
-      ⚠️ **E ELA MORA AQUI, NÃO NA TELA (§7.9).** "As quatro frases são
-      distintas" é propriedade de QUATRO VALORES do catálogo: independe de
+      ⚠️ **E ELA MORA AQUI, NÃO NA TELA (§7.9).** "As frases são
+      distintas" é propriedade de VALORES do catálogo: independe de
       estado e independe de tela. Até a Tarefa 38d ela também percorria os
       dois locales — esse era o argumento mais forte para ela morar aqui, e
       ele morreu com o segundo catálogo. Os outros dois continuam de pé: o
@@ -158,21 +160,52 @@ describe('catálogos de i18n', () => {
       lembrar de renderizar.
 
       O que o catálogo NÃO decide, e por isso continua na tela: que a tela
-      escolha a chave certa para cada tipo. Quatro frases distintas num
-      catálogo que a tela lê por uma chave só ficariam verdes aqui. O acusador
-      daquela metade é `home.test.tsx`.
+      escolha a chave certa para cada tipo — e, desde a 38e, que ela escolha a
+      irmã COM tema só quando há tema. Frases distintas num catálogo que a tela
+      lê por uma chave só ficariam verdes aqui. Os acusadores daquela metade são
+      `activity-feed.test.ts` (o `activitySentenceKey`, onde a escolha é
+      decidível sem tela) e `home.test.tsx` (a linha renderizada).
     */
     const feed = catalog.pages.home.feed;
-    const sentences = [feed.planNote, feed.freeNote, feed.highlight, feed.read];
+    const sentences = [
+      feed.planNote,
+      feed.freeNote,
+      feed.highlight,
+      feed.read,
+      // ⚠️ As DUAS da Tarefa 38e entram na MESMA varredura: elas são as frases
+      // dos mesmos dois tipos quando há tema do dia, e uma delas igual à sua
+      // irmã sem tema faria o tema sumir da linha sem nenhum vermelho.
+      feed.planNoteOnTheme,
+      feed.readOnTheme,
+    ];
 
-    // O par positivo: as quatro existem e falam de alguém e de um livro. Sem
-    // ele, quatro strings vazias seriam "distintas" só no dia em que o
-    // `new Set` mudasse de tamanho (§7.4).
+    // O par positivo: as seis existem e falam de alguém e de um livro. Sem ele,
+    // seis strings vazias seriam "distintas" só no dia em que o `new Set`
+    // mudasse de tamanho (§7.4).
     for (const sentence of sentences) {
       expect(sentence).toContain('{{name}}');
       expect(sentence).toContain('{{book}}');
     }
-    expect(new Set(sentences).size).toBe(4);
+    expect(new Set(sentences).size).toBe(6);
+
+    /*
+      ⚠️ **E as duas com tema PRECISAM do buraco do tema** — uma frase de tema
+      que esquecesse o `{{theme}}` seria distinta das outras cinco, passaria na
+      contagem acima, e a tela diria "escreveu sobre , em O Hobbit". O tema é
+      CONTEÚDO DO USUÁRIO (regra 7): o catálogo garante o buraco, nunca o texto
+      que entra nele.
+    */
+    for (const sentence of [feed.planNoteOnTheme, feed.readOnTheme]) {
+      expect(sentence).toContain('{{theme}}');
+    }
+    for (const sentence of [
+      feed.planNote,
+      feed.freeNote,
+      feed.highlight,
+      feed.read,
+    ]) {
+      expect(sentence).not.toContain('{{theme}}');
+    }
 
     /*
       E os DOIS estados sem linha nenhuma também são distintos entre si — a

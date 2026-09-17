@@ -128,10 +128,17 @@ export class PrismaReadingPlanItemRepository implements ReadingPlanItemRepositor
    */
   async find(filter: ReadingPlanItemFilter): Promise<ReadingPlanItem[]> {
     if (filter.bookIds.length === 0) return [];
+    // ⚠️ Mesma regra, segunda lista (Tarefa 38e): `ids: []` é "não quero
+    // nenhum". Sem esta linha seria um `IN ()` a cada carga de feed em que
+    // ninguém escreveu sobre um dia — consulta garantidamente vazia.
+    if (filter.ids?.length === 0) return [];
 
     const records = await this.prisma.readingPlanItem.findMany({
       where: {
         bookId: { in: [...filter.bookIds] },
+        // O recorte por id estreita DENTRO dos livros; ele nunca os substitui
+        // (decisão D). Ausente some do `where`, como a `date` logo abaixo.
+        ...(filter.ids === undefined ? {} : { id: { in: [...filter.ids] } }),
         // Ausente = todos os dias (ADR 0010). `undefined` some do `where` do
         // Prisma; escrever `date: undefined` seria o mesmo, mas o ternário diz
         // a intenção a quem lê.

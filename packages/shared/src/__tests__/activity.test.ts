@@ -260,12 +260,13 @@ describe('activityEventResponseSchema', () => {
       type: 'PLAN_NOTE',
       bookId: 'book-1',
       planItemId: 'day-3',
+      planItemTitle: 'Cap. 3 — A promessa',
       subjectId: 'note-9',
       createdAt: '2026-10-01T18:30:45.123Z',
     };
   }
 
-  it('accepts the eight fields of the entity', () => {
+  it('accepts the nine fields the feed reads', () => {
     expect(activityEventResponseSchema.parse(anEventBody())).toEqual(
       anEventBody(),
     );
@@ -291,6 +292,35 @@ describe('activityEventResponseSchema', () => {
   });
 
   /**
+   * ⚠️ **O TEMA DO DIA (Tarefa 38e) — obrigatório e ANULÁVEL, pela MESMA razão
+   * do `planItemId` logo acima**, e nunca `.optional()`.
+   *
+   * O cliente valida a resposta de sucesso (§6.8): um campo ausente não degrada
+   * a linha, derruba a tela inteira em `errors.unknown`. E o `null` aqui é
+   * estado real com **dois** significados legítimos (decisão C): o evento não
+   * tem dia (avulsa, grifo), ou o dia existia e o admin o tirou do plano. A
+   * tela trata os dois igual.
+   *
+   * ⚠️ **E ele NÃO é denormalizado no evento** — a Tarefa 35 recusou isso e a
+   * recusa continua valendo. Ele é resolvido na LEITURA, contra o plano atual,
+   * pelo `ListActivity`.
+   */
+  it('takes a null planItemTitle, and refuses the field missing', () => {
+    const withoutTheTheme = { ...anEventBody() };
+    delete withoutTheTheme['planItemTitle'];
+
+    expect(
+      activityEventResponseSchema.parse({
+        ...anEventBody(),
+        planItemTitle: null,
+      }).planItemTitle,
+    ).toBeNull();
+    expect(activityEventResponseSchema.safeParse(withoutTheTheme).success).toBe(
+      false,
+    );
+  });
+
+  /**
    * ⚠️ **§6.1 — o `response` schema é FRONTEIRA DE SEGURANÇA**: é o strip do
    * Zod que corta o que não está declarado, e é o que impede um objeto de
    * domínio inteiro de ir para a rede.
@@ -308,6 +338,7 @@ describe('activityEventResponseSchema', () => {
       'createdAt',
       'id',
       'planItemId',
+      'planItemTitle',
       'subjectId',
       'type',
       'userId',

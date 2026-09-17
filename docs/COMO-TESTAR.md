@@ -30,7 +30,7 @@
 | **MVP 2 — O filtro diz o NOME** (`Tudo · Minhas · De Maria`), com avatar | a mesma tela |
 | **MVP 2 — Buscar por texto** no acervo do clube inteiro, em qualquer livro | `/busca`, pela home (§6.3) |
 | **MVP 3 — Marcar "li hoje"**, e ver a marca de quem já leu, dia a dia | `/books/:id` (§6.4) |
-| **MVP 3 — O feed de atividade** do clube: quem, o quê, em que livro, quando | `/` (§6.5) |
+| **MVP 3 — O feed de atividade** do clube: quem, o quê, **sobre que dia**, em que livro, quando | `/` (§6.5) |
 | **MVP 3 — Preferências**: horário do lembrete, ligar/desligar os dois avisos | `/preferencias`, pelo cabeçalho (§6.6) |
 | **MVP 3 — Ativar as notificações NESTE aparelho** | `/preferencias` (§6.6) — ⚠️ **exige contexto seguro**, ver a ressalva abaixo |
 | O estado "nenhum clube ainda" | `/` com um usuário sem membership |
@@ -477,13 +477,34 @@ coisa no celular, diga — foi desenhado para não parecer.
 
 ## 6.5. O feed de atividade na home (MVP 3, Tarefas 33–35)
 
-Volte para `/`. Abaixo da estante há **a atividade do clube**: quem, o quê, em que livro, e
-quando — uma **frase** por linha, em ordem cronológica.
+Volte para `/`. Abaixo da estante há **a atividade do clube**: quem, o quê, **sobre que dia**,
+em que livro, e quando — uma **frase** por linha, em ordem cronológica.
 
 1. Marque uma leitura, escreva uma anotação e registre um grifo.
 2. Recarregue a home. As três aparecem, **a mais recente em cima**.
 3. Toque numa linha: ela leva **ao lugar certo** — a anotação abre a anotação, o grifo abre o
    grifo, a leitura abre a tela do livro.
+
+⚠️ **O TEMA DO DIA NA LINHA (Tarefa 38e — o que você pediu na pergunta 3 do MVP 3).** A linha
+de quem leu ou escreveu **sobre um dia do plano** diz **qual** dia: *"Maria escreveu sobre
+Cap. 3 — A promessa, em O Hobbit"*, no lugar de *"escreveu a anotação do dia em O Hobbit"*. A
+anotação **avulsa** e o **grifo** não têm dia, então continuam dizendo só o livro — isso é o
+certo, não um esquecimento.
+
+⚠️⚠️ **E O PASSO QUE SÓ AGORA DÁ PARA FAZER À MÃO — é a propriedade central da fatia:**
+
+4. Escolha um dia que já apareça no feed e **corrija o título dele no plano do livro** (tela de
+   editar o livro). Salve.
+5. Recarregue a home. ⚠️ **A linha ANTIGA passa a dizer o título NOVO.**
+
+Isso é de propósito, e é o motivo de o título **não** ser guardado dentro do evento: se fosse,
+a linha de ontem repetiria o erro de digitação para sempre, e o feed passaria a mentir sobre o
+passado. Se você corrigir o plano e a linha velha continuar com o texto velho, **diga** — é
+exatamente o defeito que o desenho existe para impedir.
+
+⚠️ E se um dia **sumir** do plano, a linha dele **continua no feed**, dizendo só o livro. Ela
+não vira erro e não desaparece: o que aconteceu, aconteceu. (Hoje o app **recusa** tirar do
+plano um dia que já tem atividade, então esse estado é raro de ver à mão.)
 
 ⚠️ **O que conferir, e é o mesmo princípio do §6.4:** o feed é **frase**, não tabela. Não há
 coluna de pessoa (que convidaria o olho a varrer e contar), não há agrupamento por pessoa

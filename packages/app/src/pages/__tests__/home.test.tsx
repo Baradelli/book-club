@@ -150,11 +150,19 @@ function clubMembers(): ClubMemberResponse[] {
 /**
  * Um evento do feed como a API o devolve — factory com `overrides` (§7.7).
  *
- * O CONTRATO REAL, medido em `activityEventResponseSchema`: os OITO campos, com
- * `planItemId` **anulável, não opcional** (o serializer do Zod exige a chave) e
- * `createdAt` ISO em string. ⚠️ Ele leva **referência, nunca conteúdo** — não há
- * nome de quem fez, nem título do dia, nem nome do livro (decisão G da Tarefa
- * 33). É por isso que a home resolve os dois por conta própria.
+ * O CONTRATO REAL, medido em `activityEventResponseSchema`: os oito campos da
+ * entidade **mais o `planItemTitle`** (Tarefa 38e), com `planItemId` e
+ * `planItemTitle` **anuláveis, não opcionais** (o serializer do Zod exige as
+ * duas chaves) e `createdAt` ISO em string.
+ *
+ * ⚠️ O padrão dos dois é `null`, que é o estado do grifo — o tipo padrão desta
+ * fábrica. ⚠️ E o `planItemTitle` é **conteúdo do usuário**: quem digita o tema
+ * do dia é o admin do clube, então ele nunca entra nas varreduras de
+ * vocabulário, que medem as NOSSAS frases com as fixtures delas (regra 7).
+ *
+ * Fora ele, o evento continua levando **referência, nunca conteúdo** — não há
+ * nome de quem fez nem nome do livro (decisão G da Tarefa 33). É por isso que a
+ * home resolve os dois por conta própria.
  */
 function anActivity(
   overrides: Partial<ActivityEventResponse> = {},
@@ -166,6 +174,7 @@ function anActivity(
     type: 'HIGHLIGHT',
     bookId: 'b-hobbit',
     planItemId: null,
+    planItemTitle: null,
     subjectId: 'h-1',
     createdAt: agoMs(0),
     ...overrides,
@@ -1312,6 +1321,43 @@ describe('the activity feed of the club (rules 1 to 10)', () => {
     return first;
   }
 
+  /**
+   * ⚠️ **A FRASE INTEIRA, com os buracos preenchidos — e ela existe porque o
+   * `saidBy` NÃO distingue duas frases quando uma começa dentro da outra.**
+   *
+   * Medido sobre o catálogo real, na rodada de correção da Tarefa 38e:
+   *
+   * ```
+   * saidBy(read)        = "leu um dia de"
+   * saidBy(readOnTheme) = "leu"          ← substring da de cima
+   * ```
+   *
+   * Ou seja: `expect(linha).toContain(saidBy(readOnTheme))` afirmava só *"a
+   * linha tem a palavra leu"*, e sobrevivia ao mutante que ela nomeia (medido:
+   * a tela obrigada a nunca escolher a frase com tema do `READ`, com as linhas
+   * companheiras de `THEME` removidas como sonda, deixava `home.test.tsx`
+   * **50/50 verde**).
+   *
+   * ⚠️ **E o pior era o lado NEGATIVO:** `not.toContain(saidBy(readOnTheme))`
+   * era, na prática, `not.toContain('leu')` — uma asserção que ficaria vermelha
+   * **com o código certo** no dia em que o fixture ganhasse um `READ` sem tema,
+   * que é exatamente o caso que aquele teste existe para cobrir. (Ele ganhou,
+   * nesta mesma rodada.)
+   *
+   * O valor esperado continua saindo do CATÁLOGO, nunca de uma cópia escrita à
+   * mão: uma frase corrigida no `pt.ts` deixa o teste vermelho, que é o que se
+   * quer. O que muda é que agora ele compara a frase toda.
+   */
+  function lineOf(template: string, values: Record<string, string>): string {
+    return template.replace(/\{\{(\w+)\}\}/gu, (_hole, key: string) => {
+      const value = values[key];
+      if (value === undefined) {
+        throw new Error(`frase sem valor para {{${key}}}: ${template}`);
+      }
+      return value;
+    });
+  }
+
   /** A estante que dá NOME ao livro de cada linha (medição 1 da spec). */
   function shelfOfTheFeed(): readonly Reply[] {
     return [
@@ -1408,6 +1454,8 @@ describe('the activity feed of the club (rules 1 to 10)', () => {
       escritas abaixo — um texto que a tela produza a MAIS sobrevive à redação.
     */
     const BOOK_WITH_A_DIGIT = 'O Hobbit 1984';
+    /* O tema de um dia real TEM dígito — "Cap. 3" é o exemplo do §1 do plano. */
+    const THEME_WITH_A_DIGIT = 'Cap. 3 — A promessa';
 
     await renderFeed({
       shelf: [
@@ -1424,7 +1472,21 @@ describe('the activity feed of the club (rules 1 to 10)', () => {
         body: [
           anActivity({ id: 'a-1', userId: MARIA, createdAt: agoMs(2 * HOUR) }),
           anActivity({ id: 'a-2', userId: MARIA, createdAt: agoMs(3 * DAY) }),
-          anActivity({ id: 'a-3', userId: ME_ID, createdAt: agoMs(10 * DAY) }),
+          /*
+            ⚠️ **A LINHA COM TEMA ENTRA NA VARREDURA, e o tema É DADO** (regra 7
+            da Tarefa 38e): quem digita "Cap. 3" é o admin do clube, não nós. Ele
+            é redigido junto com o título do livro e o rótulo de autor — e é a
+            frase COM tema que fica exposta ao `not.toMatch(/\d/u)` abaixo.
+          */
+          anActivity({
+            id: 'a-3',
+            userId: ME_ID,
+            type: 'PLAN_NOTE',
+            planItemId: 'p-hoje',
+            planItemTitle: THEME_WITH_A_DIGIT,
+            subjectId: 'n-3',
+            createdAt: agoMs(10 * DAY),
+          }),
         ],
       },
     });
@@ -1438,6 +1500,7 @@ describe('the activity feed of the club (rules 1 to 10)', () => {
     /** O que vem de DADO — e cada um deles TEM dígito ou pode ter. */
     const fromData = [
       BOOK_WITH_A_DIGIT,
+      THEME_WITH_A_DIGIT,
       'Maria',
       pt.pages.acervo.item.author.you,
       // Os três degraus: hora, dia e semana. Escritos à mão.
@@ -1506,6 +1569,216 @@ describe('the activity feed of the club (rules 1 to 10)', () => {
     expect(minha).not.toContain('Marcos');
 
     expectNoGuilt();
+  });
+
+  /**
+   * ⚠️ **O TEMA DO DIA NA LINHA (Tarefa 38e)** — a resposta do dono à pergunta
+   * que a Tarefa 35 registrou sem decidir: *"quero o tema do dia na linha"*.
+   *
+   * ⚠️ **O TÍTULO É CONTEÚDO DO USUÁRIO** (regra 7): quem o digita é o admin do
+   * clube. Ele não é uma frase nossa e por isso **não** é alimentado às guardas
+   * de vocabulário — a `expectNoGuilt()` e a varredura de dígito continuam
+   * medindo as NOSSAS frases, com as fixtures delas. Aqui o tema é escolhido
+   * como um tema real seria, e o que os testes afirmam é que ele **aparece**.
+   */
+  describe('the theme of the day on the line (task 38e)', () => {
+    const THEME = 'A promessa antiga';
+
+    it('⚠️ says the theme when the event has one, for the day note and for the read', async () => {
+      await renderFeed({
+        activity: {
+          status: 200,
+          body: [
+            anActivity({
+              id: 'a-1',
+              userId: MARIA,
+              type: 'PLAN_NOTE',
+              planItemId: 'p-hoje',
+              planItemTitle: THEME,
+              subjectId: 'n-1',
+              createdAt: agoMs(2 * HOUR),
+            }),
+            anActivity({
+              id: 'a-2',
+              userId: MARIA,
+              type: 'READ',
+              planItemId: 'p-hoje',
+              planItemTitle: THEME,
+              subjectId: 'log-1',
+              createdAt: agoMs(3 * HOUR),
+            }),
+          ],
+        },
+      });
+
+      await waitFor(() => {
+        expect(feedLines()).toHaveLength(2);
+      });
+
+      const [escreveu, leu] = feedLines();
+      /*
+        ⚠️ **A FRASE INTEIRA, montada pelo `lineOf` a partir do catálogo** — e
+        não o primeiro pedaço dela. Com `saidBy`, a asserção do `READ` era
+        `toContain('leu')`, que a frase SEM tema também satisfaz: ela sobrevivia
+        ao mutante que ela nomeia (medido). A frase montada casa quem, o quê, o
+        TEMA e o livro de uma vez — e é o livro no fim dela que prova que o tema
+        não o substituiu.
+      */
+      expect(escreveu).toContain(
+        lineOf(pt.pages.home.feed.planNoteOnTheme, {
+          name: 'Maria',
+          theme: THEME,
+          book: 'O Hobbit',
+        }),
+      );
+      expect(leu).toContain(
+        lineOf(pt.pages.home.feed.readOnTheme, {
+          name: 'Maria',
+          theme: THEME,
+          book: 'O Hobbit',
+        }),
+      );
+
+      expectNoGuilt();
+    });
+
+    /**
+     * ⚠️ **OS DOIS `null` DA DECISÃO C, NA TELA, E ELES FALAM A MESMA FRASE.**
+     *
+     * (1) o evento não tem dia — a avulsa e o grifo; (2) o dia **existia e
+     * sumiu**, porque o admin o tirou do plano: o `planItemId` continua no
+     * evento e o título vem `null`. A tela trata os dois igual, caindo na frase
+     * de sempre. **Não existe frase de "dia removido"** — seria ruído sobre uma
+     * correção de plano que não é da conta de quem lê o feed.
+     *
+     * ⚠️ E a asserção que importa é a primeira: **a linha do dia removido
+     * CONTINUA na lista**. Um `.filter()` mal posto — na junção do servidor ou
+     * aqui — sumiria com ela, e o feed apagaria do passado do clube um evento
+     * que é dele.
+     */
+    it('⚠️ keeps the line, with the plain sentence, when there is no theme (decision C)', async () => {
+      await renderFeed({
+        activity: {
+          status: 200,
+          body: [
+            // (2) o dia sumiu do plano: tem `planItemId`, não tem título.
+            anActivity({
+              id: 'a-1',
+              userId: MARIA,
+              type: 'PLAN_NOTE',
+              planItemId: 'p-que-sumiu',
+              planItemTitle: null,
+              subjectId: 'n-1',
+              createdAt: agoMs(2 * HOUR),
+            }),
+            // (1) a avulsa nunca teve dia.
+            anActivity({
+              id: 'a-2',
+              userId: MARIA,
+              type: 'FREE_NOTE',
+              planItemId: null,
+              planItemTitle: null,
+              subjectId: 'n-2',
+              createdAt: agoMs(3 * HOUR),
+            }),
+            /*
+              ⚠️ **O `READ` SEM TEMA, acrescentado na rodada de correção.** Ele
+              é o caso (2) do outro tipo que tem dia — e é o fixture que a
+              asserção negativa antiga NÃO suportava: com `saidBy`, ela era
+              `not.toContain('leu')`, e esta linha a deixaria vermelha **com o
+              código certo**. Com a frase inteira do `lineOf`, ela passa a
+              descrever a verdade.
+            */
+            anActivity({
+              id: 'a-3',
+              userId: MARIA,
+              type: 'READ',
+              planItemId: 'p-que-sumiu',
+              planItemTitle: null,
+              subjectId: 'log-3',
+              createdAt: agoMs(4 * HOUR),
+            }),
+          ],
+        },
+      });
+
+      // ⚠️ AS TRÊS LINHAS ESTÃO LÁ — as dos dias removidos não sumiram.
+      await waitFor(() => {
+        expect(feedLines()).toHaveLength(3);
+      });
+
+      const [semTema, avulsa, leu] = feedLines();
+      expect(semTema).toContain(
+        lineOf(pt.pages.home.feed.planNote, {
+          name: 'Maria',
+          book: 'O Hobbit',
+        }),
+      );
+      expect(avulsa).toContain(
+        lineOf(pt.pages.home.feed.freeNote, {
+          name: 'Maria',
+          book: 'O Hobbit',
+        }),
+      );
+      expect(leu).toContain(
+        lineOf(pt.pages.home.feed.read, { name: 'Maria', book: 'O Hobbit' }),
+      );
+      /*
+        E nenhuma delas usa a frase com tema. ⚠️ A asserção é a frase INTEIRA
+        (com o tema que a linha teria se houvesse um), não o primeiro pedaço
+        dela: `not.toContain(saidBy(readOnTheme))` era `not.toContain('leu')`, e
+        a linha do `READ` logo acima a deixaria vermelha com o código certo.
+      */
+      const text = feedSection().textContent ?? '';
+      for (const template of [
+        pt.pages.home.feed.planNoteOnTheme,
+        pt.pages.home.feed.readOnTheme,
+      ]) {
+        expect(text).not.toContain(
+          lineOf(template, {
+            name: 'Maria',
+            theme: THEME,
+            book: 'O Hobbit',
+          }),
+        );
+      }
+      // E o tema NÃO aparece em lugar nenhum da seção: nenhuma linha o inventou.
+      expect(text).not.toContain(THEME);
+
+      expectNoGuilt();
+    });
+
+    /**
+     * ⚠️ **A LINHA COM TEMA É LINK PARA O MESMO LUGAR** — o tema enfeita a
+     * frase, não muda o alvo (decisão D da Tarefa 35: a linha inteira é o
+     * link). Sem isto, um `<a>` a mais dentro da linha nasceria sem ninguém
+     * notar, e alvo dentro de alvo em celular é toque errado garantido.
+     */
+    it('does not change the target, nor add a second link, because of the theme', async () => {
+      await renderFeed({
+        activity: {
+          status: 200,
+          body: [
+            anActivity({
+              id: 'a-1',
+              userId: MARIA,
+              type: 'PLAN_NOTE',
+              planItemId: 'p-hoje',
+              planItemTitle: THEME,
+              subjectId: 'n-1',
+            }),
+          ],
+        },
+      });
+
+      await waitFor(() => {
+        expect(feedLines()).toHaveLength(1);
+      });
+
+      expect(feedHrefs()).toEqual(['/books/b-hobbit/days/p-hoje']);
+
+      expectNoGuilt();
+    });
   });
 
   it('⚠️ gives the FOUR types four DISTINGUISHABLE sentences (rule 3)', async () => {

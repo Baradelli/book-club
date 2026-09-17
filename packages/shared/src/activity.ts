@@ -121,15 +121,21 @@ export const activityType = z.enum(ACTIVITY_TYPES);
 /**
  * Um evento do feed como sai na resposta.
  *
- * **Os OITO campos da entidade, e nada mais** — e o schema é a FRONTEIRA: é o
- * `serializerCompiler` do Zod que corta o que não está declarado, e sem ele o
- * objeto de domínio inteiro iria para a rede (§6.1).
+ * **Os oito campos da entidade** — ⚠️ **mais o `planItemTitle`, que a Tarefa 38e
+ * acrescentou e que NÃO é campo da entidade** (ver abaixo). O schema é a
+ * FRONTEIRA: é o `serializerCompiler` do Zod que corta o que não está
+ * declarado, e sem ele o objeto de domínio inteiro iria para a rede (§6.1).
  *
  * ⚠️ **Ele leva REFERÊNCIA, nunca conteúdo** (decisão G da Tarefa 33): nem o
- * nome de quem fez, nem o título do dia, nem o nome do livro, nem um trecho.
- * A tela resolve nome pelo `GET /clubs/:clubId/members` (usa isso desde a 26a)
- * e já tem o livro. Denormalizar aqui seria um segundo `getBookWithPlan` com
- * outra forma — e um evento com título velho é uma tela que mente.
+ * nome de quem fez, nem o nome do livro, nem um trecho. A tela resolve nome
+ * pelo `GET /clubs/:clubId/members` (usa isso desde a 26a) e já tem o livro.
+ *
+ * ⚠️ **O TÍTULO DO DIA é a exceção, e ela é estreita** (Tarefa 38e, decisão do
+ * dono: *"quero o tema do dia na linha"*). Ele **não** foi denormalizado no
+ * evento — a `ActivityEvent` não ganhou coluna e o log continua imutável. Ele é
+ * resolvido na LEITURA, pelo `ListActivity`, contra o plano **atual**, e por
+ * isso não envelhece: um título gravado mentiria no dia em que o admin
+ * corrigisse o plano, e é essa a mentira que a Tarefa 35 recusou.
  *
  * ⚠️ **E NENHUMA contagem, nenhum "e mais N"** (decisão F): `COUNTER_SHAPE`
  * proíbe, e progresso é presença. É o CONTRATO que torna o número
@@ -162,6 +168,32 @@ export const activityEventResponseSchema = z.object({
    * (§6.8).
    */
   planItemId: z.string().nullable(),
+  /**
+   * ⚠️ **O TEMA DAQUELE DIA — "Cap. 3 — A promessa"** (Tarefa 38e, decisão A).
+   *
+   * **Obrigatório e ANULÁVEL**, nunca `optional()`: é a mesma decisão, e o
+   * mesmo motivo, do `planItemId` de cima — o cliente valida a resposta de
+   * sucesso (§6.8), e um campo ausente quebraria a tela em cheio.
+   *
+   * ⚠️ **`null` tem DOIS significados, e os dois são legítimos** (decisão C):
+   * (1) o evento não tem dia (a avulsa e o grifo, cujo `planItemId` já é
+   * `null`); (2) o dia **existia e sumiu**, porque o admin o tirou do plano. A
+   * tela trata os dois **igual** — cai na frase que só diz o livro. Inventar
+   * uma frase de "dia removido" seria narrar uma correção de plano que não é da
+   * conta de quem lê o feed.
+   *
+   * ⚠️ **ISTO NÃO DESFAZ A RECUSA DA TAREFA 35 de denormalizar o título dentro
+   * do `ActivityEvent`** — a entidade continua com os oito campos e o log
+   * continua imutável. O título é resolvido **no momento da leitura**, a partir
+   * do plano **atual**: ele nunca é guardado, nunca tem versão e não pode
+   * divergir do plano, porque *é* o plano. Quem corrige o plano corrige o feed
+   * de graça, inclusive para eventos de meses atrás — que é exatamente o que um
+   * título gravado não faria.
+   *
+   * ⚠️ **E ele é CONTEÚDO DO USUÁRIO**: quem o digita é o admin do clube. Ele
+   * não é uma frase nossa, e não entra nas varreduras de vocabulário do app.
+   */
+  planItemTitle: z.string().nullable(),
   /** O id da nota / do grifo / do log. Referência, não conteúdo. */
   subjectId: z.string(),
   createdAt: z.string(),

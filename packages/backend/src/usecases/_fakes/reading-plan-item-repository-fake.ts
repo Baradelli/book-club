@@ -51,26 +51,39 @@ export class ReadingPlanItemRepositoryFake implements ReadingPlanItemRepository 
    * aqui e o mesmo dia num `Date`. Um fake que normalizasse a data aceitaria
    * uma chave que o banco não aceita.
    *
-   * ⚠️ **Lista de livros vazia devolve vazio SEM procurar** — o espelho do
-   * `IN ()` que a implementação Prisma evita.
+   * **Lista de livros vazia — e, desde a Tarefa 38e, lista de IDS vazia —
+   * devolve vazio sem procurar**, o espelho do `IN ()` que a implementação
+   * Prisma evita.
+   *
+   * ⚠️ **E as duas guardas são de CUSTO, não de comportamento — medido, não
+   * suposto (§7.10).** Apagar qualquer uma delas deixa a suíte **inteira**
+   * verde (1916/1916 na rodada da 38e): sem o `if`, `wantedIds` vira um `Set`
+   * vazio aqui e `id: { in: [] }` lá, e os dois devolvem vazio do mesmo jeito.
+   * O que o `if` economiza é a **ida ao banco**, que nenhum teste consegue
+   * observar — então **estas duas linhas não têm acusador**, e é assim que o
+   * teste de contrato já as descreve desde a Tarefa 37. O que os testes daqui
+   * provam é o RESULTADO: `[]` é "não quero nenhum", nunca "quero todos".
    *
    * A enumeração é **INVERTIDA** (§7.2): o port não promete ordem, e é o
    * chamador que ordena pelo que precisa.
    */
   async find(filter: ReadingPlanItemFilter): Promise<ReadingPlanItem[]> {
     this.findCallCount += 1;
-    this.findFiltersSeen.push({
-      bookIds: [...filter.bookIds],
-      date: filter.date,
-    });
+    this.findFiltersSeen.push(this.copyOf(filter));
 
     if (filter.bookIds.length === 0) return [];
+    if (filter.ids?.length === 0) return [];
 
     const wanted = new Set(filter.bookIds);
+    const wantedIds = filter.ids === undefined ? null : new Set(filter.ids);
     return [...this.store.values()]
       .filter(
         (item) =>
           wanted.has(item.bookId) &&
+          // Ausente = todos os itens daqueles livros. ⚠️ O recorte por id é a
+          // SEGUNDA barreira do par (decisão D): ele estreita dentro dos
+          // livros, nunca os substitui.
+          (wantedIds === null || wantedIds.has(item.id)) &&
           // Ausente = todos os dias (ADR 0010), como o `where` do Prisma sem
           // a coluna. ⚠️ E a comparação continua sendo de STRING: o teste
           // `matches the calendar day exactly` mede isso, e o fuso do pino do
@@ -164,10 +177,29 @@ export class ReadingPlanItemRepositoryFake implements ReadingPlanItemRepository 
    * com um livro só, e que só divergem no dia em que houver dois.
    */
   get findFilters(): readonly ReadingPlanItemFilter[] {
-    return this.findFiltersSeen.map((filter) => ({
+    return this.findFiltersSeen.map((filter) => this.copyOf(filter));
+  }
+
+  /**
+   * A cópia PROFUNDA do filtro — as duas listas incluídas.
+   *
+   * Extraída na Tarefa 38e porque o filtro passou a ter **duas** listas, e uma
+   * cópia escrita duas vezes é como a segunda esquece a chave nova: o
+   * `findFilters` guardaria o array vivo do chamador e um `push` posterior
+   * reescreveria o passado.
+   *
+   * ⚠️ **Chave ausente fica AUSENTE, e não presente valendo `undefined`.** Um
+   * `date: filter.date` cru passa despercebido no `toEqual` (que ignora
+   * `undefined`) e mente no `Object.keys` — que é justamente a asserção de
+   * "nenhuma chave à toa" que o §7.3 pede a quem prova que o filtro certo foi
+   * ao banco.
+   */
+  private copyOf(filter: ReadingPlanItemFilter): ReadingPlanItemFilter {
+    return {
       bookIds: [...filter.bookIds],
-      date: filter.date,
-    }));
+      ...(filter.ids === undefined ? {} : { ids: [...filter.ids] }),
+      ...(filter.date === undefined ? {} : { date: filter.date }),
+    };
   }
 
   /** Todo id que alguma chamada pediu para remover, na ordem em que veio. */

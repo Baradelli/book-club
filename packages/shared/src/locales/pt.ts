@@ -182,9 +182,21 @@ export const pt = {
         proíbe a forma, e o contrato da rota (que não devolve contagem nenhuma)
         torna o número irrenderizável.
 
-        O livro entra e o TEMA do dia não: o evento não carrega o título do dia
-        (medição 2 da spec) e a home só tem o plano de um livro. A pergunta está
-        registrada em `docs/tasks/35-feed-na-home.md`.
+        ⚠️ ~~O livro entra e o TEMA do dia não.~~ **CAIU NA TAREFA 38e**, por
+        decisão do dono ("quero o tema do dia na linha"). A medição 2 da Tarefa
+        35 continua correta sobre o que ela mediu — o EVENTO não carrega o
+        título —, e a saída não foi guardá-lo lá: o `listActivity` resolve o
+        título na LEITURA, contra o plano atual, e o devolve no
+        `planItemTitle`. Por isso são **seis** frases, e não quatro: os dois
+        tipos que têm dia (`PLAN_NOTE` e `READ`) ganham uma irmã com o tema, e
+        os dois que não têm dia (avulsa e grifo) não ganham nada.
+
+        ⚠️ **O TEMA É CONTEÚDO DO USUÁRIO — quem o digita é o admin do clube.**
+        Ele entra pelo `{{theme}}` e nunca mora aqui: as varreduras anti-culpa e
+        a `COUNTER_SHAPE` deste catálogo medem as NOSSAS frases, e um "Cap. 3"
+        digitado por alguém não é uma delas. É também por isso que a frase com
+        tema não pode ser montada por concatenação: o buraco é o que separa o
+        nosso texto do dele.
       */
       feed: {
         heading: 'O que aconteceu por aqui',
@@ -197,11 +209,18 @@ export const pt = {
            plano violado pelo estado vazio. E ela é DIFERENTE da de falha. */
         empty: 'Ainda não há atividade por aqui.',
         failed: 'Não foi possível carregar a atividade agora.',
-        /* As quatro frases, uma por tipo de `ActivityEvent`. */
+        /* As quatro frases, uma por tipo de `ActivityEvent` — usadas quando não
+           há tema do dia (os dois `null` da decisão C da Tarefa 38e: o evento
+           sem dia, e o dia que o admin tirou do plano). */
         planNote: '{{name}} escreveu a anotação do dia em {{book}}',
         freeNote: '{{name}} escreveu uma anotação avulsa em {{book}}',
         highlight: '{{name}} grifou um trecho de {{book}}',
         read: '{{name}} leu um dia de {{book}}',
+        /* ⚠️ As DUAS com o tema do dia (Tarefa 38e) — só os tipos que TÊM dia.
+           "Ela escreveu sobre o capítulo 4" é o exemplo do §1 do plano, escrito
+           lá desde o começo, e é o que faz a atividade do outro puxar. */
+        planNoteOnTheme: '{{name}} escreveu sobre {{theme}}, em {{book}}',
+        readOnTheme: '{{name}} leu {{theme}}, de {{book}}',
       },
       /*
         REGRA 17: o membership sumiu entre o `/me` e a listagem da estante

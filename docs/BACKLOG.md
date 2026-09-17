@@ -3007,7 +3007,7 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       docblocks apontando para um `it.each` que não existe mais, e o `describe` do
       `anti-guilt.test.ts` no plural._
 
-- [ ] **38e** — O tema do dia na linha do feed. ⚠️ **FATIA GERADA PELA RESPOSTA DO DONO à
+- [x] **38e** — O tema do dia na linha do feed. ⚠️ **FATIA GERADA PELA RESPOSTA DO DONO à
       pergunta 3 do MVP 3** (2026-09-17): *"quero o tema do dia na linha"*.
       → `docs/ACEITE-MVP.md`, MVP 3, pergunta 3.
       _⚠️ **O `ActivityEvent` NÃO carrega o título do dia** — ele tem `bookId` e `planItemId`.
@@ -3019,6 +3019,13 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       que mente sobre o passado no dia em que o admin corrigir o plano._
       _**Ordem:** depois da **38d**, de propósito — com um catálogo só, esta fatia mexe em
       metade dos arquivos de texto._
+      _✅ **ENTREGUE.** A spec escolheu a saída **(b)** — a rota devolve o título junto —, e a
+      medição que decidiu foi a da Tarefa 35: a saída (a) seria o plano de **cada livro** do
+      feed, N requisições no celular. O `activityEventResponseSchema` ganhou
+      `planItemTitle: z.string().nullable()`; o `ListActivity` resolve o título **na leitura**,
+      contra o plano atual, numa consulta só (`ReadingPlanItemFilter.ids`, com o `bookIds`
+      mantido como segunda barreira de tenant). ⚠️ **A recusa da 35 continua inteira:** o
+      `ActivityEvent` **não ganhou coluna** e não houve migration._
 
 ## Definição de "MVP 3 pronto"
 

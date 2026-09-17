@@ -72,13 +72,32 @@ import { StreakBar } from './streak-bar';
  * assunto, porque quem escreveu, quem leu e quem aparece no feed se nomeiam pelo
  * MESMO `nameOfWriter`.
  *
- * ⚠️ **O EVENTO NÃO CARREGA O TEMA DO DIA, e isso é decisão registrada
+ * ⚠️ ~~**O EVENTO NÃO CARREGA O TEMA DO DIA, e isso é decisão registrada
  * (decisão E).** Ele tem `bookId` e `planItemId`, não o título. A home **tem** a
  * estante (então o nome do livro é resolvível de graça) e **não** tem o plano
  * dos outros livros — dizer "sobre o Cap. 3" seria uma requisição por livro do
  * feed, ou denormalizar o título dentro do evento (que envelhece quando o admin
  * corrige o plano). A pergunta está registrada para o dono em
- * `docs/tasks/35-feed-na-home.md`; ela **não** foi decidida aqui.
+ * `docs/tasks/35-feed-na-home.md`; ela **não** foi decidida aqui.~~
+ *
+ * ⚠️ **ESTE PARÁGRAFO FICOU FALSO NA TAREFA 38e, e a pergunta que ele registrava
+ * foi respondida pelo dono:** *"quero o tema do dia na linha"*
+ * (`docs/ACEITE-MVP.md`, MVP 3, pergunta 3). A resposta da API passou a levar
+ * `planItemTitle`, e a linha diz "escreveu sobre Cap. 3 — A promessa, em O
+ * Hobbit" quando há dia.
+ *
+ * ✅ **E A RECUSA QUE ELE PROTEGIA CONTINUA INTEIRA, palavra por palavra.**
+ * Denormalizar o título **dentro do `ActivityEvent`** segue proibido: o evento é
+ * log imutável, **não ganhou coluna**, e um título guardado envelheceria no dia
+ * em que o admin corrigisse o plano — aí o feed mentiria sobre o passado, que é
+ * pior que não dizer nada.
+ *
+ * ⚠️ **O que mudou é ONDE a junção acontece, e é essa diferença que fez a fatia
+ * caber sem desfazer nada:** o título é resolvido **na LEITURA**, no
+ * `listActivity`, a partir do plano **atual**. Ele nunca é guardado, nunca tem
+ * versão e não pode divergir do plano — porque *é* o plano. E não são as N
+ * requisições que o parágrafo riscado temia: a junção é **uma** consulta a mais
+ * no servidor, indexada por id, e a tela não pede nada além do que já pedia.
  */
 
 /**
@@ -237,6 +256,69 @@ const SENTENCE_KEYS = {
   HIGHLIGHT: 'pages.home.feed.highlight',
   READ: 'pages.home.feed.read',
 } as const satisfies Record<ActivityType, string>;
+
+/**
+ * ⚠️ **A frase de quem TEM tema do dia — e o mapa é PARCIAL de propósito.**
+ *
+ * Só dois dos quatro nascimentos têm dia de leitura: a anotação do dia e o "li".
+ * A avulsa e o grifo gravam `planItemId: null` por construção (ADR 0004), então
+ * uma chave `freeNoteOnTheme` seria uma frase que o produto nunca mostra — e uma
+ * frase que ninguém renderiza é uma frase que ninguém revisa.
+ *
+ * O `Partial` não é fraqueza de tipo: é ele que obriga o `activitySentenceKey`
+ * a ter uma queda explícita, que é justamente o comportamento certo se um dia um
+ * título chegar num tipo sem dia.
+ */
+const SENTENCE_KEYS_ON_THEME = {
+  PLAN_NOTE: 'pages.home.feed.planNoteOnTheme',
+  READ: 'pages.home.feed.readOnTheme',
+} as const satisfies Partial<Record<ActivityType, string>>;
+
+/** A chave de uma frase COM tema — o alfabeto do mapa parcial acima. */
+type OnThemeSentenceKey =
+  (typeof SENTENCE_KEYS_ON_THEME)[keyof typeof SENTENCE_KEYS_ON_THEME];
+
+/**
+ * A chave de qualquer frase de linha. Ela é um LITERAL, e precisa ser: o `t()`
+ * deste projeto é tipado pelo catálogo, e uma `string` larga apagaria a checagem
+ * que impede uma chave inexistente de aparecer crua na tela.
+ */
+type FeedSentenceKey =
+  (typeof SENTENCE_KEYS)[ActivityType] | OnThemeSentenceKey;
+
+/**
+ * ⚠️ **QUAL FRASE A LINHA USA — e é uma função pura, não um ternário no JSX.**
+ *
+ * Fora do componente porque a propriedade é decidível sem tela (§7.9): "o evento
+ * com tema usa a frase com tema" é uma função de um evento para uma chave, e
+ * prová-la montando a home seria montar meio app para afirmar um `if`. O
+ * `catalogs.test.ts` prova que as seis frases são distintas entre si; ele não
+ * consegue provar que a tela escolhe a certa — esta função é a metade que falta,
+ * e ela tem acusador em `__tests__/activity-feed.test.ts`.
+ *
+ * ⚠️ **OS DOIS `null` DE `planItemTitle` CAEM NO MESMO RAMO, e é decisão** (a
+ * decisão C da Tarefa 38e): o evento que não tem dia (avulsa, grifo) e o dia que
+ * **existia e sumiu** do plano. **Não existe frase de "dia removido"** — seria
+ * ruído sobre uma correção de plano que não é da conta de quem lê o feed, e a
+ * linha continua inteira dizendo o livro.
+ */
+export function activitySentenceKey(
+  event: ActivityEventResponse,
+): FeedSentenceKey {
+  /*
+    O mapa parcial visto sobre os QUATRO tipos — é o que dá um `undefined`
+    tipado para a avulsa e o grifo, em vez de um `as` na chave. Sem `any` e sem
+    asserção: o compilador continua sabendo quais literais podem sair daqui.
+  */
+  const onTheme: Partial<Record<ActivityType, OnThemeSentenceKey>> =
+    SENTENCE_KEYS_ON_THEME;
+  const withTheme = onTheme[event.type];
+
+  if (event.planItemTitle !== null && withTheme !== undefined) {
+    return withTheme;
+  }
+  return SENTENCE_KEYS[event.type];
+}
 
 /**
  * ⚠️ **VAZIO E FALHA SÃO ESTADOS DIFERENTES, e não falam a mesma frase**
@@ -460,9 +542,21 @@ export function ActivityFeed({ books, clubId, me }: ActivityFeedProps) {
               livro, numa linha de texto só. Uma coluna de pessoa convida o olho
               a varrê-la e a contar quem fez mais.
             */
-            title={t(SENTENCE_KEYS[event.type], {
+            title={t(activitySentenceKey(event), {
               name: authorLabelOf(event.userId),
               book: bookLabelOf(event.bookId),
+              /*
+                ⚠️ **O TEMA É CONTEÚDO DO USUÁRIO** (regra 7 da Tarefa 38e):
+                quem digita o título do dia é o admin do clube. Ele entra pelo
+                buraco da frase, e é por isso que a frase com tema é uma CHAVE
+                própria e não uma concatenação — o buraco é o que separa o nosso
+                texto do dele, e é o que mantém as varreduras de vocabulário
+                medindo as nossas frases.
+
+                `?? ''` só existe porque o i18next quer `string`: quando o tema
+                é `null` a chave escolhida é a SEM tema, e este valor não é lido.
+              */
+              theme: event.planItemTitle ?? '',
             })}
           />
         ))}

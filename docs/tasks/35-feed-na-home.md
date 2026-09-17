@@ -52,7 +52,7 @@ varreduras em todos os estados novos.
 | ⚠️ **"Carregar mais" / paginação** | O feed é "o que aconteceu recentemente". Um botão de carregar mais convida a rolar o histórico procurando quem fez mais — que é a comparação pela porta dos fundos. |
 | Filtro por pessoa ou por tipo no feed | O acervo já filtra. Aqui a pergunta é "o clube está vivo?", não "o que a Maria fez". |
 | Push | Tarefa 38. |
-| O tema do dia na linha | Medição 2 — ver decisão E. **Registre como pergunta do dono**, não implemente. |
+| ~~O tema do dia na linha~~ | Medição 2 — ver decisão E. **Registre como pergunta do dono**, não implemente. ✅ **Foi registrado, o dono respondeu, e a Tarefa 38e implementou** — ver a decisão E. |
 | Avatar/foto | Não existe upload; o `PersonAvatar` com inicial já é o padrão das outras telas. |
 
 ## Decisões já tomadas (não reabrir)
@@ -72,7 +72,7 @@ varreduras em todos os estados novos.
 | B | ⚠️ **Ordem cronológica pura, sem agrupar por pessoa nem por dia** | Agrupar por pessoa **é** o placar. Agrupar por dia cria cabeçalhos que viram régua ("ontem: 4 · hoje: 0"). |
 | C | **Tempo relativo ("há 2 horas"), com `Intl.RelativeTimeFormat`** | Data absoluta numa lista curta é ruído. ⚠️ E **não** pode virar cobrança: nada de "há 3 dias ninguém escreve". O tempo descreve **o que aconteceu**, nunca o que não aconteceu. |
 | D | **A linha inteira é o link**, para o alvo do tipo (dia · avulsa · grifo) | É o padrão do acervo. E um alvo dentro de outro alvo em celular é toque errado garantido (a mesma razão da decisão I da 32b). |
-| E | ⚠️ **A linha diz o LIVRO, não o tema do dia** | Medição 2: o evento não carrega o título do dia, e a home só tem o plano de **um** livro. Buscar o plano de cada livro do feed seriam N requisições para enfeitar uma frase. O livro **é** resolvível (a home já lista) e responde "onde". **Registre como pergunta do dono**: vale uma requisição a mais para dizer "sobre o Cap. 3"? |
+| E | ⚠️ ~~**A linha diz o LIVRO, não o tema do dia**~~ → **REVERTIDA PELO DONO na Tarefa 38e** (ver abaixo) | Medição 2: o evento não carrega o título do dia, e a home só tem o plano de **um** livro. Buscar o plano de cada livro do feed seriam N requisições para enfeitar uma frase. O livro **é** resolvível (a home já lista) e responde "onde". **Registre como pergunta do dono**: vale uma requisição a mais para dizer "sobre o Cap. 3"? |
 | F | ⚠️ **As duas requisições novas (feed + membros) são PARALELAS entre si e não bloqueiam a estante** | A estante e o atalho de hoje são o produto da home; o feed é o acessório. Se o feed falhar, **a home continua inteira** — o mesmo desenho que o `home.tsx:257` já usa para o plano (silêncio de propósito). ⚠️ Provado por contagem, não por ausência de erro. |
 | G | ⚠️ **Feed vazio tem frase própria, e ela NÃO cobra** | "Ainda não há atividade por aqui" é constatação; "ninguém leu ainda" é cobrança. E ela é **diferente** da de erro — a lição das Tarefas 19/25/28: os dois estados nunca são o mesmo. |
 | H | **Quem sou eu aparece como "Você"**, pelo mesmo `nameOfWriter` | Já é o comportamento do acervo e do plano. Uma frase dizendo o próprio nome na terceira pessoa é estranha e, num feed, soa a registro de ponto. |
@@ -143,7 +143,7 @@ packages/shared/src/locales/{pt,en}.ts             as chaves
 (⚠️ a home **importa** dele; não o reescreva) · `pages/{book,acervo,busca,reading-marks}.tsx` ·
 `app/src/{i18n,theme,env}.ts` · `docs/**`.
 
-## A pergunta do dono (registre, não decida)
+## A pergunta do dono (registre, não decida) — ✅ **RESPONDIDA**
 
 **O feed deve dizer o TEMA do dia?** Hoje ele diz o livro ("Maria leu um dia de *O Senhor dos
 Anéis*") e não o capítulo ("…sobre o Cap. 3"). Medido: o evento não carrega o título, e a home
@@ -151,6 +151,21 @@ só tem o plano de um livro — dizer o tema exigiria uma requisição por livro
 denormalizar o título dentro do evento (que envelhece quando o admin corrige o plano).
 **Recomendação:** deixar como está e ver se incomoda. Se incomodar, a saída barata é a rota do
 feed devolver o título junto — uma mudança de contrato, não N requisições.
+
+> ✅ **O DONO RESPONDEU (2026-09-17): *"quero o tema do dia na linha"*** →
+> `docs/ACEITE-MVP.md`, MVP 3, pergunta 3. Entregue na **Tarefa 38e**
+> (`docs/tasks/38e-tema-do-dia-no-feed.md`), pela saída que esta seção recomendava: **a rota
+> do feed devolve o título junto** (`planItemTitle` no `activityEventResponseSchema`), numa
+> consulta a mais no servidor — **não** N requisições, e **não** denormalização.
+>
+> ⚠️ **A recusa de denormalizar continua valendo palavra por palavra**, e é por isso que a
+> fatia coube: o `ActivityEvent` **não ganhou coluna**; o título é resolvido **na leitura**,
+> contra o plano **atual**, no `ListActivity`. Ele não tem versão e não pode divergir do
+> plano — corrigir o plano corrige o feed inteiro, inclusive linhas de meses atrás.
+>
+> ⚠️ **Esta spec NÃO foi reescrita** (o mesmo tratamento do aviso do topo): ela registra o que
+> se decidiu no dia, e o que ela entregou continua em pé e continua testado. As duas linhas
+> acima — a decisão E e a do "Escopo enxuto" — estão **riscadas e datadas**, não apagadas.
 
 ## Definição de pronto
 

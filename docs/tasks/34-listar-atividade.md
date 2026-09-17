@@ -40,7 +40,7 @@ temporário**.
 | --- | --- |
 | O feed na tela | É a **Tarefa 35**. |
 | Push / `GROUP_ACTIVITY` | É a **Tarefa 38**. |
-| ⚠️ **Resolver nome de pessoa, título do dia ou nome do livro dentro da resposta** | O evento guarda **referência, não conteúdo** (decisão G da 33). A tela já sabe resolver nome pelo `GET /clubs/:clubId/members` (usa isso desde a 26a) e já tem o livro. Fazer o backend juntar tudo seria um segundo `getBookWithPlan` com outra forma. ⚠️ **Se a Tarefa 35 medir que falta alguma coisa, ela reporta — não inventa.** |
+| ⚠️ **Resolver nome de pessoa, ~~título do dia~~ ou nome do livro dentro da resposta** | O evento guarda **referência, não conteúdo** (decisão G da 33). A tela já sabe resolver nome pelo `GET /clubs/:clubId/members` (usa isso desde a 26a) e já tem o livro. Fazer o backend juntar tudo seria um segundo `getBookWithPlan` com outra forma. ⚠️ **Se a Tarefa 35 medir que falta alguma coisa, ela reporta — não inventa.** ⚠️ **O "título do dia" CAIU NA TAREFA 38e**, e pelo caminho que esta linha pedia: a 35 mediu, **reportou** como pergunta do dono, e o dono respondeu *"quero o tema do dia na linha"*. A resposta passou a levar `planItemTitle`, resolvido **na leitura** contra o plano atual — o nome e o livro **continuam fora**. |
 | Paginação com cursor | O feed é "o que aconteceu recentemente". Cursor é contrato novo e não há tela que o peça. ⚠️ Ver decisão D: o limite é **explícito**, não escondido. |
 | Filtro por tipo / por pessoa no feed | Ninguém pediu, e o feed não é listagem de acervo — o acervo já filtra por pessoa e tipo. |
 | Apagar ou arquivar evento | Log imutável. |

@@ -590,4 +590,96 @@ describe('PrismaReadingPlanItemRepository (contract)', () => {
       expect(found.map((item) => item.bookId)).toEqual([OTHER_BOOK_ID]);
     });
   });
+
+  /**
+   * ⚠️ **O RECORTE POR ID — o que o feed pede (Tarefa 38e).**
+   *
+   * O fake é fiel nos dois sentidos (§7.1), e é contra o Postgres que isso se
+   * confere: o que ele aceita, o banco aceita; o que ele recusa, o banco
+   * recusa.
+   */
+  describe('find({ bookIds, ids })', () => {
+    /*
+      ⚠️ Os ids são FIXADOS aqui, e não chamados dentro das asserções:
+      `prefixedId` sorteia um UUID a cada chamada, então dois `trackedId` com o
+      MESMO prefixo são dois ids diferentes. É a única suíte deste arquivo que
+      compara id por id — as outras comparam data e livro.
+    */
+    const ID_UM = trackedId('ids-um');
+    const ID_DOIS = trackedId('ids-dois');
+    const ID_OUTRO_LIVRO = trackedId('ids-outro-livro');
+
+    beforeEach(async () => {
+      await repo.saveMany([
+        anItem(ID_UM, { order: 0, date: '2026-11-01' }),
+        anItem(ID_DOIS, { order: 1, date: '2026-11-02' }),
+        anItem(ID_OUTRO_LIVRO, {
+          bookId: OTHER_BOOK_ID,
+          order: 0,
+          date: '2026-11-01',
+        }),
+      ]);
+    });
+
+    it('brings only the items asked for by id', async () => {
+      const found = await repo.find({
+        bookIds: [BOOK_ID],
+        ids: [ID_UM],
+      });
+
+      expect(found.map((item) => item.id)).toEqual([ID_UM]);
+    });
+
+    /**
+     * ⚠️ **A SEGUNDA BARREIRA (decisão D), contra o banco:** o `bookIds` corta
+     * mesmo com o id certo na mão. O par positivo vem junto, senão "devolve
+     * vazio sempre" passaria.
+     */
+    it('never brings an item outside the books asked for, even by id', async () => {
+      await expect(
+        repo.find({ bookIds: [BOOK_ID], ids: [ID_OUTRO_LIVRO] }),
+      ).resolves.toEqual([]);
+
+      await expect(
+        repo.find({
+          bookIds: [OTHER_BOOK_ID],
+          ids: [ID_OUTRO_LIVRO],
+        }),
+      ).resolves.toHaveLength(1);
+    });
+
+    /** Chave ausente = todos os itens daqueles livros (o que a corrente usa). */
+    it('brings every item of the books when no id is asked for', async () => {
+      const found = await repo.find({ bookIds: [BOOK_ID] });
+
+      expect(found.map((item) => item.id).sort()).toEqual(
+        [ID_UM, ID_DOIS].sort(),
+      );
+    });
+
+    /**
+     * ⚠️ **Lista VAZIA de ids devolve vazio, e não "tudo"** — a mesma regra do
+     * `bookIds`, e a diferença que separa "não pedi nada" de "pedi tudo". O que
+     * o teste prova daqui é o RESULTADO; que não houve consulta está no `if` da
+     * implementação e no espelho do fake.
+     */
+    it('answers empty for an empty list of ids, never the whole plan', async () => {
+      await expect(repo.find({ bookIds: [BOOK_ID], ids: [] })).resolves.toEqual(
+        [],
+      );
+      await expect(
+        repo.find({ bookIds: [BOOK_ID], ids: [ID_UM] }),
+      ).resolves.toHaveLength(1);
+    });
+
+    /** Id inexistente não é erro: some da resposta, e o resto vem. */
+    it('ignores an id that is not in the plan, and brings the rest', async () => {
+      const found = await repo.find({
+        bookIds: [BOOK_ID],
+        ids: [ID_UM, prefixedId('t07', 'plan-ghost')],
+      });
+
+      expect(found.map((item) => item.id)).toEqual([ID_UM]);
+    });
+  });
 });
