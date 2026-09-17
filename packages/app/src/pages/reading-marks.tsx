@@ -22,6 +22,14 @@ import { nameOfWriter } from './club-names';
  * não devolve contagem nenhuma, então não existe número para renderizar por
  * engano.
  *
+ * ⚠️ **A PERGUNTA 1 FOI REVERTIDA PELO DONO NA TAREFA 38c** — ele pediu a
+ * corrente de leitura, que é um número por pessoa
+ * (→ `docs/adr/0010-corrente-de-leitura-visivel.md`). ✅ **Este módulo não
+ * mudou, e a frase estreita continua verdadeira:** a marca de leitura do dia
+ * continua sendo presença, o `readers` continua sem contagem, e a corrente
+ * mora em outra rota e em outra tela. ⚠️ **Não leia esta seção como "o app não
+ * tem número"** — leia como "o número não passa por aqui".
+ *
  * ⚠️ **DOIS ASSUNTOS NUM MÓDULO SÓ, e o nome só cobre o primeiro.** O
  * `ReadMarks` é informação (uma marca por leitor, sem estado e sem rede); o
  * `TodayReading` é **ação de escrita** — dois estados, uma chamada HTTP, um

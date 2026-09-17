@@ -19,6 +19,14 @@ import { z } from 'zod';
  * (`CLAUDE.md`, e a decisão fechada do MVP 3), e é o CONTRATO que torna o
  * número irrenderizável: uma tela não pode desenhar um placar que a resposta
  * não carrega. É mais forte que uma regra de estilo, e foi escolhido por isso.
+ *
+ * ⚠️ **A JUSTIFICATIVA LARGA CAIU NA TAREFA 38c** — o dono reverteu a
+ * pergunta 1 e pediu a corrente de leitura, que **é** um número por pessoa
+ * (→ `docs/adr/0010-corrente-de-leitura-visivel.md`). ✅ **A afirmação
+ * estreita daqui continua inteira e continua testada:** nem este schema nem o
+ * `readers` ganharam contagem. ⚠️ **E a prova de que "mais forte que estilo"
+ * não era retórica está justamente na 38c:** para entregar o número, o dono
+ * teve de pedir uma ROTA nova — nenhuma tela conseguiu produzi-lo sozinha.
  */
 
 /**

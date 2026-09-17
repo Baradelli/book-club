@@ -186,6 +186,14 @@ export const planItemResponseSchema = z.object({
  * ⚠️ E **nenhum contador**: nem `readDays`, nem total, nem percentual.
  * Progresso é presença, e é o contrato que torna o número irrenderizável.
  *
+ * ⚠️ **A JUSTIFICATIVA LARGA CAIU NA TAREFA 38c** — o dono reverteu a
+ * pergunta 1 e pediu a corrente de leitura, que **é** um número por pessoa
+ * (→ `docs/adr/0010-corrente-de-leitura-visivel.md`). ✅ **A afirmação
+ * estreita daqui continua inteira e continua testada:** o `readers` do livro não
+ * ganhou contagem na 38c. O progresso **no livro** continua sem número; o que
+ * passou a existir é a corrente de **dias seguidos**, que é outra coisa e mora
+ * em outra rota.
+ *
  * ⚠️⚠️ **A FASE 2 DO PHASE-IN ESTÁ CONCLUÍDA (Tarefa 32b): o `readers` DEIXOU
  * DE SER `.optional()`.** O registro fica porque é o phase-in do §6.8
  * acontecendo por inteiro, e porque a medição é o argumento.

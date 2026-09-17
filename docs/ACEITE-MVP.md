@@ -172,7 +172,14 @@ fatia de tamanho médio, e é o que faz o app parecer nativo.
 sinal ruim, isto é a coisa mais valiosa do MVP 2, à frente dos grifos. Se vocês leem em casa,
 pode esperar.
 
-**Resposta:**
+**Resposta (2026-09-17):** ❌ **Não. "Lemos em casa, com wi-fi."**
+
+**Consequência:** o cache de leitura sai do radar — não é dívida, é escopo. ⚠️ **E ela fecha
+uma pergunta que ficou aberta por TRÊS MVPs**, reaparecendo a cada fechamento com o custo
+subindo; a última vez que subiu foi no MVP 3, quando a notificação passou a levar a pessoa
+para um app que pede rede. **Com a resposta, ela para de reaparecer.** Se um dia a leitura
+mudar de lugar — metrô, viagem —, reabra esta pergunta: a fatia continua existindo, e o que
+estava certo aqui é que ela é média, não pequena.
 
 ### 6. Criar anotação avulsa sem rede
 
@@ -198,7 +205,24 @@ dos dois.
 tela — se a frase não existe em dois lugares, ela não passou pelo `t()`. Só tire se for
 incomodar.
 
-**Resposta:**
+**Resposta (2026-09-17):** ❌ **Não. "Só português — apagar o inglês."**
+
+**Consequência: é a maior das duas fatias que o fechamento do MVP 3 gerou**, e maior do que a
+pergunta fazia parecer, porque não é só apagar um arquivo. ⚠️ **A Tarefa 29a inteira existe por
+causa do `en`** — ela tirou o catálogo do chunk de entrada por `import()`, e entregou o
+`changeLocale`, o chunk separado, o `globIgnores` do service worker e as asserções do
+`bundle-guard`. Sem o `en`, essa maquinaria toda vira código morto e sai junto: o seletor de
+idioma, o `persistLocale`, o `SUPPORTED_LOCALES`/`isLocale`/`FALLBACK_LOCALE`, a metade `en`
+dos testes de paridade e da varredura anti-culpa, e o caminho de locale do lembrete e do aviso
+de atividade (`Settings.locale`).
+
+⚠️ **O que se perde, e é justo registrar porque era o argumento da recomendação:** o segundo
+catálogo era a rede que pegava texto solto na tela — *"se a frase não existe em dois lugares,
+ela não passou pelo `t()`"*. Com um catálogo só, essa rede some. ✅ **O que sobra no lugar:** a
+varredura de fonte das telas e as guardas de vocabulário do catálogo, que continuam de pé.
+
+✅ **E uma dívida conhecida morre junto:** os **33 textos da barra do editor** que só existiam
+em português deixam de ser dívida — eles eram a pergunta 6 do MVP 2.
 
 ### 8. Alguma coisa que você esperava e não está aqui?
 
@@ -440,7 +464,21 @@ truncou, e isso é mudança de contrato da API.
 **Recomendação:** **manter sem contador.** Se você quiser o número, é uma decisão sua e eu
 relaxo a guarda — mas diga explicitamente, porque hoje ela está lá de propósito.
 
-**Resposta:**
+**Resposta (2026-09-17):** ✅ **Mantido sem contador de resultados** — e esta resposta merece
+ler com atenção, porque o **gatilho que ela mesma escreveu disparou**, só que em outro lugar.
+
+⚠️ **Você pediu um número** — a corrente de dias, o foguinho (Tarefa 38c, ADR 0010). Pela letra
+do parágrafo acima, seria "relaxar a guarda". **Não foi isso que se fez, e a diferença importa:**
+
+- a guarda **não foi relaxada**: a isenção é **nominal**, vale para **sete chaves** e é **pinada
+  por igualdade exata** — ampliá-la deixa o teste vermelho, e quem ampliar tem de escrever no
+  teste que está ampliando;
+- o número que entrou é a **corrente**, que conta **dias seguidos de leitura**. O **contador de
+  resultados** desta pergunta — *"12 anotações"*, *"3 resultados"* — **continua proibido**, e
+  continua proibido pelo mesmo teste de sempre;
+- o **custo real** que esta pergunta apontou continua sem dono, e ele não era o contador: a
+  busca corta em **500** e **não avisa** que cortou. O conserto honesto é o **servidor** dizer
+  que truncou. Isso continua de fora.
 
 ### 6. A barra do editor está só em português. Isso conserta agora ou espera você?
 
@@ -474,11 +512,12 @@ Elas **afetaram** o MVP 2 e eu segui com o padrão conservador, sem decidir no s
 
 - **Pergunta 1** (filtro por pessoa e o nome de quem escreveu) — **FECHADA pelo MVP 2**: a
   Tarefa 26a criou a rota e a 27 pôs o nome no chip e no avatar.
-- **Pergunta 5** (abrir o app sem rede — cache de leitura) — **continua aberta, e o MVP 2 não a
-  fez.** A regra do fechamento era: se não houver resposta, não entrar. A escrita sobrevive à
-  falta de rede; a leitura, não. ⚠️ **Isto é hoje a coisa mais valiosa que está de fora**, e a
-  recomendação do MVP 1 continua valendo: se vocês leem em transporte público, ela vem antes de
-  qualquer coisa do MVP 3.
+- **Pergunta 5** (abrir o app sem rede — cache de leitura) — ~~**continua aberta, e o MVP 2
+  não a fez.**~~ ✅ **RESPONDIDA EM 2026-09-17, no fechamento do MVP 3: "não — lemos em casa,
+  com wi-fi".** O registro fica aqui riscado, e não apagado, porque esta seção conta a
+  **história** da pergunta: ela atravessou o MVP 2 e o MVP 3 aberta, e a cada fechamento eu
+  escrevi que era "a coisa mais valiosa que está de fora". Era — dado o uso que eu supunha.
+  Não era, dado o uso real. A resposta está na pergunta 5 do MVP 1.
 - **Pergunta 2** (entra mais gente no clube?) — o MVP 2 assumiu **"duas hoje, mais amanhã"**:
   nada na estrutura assume duas (o filtro por pessoa é por membro, com nome), e o texto de
   interface continua simples enquanto forem duas.
@@ -536,16 +575,42 @@ limitação que impede o PWA de instalar pelo IP. Faça a parte A.1 no celular e
 - [ ] Toco numa linha do feed e ela **cai na tela certa** — a anotação abre a anotação, o grifo
       abre o grifo.
 
+⚠️ **O foguinho (Tarefa 38c, ADR 0010) — a parte que você pediu depois, e é a que mais precisa
+do seu olho** → `COMO-TESTAR.md` §6.5.1:
+
+- [ ] Acima do feed vejo **um fogo por pessoa** do clube, com o número de dias seguidos.
+- [ ] Marco "li hoje" e **a minha corrente sobe**.
+- [ ] **No dia seguinte, antes de eu marcar:** a corrente **continua** no número de ontem, e
+      aparece **"Você vai perder a sua sequência!"**. ⚠️ **Se ela zerar de manhã, é bug** — é a
+      regra que decide se o fogo é usável, e ela tem teste.
+- [ ] Marco "li hoje" e **o aviso some**.
+- [ ] Quem está em **zero** vê *"Comece a sua sequência hoje"* e **não** vê o aviso de perda.
+- [ ] ⚠️ **O plano pula um dia (domingo, por exemplo) e a corrente NÃO quebra** — ela conta
+      dias do **plano**, não do calendário.
+- [ ] ⚠️ **A pergunta que não é técnica:** olhe o fogo dela ao lado do seu. **Você sentiu
+      alguma coisa?** Alívio, orgulho, ou um aperto? A resposta honesta a isso vale mais que
+      todo o resto desta lista — e é o §A.2.
+
 ### A.2 — ⚠️ A pergunta que decide o MVP, e ela não é técnica
 
 Este MVP tem um princípio no meio: **o clube não pode virar placar.** Tudo abaixo é para você
 julgar com o olho, não com o teste.
 
-- [ ] Em nenhum lugar aparece **número que o app inventou** — nem "2 de 30", nem percentual,
-      nem "+3", nem "12 dias lidos". (Números que vêm de **dado** são esperados: "há 2 horas",
-      ou um livro chamado *1984*.)
-- [ ] Olhando o feed, **eu não sinto vontade de comparar** quem fez mais. Se sentir, o desenho
-      falhou — e não é conserto de tela, é decisão de produto.
+> ⚠️⚠️ **ESTA SEÇÃO MUDOU DE SENTIDO DEPOIS QUE VOCÊ PEDIU O FOGUINHO (Tarefa 38c, ADR 0010).**
+> Ela foi escrita para conferir que o app **não** conta nada. Agora ele conta, por decisão sua.
+> O que sobra aqui não é mais "o app conta?" — é **"contar fez o que você queria, ou fez o que
+> eu avisei que faria?"**. É a pergunta mais importante de todo este aceite, e só você responde.
+
+- [ ] ⚠️ **O único número inventado pelo app é a corrente** (o fogo). Se você vir **qualquer
+      outro** — "2 de 30", percentual, "+3", "3 atividades" —, é bug: ele não foi pedido e não
+      passou por decisão nenhuma.
+- [ ] ⚠️ **Depois de alguns dias com o fogo aceso: eu olho o fogo dela antes de olhar o que ela
+      escreveu?** Se sim, o clube virou competição — e é exatamente o risco que ficou registrado
+      antes de eu escrever a primeira linha. A reversão é barata: nada foi guardado no banco.
+- [ ] ⚠️ **Quando eu perco a sequência, o que eu sinto?** Se der vontade de abrir menos o app em
+      vez de mais, o mecanismo está trabalhando contra o §1 do plano, não a favor.
+- [ ] Olhando o feed **abaixo do fogo**, eu não sinto vontade de comparar quem escreveu mais. O
+      feed continua sendo frase, sem coluna de pessoa — só a corrente virou coluna.
 - [ ] O texto das preferências fala em **primeira pessoa** e não cobra ("me lembre às", nunca
       "você não leu hoje").
 - [ ] ⚠️ **O ponto que eu mais quero que você teste:** marque "li hoje", e depois rode o
@@ -570,6 +635,11 @@ julgar com o olho, não com o teste.
       hoje", e rodo `pnpm --filter @clube/backend notifications:dispatch` → §6.7.
       **O lembrete chega.**
 - [ ] Rodo **de novo** no mesmo dia: **não chega segunda vez** (`skipped`).
+- [ ] ⚠️ **Com corrente viva, o lembrete MUDA de frase** (Tarefa 38c): em vez do tema do dia
+      sozinho, chega *"Você vai perder a sua sequência de N dias"* **seguido do tema**. Quem
+      está em **zero** continua recebendo o lembrete simples, sem moldura → `COMO-TESTAR.md`
+      §6.7. ⚠️ **E quem já marcou "li hoje" continua não recebendo nada** — essa é a metade da
+      regra anti-culpa que o foguinho **não** derrubou, e ela vem antes da moldura.
 - [ ] Ela escreve uma anotação no aparelho dela. **Meu celular avisa.**
 - [ ] Desligo "quero saber quando alguém do clube lê ou escreve", ela escreve de novo, e **não
       chega nada**.
@@ -582,7 +652,7 @@ Confiro a definição frase por frase, e digo o que está entregue e o que depen
 | Pedaço da frase | Estado |
 | --- | --- |
 | *"Eu marco que li o trecho de hoje"* | ✅ **Entregue.** ⚠️ **Só o dia de hoje** — um dia passado não se marca pela tela (é a pergunta 2 desta seção) |
-| *"e vejo onde eu e o clube estamos no livro"* | ✅ **Entregue como PRESENÇA, não como número** — é a sua resposta à pergunta 1. ⚠️ **Este é o pedaço que mais pode significar outra coisa para você do que significou para mim.** Se "ver onde estamos" para você era uma barra que enche, ele **não** está entregue, e reabre a decisão |
+| *"e vejo onde eu e o clube estamos no livro"* | ✅ **Entregue duas vezes, e a segunda reverteu a primeira.** Primeiro como **presença** (a sua resposta à pergunta 1); depois, a seu pedido, também como **número** — a corrente de dias seguidos, visível para o clube (Tarefa 38c, ADR 0010). ⚠️ **É o pedaço a julgar com mais cuidado no aceite**, porque as duas formas respondem à mesma frase e puxam o clube para lados opostos |
 | *"Recebo um lembrete no horário que eu escolhi"* | ⚠️ **Entregue, mas NÃO AUTOMÁTICO — ver abaixo** |
 | *"e não recebo se eu já li"* | ✅ **Entregue**, e é o item que eu mais quero que você teste (A.2) |
 | *"quando ela lê, escreve ou grifa, meu celular avisa"* | ⚠️ **Entregue, com duas condições — ver abaixo** |
@@ -671,7 +741,7 @@ ver na tela, com o app usado, que ela se confirma.
 > vê o seu fogo apagar** — não é você contra um app, é você devendo satisfação a quem dorme
 > do seu lado.
 >
-> **O dono reafirmou, escolhendo a opção completa**, ciente do custo. A Tarefa 39 entregou:
+> **O dono reafirmou, escolhendo a opção completa**, ciente do custo. A Tarefa 38c entregou:
 > contagem por pessoa na API, fogo visível para o clube no feed, frase de perda na tela e no
 > lembrete.
 >
@@ -712,7 +782,20 @@ sem criar a lista de auditoria — ela aparece onde você já está, e uma de ca
 que eu evitaria mesmo se você pedir o recurso; a (d) é uma régua arbitrária que vai gerar a
 pergunta "por que ontem sim e anteontem não?".
 
-**Resposta:**
+**Resposta (2026-09-17):** ✅ **(a) — "Não. Só hoje, e a corrente é dura mesmo."**
+
+**Consequência: nada a construir**, e a decisão ficou **mais** coerente depois do foguinho, não
+menos. ⚠️ **As duas respostas se sustentam de propósito:** se desse para marcar sábado na
+segunda, a corrente viraria um número que se conserta depois — e um fogo que se acende
+retroativamente não incentiva ninguém a ler hoje. **Perder é perder**, e você disse isso com
+todas as letras.
+
+⚠️ **O custo continua real e não mudou:** quem lê no fim de semana e só abre o app na segunda
+perde o registro **e** a corrente. Se um dia incomodar, a saída continua sendo a **(b)** —
+marcar ao abrir a anotação daquele dia —, e ela continua sendo a única que dá o registro sem
+criar a lista de auditoria. ⚠️ **Mas atenção:** com o foguinho no ar, a (b) deixou de ser só
+uma tela. Ela passaria a **restaurar corrente perdida**, e isso é decisão de produto nova, não
+mais "uma fatia de tela".
 
 ### 3. O feed deve dizer o TEMA do dia, ou basta o livro?
 
@@ -736,7 +819,16 @@ dia em que o admin corrigir o plano, e aí o feed mente sobre o passado.
 capítulo é detalhe que o toque já entrega. Se incomodar, a saída barata é a **(b)** — e ela é
 uma mudança de contrato, não de arquitetura.
 
-**Resposta:**
+**Resposta (2026-09-17):** ✅ **"Quero o tema do dia na linha."**
+
+**Consequência: é fatia**, e está no `docs/BACKLOG.md`. ⚠️ **A alternativa (c) continua
+descartada, e a recusa é de escrita, da Tarefa 35:** denormalizar o título dentro do
+`ActivityEvent` faria o feed **mentir sobre o passado** no dia em que o admin corrigisse o
+plano, e o `ActivityEvent` é log imutável (`CLAUDE.md`).
+
+Entre **(b)** e resolver o título na tela pelo `planItemId` que o evento **já carrega**, a
+escolha é da spec da fatia, **com medição** — não deste documento. As duas custam uma consulta
+a mais no servidor e nenhuma toca o modelo; o que muda é onde a junção acontece.
 
 ---
 
@@ -744,22 +836,30 @@ uma mudança de contrato, não de arquitetura.
 
 Elas **afetaram** o MVP 3, e eu segui com o padrão conservador, sem decidir no seu lugar:
 
-- ⚠️ **Pergunta 5 do MVP 1** (abrir o app sem rede — cache de leitura) — **continua aberta, e
-  o MVP 3 também não a fez.** Pela terceira fase seguida, a regra do fechamento valeu: sem
-  resposta, não entra. ⚠️ **Ela agora encosta em coisa nova:** a notificação chega no celular,
-  a pessoa toca, e o app **abre pedindo rede**. Se vocês leem em transporte público, o toque na
-  notificação é exatamente o momento em que a falta do cache dói — e isso não existia antes do
-  MVP 3. **Continua sendo a coisa mais valiosa que está de fora.**
+- ✅ **Pergunta 5 do MVP 1** (abrir o app sem rede — cache de leitura) — **FECHADA em
+  2026-09-17: "não — lemos em casa, com wi-fi".** ⚠️ **Ela ficou aberta por três MVPs**, e em
+  cada fechamento eu escrevi que era "a coisa mais valiosa que está de fora" — inclusive
+  aqui, com o argumento novo de que a notificação leva a pessoa para um app que pede rede.
+  **O argumento era bom e a premissa era minha, não sua.** Com a resposta, a fatia sai do
+  radar e a pergunta para de reaparecer a cada fechamento.
 - **Pergunta 1 do MVP 2** (busca sem acento, `unaccent`) — sem resposta, não entrou.
 - **Pergunta 2 do MVP 1** (entra mais gente no clube?) — o MVP 3 assumiu **"duas hoje, mais
   amanhã"**, e desta vez com consequência medida: o feed é uma **frase por linha**, e o leque
   de notificação percorre **todos os membros ativos** menos o autor. Nenhum dos dois assume
   duas pessoas; mas **o desenho anti-placar é mais difícil com dez** do que com duas, e essa é
   a hora de você dizer se o clube vai crescer.
-- **Pergunta 7 do MVP 1** (manter o inglês?) — sem resposta, e o custo dela **subiu**: o MVP 3
-  acrescentou o catálogo do lembrete e do aviso de atividade, nos dois idiomas. Se a resposta
-  for "não mantém", há mais coisa para apagar do que havia.
+- ✅ **Pergunta 7 do MVP 1** (manter o inglês?) — **FECHADA em 2026-09-17: "só português —
+  apagar o inglês".** E o aviso de que o custo **subia a cada MVP** se confirmou na conta
+  final: além dos dois catálogos, sai a maquinaria inteira da **Tarefa 29a**, que só existe
+  por causa do `en`. **É fatia própria**, está no `docs/BACKLOG.md`, e a lista do que sai está
+  na resposta da pergunta.
 - **Perguntas 3, 4, 6 e 8 do MVP 1** — sem resposta, e nenhuma bloqueou o MVP 3.
+- ✅ **Pergunta 5 do MVP 2** (o número de resultados na tela) — **respondida em 2026-09-17, e
+  ela é a mais sutil das quatro.** O gatilho que ela mesma escreveu (*"se você quiser o número,
+  diga explicitamente"*) **disparou** — você pediu o foguinho. Mas a guarda **não foi
+  relaxada**, e o contador de resultados **continua fora**: leia a resposta lá, porque a
+  diferença entre "um número" e "este número" é o que manteve a rede de pé.
+- ⚠️ **O que continua sem dono, e não é pergunta:** a busca corta em **500** e **não avisa**.
 
 ---
 

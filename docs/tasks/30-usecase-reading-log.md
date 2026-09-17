@@ -1,5 +1,12 @@
 # Tarefa 30 — Domínio `ReadingLog` + `markRead` / `unmarkRead`
 
+> ⚠️⚠️ **AVISO DE 2026-09-17 — LEIA ANTES DE USAR ESTA SPEC COMO RÉGUA.** Ela cita a
+> **pergunta 1 do MVP 3** (*"progresso é presença, não número"*) como decisão fechada do dono.
+> **O dono reverteu essa resposta** na Tarefa 38c, a corrente de leitura — o "foguinho":
+> → `docs/adr/0010-corrente-de-leitura-visivel.md`. **A spec não foi alterada**, porque ela
+> registra o que se decidiu no dia; o que ela entregou continua em pé e continua testado.
+> Estes mesmos `ReadingLog` são a matéria-prima da corrente — que é **calculada**, nunca guardada.
+
 > **A primeira fatia do MVP 3, e ela começa pelo domínio, como o `CLAUDE.md` manda** — sem
 > persistência, sem rota, sem tela. É a mesma abertura da Tarefa 22 no MVP 2 (`Highlight`
 > ganhou entidade, autoria e relógio antes de existir tabela).

@@ -37,6 +37,14 @@ export interface PersonAvatarProps {
  * nunca ordenação por volume, nunca medalha ou selo de sequência. Se uma tela
  * precisar mostrar quanto alguém escreveu, essa tela está errada antes de este
  * componente estar.
+ *
+ * ⚠️ **O "SELO DE SEQUÊNCIA" EXISTE DESDE A TAREFA 38c — e não é este
+ * componente.** O dono pediu a corrente de leitura e reafirmou com a objeção na
+ * mão (→ `docs/adr/0010-corrente-de-leitura-visivel.md`). ✅ **Medido, e é o
+ * que salva esta regra:** a `StreakBar` do app **não importa o `PersonAvatar`**
+ * — ela escreve o nome e o fogo por conta própria. A regra daqui continua
+ * valendo como está escrita: **este** componente não ganha contador nem selo, e
+ * quem precisar de um constrói fora dele, à vista de todo mundo.
  */
 export function PersonAvatar({
   className,

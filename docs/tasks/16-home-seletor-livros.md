@@ -1,5 +1,12 @@
 # Tarefa 16 — Home: seletor de clube, estante e a leitura de hoje
 
+> ⚠️⚠️ **AVISO DE 2026-09-17 — LEIA ANTES DE USAR ESTA SPEC COMO RÉGUA.** Ela cita a
+> **pergunta 1 do MVP 3** (*"progresso é presença, não número"*) como decisão fechada do dono.
+> **O dono reverteu essa resposta** na Tarefa 38c, a corrente de leitura — o "foguinho":
+> → `docs/adr/0010-corrente-de-leitura-visivel.md`. **A spec não foi alterada**, porque ela
+> registra o que se decidiu no dia; o que ela entregou continua em pé e continua testado.
+> Hoje a home mostra um número: o fogo de cada pessoa, acima do feed.
+
 > A tela que abre o app. É aqui que o **clube ativo** deixa de ser um termo do glossário e
 > passa a existir, e é aqui que o princípio anti-culpa é testado pela primeira vez.
 >

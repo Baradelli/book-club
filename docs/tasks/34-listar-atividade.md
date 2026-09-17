@@ -1,5 +1,12 @@
 # Tarefa 34 — `listActivity` + repositório + rota
 
+> ⚠️⚠️ **AVISO DE 2026-09-17 — LEIA ANTES DE USAR ESTA SPEC COMO RÉGUA.** Ela cita a
+> **pergunta 1 do MVP 3** (*"progresso é presença, não número"*) como decisão fechada do dono.
+> **O dono reverteu essa resposta** na Tarefa 38c, a corrente de leitura — o "foguinho":
+> → `docs/adr/0010-corrente-de-leitura-visivel.md`. **A spec não foi alterada**, porque ela
+> registra o que se decidiu no dia; o que ela entregou continua em pé e continua testado.
+> O `activityEventResponseSchema` **não ganhou contagem** e não foi tocado pela 38c.
+
 > **A fatia que paga uma dívida datada.** A Tarefa 33 deixou um
 > `PendingActivityEventRepository` que **lança de propósito**, e uma **guarda auto-desarmável**
 > que fica vermelha no instante em que o `model ActivityEvent` existir no `schema.prisma`.

@@ -1,5 +1,12 @@
 # Tarefa 32 — O `ReadingLog` chega ao banco e à API
 
+> ⚠️⚠️ **AVISO DE 2026-09-17 — LEIA ANTES DE USAR ESTA SPEC COMO RÉGUA.** Ela cita a
+> **pergunta 1 do MVP 3** (*"progresso é presença, não número"*) como decisão fechada do dono.
+> **O dono reverteu essa resposta** na Tarefa 38c, a corrente de leitura — o "foguinho":
+> → `docs/adr/0010-corrente-de-leitura-visivel.md`. **A spec não foi alterada**, porque ela
+> registra o que se decidiu no dia; o que ela entregou continua em pé e continua testado.
+> Esta rota **continua sem contagem**; o número da 38c veio de uma rota nova.
+
 > **⚠️ FATIA DIVIDIDA, e o motivo é medido.** O `BACKLOG` pedia *"Repo Prisma + rotas +
 > progresso na tela"*. A fatia equivalente do MVP 2 — a **Tarefa 24**, "Repo Prisma + rotas"
 > do grifo — custou **4.324 inserções em 16 arquivos**, e a tela foi a **Tarefa 25**,

@@ -60,10 +60,16 @@ export const en: typeof pt = {
         'You are already in this club. Sign in with your email and password.',
     },
     /*
-      ⚠️ A mesma regra do `pt`: nenhuma frase daqui cobra. A varredura da regra
-      16 roda contra o catálogo `pt` (é o idioma pinado nos testes), então o
-      `en` não é conferido por ela — quem escrever aqui é responsável por não
-      reintroduzir "you haven't", "overdue", "behind" ou "pending".
+      ⚠️ A mesma regra do `pt`: nenhuma frase daqui cobra, fora as isentas por
+      nome do ADR 0010 (a corrente, logo abaixo, e a moldura de perda do
+      lembrete).
+
+      ⚠️⚠️ ~~"A varredura da regra 16 roda contra o catálogo `pt` … então o `en`
+      não é conferido por ela"~~ — **ISSO SEMPRE FOI FALSO, e era o ponteiro morto
+      mais perigoso do repositório**: ele convidava a escrever cobrança em inglês
+      achando que não havia rede embaixo. A `anti-guilt.test.ts` varre **os dois
+      catálogos** desde que existe. O erro é anterior ao foguinho e não foi ele
+      que o criou; foi ele que fez alguém reler esta linha.
     */
     home: {
       streak: {
@@ -476,7 +482,11 @@ export const en: typeof pt = {
     arrives without anyone opening a screen. See the pt catalogue for the two
     reasons it lives here (the backend writes no raw prose, and the language is
     the person's `Settings.locale`, because no browser is open when it goes
-    out), and for why it never nags.
+    out), and for why the plain `body` never nags.
+
+    ⚠️ ~~"it never nags"~~ — since Tarefa 38c that holds for the `body` only.
+    The `streakBody_*` pair right below nags **on purpose** (ADR 0010), and goes
+    only to people who HAVE a streak to lose.
   */
   notifications: {
     readingReminder: {

@@ -30,6 +30,26 @@ gente, ou abrir um segundo clube, tem que ser cadastro, não refactor.
   é normal; o app existe para retomar, não para cobrar.
 - **Incentivo por presença, não por comparação.** A atividade do outro é o que puxa: "ela
   escreveu sobre o capítulo 4". Nunca um ranking, nunca um placar de quem leu mais.
+
+> ⚠️⚠️ **OS DOIS PRINCÍPIOS ACIMA FORAM PARCIALMENTE REVERTIDOS PELO PRÓPRIO DONO, na
+> Tarefa 38c** — a corrente de leitura, o "foguinho". Ela é um **número por pessoa**, visível
+> para o clube inteiro, com uma frase de perda para quem tem corrente viva e ainda não leu
+> hoje. A objeção foi levantada **antes de qualquer linha**, com a medição na mão, e o dono
+> reafirmou escolhendo a opção completa. → `docs/adr/0010-corrente-de-leitura-visivel.md`.
+>
+> **Eles ficam escritos, e não riscados inteiros, porque a maior parte sobreviveu** — e
+> porque esta seção é o lugar onde o próximo agente vem procurar a régua:
+>
+> - ✅ o lembrete **continua não chegando para quem já leu**;
+> - ✅ **não há ranking** nem ordenação por quem leu mais — a rota da corrente não promete
+>   ordem, e quem desenha a tela escolhe a dele;
+> - ✅ **nenhuma linha do feed ganhou contagem**: o contrato do `ActivityEvent` não devolve
+>   número nenhum, e isso é estrutural, não uma varredura de texto;
+> - ✅ **nenhuma tela mostra dívida vermelha**, e "atraso é normal" continua valendo;
+> - ❌ **caiu o "nunca um número".** E, honestamente: num clube de duas pessoas, dois números
+>   lado a lado se comparam sozinhos, sem precisar de ranking. Esse é o custo, e ele está
+>   escrito no ADR em vez de escondido aqui.
+
 - **Tudo compartilhado, e isso é decisão.** Dentro do clube, todo mundo vê tudo. O filtro
   ("Tudo / Minhas / de X") é **navegação, não permissão**. Não existe nota privada — porque
   a nota que ninguém lê não é clube do livro, é diário. → `docs/adr/0002-*.md`.

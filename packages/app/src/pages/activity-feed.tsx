@@ -27,12 +27,24 @@ import { bookPath, highlightPath } from './paths';
 import { StreakBar } from './streak-bar';
 
 /**
- * O FEED DE ATIVIDADE DA HOME (Tarefa 35) — "o clube está vivo", sem placar.
+ * O FEED DE ATIVIDADE DA HOME (Tarefa 35) — "o clube está vivo", ~~sem placar~~.
+ *
+ * ⚠️ **"SEM PLACAR" CAIU NA TAREFA 38c, E ESTE ARQUIVO É O PRIMEIRO A DESMENTIR
+ * O QUE ESCREVE.** O dono pediu a corrente de leitura — o foguinho — e reafirmou
+ * com a objeção e a medição na mão; está registrado em
+ * `docs/adr/0010-corrente-de-leitura-visivel.md`. A `<StreakBar>` importada logo
+ * acima e renderizada no TOPO desta tela mostra um **número por pessoa do clube**.
+ * ⚠️ **Nada abaixo foi apagado, porque quase tudo continua valendo** — as decisões
+ * A, B e D seguem de pé e seguem testadas. O que caiu é a promessa LARGA, e ela
+ * está riscada onde aparece. Leia o resto como "o feed em si não conta nada",
+ * não como "esta tela não tem número".
  *
  * ⚠️ **ESTA É A SUPERFÍCIE MAIS PERIGOSA DO MVP PARA O §1 DO PLANO.** Um feed é,
  * por construção, uma superfície de **comparação**: quem fez mais aparece mais.
- * `docs/ACEITE-MVP.md` (MVP 3, pergunta 1, respondida pelo dono) decide que
- * atividade é **presença, não placar**, e cada decisão daqui executa isso:
+ * `docs/ACEITE-MVP.md` (MVP 3, pergunta 1, respondida pelo dono) decidia que
+ * atividade é **presença, não placar** — ⚠️ **e o próprio dono reverteu essa
+ * resposta depois (ADR 0010)**. As decisões daqui continuam executando a parte
+ * que sobreviveu:
  *
  * - **a linha é uma FRASE, não uma tabela** (decisão A). Uma coluna de pessoa
  *   convida o olho a varrê-la e contar; a frase obriga a ler uma coisa de cada
@@ -40,10 +52,14 @@ import { StreakBar } from './streak-bar';
  * - **ordem cronológica pura, sem agrupar** (decisão B). Agrupar por pessoa **é**
  *   o placar; agrupar por dia cria cabeçalhos que viram régua ("ontem: 4 · hoje:
  *   0").
- * - **nenhum número em lugar nenhum** (regra 5): nem contagem, nem "+N", nem
- *   "e mais 3". E a metade ESTRUTURAL é mais forte que a varredura: o contrato
- *   da rota (`activityEventResponseSchema`) não devolve contagem nenhuma, então
- *   não existe número para renderizar por engano.
+ * - ~~**nenhum número em lugar nenhum** (regra 5): nem contagem, nem "+N", nem
+ *   "e mais 3".~~ ⚠️ **ESTA É A QUE MORREU** — o foguinho é exatamente um número
+ *   nesta tela. ✅ **A metade ESTRUTURAL, porém, continua inteira e é o que
+ *   importa guardar:** o contrato do EVENTO (`activityEventResponseSchema`) não
+ *   devolve contagem nenhuma e **não mudou** na 38c; o número da corrente vem de
+ *   outra rota (`GET /clubs/:clubId/streaks`), por outro schema. Nenhuma LINHA
+ *   do feed ganhou número — continua sendo impossível renderizar "3 atividades"
+ *   por engano aqui.
  * - **sem "carregar mais"** — um botão de histórico é o convite a rolar
  *   procurando quem fez mais, que é a comparação pela porta dos fundos.
  *

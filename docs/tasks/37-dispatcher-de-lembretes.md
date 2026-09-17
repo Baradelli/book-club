@@ -1,4 +1,16 @@
-# Tarefa 37 — `dispatchDueNotifications`: o lembrete que não cobra
+# Tarefa 37 — `dispatchDueNotifications`: ~~o lembrete que não cobra~~
+
+> ⚠️⚠️ **O TÍTULO DESTA SPEC FICOU FALSO EM 2026-09-17, e ele é o ponteiro morto mais
+> chamativo do repositório porque é o nome do arquivo que aparece na listagem.** Na Tarefa 38c
+> o dono pediu a corrente de leitura e, com ela, a **moldura de perda no lembrete**: quem tem
+> corrente e ainda não leu recebe *"Você vai perder a sua sequência de N dias"*.
+> → `docs/adr/0010-corrente-de-leitura-visivel.md`.
+>
+> **O arquivo não foi renomeado de propósito** — o nome está em commits, no `BACKLOG.md` e em
+> meia dúzia de docblocks, e um link quebrado é pior que um título riscado. ✅ **E a metade que
+> continua valendo é a que mais importa:** o lembrete **continua não chegando para quem já
+> leu**, e quem está em **zero** continua recebendo a frase simples, sem moldura. O que caiu é
+> o "não cobra" como promessa larga — hoje ele cobra **quem tem o que perder**, e só.
 
 > **A fatia mais pesada do MVP 3.** Ela é a única que decide, sozinha e sem ninguém olhando,
 > mandar uma mensagem para o celular de uma pessoa. Tudo aqui é sobre **não mandar**: não

@@ -35,12 +35,25 @@ import { bookNewPath, bookPath, isClubAdmin, searchPath } from './paths';
  * de hoje**, e o que o clube está lendo.
  *
  * ⚠️ **O PRINCÍPIO ANTI-CULPA É REGRA TESTADA AQUI, NÃO INTENÇÃO** (regra 16).
- * Sem trecho de leitura hoje, esta tela **não cobra nada**: nem "você está
- * atrasado", nem "faltam 3 dias", nem badge de pendência, nem vermelho de
- * atraso. `text-danger`/`bg-danger` não aparecem em lugar nenhum deste arquivo,
- * e o acusador é a varredura de DOM (texto **e** atributos) de
+ * Sem trecho de leitura hoje, ~~esta tela~~ **este arquivo não cobra nada**: nem
+ * "você está atrasado", nem "faltam 3 dias", nem badge de pendência, nem vermelho
+ * de atraso. `text-danger`/`bg-danger` não aparecem em lugar nenhum deste
+ * arquivo, e o acusador é a varredura de DOM (texto **e** atributos) de
  * `__tests__/home.test.tsx` — o mesmo espírito da guarda do ADR 0002 no
  * `FilterChip`.
+ *
+ * ⚠️ **"ESTA TELA" VIROU FALSO NA TAREFA 38c, E A TROCA POR "ESTE ARQUIVO" NÃO É
+ * ESCAPISMO — É O QUE A GUARDA MEDE.** A home renderiza o `<ActivityFeed>`, que
+ * renderiza a `<StreakBar>`: quem tem corrente viva e ainda não leu hoje **lê
+ * uma frase de perda nesta tela**. Foi pedido pelo dono e reafirmado com a
+ * objeção e a medição na mão → `docs/adr/0010-corrente-de-leitura-visivel.md`.
+ * ✅ **O que a guarda continua cobrindo de verdade:** a `expectNoGuilt` roda em
+ * todos os estados desta suíte, e neles a corrente vem **vazia** — qualquer
+ * cobrança que nasça no corpo da home continua ficando vermelha. ⚠️ **O que ela
+ * deixou de cobrir, de propósito:** os estados de corrente não a chamam, porque
+ * chamá-la sobre a frase que o dono pediu seria escrever um teste para falhar.
+ * A isenção é **nominal, por chave, e pinada por igualdade exata** na
+ * `GUILT_TERMS` (`STREAK_KEYS`): ampliá-la fica vermelho.
  *
  * ⚠️ **E O ESTADO VAZIO VEM PRIMEIRO, NÃO POR ÚLTIMO.** O seed cria
  * `admin@clube.local` com `isSuperAdmin: true` e **zero memberships**: a

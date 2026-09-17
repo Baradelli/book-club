@@ -136,6 +136,14 @@ export const activityType = z.enum(ACTIVITY_TYPES);
  * irrenderizável — uma tela não pode desenhar um placar que a resposta não
  * carrega.
  *
+ * ⚠️ **A JUSTIFICATIVA LARGA CAIU NA TAREFA 38c** — o dono reverteu a
+ * pergunta 1 e pediu a corrente de leitura, que **é** um número por pessoa
+ * (→ `docs/adr/0010-corrente-de-leitura-visivel.md`). ✅ **A afirmação
+ * estreita daqui continua inteira e continua testada:** este schema não ganhou
+ * contagem nenhuma na 38c e não mudou uma linha. O número da corrente vem de
+ * OUTRA rota, com outro schema — continua sendo impossível desenhar um placar
+ * de atividade a partir desta resposta.
+ *
  * `userId` aparece porque dentro do clube não existe conteúdo privado (ADR
  * 0002): o evento **não cria visibilidade nova** — ele aponta para o que todo
  * membro ativo já podia ver.

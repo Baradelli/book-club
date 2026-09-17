@@ -1,8 +1,13 @@
 # README-IA.md — Guia dos documentos deste repositório
 
-> Este repositório contém, neste momento, **só documentação**. Nenhuma linha de código, nenhum
-> `package.json`, nenhum `node_modules`. O código nasce executando as tarefas de
-> `docs/BACKLOG.md`, uma por vez.
+> ⚠️⚠️ **ESTE PARÁGRAFO ESTAVA MENTINDO HÁ TRÊS MVPs, e é a primeira coisa que alguém lê no
+> repositório.** Corrigido em **2026-09-17**, no fechamento do MVP 3.
+>
+> ~~Este repositório contém, neste momento, **só documentação**. Nenhuma linha de código,
+> nenhum `package.json`, nenhum `node_modules`.~~ O repositório é um **monorepo pnpm com
+> quatro pacotes** (`shared`, `ui`, `backend`, `app`), com os MVPs **1, 2 e 3 entregues** —
+> domínio, banco, rotas, telas, PWA e push. O código nasce executando as tarefas de
+> `docs/BACKLOG.md`, uma por vez, e é assim até hoje.
 >
 > Se você é um agente começando aqui: **cole `PROMPT-INICIAL.md` como primeira mensagem** ou
 > siga a ordem de leitura abaixo.
@@ -97,8 +102,15 @@ O título da API no Swagger (`docs/tasks/04-*.md`) também carrega o nome, mas �
 
 ## O estado atual
 
-Nada foi implementado. A próxima ação é `docs/SETUP.md` (uma vez) e depois
-`docs/tasks/01-usecase-clube-membership.md`.
+⚠️ **Atualizado em 2026-09-17.** ~~"Nada foi implementado. A próxima ação é `docs/SETUP.md`
+(uma vez) e depois `docs/tasks/01-usecase-clube-membership.md`."~~ — essa frase envelheceu
+por **três MVPs** antes de alguém reler esta seção, e é o exemplo mais caro do que o
+fechamento do MVP 3 foi caçar: **ponteiro morto não dá erro, não fica vermelho e não impede
+build — ele só faz o próximo agente acreditar.**
 
-As tarefas **01 a 04** já estão detalhadas. As demais estão listadas no `docs/BACKLOG.md`
-com `_a detalhar_` — por escolha: spec escrita cedo envelhece antes de ser usada.
+**Entregues:** MVP 1 (Tarefas 01–21), MVP 2 (22–29) e MVP 3 (29a–38c, incluindo o foguinho do
+ADR 0010). **A próxima ação** de quem chega é `docs/SETUP.md` (uma vez) e depois a primeira
+tarefa aberta do `docs/BACKLOG.md` — hoje o **MVP 4**, administração.
+
+A regra de detalhamento continua a mesma, e ela se provou: **spec escrita cedo envelhece antes
+de ser usada**, então as tarefas ficam `_a detalhar_` no `docs/BACKLOG.md` até a vez delas.

@@ -16,6 +16,14 @@ import { groupUsersByPlanItem } from './plan-item-groups';
  * rota não devolve contagem nenhuma — decisão do dono na rodada do MVP 3, e é
  * o que torna o número impossível de renderizar por construção.
  *
+ * ⚠️ **A JUSTIFICATIVA LARGA CAIU NA TAREFA 38c** — o dono reverteu a
+ * pergunta 1 e pediu a corrente de leitura, que **é** um número por pessoa
+ * (→ `docs/adr/0010-corrente-de-leitura-visivel.md`). ✅ **A afirmação
+ * estreita daqui continua inteira e continua testada:** este tipo não ganhou campo
+ * nenhum. ⚠️ **E "nenhuma comparação entre pessoas" virou meia-verdade no
+ * produto**, não aqui: a corrente é por pessoa e o clube a vê. Quem quiser
+ * medir progresso no livro continua sem contagem para onde olhar.
+ *
  * `userIds` é **ordenado**, para a saída ser determinística: nenhum port
  * promete ordem, e o fake enumera invertido de propósito (§7.2).
  */

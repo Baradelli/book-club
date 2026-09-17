@@ -1,5 +1,12 @@
 # Tarefa 32b — A marca de leitura na tela do livro
 
+> ⚠️⚠️ **AVISO DE 2026-09-17 — LEIA ANTES DE USAR ESTA SPEC COMO RÉGUA.** Ela cita a
+> **pergunta 1 do MVP 3** (*"progresso é presença, não número"*) como decisão fechada do dono.
+> **O dono reverteu essa resposta** na Tarefa 38c, a corrente de leitura — o "foguinho":
+> → `docs/adr/0010-corrente-de-leitura-visivel.md`. **A spec não foi alterada**, porque ela
+> registra o que se decidiu no dia; o que ela entregou continua em pé e continua testado.
+> A tela do livro **não mudou**: o foguinho vive na home.
+
 > **Fatia inserida**, a metade de tela da Tarefa 32 (o motivo da divisão está lá: a irmã do
 > MVP 2 sem tela já custou 4.324 inserções). Aqui o "li" vira gesto.
 >

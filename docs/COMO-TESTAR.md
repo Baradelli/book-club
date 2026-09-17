@@ -85,12 +85,16 @@
 - **Arquivar grifo ou anotação sem conexão** → o mesmo motivo.
 - **Criar clube e convidar pela interface** → MVP 4 (Tarefas 42/43). Por API (§5).
 - **Desarquivar** qualquer coisa → MVP 4. Arquivado é invisível, inclusive para quem escreveu.
-- ⚠️ **VER PROGRESSO COMO NÚMERO** — percentual, "12 de 30 dias", barra que enche. **Não
-  existe, e é decisão de produto, não fatia faltando.** O MVP 3 mostra progresso como
-  **presença**: uma marca por leitor, por dia. A rota **não devolve contagem nenhuma**, então o
-  número é impossível de renderizar por construção — a ideia é que o clube não vire placar. É a
-  **pergunta 1 do MVP 3** no `docs/ACEITE-MVP.md`: se depois de usar você quiser o número,
-  diga, e ele é fatia própria (e reabre a decisão, não só a tela).
+- ⚠️ **VER PROGRESSO DO LIVRO COMO NÚMERO** — percentual, "12 de 30 dias", barra que enche.
+  **Não existe, e é decisão de produto, não fatia faltando.** O progresso no livro aparece como
+  **presença**: uma marca por leitor, por dia. A rota do plano e a da atividade **não devolvem
+  contagem nenhuma**, então esse número é impossível de renderizar por construção.
+  ⚠️⚠️ **MAS UM NÚMERO EXISTE AGORA, E É VOCÊ QUEM O PEDIU:** ~~"se depois de usar você quiser
+  o número, diga, e ele é fatia própria"~~ — você disse, e a fatia saiu. A **corrente de dias
+  seguidos** (o foguinho, Tarefa 38c) é contagem, aparece na home e é visível para o clube
+  inteiro: veja o **§6.5.1**, e a reversão da pergunta 1 em
+  `docs/adr/0010-corrente-de-leitura-visivel.md`. O que continua fora é o número **do livro**:
+  nenhum "12 de 30", nenhuma barra que enche.
 - ⚠️ **"CARREGAR MAIS" NO FEED** → de fora de propósito. Paginação convida a rolar o histórico
   procurando quem fez mais, que é a mesma coisa que o placar. O feed mostra a atividade
   recente e para.
@@ -638,8 +642,21 @@ lembradas), `skipped` (quantas não foram, por **qualquer** motivo) e `disabled`
 3. Garanta que **existe plano para hoje** no livro do clube — sem trecho do dia, não há do que
    lembrar, e a pessoa conta como `skipped`.
 4. ⚠️ Garanta que você **não marcou "li hoje"** — quem já leu **não** recebe lembrete. Essa é
-   a regra anti-culpa, e ela é o ponto da feature.
+   a regra anti-culpa, e ela é a única metade dela que o foguinho **não** derrubou.
 5. Rode o comando.
+
+⚠️ **DUAS FRASES DIFERENTES PODEM CHEGAR, e qual delas depende da SUA corrente** (Tarefa 38c,
+`docs/adr/0010-corrente-de-leitura-visivel.md`). Era para isto que o §6.5.1 apontava aqui:
+
+| Sua corrente hoje | O que o aparelho mostra |
+|---|---|
+| **zero** | o lembrete de sempre: só o tema do dia, sem moldura — quem não tem nada a perder não é cobrado |
+| **um dia ou mais** | *"Você vai perder a sua sequência de N dias"* **seguido do tema do dia** — mesmo cobrando, o lembrete tem de dizer o que ler |
+
+⚠️ **A segunda não se fabrica em cinco minutos, e isso é consequência de outra decisão sua:**
+como **dia passado não se marca pela tela** (§1), ter corrente hoje significa ter lido de
+verdade nos dias anteriores do plano. Ou você já vem lendo, ou insere os `ReadingLog` dos dias
+passados pelo banco (§8) — e aí, com **hoje** ainda sem marcar, o comando manda a moldura.
 
 ⚠️ **Rodar duas vezes não manda duas vezes.** Há uma trava no banco (um registro por pessoa,
 por tipo, por dia no fuso dela), e é ela que deixa o cron rodar de cinco em cinco minutos sem

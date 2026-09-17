@@ -971,13 +971,22 @@ export const pt = {
        sai. É a única mensagem do produto que não pode perguntar ao i18n da
        tela.
 
-    ⚠️ **E ELA NÃO COBRA** (`docs/plano-clube-do-livro.md` §1 e regra 15): nada
+    ⚠️ ~~**E ELA NÃO COBRA** (`docs/plano-clube-do-livro.md` §1 e regra 15): nada
     de "você não leu", "faltam N dias", "você está atrasada", nem contagem de
-    coisa alguma. Ela diz **o trecho de hoje** e para por aí — o mesmo texto do
-    `home.today.heading`, que é o que a pessoa vê ao abrir o app. Quem guarda
-    isso é a varredura de `__tests__/anti-guilt.test.ts`, que percorre os DOIS
-    catálogos: uma guarda de tela nunca veria esta frase, porque ela não passa
-    por tela nenhuma.
+    coisa alguma.~~ **CAIU PELA METADE NA TAREFA 38c** — leia a ressalva abaixo
+    antes de acreditar nesta frase. Ela diz **o trecho de hoje** e para por aí —
+    o mesmo texto do `home.today.heading`, que é o que a pessoa vê ao abrir o
+    app. Quem guarda isso é a varredura de `__tests__/anti-guilt.test.ts`, que
+    percorre os DOIS catálogos: uma guarda de tela nunca veria esta frase, porque
+    ela não passa por tela nenhuma.
+
+    ⚠️ **A RESSALVA (ADR 0010, pedido do dono e reafirmado por ele):** existem
+    agora DUAS frases de lembrete, e a diferença importa. O `body` é o de sempre
+    e continua não cobrando nada — é o que recebe quem está em **zero**, ou seja,
+    justamente quem já não tem nada a perder. O `streakBody_*` **cobra de
+    propósito**, com contagem e moldura de perda, e vai só para quem **tem**
+    corrente. As duas chaves da moldura são **isentas por nome** da varredura, e
+    a isenção é **pinada por igualdade exata**: ampliar a lista fica vermelho.
   */
   notifications: {
     readingReminder: {

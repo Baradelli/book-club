@@ -1,5 +1,12 @@
 # Tarefa 35 — O feed de atividade na home
 
+> ⚠️⚠️ **AVISO DE 2026-09-17 — LEIA ANTES DE USAR ESTA SPEC COMO RÉGUA.** Ela cita a
+> **pergunta 1 do MVP 3** (*"progresso é presença, não número"*) como decisão fechada do dono.
+> **O dono reverteu essa resposta** na Tarefa 38c, a corrente de leitura — o "foguinho":
+> → `docs/adr/0010-corrente-de-leitura-visivel.md`. **A spec não foi alterada**, porque ela
+> registra o que se decidiu no dia; o que ela entregou continua em pé e continua testado.
+> ⚠️ **Esta é a spec que mais envelheceu**: o feed continua sem número por linha, mas a `StreakBar` é renderizada por cima dele, no mesmo arquivo.
+
 > **A última fatia do Bloco H, e a mais perigosa do MVP inteiro para o §1 do plano.** Um feed
 > é, por construção, uma superfície de **comparação**: quem fez mais aparece mais. Toda decisão
 > aqui existe para entregar o incentivo sem entregar o placar.

@@ -35,6 +35,14 @@ export interface GetBookWithPlanOutput {
    * lugar nenhum desta resposta. Progresso é **presença** (decisão do dono,
    * `docs/ACEITE-MVP.md` MVP 3, pergunta 1) e é **calculado** a partir dos
    * logs, nunca guardado. É o contrato que torna o número irrenderizável.
+   *
+   * ⚠️ **A JUSTIFICATIVA LARGA CAIU NA TAREFA 38c** — o dono reverteu a
+   * pergunta 1 e pediu a corrente de leitura, que **é** um número por pessoa
+   * (→ `docs/adr/0010-corrente-de-leitura-visivel.md`). ✅ **A afirmação
+   * estreita daqui continua inteira e continua testada:** esta resposta continua sem
+   * contagem. ⚠️ **A pergunta 1 foi revertida pelo dono**, mas a reversão não
+   * passou por aqui: a corrente nasceu em `GetClubStreaks`, um caso de uso
+   * próprio, e "calculado, nunca guardado" continua valendo para as duas.
    */
   readers: PlanItemReaders[];
 }

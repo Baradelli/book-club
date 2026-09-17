@@ -92,7 +92,10 @@ import { ReadMarks, TodayReading } from './reading-marks';
  *   proíbe comparação. É a decisão do dono em `docs/ACEITE-MVP.md` (MVP 3,
  *   pergunta 1): progresso é **presença**, e a rota não devolve contagem
  *   nenhuma, então o número é irrenderizável por CONTRATO, não por estilo
- *   (→ `docs/adr/0002-visibilidade-total-no-clube.md`);
+ *   (→ `docs/adr/0002-visibilidade-total-no-clube.md`). ⚠️ **A pergunta 1 foi
+ *   revertida pelo dono na Tarefa 38c** (→ `docs/adr/0010-…`), mas **a tela do
+ *   livro não mudou**: o foguinho vive na home, e esta tela continua sem
+ *   contador porque a resposta dela continua sem contagem;
  * - **só hoje é destacado.** Destacar "atrasados" é cobrança desenhada;
  *   destacar o futuro não serve para nada.
  *

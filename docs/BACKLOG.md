@@ -2892,8 +2892,13 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       medido, guarda da 29a de pé e a revisão do `push-handler.js` no `sw.js` intacta.
       `backend`, `prisma` e `ui` intocados; nenhuma dependência nova; nenhuma migration._
 
-- [x] **39** — A corrente de leitura: o "foguinho". ⚠️ **FATIA PEDIDA PELO DONO depois do
+- [x] **38c** — A corrente de leitura: o "foguinho". ⚠️ **FATIA PEDIDA PELO DONO depois do
       fechamento do MVP 3, e ela REVERTE a decisão 1 — que era dele.**
+      ⚠️ _Nasceu numerada **39** (é assim que o commit `2c00924` a chama) e virou **38c** no
+      fechamento: já existia uma Tarefa 39 no MVP 4 (super-admin), e duas tarefas com o mesmo
+      número num backlog são uma marcação de checklist na linha errada esperando acontecer.
+      Sufixo de letra é a convenção do projeto para fatia inserida — 26a, 29a, 32b, 32c, 34b,
+      36b, 38b._
       → `docs/adr/0010-corrente-de-leitura-visivel.md`
       _**605 shared** (era 602) **· 195 ui** (intocado) **· 1918 backend** (era 1891, +27)
       **· 777 app** (era 770, +7). Integração **611** (era 608, +3). Chunk **433.129 B** (era
@@ -2949,18 +2954,51 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       medido, integração **611**, e o banco provado **idêntico por consulta** — inclusive o
       `ReadingLog` que o dono criou testando o app. Nenhuma dependência nova._
 
+- [ ] **38d** — Só português: apagar o catálogo `en` e a maquinaria que só existe por causa
+      dele. ⚠️ **FATIA GERADA PELA RESPOSTA DO DONO à pergunta 7 do MVP 1** (2026-09-17):
+      *"só português — apagar o inglês"*. → `docs/ACEITE-MVP.md`, MVP 1, pergunta 7.
+      _⚠️ **Ela é maior do que "apagar um arquivo", e a razão é a Tarefa 29a**: aquela fatia
+      inteira existe para tirar o `en` do chunk de entrada por `import()`. Sem o `en`, viram
+      código morto e saem junto: o `import()` e o `changeLocale` (`app/src/i18n.ts`), o
+      `LanguagePicker` e o `persistLocale` (`App.tsx`), o `SUPPORTED_LOCALES`, o `isLocale` e o
+      `FALLBACK_LOCALE`, a metade `en` dos testes de paridade/anti-culpa/`catalogs`, e o
+      caminho de locale do `reminder-message.ts`, do `group-activity-message.ts` e do
+      `Settings.locale`._
+      _⚠️⚠️ **O PERIGO CONHECIDO, e ele é de service worker:** o `globIgnores: ['assets/en-*.js']`
+      do `vite.config.ts` sai — e a guarda que o pina tem **cinco** propriedades. Tirar uma não
+      pode derrubar as outras quatro, e é isso que a fatia tem de MEDIR uma a uma. O service
+      worker é a única peça capaz de quebrar o que já está entregue._
+      _**Ganho previsto:** ~11 KiB de precache, e a dívida dos **33 textos do editor** que só
+      existem em português deixa de ser dívida (era a pergunta 6 do MVP 2). **A perda,
+      registrada:** o segundo catálogo era a rede que pegava texto solto na tela._
+
+- [ ] **38e** — O tema do dia na linha do feed. ⚠️ **FATIA GERADA PELA RESPOSTA DO DONO à
+      pergunta 3 do MVP 3** (2026-09-17): *"quero o tema do dia na linha"*.
+      → `docs/ACEITE-MVP.md`, MVP 3, pergunta 3.
+      _⚠️ **O `ActivityEvent` NÃO carrega o título do dia** — ele tem `bookId` e `planItemId`.
+      Duas saídas, e a spec escolhe **com medição**: (a) a tela resolve o título pelo
+      `planItemId` que o evento já carrega; (b) a rota do feed devolve o título junto. As duas
+      custam uma consulta a mais e nenhuma toca o modelo._
+      _⚠️⚠️ **A terceira saída está RECUSADA POR ESCRITO desde a Tarefa 35**: denormalizar o
+      título dentro do evento. O `ActivityEvent` é log imutável, e um título velho é uma tela
+      que mente sobre o passado no dia em que o admin corrigir o plano._
+      _**Ordem:** depois da **38d**, de propósito — com um catálogo só, esta fatia mexe em
+      metade dos arquivos de texto._
+
 ## Definição de "MVP 3 pronto"
 
 Eu marco que li o trecho de hoje e vejo onde eu e o clube estamos no livro. Recebo um
 lembrete no horário que eu escolhi — e não recebo se eu já li. E quando ela lê, escreve ou
 grifa, meu celular avisa e a atividade aparece no feed da home.
 
-**Conferida frase por frase no fechamento** (o detalhe está em `ACEITE-MVP.md` §A.4):
+**Conferida frase por frase no fechamento** (o detalhe está em `ACEITE-MVP.md` §A.4).
+⚠️ **A conferência é de `7aa764e`, ANTES das duas fatias que o dono pediu depois** (38b, o
+botão de testar; e 38c, o foguinho). Só uma linha mudou de sentido, e ela está marcada:
 
 | Pedaço | Estado |
 | --- | --- |
 | *"marco que li o trecho de hoje"* | ✅ ⚠️ **só o dia de hoje** — dia passado não se marca pela tela (pergunta 2) |
-| *"vejo onde eu e o clube estamos no livro"* | ✅ **como presença, não como número** — resposta do dono à pergunta 1, tornada estrutural (a rota não devolve contagem) |
+| *"vejo onde eu e o clube estamos no livro"* | ✅ ⚠️ **entregue duas vezes, e a segunda reverteu a primeira.** Primeiro como ~~**presença, não número**~~ (resposta do dono à pergunta 1, tornada estrutural: a rota da atividade não devolve contagem — **e isso continua verdade**); depois, a pedido dele, **também como número** — a corrente de dias, visível para o clube (Tarefa 38c, ADR 0010) |
 | *"recebo um lembrete no horário que eu escolhi"* | ⚠️ **entregue, NÃO automático** |
 | *"e não recebo se eu já li"* | ✅ |
 | *"meu celular avisa"* | ⚠️ **entregue, com duas condições de ambiente** |
