@@ -86,6 +86,10 @@ function toDomain(record: PrismaHighlight): Highlight {
     clubId: record.clubId,
     bookId: record.bookId,
     userId: record.userId,
+    // O dia do plano em que o grifo nasceu, ou `null` — a emenda de 2026-09-18
+    // ao ADR 0004. Coluna anulável de propósito: grifo em dia sem plano é o
+    // caso que o ADR protege.
+    planItemId: record.planItemId,
     quote: record.quote,
     // A coluna é `String` (o `CLAUDE.md` lista `Highlight.color` entre os campos
     // validados por `z.enum`, porque paleta configurável por clube é o futuro
@@ -131,6 +135,12 @@ function toUpsertUpdateData(highlight: Highlight) {
     clubId: highlight.clubId,
     bookId: highlight.bookId,
     userId: highlight.userId,
+    // Vai no `update` do upsert junto de `clubId`/`bookId`/`userId`, e não com
+    // o `createdAt`: o `save` escreve a entidade INTEIRA, e o dia em que o
+    // grifo nasceu acompanha a linha que o reenvio da fila offline reescreve.
+    // Quem NÃO pode mexer nele é o `editHighlight` — `planItemId` está fora do
+    // `HighlightPatch`, como o `createdAt`.
+    planItemId: highlight.planItemId,
     quote: highlight.quote,
     color: highlight.color,
     page: highlight.page,
@@ -287,5 +297,36 @@ export class PrismaHighlightRepository implements HighlightRepository {
       take: FIND_ROW_LIMIT,
     });
     return records.map(toDomain);
+  }
+
+  /**
+   * Dos ids dados, quais têm algum grifo — **inclusive arquivado**.
+   *
+   * Byte por byte o irmão do `PrismaNoteRepository.planItemIdsWithAnyNote`, e
+   * pelas mesmas três razões: sem cláusula de `status` (a FK não olha status),
+   * **sem `take`** (um corte aqui faria a guarda PERDER um dia com grifo e
+   * liberar uma remoção que a FK depois recusa — a válvula viraria a falha), e
+   * deduplicação em memória como CONTRATO (dois grifos no mesmo dia são UM id,
+   * senão a mensagem da guarda diria "2 dias" para um dia só).
+   */
+  async planItemIdsWithAnyHighlight(
+    planItemIds: readonly string[],
+  ): Promise<string[]> {
+    // O port promete "lista vazia não vai ao banco". Sem isto seria um `IN ()`,
+    // uma ida garantidamente vazia em toda troca de plano que não remove nada.
+    if (planItemIds.length === 0) return [];
+
+    const rows = await this.prisma.highlight.findMany({
+      where: { planItemId: { in: [...planItemIds] } },
+      select: { planItemId: true },
+    });
+
+    const found = new Set<string>();
+    for (const { planItemId } of rows) {
+      // O `IN (...)` já exclui a coluna nula (o grifo sem dia de plano): `NULL`
+      // não é igual a nada. O tipo é que não sabe disso.
+      if (planItemId !== null) found.add(planItemId);
+    }
+    return [...found];
   }
 }

@@ -1548,9 +1548,17 @@ Sem grifos em tela própria (MVP 2), sem marcar "li", sem feed e sem notificaç�
       **não** tem campo de texto; a busca filtra por texto e **não** tem as outras quatro; as
       cinco **nunca coexistem**. A boa notícia é que a segunda metade ficou **barata** (o `text`
       já existe em todas as camadas dos **dois** recursos). (2) *"por capítulo"* **não existe
-      para grifo** em lugar nenhum: o `readingKeyOf` devolve `null` para `HIGHLIGHT`, o capítulo
+      para grifo** em lugar nenhum: o `readingOf` devolve `null` para `HIGHLIGHT`, o capítulo
       de um grifo mora na `reference`, e há teste que **pina** que a busca não a toca. A segunda
       é lacuna de produto que **ninguém tinha nomeado** até a auditoria da última fatia._
+      _⚠️ **DUAS CORREÇÕES DE 2026-09-18, e as duas são da regra 11.** (a) A função **nunca se
+      chamou `readingKeyOf`** — é `readingOf`, em `acervo-entries.ts`; o nome errado foi escrito
+      aqui e copiado para a "Definição de MVP 2 pronto", e sobreviveu a dez fatias porque
+      ninguém procurou. É a lição do `dayRange` que o `CLAUDE.md` registra: um nome que não
+      existe faz o próximo leitor procurar, não achar, e inventar um terceiro. (b) A frase
+      *"devolve `null` para `HIGHLIGHT`"* **deixou de ser verdade na Tarefa 38i** — ela fica
+      como estava porque este parágrafo é o registro do que a auditoria da 29 mediu **naquele
+      dia**, e o que mudou está escrito onde a lacuna foi nomeada._
       _**Dívidas registradas:** a aritmética do teto de 500 vale para a anotação do plano
       (~8 meses); para **grifo** é **~3 meses** para quem grifa 5 trechos por dia, e essa
       correção está no docblock · a tela **não avisa** quando corta em 500, e o conserto honesto
@@ -1591,12 +1599,29 @@ própria porque mudam o que o app é:
    ficou barata:** o filtro `text` já existe em **todas** as camadas dos **dois** recursos —
    port, fake, UseCase, repositório Prisma, borda e integração —, então um campo de texto no
    acervo é fatia curta de tela.
-2. **"por capítulo" não existe para GRIFO em lugar nenhum.** O filtro por leitura alcança só a
-   anotação do dia: o `readingKeyOf` devolve `null` para `HIGHLIGHT`, porque o ADR 0004 decidiu
+2. ~~**"por capítulo" não existe para GRIFO em lugar nenhum.** O filtro por leitura alcança só a
+   anotação do dia: o `readingOf` devolve `null` para `HIGHLIGHT`, porque o ADR 0004 decidiu
    (bem) que o grifo não depende de um dia do plano. O capítulo de um grifo mora na
    `reference` ("Cap. 12"), e **nem o filtro nem a busca a tocam** — há teste de contrato que
    **pina** que a busca não a casa. "Os grifos do capítulo 3" não tem como ser pedido.
-   É lacuna de produto que **ninguém havia nomeado** em nove fatias.
+   É lacuna de produto que **ninguém havia nomeado** em nove fatias.~~
+
+   ✅ **ENTREGUE (2026-09-18), por TRÊS fatias, e a lacuna que este parágrafo nomeou é o que as
+   gerou.** O dono leu isto no fechamento do MVP 2 e respondeu a pergunta 4 com **(c) e (d)**:
+
+   - **38h** — a **faixa de página** (`p. 40–60`), que é o eixo que o grifo sempre teve;
+   - **38i** — o **dia do plano no grifo** (`Highlight.planItemId?`, emenda ao ADR 0004): o
+     grifo nasce ancorado no trecho que o clube está lendo, e o filtro por leitura do acervo
+     passou a alcançá-lo (decisão G). *"Os grifos do capítulo 3"* **é pedível**;
+   - **38g** — de quebra, o campo de texto que fechou o item 1 acima.
+
+   ⚠️ **O que deste parágrafo CONTINUA verdade, e por isso ele fica riscado e não apagado:**
+   a `reference` do grifo ("Cap. 12") **continua sem filtro e sem busca** — o teste de contrato
+   que pina isso segue lá. O que mudou é que o capítulo deixou de depender dela: quem responde
+   *"de que trecho é este grifo"* agora é o **dia do plano**, que tem título próprio e não é
+   texto livre digitado à mão. ⚠️ **E o grifo ANTERIOR à migration continua com `planItemId`
+   nulo** — a coluna é aditiva e não retroage; derivar o dia daqueles a partir do `createdAt` é
+   exatamente a saída que a 38i recusou.
 
 **O que o MVP 2 entregou além da frase:** a rota de membros do clube (**26a**, inserida), que
 fechou a **pergunta 1 do MVP 1** — o filtro diz o nome e o avatar diz quem escreveu. E a
@@ -3135,7 +3160,7 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       pode falhar —, virou o `retryButton`. É o `authorLabel` da 38g de novo: a dimensão nova
       se paga com uma repetição a menos._
 
-- [ ] **38i** — O grifo ganha o dia do plano (`planItemId?`). ⚠️ **FATIA GERADA PELA RESPOSTA
+- [x] **38i** — O grifo ganha o dia do plano (`planItemId?`). ⚠️ **FATIA GERADA PELA RESPOSTA
       DO DONO à pergunta 4 do MVP 2, opção (d)** (2026-09-18). ⚠️ **A ÚNICA DAS TRÊS COM
       MIGRATION.** → emenda de 2026-09-18 em `docs/adr/0004-grifo-entidade-propria.md`.
       _⚠️⚠️ **O ACEITE CITAVA O ADR ERRADO, e o erro estava lá desde que a pergunta foi
@@ -3155,6 +3180,49 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       _⚠️ **Migration só via `prisma migrate dev --name <nome>`**, no executor desta fatia,
       **nunca SQL à mão** (`CLAUDE.md`). O banco é o de desenvolvimento do dono, com
       super-admin de seed — e o banco tem de ser **provado idêntico por consulta** depois._
+      _✅ **ENTREGUE (2026-09-18).** Migration `20260918155532_highlight_plan_item`,
+      gerada pelo Prisma (`prisma migrate dev --name highlight_plan_item`): duas linhas de SQL,
+      `ADD COLUMN "planItemId" TEXT` mais a FK `ON DELETE RESTRICT`. ⚠️ **O banco do dono foi
+      provado idêntico por consulta** — contagem das 13 tabelas e o CONTEÚDO inteiro de
+      `User`/`Club`/`Membership`/`Book`/`ReadingPlanItem`/`Note`/`Highlight`/`ReadingLog`/
+      `Settings`/`ActivityEvent` antes e depois: a ÚNICA diferença em todo o despejo é o
+      `"planItemId": null` que apareceu no único grifo do dono, e ele continua idêntico depois
+      da suíte de integração inteira._
+      _O grifo nasce com o item do plano de **hoje no fuso da pessoa** quando existe um, e com
+      `null` quando não existe — e é criado assim mesmo (decisão F). O `now` chega **injetado**
+      de UMA leitura de relógio, e a resolução custa **uma** consulta de plano e **uma** de
+      settings, provadas por contador (§7.3). `planItemId` no corpo é **400** pelo `.strict()`,
+      testado com o ator legítimo (§7.5)._
+      _⚠️⚠️ **A FATIA CRESCEU NUM PONTO QUE A SPEC NÃO PREVIU, e quem a obrigou foi um teste:**
+      `Highlight.planItemId` é a **QUARTA FK `ON DELETE RESTRICT`** apontando para o
+      `ReadingPlanItem`, e o `plan-item-fk-guards.test.ts` (Tarefa 34b) ficou **vermelho no
+      mesmo commit da coluna**, nomeando `Highlight.planItem` e o método a escrever. Entraram
+      o `planItemIdsWithAnyHighlight` (port + Prisma + fake, na MESMA unidade — §6.9) e a
+      **quarta guarda** do `replacePlanItems`, POR ÚLTIMO para não roubar a mensagem das três
+      que o admin já aprendeu. ✅ **É a primeira das quatro FKs que nasceu COM guarda** — as
+      duas anteriores (32→32c, 34→34b) precisaram de fatia de conserto._
+      _⚠️ **`onDelete: Restrict` EXPLÍCITO na relação opcional**, e não o `SetNull` que o Prisma
+      daria por omissão. ✅ **Não é decisão nova: é a TERCEIRA aplicação de um padrão que já está
+      duas vezes no mesmo schema** — `Note.planItem` e `ActivityEvent.planItem` são opcionais e
+      já declaram `Restrict` explicitamente, e o `SetNull` faria o `Highlight` ser a única das
+      quatro com regra diferente._
+      _⚠️ **E o argumento contra o `SetNull` foi CORRIGIDO na rodada de auditoria, porque a
+      retórica estava mais forte que a medição.** Ele dizia "é exatamente a tela mentindo sobre o
+      passado": não é exatamente — a derivação recusada **remapeava** para o dia errado
+      (mentira), o `SetNull` deixa **sem dia** (amnésia). O argumento que se sustenta é que o
+      `null` resultante é **indistinguível do grifo legitimamente avulso**: depois do fato
+      ninguém separa "nasceu sem dia" de "o admin apagou o dia", porque não há coluna, log nem
+      evento que registre a diferença._
+      _A dimensão de **leitura** do acervo passa a alcançar o grifo (decisão G): `readingOf`
+      devolve o dia dele e `typeCanCarryReading` passou a ser escrito pela NEGATIVA — a
+      única que nunca carrega dia é a **avulsa**. O grifo AVULSO continua sumindo
+      quando se escolhe uma leitura, pela mesma fidelidade do §7.1._
+      _Contagens: **590** shared (+3) · **195** ui · **1975** backend (+32) · **811** app (+12);
+      integração **629** (+11). Chunk de entrada **433.828 B** (teto 450.000, folga 16.172),
+      precache 16 / 900,65 KiB._
+      _**O `acervo.tsx` NÃO cresceu: 511 antes, 511 depois**, pelo contador canônico
+      (`acervo-filters.tsx` 257 → 257, `acervo-entries.ts` 167 → 169 — as duas linhas do
+      `readingOf`, que deixou de ser um ternário de uma linha)._
 
 ## Definição de "MVP 3 pronto"
 

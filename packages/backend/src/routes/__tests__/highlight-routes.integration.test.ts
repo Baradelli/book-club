@@ -1,3 +1,4 @@
+import { localDay } from '@clube/shared';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -8,6 +9,7 @@ import {
   prisma,
   removeFixtures,
 } from '../../repositories/__tests__/_db';
+import { required } from '../../test-support/builders';
 
 const CLUB_ID = prefixedId('t24r', 'club');
 const OTHER_CLUB_ID = prefixedId('t24r', 'otherclub');
@@ -58,19 +60,37 @@ const SEARCH_BOOK_ID = prefixedId('t29', 'hl-searchbook');
 
 const membershipIds: string[] = [];
 const userIds: string[] = [MARIA_ID, MARCOS_ID, OUTSIDER_ID];
+/**
+ * ⚠️ Livro EXCLUSIVO do bloco do DIA DO PLANO (Tarefa 38i), pelo mesmo
+ * motivo medido do `NAV_BOOK_ID`: ele é o único livro do arquivo que TEM plano,
+ * e o preenchimento automático do dia mudaria o `planItemId` de todo grifo que
+ * outro bloco criasse nele.
+ */
+const DAY_BOOK_ID = prefixedId('t38i', 'daybook');
+
+/** O par da decisão F: livro do mesmo clube, sem plano nenhum. */
+const NO_PLAN_BOOK_ID = prefixedId('t38i', 'noplanbook');
+
 const bookIds = [
   BOOK_ID,
   FILTER_BOOK_ID,
   NAV_BOOK_ID,
   SEARCH_BOOK_ID,
   OTHER_CLUB_BOOK_ID,
+  DAY_BOOK_ID,
+  NO_PLAN_BOOK_ID,
 ];
+
+/** Os dias do plano e as preferências do bloco da Tarefa 38i. */
+const planItemIds: string[] = [];
+const settingsIds: string[] = [];
 
 interface HighlightBody {
   id: string;
   clubId: string;
   bookId: string;
   userId: string;
+  planItemId: string | null;
   quote: string;
   color: string;
   page: number | null;
@@ -240,6 +260,10 @@ describe('highlight routes', () => {
 
     await removeFixtures({
       highlightIds: highlights.map((row) => row.id),
+      // ⚠️ O grifo sai ANTES do dia do plano — a FK nova é RESTRICT (Tarefa
+      // 38i) —, e o `removeFixtures` já os apaga nessa ordem.
+      planItemIds,
+      settingsIds,
       bookIds,
       membershipIds: [
         ...new Set([...membershipIds, ...memberships.map((m) => m.id)]),
@@ -1024,6 +1048,177 @@ describe('highlight routes', () => {
   // Regra 13 — o que o input recusa, e o contrabando (regra 19)
   // ───────────────────────────────────────────────────────────────────────────
 
+  /**
+   * ⚠️ **O DIA DO PLANO NO GRIFO, PONTA A PONTA (Tarefa 38i)** — a fiação da
+   * rota, que é a única coisa que só aqui é decidível.
+   *
+   * ⚠️ **O FUSO DA PESSOA É `'UTC'` NESTE BLOCO, DE PROPÓSITO, e a razão é
+   * determinismo — não descuido** (§7.10: afirmação de indecidibilidade vem com
+   * o endereço da prova). "Que dia é hoje" depende da hora em que a suíte roda,
+   * e um fixture com fuso deslocado ficaria verde por 14 horas do dia e vermelho
+   * pelas outras — o pior dos mundos, porque a falha não seria reprodutível.
+   * **Quem prova que o fuso é o DA PESSOA, e não o do servidor, é o unitário**,
+   * com dois fusos e dois dias a partir de UM instante:
+   * `usecases/__tests__/create-highlight.test.ts`, no
+   * `describe('the reading day of the plan')`.
+   *
+   * O que ESTE bloco prova é o que o unitário não pode: que a rota entrega o
+   * `ReadingPlanItemRepository` e o `SettingsRepository` ao UseCase, que a
+   * coluna nova atravessa o `response` schema, e que o `.strict()` do corpo
+   * barra o contrabando.
+   */
+  describe('the reading day of the plan', () => {
+    /** O dia de HOJE, derivado — nunca uma data escrita à mão (§7.8). */
+    function todayInUtc(): string {
+      return localDay(new Date(), 'UTC');
+    }
+
+    beforeAll(async () => {
+      await seedBook(DAY_BOOK_ID, CLUB_ID, MARIA_ID, 'O Dia do Plano');
+      await seedBook(NO_PLAN_BOOK_ID, CLUB_ID, MARIA_ID, 'Livro sem Plano');
+
+      const settingsId = prefixedId('t38i', 'settings-maria');
+      settingsIds.push(settingsId);
+      await prisma.settings.create({
+        data: { id: settingsId, userId: MARIA_ID, timezone: 'UTC' },
+      });
+
+      // Dois dias no plano: o de HOJE e o de ONTEM. O de ontem é o par que
+      // impede um `find` sem `date` de passar — ele devolveria os dois, e o
+      // primeiro da lista poderia ser qualquer um.
+      const today = todayInUtc();
+      const yesterday = localDay(
+        new Date(Date.now() - 24 * 60 * 60 * 1000),
+        'UTC',
+      );
+      for (const [prefix, order, date] of [
+        ['hoje', 0, today],
+        ['ontem', 1, yesterday],
+      ] as const) {
+        const id = prefixedId('t38i', `pi-${prefix}`);
+        planItemIds.push(id);
+        await prisma.readingPlanItem.create({
+          data: {
+            id,
+            bookId: DAY_BOOK_ID,
+            order,
+            date: new Date(`${date}T00:00:00.000Z`),
+            title: `Cap. ${order + 1}`,
+          },
+        });
+      }
+    });
+
+    /** O id do item do plano de hoje, lido do banco — não deduzido. */
+    async function planDayOfToday(): Promise<string> {
+      const row = await prisma.readingPlanItem.findFirstOrThrow({
+        where: {
+          bookId: DAY_BOOK_ID,
+          date: new Date(`${todayInUtc()}T00:00:00.000Z`),
+        },
+        select: { id: true },
+      });
+      return row.id;
+    }
+
+    it('is born anchored on the plan day of today, with nothing new in the body', async () => {
+      const expected = await planDayOfToday();
+
+      const response = await postHighlight(
+        { quote: 'o trecho de hoje', color: '#facc15' },
+        mariaToken,
+        DAY_BOOK_ID,
+      );
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json<HighlightBody>();
+      expect(body.planItemId).toBe(expected);
+      // E a LINHA, não só a resposta.
+      await expect(
+        prisma.highlight.count({
+          where: { id: body.id, planItemId: expected },
+        }),
+      ).resolves.toBe(1);
+    });
+
+    /**
+     * ⚠️ **DECISÃO F — livro sem plano nenhum grava `null`, e o grifo é criado
+     * assim mesmo.** É o estado normal entre dois livros, e falhar aqui
+     * impediria de grifar.
+     */
+    it('writes a null plan day when the book has no plan, and creates the highlight anyway', async () => {
+      const response = await postHighlight(
+        { quote: 'o trecho de dia nenhum', color: '#22c55e' },
+        mariaToken,
+        NO_PLAN_BOOK_ID,
+      );
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json<HighlightBody>();
+      expect(body.planItemId).toBeNull();
+      await expect(
+        prisma.highlight.count({
+          where: { id: body.id, planItemId: null },
+        }),
+      ).resolves.toBe(1);
+    });
+
+    /**
+     * ⚠️ **DECISÃO E / §7.5 — CONTRABANDO, COM O ATOR LEGÍTIMO.** A Maria é
+     * membro do clube e dona do livro: se a requisição morresse no corte de
+     * tenant, o teste morreria igual com o contrabando funcionando.
+     *
+     * A chave proibida é **400** pelo `.strict()` do `createHighlightSchema`, e
+     * **nada é escrito** — mais forte que "foi ignorada". Aceitá-la deixaria
+     * qualquer um apontar o grifo para o dia que quisesse.
+     */
+    it('never lets a planItemId in the body choose the day, for the legitimate actor', async () => {
+      const otherDay = required(
+        planItemIds.find((id) => id.includes('pi-ontem')),
+      );
+
+      const response = await postHighlight(
+        {
+          quote: 'o dia que eu escolhi',
+          color: '#facc15',
+          planItemId: otherDay,
+        },
+        mariaToken,
+        DAY_BOOK_ID,
+      );
+
+      expect(response.statusCode).toBe(400);
+      await expect(
+        prisma.highlight.count({
+          where: { quote: 'o dia que eu escolhi' },
+        }),
+      ).resolves.toBe(0);
+      // E o dia de ONTEM continua sem nenhum grifo: o contrabando não pegou por
+      // nenhum outro caminho.
+      await expect(
+        prisma.highlight.count({ where: { planItemId: otherDay } }),
+      ).resolves.toBe(0);
+    });
+
+    // O PATCH também recusa: o dia é do NASCIMENTO do grifo, como o
+    // `createdAt`, e nem está no `HighlightPatch` do port.
+    it('never lets a planItemId in the patch move the day', async () => {
+      const created = await postHighlight(
+        { quote: 'o trecho que vai ser corrigido', color: '#facc15' },
+        mariaToken,
+        DAY_BOOK_ID,
+      );
+      const { id, planItemId } = created.json<HighlightBody>();
+
+      const patched = await patchHighlight(id, { planItemId: null });
+
+      expect(patched.statusCode).toBe(400);
+      await expect(
+        prisma.highlight.count({ where: { id, planItemId } }),
+      ).resolves.toBe(1);
+    });
+  });
+
   describe('input hardening', () => {
     /**
      * Regra 13 — `commentText` **sai** na resposta (é derivado e é o que a busca
@@ -1629,6 +1824,10 @@ describe('highlight routes', () => {
       'createdAt',
       'id',
       'page',
+      // ⚠️ Tarefa 38i — o dia do plano SAI na resposta (é o que o acervo usa
+      // para recortar por dia de leitura) e não entra em input nenhum, como o
+      // `commentText`.
+      'planItemId',
       'quote',
       'reference',
       'status',

@@ -163,14 +163,24 @@ export function createdAtOf(entry: AcervoEntry): string {
 /**
  * A leitura de uma entrada — `null` quando ela não está ancorada em dia nenhum.
  *
- * ⚠️ **A ANOTAÇÃO AVULSA E O GRIFO NÃO TÊM LEITURA, e isso é a fidelidade do
- * §7.1** (4ª aparição): `WHERE "planItemId" = 'x'` contra coluna nula é
- * **falso** no Postgres, e o grifo nem tem a coluna (ADR 0004: ele não depende
- * de existir um `ReadingPlanItem`). Escolher uma leitura os **exclui** — é o
- * comportamento certo, não um bug a consertar.
+ * ⚠️ **O GRIFO TAMBÉM TEM LEITURA DESDE A TAREFA 38i** (decisão G), e é a
+ * emenda de 2026-09-18 ao ADR 0004: `Highlight.planItemId` passou a existir,
+ * preenchido em silêncio na criação com o dia do plano de hoje. **Este
+ * parágrafo dizia o contrário até então** — "o grifo nem tem a coluna" — e a
+ * frase estava certa quando foi escrita; ela fica registrada aqui, e não
+ * apagada, porque é o que explica por que o comportamento MUDOU.
+ *
+ * ⚠️ **O QUE NÃO MUDOU é a fidelidade do §7.1** (4ª aparição): a coluna é
+ * **anulável** nos dois lados agora, e `WHERE "planItemId" = 'x'` contra coluna
+ * nula é **falso** no Postgres. Escolher uma leitura continua **excluindo** a
+ * anotação avulsa — e passa a excluir o **grifo avulso**, o que nasceu num dia
+ * em que o plano não tinha item. É o comportamento certo, e é a decisão central
+ * do ADR 0004 intacta: o grifo não depende de um dia de leitura.
  */
 export function readingOf(entry: AcervoEntry): string | null {
-  return entry.type === 'HIGHLIGHT' ? null : entry.note.planItemId;
+  return entry.type === 'HIGHLIGHT'
+    ? entry.highlight.planItemId
+    : entry.note.planItemId;
 }
 
 /** A cor de uma entrada — `null` quando ela não é grifo. */
@@ -378,8 +388,16 @@ export function typeFromChipValue(value: string): AcervoEntry['type'] | null {
  * campos são diferentes, não porque a regra é diferente:
  *
  * - **cor** só existe em grifo → tipo ∈ {Tudo, Grifo};
- * - **leitura** (`planItemId`) só existe na anotação DO DIA → tipo ∈ {Tudo, Do
- *   dia}. A avulsa tem a coluna nula e o grifo nem tem a coluna (ADR 0004).
+ * - **leitura** (`planItemId`) existe na anotação DO DIA **e no grifo** → tipo ∈
+ *   {Tudo, Do dia, Grifo}. ⚠️ **A única que nunca carrega dia é a AVULSA**, e é
+ *   por isso que a segunda função é escrita pela NEGATIVA: uma lista de
+ *   permitidos precisaria crescer a cada tipo novo, e foi exatamente ela que
+ *   ficou para trás quando o grifo ganhou a coluna.
+ *
+ * ⚠️ **ESTA LISTA DIZIA "só na anotação DO DIA" até a Tarefa 38i** (decisão G),
+ * e a frase era verdadeira: o grifo não tinha coluna de dia. A emenda de
+ * 2026-09-18 ao ADR 0004 lhe deu `planItemId?`, e a dimensão de leitura passou a
+ * alcançá-lo — nenhuma dimensão nova, nenhum controle novo, **alcance** novo.
  */
 export function typeCanIncludeHighlight(
   type: AcervoEntry['type'] | null,
@@ -388,7 +406,7 @@ export function typeCanIncludeHighlight(
 }
 
 export function typeCanCarryReading(type: AcervoEntry['type'] | null): boolean {
-  return type === null || type === 'PLAN';
+  return type !== 'FREE';
 }
 
 /** O `value` da opção "todas as leituras" do `<select>`. */
@@ -638,15 +656,21 @@ export function matchesAuthor(
  * valor escolhido descarta a entrada que **não carrega aquele campo**, e é a
  * fidelidade do §7.1 (4ª aparição: `= 'x'` contra coluna nula é falso):
  *
- * - escolher uma **leitura** exclui a avulsa e o grifo (nenhum tem
- *   `planItemId`) — regra 10, e é o comportamento certo;
+ * - escolher uma **leitura** exclui a anotação avulsa e o grifo **avulso** (os
+ *   dois têm `planItemId` nulo) — e desde a Tarefa 38i **não** exclui mais todo
+ *   grifo: o que nasceu num dia do plano casa, como a anotação do dia;
  * - escolher uma **cor** exclui as anotações (nenhuma tem cor);
  * - escolher uma **faixa de página** exclui as anotações **e** o grifo de
  *   `page` nula (decisão B da 38h).
  *
- * Leitura com cor, e leitura com faixa, devolvem portanto **vazio por
- * construção** — e a tela mostra o estado "filtrado sem resultado", nunca uma
- * lista que ignora um dos recortes.
+ * ⚠️ **Leitura com cor, e leitura com faixa, DEIXARAM DE SER vazio por
+ * construção na Tarefa 38i** — e esta frase dizia que eram. Um grifo do dia do
+ * plano tem leitura, cor e página ao mesmo tempo, então os três recortes podem
+ * coexistir com resultado. O que continua vazio por construção é **leitura com
+ * tipo "Avulsa"**: a anotação avulsa é o único tipo que nunca carrega dia.
+ *
+ * Nesses casos a tela mostra o estado "filtrado sem resultado", nunca uma lista
+ * que ignora um dos recortes.
  */
 export function filterEntries(
   entries: readonly AcervoEntry[],

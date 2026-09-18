@@ -85,8 +85,19 @@ marca dentro da anotação" lá em cima.
   servidor; e o `planItemId` **não vem do corpo da requisição** — é resolvido no servidor,
   como o `userId` e o `clubId`.
 
-**O que NÃO entra:** o `noteId?`. Ele continua sendo a alternativa recusada que este ADR
-descreve, e continua sem ninguém pedindo.
+**O que NÃO entra:**
+
+- o `noteId?`. Ele continua sendo a alternativa recusada que este ADR descreve, e continua
+  sem ninguém pedindo;
+- ⚠️ **a CORREÇÃO do dia.** O argumento que derrubou a derivação na leitura tem duas
+  pernas, e só uma foi entregue: a coluna **preserva** o passado (✅ entregue) e ela seria
+  **onde caberia** uma correção no dia em que o preenchimento automático errar — grifar no
+  sábado o que se leu na sexta. ⚠️ **Essa correção não existe, e hoje é impossível:** o
+  `planItemId` é **write-once no nascimento**, e três coisas o pinam — o
+  `editHighlightSchema` o recusa com **400**, ele está fora do `HighlightPatch` do port, e o
+  único `save` de grifo do projeto é o do `createHighlight`. **É fatia própria, e ninguém
+  pediu ainda.** Fica escrito no condicional de propósito: o argumento repetido no
+  indicativo mandaria o próximo leitor procurar uma tela que não foi feita.
 
 ---
 

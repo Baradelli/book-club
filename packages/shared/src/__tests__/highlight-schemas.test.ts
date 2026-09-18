@@ -267,6 +267,11 @@ describe('createHighlightSchema', () => {
     ['id', { id: 'escolhi-o-id' }],
     ['createdAt', { createdAt: '2026-01-01T00:00:00.000Z' }],
     ['updatedAt', { updatedAt: '2026-01-01T00:00:00.000Z' }],
+    // ⚠️ Tarefa 38i — o dia do plano é RESOLVIDO NO SERVIDOR (decisão E),
+    // a partir do `Settings.timezone` da pessoa. Aceitá-lo do cliente deixaria
+    // qualquer um apontar o grifo para o dia que quisesse — a mesma classe do
+    // `userId` acima, e por isso a mesma linha desta tabela.
+    ['planItemId', { planItemId: 'o-dia-que-eu-escolhi' }],
   ])('refuses a body that carries %s', (_label, extra) => {
     expect(
       createHighlightSchema.safeParse({ ...aValidCreate(), ...extra }).success,
@@ -362,6 +367,10 @@ describe('editHighlightSchema', () => {
     ['clubId', { clubId: 'outro-clube' }],
     ['status', { status: 'ARCHIVED' }],
     ['archivedAt', { archivedAt: null }],
+    // ⚠️ Tarefa 38i — e no PATCH ele é proibido por um motivo A MAIS: o dia
+    // do plano é do NASCIMENTO do grifo, como o `createdAt`. Ele nem está no
+    // `HighlightPatch` do port — nenhum `update` o toca.
+    ['planItemId', { planItemId: 'o-dia-que-eu-escolhi' }],
   ])('refuses a patch that carries %s', (_label, extra) => {
     expect(editHighlightSchema.safeParse(extra).success).toBe(false);
   });
@@ -581,6 +590,7 @@ function aHighlightResponse(
     clubId: 'c1',
     bookId: 'b1',
     userId: 'u1',
+    planItemId: null,
     quote: 'Num buraco no chão vivia um hobbit',
     color: '#facc15',
     page: 45,
@@ -682,12 +692,40 @@ describe('highlightResponseSchema', () => {
       'createdAt',
       'id',
       'page',
+      // ⚠️ Tarefa 38i — SAI na resposta e não entra em input nenhum, como o
+      // `commentText`: é o que o acervo usa para recortar por dia de leitura.
+      'planItemId',
       'quote',
       'reference',
       'status',
       'updatedAt',
       'userId',
     ]);
+  });
+
+  /**
+   * ⚠️ **Tarefa 38i — `planItemId` é `nullable`, não `optional`.**
+   *
+   * `null` é o valor NORMAL (grifo em dia sem plano é o caso que o ADR 0004
+   * protege, e toda linha anterior à migration tem `null`), e a **ausência** do
+   * campo é erro: o `response` schema é fronteira de segurança (§6.1), e um
+   * `.optional()` faria o serializer aceitar uma resposta sem a chave — a tela
+   * leria `undefined` onde compara com `null`.
+   */
+  it('accepts a null plan day and refuses the field to be missing', () => {
+    const withoutTheDay = { ...aHighlightResponse() };
+    delete withoutTheDay['planItemId'];
+
+    expect(highlightResponseSchema.parse(aHighlightResponse()).planItemId).toBe(
+      null,
+    );
+    expect(
+      highlightResponseSchema.parse(aHighlightResponse({ planItemId: 'p-1' }))
+        .planItemId,
+    ).toBe('p-1');
+    expect(highlightResponseSchema.safeParse(withoutTheDay).success).toBe(
+      false,
+    );
   });
 
   it('refuses a colour outside the palette on the way out', () => {

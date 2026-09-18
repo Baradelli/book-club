@@ -739,7 +739,8 @@ export function AcervoPage() {
      * tipo selecionado pode carregar aquele campo** (`acervo-entries.ts`). São
      * **três** dimensões condicionais desde a Tarefa 38h: a cor e a faixa de
      * página pedem tipo ∈ {Tudo, Grifo} — a MESMA pergunta, e por isso o MESMO
-     * booleano —, e a leitura pede tipo ∈ {Tudo, Do dia}.
+     * booleano —, e a leitura pede tipo **≠ Avulsa** (ela pedia ∈ {Tudo, Do
+     * dia} até a Tarefa 38i, quando o grifo ganhou o dia do plano: decisão G).
      *
      * ⚠️ **E SÃO DUAS REGRAS COM UM DONO CADA, não uma regra com dois donos.**
      * Estes dois booleanos decidem se o controle **EXISTE** (é só render); o
@@ -923,9 +924,12 @@ export function AcervoPage() {
                 real (a tela do livro tem estado próprio para ele desde a
                 Tarefa 17);
               - **o tipo pode carregar leitura?** (`readingApplies`, decisão E
-                generalizada). Com o tipo em "Avulsa" ou "Grifo" o controle
-                seria pior que inútil: cada opção **garantiria** zero
-                resultados, porque nenhum dos dois tem `planItemId`.
+                generalizada). ⚠️ **Com o tipo em "Avulsa" — e SÓ nele desde a
+                Tarefa 38i** — o controle seria pior que inútil: cada opção
+                **garantiria** zero resultados, porque a anotação avulsa é o
+                único tipo que nunca tem `planItemId`. O GRIFO saiu desta lista
+                quando ganhou a coluna (decisão G, emenda ao ADR 0004): com o
+                tipo em "Grifo" o `<select>` existe e recorta de verdade.
 
               A marcação e o vocabulário são do `ReadingSelect`
               (`acervo-filters.tsx`), que documenta por que é `<select>` nativo

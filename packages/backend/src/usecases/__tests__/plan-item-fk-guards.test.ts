@@ -9,15 +9,16 @@ import { describe, expect, it } from 'vitest';
  *
  * O `replacePlanItems` recusa a remoção de um dia do plano que ainda está
  * ancorado em alguma coisa, e dá **400 com mensagem** em vez do **500 mudo** do
- * `ON DELETE RESTRICT`. Hoje são três âncoras — `Note` (Tarefa 11),
- * `ReadingLog` (32c) e `ActivityEvent` (34b) —, e **as três guardas foram
- * escritas depois do estrago**:
+ * `ON DELETE RESTRICT`. Hoje são **quatro** âncoras — `Note` (Tarefa 11),
+ * `ReadingLog` (32c), `ActivityEvent` (34b) e `Highlight` (38i) —, e **as três
+ * primeiras guardas foram escritas depois do estrago**:
  *
  * | Fatia | O que ela introduziu | Quem consertou |
  * | --- | --- | --- |
  * | 06/11 | `Note.planItemId` | a própria 11 |
  * | **32** | `ReadingLog.planItemId` **sem guarda** | a **32c** |
  * | **34** | `ActivityEvent.planItemId` **sem guarda** | a **34b** |
+ * | **38i** | `Highlight.planItemId` **COM guarda** | ✅ **a própria 38i** |
  *
  * **Duas vezes é coincidência; três é padrão.** Nas duas últimas a lacuna só
  * apareceu porque *alguém foi procurar* — e um requisito que depende de alguém
@@ -27,8 +28,16 @@ import { describe, expect, it } from 'vitest';
  * `onDelete: Restrict` escrito **e o implícito** de relação obrigatória, que é
  * o default do Prisma —, e exige que o
  * `replace-plan-items.ts` tenha uma guarda para cada uma. No dia em que alguém
- * acrescentar a quarta FK, ela fica **vermelha** — e diz **qual** ficou sem
+ * acrescentar a próxima FK, ela fica **vermelha** — e diz **qual** ficou sem
  * guarda, para quem a vir vermelha saber o que fazer.
+ *
+ * ✅ **E ELA JÁ COBROU, UMA VEZ, DE VERDADE.** A quarta FK chegou na Tarefa 38i
+ * (`Highlight.planItemId`, a emenda ao ADR 0004), e esta varredura ficou
+ * vermelha **no mesmo commit em que a coluna entrou no `schema.prisma`**,
+ * nomeando `Highlight.planItem` e o método a escrever
+ * (`planItemIdsWithAnyHighlight`). Foi a primeira das quatro que não precisou de
+ * uma fatia de conserto, e é a medição que faz a linha nova da tabela acima
+ * dizer "COM guarda" — a diferença entre a convenção e o requisito.
  *
  * ## Por que o `schema.prisma`, e não o `Prisma.dmmf`
  *
@@ -43,12 +52,15 @@ import { describe, expect, it } from 'vitest';
  * Decisão B da 34b, e o teste decisivo é este: **uma tabela não mataria o
  * bug** — não porque ela sumiria junto com a guarda (essa explicação foi
  * medida e é **falsa**: esta varredura casa o texto `.planItemIdsWithAnyX(` em
- * qualquer ponto do arquivo, então uma tabela com os três nomes continuaria
- * satisfazendo-a), e sim porque **uma tabela não deriva de nada**. A quarta FK
- * que nascer sem linha nela não fica vermelha em lugar nenhum — é uma segunda
+ * qualquer ponto do arquivo, então uma tabela com os nomes de hoje continuaria
+ * satisfazendo-a), e sim porque **uma tabela não deriva de nada**. A FK que
+ * nascer sem linha nela não fica vermelha em lugar nenhum — é uma segunda
  * lista à mão, ao lado do schema, com a mesma chance de ficar para trás. A
- * forma das três guardas se repete, mas a regra de cada uma não (repositório
- * diferente, mensagem diferente por decisão de produto). Generalizar ali seria
+ * forma das guardas se repete, mas a regra de cada uma não (repositório
+ * diferente, mensagem diferente por decisão de produto). ⚠️ **Nenhum número
+ * aqui conta FKs de propósito:** este parágrafo dizia "os três nomes" e "a
+ * quarta FK", e a quarta chegou na Tarefa 38i — um argumento que conta
+ * envelhece a cada fatia que acrescenta uma. Generalizar ali seria
  * arrumar a prateleira sem trancar a porta; a porta é este arquivo, e ela é a
  * única coisa aqui que **deriva do `schema.prisma`**.
  *
@@ -118,7 +130,7 @@ function withoutTsComments(source: string): string {
  * | qualquer `onDelete` declarado que não seja `Restrict` | o declarado | não |
  *
  * A segunda linha é o furo que esta guarda tem de cobrir, e ele é **do tamanho
- * do padrão do Prisma**: a quarta FK pode nascer recusando de verdade sem uma
+ * do padrão do Prisma**: uma FK nova pode nascer recusando de verdade sem uma
  * palavra escrita. O fato não é suposto — o `schema.prisma` deste projeto já o
  * registra medido, no docblock do `ReadingLog.planItem` (*"lido do SQL gerado
  * na Tarefa 24, não suposto"*). E a terceira linha tem de continuar fora: o
@@ -171,7 +183,9 @@ function restrictFksToPlanItem(schema: string): PlanItemFk[] {
  *
  * ⚠️ É por isso que o método da 34b se chama `planItemIdsWithAnyActivityEvent`,
  * e não `...WithAnyActivity`: o nome do modelo, inteiro, é o que faz a guarda
- * funcionar sozinha para a QUARTA FK, que ninguém pode prever.
+ * funcionar sozinha para a PRÓXIMA FK, que ninguém pode prever. ✅ **E ela já
+ * funcionou uma vez: o `planItemIdsWithAnyHighlight` da Tarefa 38i saiu daqui,
+ * sem tabela de-para e sem ninguém decidir o nome.**
  */
 function guardMethodFor(model: string): string {
   return `planItemIdsWithAny${model}`;
@@ -181,17 +195,22 @@ function guardMethodFor(model: string): string {
  * As FKs que NÃO têm guarda no `replacePlanItems` — vazio é o estado saudável.
  *
  * ⚠️ **O LIMITE, e ele precisa estar escrito aqui:** isto prova que a
- * **chamada** existe, **não** que ela recusa. Medido nesta fatia — com a
- * chamada mantida e o `throw` removido, esta guarda fica **VERDE** e são os
- * sete testes de comportamento que acusam. Para as três FKs de hoje é
- * inofensivo (o comportamento tem teste); para a **quarta** é justamente o
- * estado em que teste de comportamento ainda não existe, e é por isso que a
+ * **chamada** existe, **não** que ela recusa. Com a chamada mantida e o
+ * `throw` removido, esta guarda fica **VERDE** e quem acusa são os testes de
+ * comportamento — **7** na medição da Tarefa 34b (a guarda de atividade) e
+ * **8** na da 38i (a de grifo, mutante `daysWithHighlights.length > 99`). Os
+ * dois números ficam com a fatia que os mediu: um número só aqui envelheceria
+ * na próxima guarda, e é a lição do `dayRange` que o `CLAUDE.md` registra.
+ *
+ * Para as QUATRO FKs de hoje o limite é inofensivo (as quatro têm teste de
+ * comportamento — a da 38i nasceu com o dela); para a **próxima** é justamente
+ * o estado em que teste de comportamento ainda não existe, e é por isso que a
  * mensagem de falha diz *"add a call … that throws"*.
  *
  * A recusa é provada em `usecases/__tests__/replace-plan-items.test.ts`, nos
- * três `describe('the guard that refuses to remove a day that has …')` e no
- * `describe('the message never lies about which guard refused')`. **O ponteiro
- * é pelo NOME do teste, nunca pela linha** (§7.4).
+ * **quatro** `describe('the guard that refuses to remove a day that has …')` e
+ * no `describe('the message never lies about which guard refused')`. **O
+ * ponteiro é pelo NOME do teste, nunca pela linha** (§7.4).
  */
 function unguarded(schema: string, source: string): PlanItemFk[] {
   const code = withoutTsComments(source);
@@ -239,23 +258,30 @@ describe('every RESTRICT foreign key to ReadingPlanItem has a domain guard', () 
    *
    * Um regex quebrado devolveria `[]`, e um `[]` faz a guarda de baixo passar
    * para sempre sem olhar nada — a guarda que parece cobrir e não cobre (§7.9).
-   * Aqui a varredura declara o que ela achou HOJE, e as três são nomeadas: são
-   * exatamente as três FKs que a Tarefa 34b mediu no `schema.prisma` e nas
-   * migrations aplicadas.
+   * Aqui a varredura declara o que ela achou HOJE, e as quatro são nomeadas: as
+   * três que a Tarefa 34b mediu no `schema.prisma` e nas migrations aplicadas,
+   * mais o `Highlight` da 38i.
    *
-   * ⚠️ **`arrayContaining`, e não igualdade**: uma QUARTA FK legítima, com
+   * ⚠️ **`arrayContaining`, e não igualdade**: uma QUINTA FK legítima, com
    * guarda, não pode quebrar este teste — quem cobra a guarda dela é o teste
    * seguinte, e é lá que a cobrança tem de aparecer.
+   *
+   * ⚠️ **O `Highlight` entrou na lista NOMEADA, e não só no `>=`**, porque a
+   * assimetria contrária foi o que quase deixou a 38i passar batida: com o piso
+   * em três e a lista de três, a varredura ficaria verde **sem enxergar** a
+   * coluna nova, e só o teste de baixo acusaria. Uma varredura que não é cobrada
+   * a ENXERGAR a FK nova é meia varredura.
    */
-  it('finds the three foreign keys that exist today, and does not come back empty', () => {
+  it('finds the four foreign keys that exist today, and does not come back empty', () => {
     const fks = restrictFksToPlanItem(SCHEMA);
 
-    expect(fks.length).toBeGreaterThanOrEqual(3);
+    expect(fks.length).toBeGreaterThanOrEqual(4);
     expect(fks).toEqual(
       expect.arrayContaining([
         { model: 'Note', field: 'planItem' },
         { model: 'ReadingLog', field: 'planItem' },
         { model: 'ActivityEvent', field: 'planItem' },
+        { model: 'Highlight', field: 'planItem' },
       ]),
     );
   });
@@ -277,11 +303,18 @@ describe('every RESTRICT foreign key to ReadingPlanItem has a domain guard', () 
    * migration.**
    *
    * O predicado é alimentado com um schema fabricado: o de verdade mais um
-   * quarto modelo com a mesma FK. Sem esta simulação, a guarda acima estaria
+   * modelo A MAIS, com a mesma FK. Sem esta simulação, a guarda acima estaria
    * verde hoje e ninguém saberia se ela **pode** ficar vermelha — que é
    * exatamente a auditoria que a Tarefa 33 pediu para a guarda irmã.
+   *
+   * ⚠️ **O NOME DESTE TESTE DIZIA "a fourth foreign key" até a Tarefa 38i, e
+   * virou mentira quando a quarta CHEGOU DE VERDADE** (`Highlight.planItem`):
+   * o `Bookmark` fabricado aqui passou a ser a **quinta**. Um nome que conta
+   * FKs envelhece a cada fatia que acrescenta uma, então ele passou a dizer o
+   * que o teste prova — *outra* FK, qualquer que seja o número —, e é o §7.4
+   * na letra: o nome do teste é parte da guarda.
    */
-  it('flips the moment a fourth foreign key arrives without a guard', () => {
+  it('flips the moment ANOTHER foreign key arrives without a guard', () => {
     const asOfSomeFutureTask = `${SCHEMA}
 model Bookmark {
   id         String  @id
@@ -291,11 +324,11 @@ model Bookmark {
 }
 `;
 
-    // A varredura enxerga a quarta...
+    // A varredura enxerga a que chegou...
     expect(restrictFksToPlanItem(asOfSomeFutureTask)).toEqual(
       expect.arrayContaining([{ model: 'Bookmark', field: 'planItem' }]),
     );
-    // ...e a guarda a acusa, sozinha: as três de hoje continuam cobertas.
+    // ...e a guarda a acusa, SOZINHA: as quatro de hoje continuam cobertas.
     expect(unguarded(asOfSomeFutureTask, GUARD_SOURCE)).toEqual([
       { model: 'Bookmark', field: 'planItem' },
     ]);
@@ -366,7 +399,7 @@ model Bookmark {
    * Postgres. Isso não é suposição: o `schema.prisma` deste projeto já o
    * registra medido, no `ReadingLog.planItem` (*"para relação OBRIGATÓRIA o
    * default do Prisma já é `Restrict` (lido do SQL gerado na Tarefa 24, não
-   * suposto)"*). Então a quarta FK pode nascer recusando remoção **de verdade**
+   * suposto)"*). Então uma FK nova pode nascer recusando remoção **de verdade**
    * e sem guarda, pela porta que o Prisma abre por omissão — e uma guarda que
    * só enxergasse o `onDelete` escrito ficaria verde exatamente no caso que ela
    * existe para matar.
@@ -376,9 +409,15 @@ model Bookmark {
    * problema, e não o desta guarda). Incluí-la faria a guarda cobrar guarda de
    * quem não precisa, e guarda que cobra à toa é a que alguém desliga.
    *
-   * A convenção "declare o `onDelete` explicitamente" existe em **três**
-   * comentários do schema e em guarda automática nenhuma (§7.9) — esta linha é
-   * o que faz a diferença entre a convenção e o requisito.
+   * A convenção "declare o `onDelete` explicitamente" existe em **seis**
+   * comentários do schema — remedido na Tarefa 38i com
+   * `grep -n 'EXPLÍCITO, e não herdado\|EXPLICITAMENTE' prisma/schema.prisma`:
+   * `Note.planItem`, `Highlight.planItem`, `ReadingLog.planItem`,
+   * `ActivityEvent`, `PushSubscription.user` e `NotificationDelivery.user`.
+   * Eram **três** quando esta frase foi escrita. E em guarda automática
+   * nenhuma (§7.9) — esta linha é o que faz a diferença entre a convenção e o
+   * requisito, e é por isso que o número dela não precisa estar certo para ela
+   * funcionar: ele é ilustração, a guarda é o `expect` abaixo.
    */
   it('counts the implicit Restrict of a required relation, and never the SetNull of an optional one', () => {
     const implicitRequired = `
@@ -420,8 +459,11 @@ model Sticker {
    * ⚠️ **E a guarda VIRA também pela FK implícita** — o mesmo teste da regra 12,
    * na forma que o Prisma produz quando ninguém escreve o `onDelete`. Sem este
    * lado, a correção do parser existiria e a guarda continuaria sem cobrá-la.
+   *
+   * ⚠️ O nome **não conta FKs**, pelo mesmo motivo do irmão acima: ele dizia
+   * "the fourth" e a quarta chegou na Tarefa 38i.
    */
-  it('flips when the fourth foreign key arrives with an implicit Restrict', () => {
+  it('flips when ANOTHER foreign key arrives with an implicit Restrict', () => {
     const asOfSomeFutureTask = `${SCHEMA}
 model Bookmark {
   id         String @id
@@ -443,11 +485,19 @@ model Bookmark {
    * ⚠️ **O falso verde mais provável desta guarda, fechado: o nome do método
    * num COMENTÁRIO não vale como guarda.**
    *
-   * O docblock do `replacePlanItems` cita os três métodos em prosa. Se a
-   * varredura olhasse o arquivo cru, apagar a chamada e deixar o comentário
-   * deixaria a guarda **verde** — e o comentário é justamente a primeira coisa
-   * que sobrevive a um refactor apressado (§7.1: fidelidade afirmada em
-   * comentário e não em teste é fidelidade que o próximo refactor apaga).
+   * ⚠️ **MEDIDO na Tarefa 38i, e o número que estava aqui era outro:** esta
+   * frase dizia que o `replacePlanItems` "cita os três métodos em prosa", e
+   * `grep -n planItemIdsWithAny replace-plan-items.ts` devolve **UM** nome em
+   * comentário (`planItemIdsWithAnyNote`, no docblock da primeira guarda) e os
+   * outros **três só como chamada**. A frase já era falsa antes desta fatia.
+   *
+   * ✅ **E o teste continua sendo necessário exatamente por causa desse UM:**
+   * se a varredura olhasse o arquivo cru, apagar a chamada de `Note` e deixar
+   * o comentário deixaria a guarda **verde** para ela — e o comentário é
+   * justamente a primeira coisa que sobrevive a um refactor apressado (§7.1:
+   * fidelidade afirmada em comentário e não em teste é fidelidade que o
+   * próximo refactor apaga). Uma citação a mais em prosa, em qualquer fatia
+   * futura, estende o buraco aos outros três sem uma linha de aviso.
    */
   it('does not accept a guard that exists only in a comment', () => {
     const commentOnly = `

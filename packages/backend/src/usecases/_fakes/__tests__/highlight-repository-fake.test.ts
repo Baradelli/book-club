@@ -1075,6 +1075,149 @@ describe('HighlightRepositoryFake', () => {
    * decrescente" dariam o mesmo resultado. A pré-condição vem do `byId`, e não
    * do `saved`, porque é justamente o `saved` que está sob teste aqui.
    */
+  /**
+   * ⚠️ **O MÉTODO DA QUARTA GUARDA DO `replacePlanItems` (Tarefa 38i)**, irmão
+   * do `planItemIdsWithAnyNote`. Duas linhas o definem, e as duas são
+   * fidelidade ao Postgres (§7.1):
+   *
+   * - **cego a `status`** — quem barra a remoção de um dia é a FK, e a FK não
+   *   olha status: um grifo arquivado ainda aponta para o item;
+   * - **`IN (...)` contra coluna nula é falso** — o grifo avulso, que é o caso
+   *   que o ADR 0004 protege e o estado de toda linha anterior à migration,
+   *   nunca mantém um dia vivo.
+   */
+  describe('planItemIdsWithAnyHighlight', () => {
+    const DAY = 'plan-item-1';
+    const OTHER_DAY = 'plan-item-2';
+    const THIRD_DAY = 'plan-item-3';
+
+    function aHighlightOfTheDay(overrides: Partial<Highlight> = {}): Highlight {
+      return aHighlight({
+        clubId: CLUB_ID,
+        bookId: BOOK_ID,
+        userId: AUTHOR_ID,
+        planItemId: DAY,
+        ...overrides,
+      });
+    }
+
+    it('returns the plan item id of a day that has a highlight', async () => {
+      await highlights.save(aHighlightOfTheDay({ id: 'h-a' }));
+
+      await expect(
+        highlights.planItemIdsWithAnyHighlight([DAY]),
+      ).resolves.toEqual([DAY]);
+    });
+
+    // ⚠️ A REGRA QUE O SEPARA DO `find({ status: 'ACTIVE' })`: um grifo
+    // arquivado ainda tem `planItemId` preenchido no banco, então a FK recusa a
+    // remoção do dia. Uma guarda que filtrasse ACTIVE liberaria a operação e o
+    // admin receberia um 500 de FK em vez do 400 que explica.
+    it('finds a day whose only highlight is archived', async () => {
+      await highlights.save(
+        aHighlightOfTheDay({
+          id: 'h-arquivado',
+          status: 'ARCHIVED',
+          archivedAt: new Date(ARCHIVED_ISO),
+        }),
+      );
+
+      await expect(
+        highlights.planItemIdsWithAnyHighlight([DAY]),
+      ).resolves.toEqual([DAY]);
+    });
+
+    it('omits a day that nobody highlighted', async () => {
+      await highlights.save(aHighlightOfTheDay({ id: 'h-a' }));
+
+      await expect(
+        highlights.planItemIdsWithAnyHighlight([OTHER_DAY]),
+      ).resolves.toEqual([]);
+    });
+
+    // Ordenado antes de comparar: o assunto é QUAIS dias, não a ordem — e a
+    // enumeração do fake é a armadilha invertida do §7.2.
+    it('returns only the asked ids that have a highlight', async () => {
+      await highlights.save(aHighlightOfTheDay({ id: 'h-a' }));
+      await highlights.save(
+        aHighlightOfTheDay({ id: 'h-c', planItemId: THIRD_DAY }),
+      );
+
+      const found = await highlights.planItemIdsWithAnyHighlight([
+        DAY,
+        OTHER_DAY,
+        THIRD_DAY,
+      ]);
+
+      expect([...found].sort()).toEqual([DAY, THIRD_DAY].sort());
+    });
+
+    // É um CONJUNTO: dois grifos no mesmo dia dão UM id, não dois. Sem isto a
+    // mensagem da guarda diria "2 dias" para um dia só.
+    it('returns one id per day, not one per highlight', async () => {
+      await highlights.save(aHighlightOfTheDay({ id: 'h-a' }));
+      await highlights.save(
+        aHighlightOfTheDay({ id: 'h-b', userId: OTHER_AUTHOR_ID }),
+      );
+
+      await expect(
+        highlights.planItemIdsWithAnyHighlight([DAY]),
+      ).resolves.toEqual([DAY]);
+    });
+
+    /**
+     * ⚠️ **O grifo AVULSO nunca mantém um dia vivo** — no Postgres é o
+     * `IN (...)` contra uma coluna nula: falso. É a linha que impede a guarda de
+     * recusar TODA edição de plano de um clube que grifa.
+     */
+    it('never lets a loose highlight keep a day alive', async () => {
+      await highlights.save(
+        aHighlightOfTheDay({ id: 'h-avulso', planItemId: null }),
+      );
+
+      // A precondição que dá dente: o grifo está gravado.
+      await expect(highlights.byId('h-avulso')).resolves.not.toBeNull();
+      await expect(
+        highlights.planItemIdsWithAnyHighlight([DAY]),
+      ).resolves.toEqual([]);
+    });
+
+    it('returns an empty list for an empty list of ids', async () => {
+      await highlights.save(aHighlightOfTheDay({ id: 'h-a' }));
+
+      await expect(highlights.planItemIdsWithAnyHighlight([])).resolves.toEqual(
+        [],
+      );
+    });
+
+    // Não é escopado por livro nem por clube de propósito: os ids vêm do plano
+    // que o `replacePlanItems` acabou de ler do livro já cortado por tenant.
+    it('does not filter by book or club: the ids are already scoped', async () => {
+      await highlights.save(
+        aHighlightOfTheDay({
+          id: 'h-de-outro-lugar',
+          clubId: OTHER_CLUB_ID,
+          bookId: OTHER_BOOK_ID,
+        }),
+      );
+
+      await expect(
+        highlights.planItemIdsWithAnyHighlight([DAY]),
+      ).resolves.toEqual([DAY]);
+    });
+
+    // Conta a CHAMADA — é o que deixa o `replacePlanItems` afirmar que a guarda
+    // roda depois do corte de tenant, e não antes (§7.3).
+    it('counts every call, including the one that found nothing', async () => {
+      expect(highlights.planItemIdsWithAnyHighlightCalls).toBe(0);
+
+      await highlights.planItemIdsWithAnyHighlight([DAY]);
+      await highlights.planItemIdsWithAnyHighlight([]);
+
+      expect(highlights.planItemIdsWithAnyHighlightCalls).toBe(2);
+    });
+  });
+
   describe('enumerates in reverse insertion order', () => {
     it('gives back the three highlights from the last inserted to the first', async () => {
       await highlights.save(aHighlight({ id: 'b-inserido-1o' }));

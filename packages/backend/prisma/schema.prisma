@@ -49,21 +49,21 @@ model User {
   isSuperAdmin Boolean  @default(false)
   createdAt    DateTime @default(now())
 
-  memberships       Membership[]
-  settings          Settings?
+  memberships            Membership[]
+  settings               Settings?
   // Bloco I (Tarefa 36). Uma pessoa, N aparelhos — e NENHUM clube no meio: push
   // é da pessoa (decisão F).
-  pushSubscriptions PushSubscription[]
+  pushSubscriptions      PushSubscription[]
   // Bloco I (Tarefa 37). A RESERVA do aviso do dia — uma linha por pessoa, por
   // tipo, por dia dela. Também sem clube no meio, pelo mesmo motivo.
   notificationDeliveries NotificationDelivery[]
-  invitesMade       Invite[]           @relation("InviteCreator")
-  invitesUsed       Invite[]           @relation("InviteUser")
-  booksCreated      Book[]             @relation("BookCreator")
-  notes             Note[]
-  highlights        Highlight[]
-  readingLogs       ReadingLog[]
-  activity          ActivityEvent[]
+  invitesMade            Invite[]               @relation("InviteCreator")
+  invitesUsed            Invite[]               @relation("InviteUser")
+  booksCreated           Book[]                 @relation("BookCreator")
+  notes                  Note[]
+  highlights             Highlight[]
+  readingLogs            ReadingLog[]
+  activity               ActivityEvent[]
 }
 
 model Club {
@@ -156,6 +156,7 @@ model ReadingPlanItem {
   notes       Note[]
   readingLogs ReadingLog[]
   activity    ActivityEvent[]
+  highlights  Highlight[]
 
   // A chave natural do dia de leitura e do diff do replacePlanItems.
   @@unique([bookId, date])
@@ -227,11 +228,29 @@ model Note {
 // é o caso real que decidiu isto. → ADR 0004. Um `noteId?` é aditivo se um dia
 // surgir.
 model Highlight {
-  id     String @id @default(cuid())
-  clubId String
-  bookId String
-  userId String // o AUTOR. Sempre o ator; nunca vem do input.
-  quote  String // o trecho grifado, digitado à mão (ADR 0004: sem OCR)
+  id         String  @id @default(cuid())
+  clubId     String
+  bookId     String
+  userId     String // o AUTOR. Sempre o ator; nunca vem do input.
+  // O DIA DO PLANO em que o grifo nasceu — a emenda de 2026-09-18 ao ADR 0004
+  // (Tarefa 38i), pedida para "os grifos do capítulo 3" ficarem pedíveis.
+  //
+  // ⚠️ NULLABLE, e é o opcional que preserva a decisão central daquele ADR: "o
+  // grifo não depende de um dia de leitura" continua verdade. Grifar num dia
+  // que o plano pula, ou entre dois livros, grava NULL — e toda linha anterior
+  // a esta migration tem NULL, que é o estado certo para ela.
+  //
+  // ⚠️ É `planItemId`, e NÃO `noteId`: o aviso dentro do ADR 0004 explica que
+  // o parágrafo do "campo aditivo" fala da ANOTAÇÃO, e que passar por ela
+  // quebraria justamente o caso que o ADR protege — grifo em dia sem nota não
+  // teria `noteId` para carregar.
+  //
+  // GUARDADO e não derivado na leitura: dava para calcular o dia a partir do
+  // `createdAt` e do plano, sem coluna, e foi recusado porque a derivação MUDA
+  // DE SIGNIFICADO SOZINHA — corrigir as datas do plano remapearia todo grifo
+  // antigo em silêncio.
+  planItemId String?
+  quote      String // o trecho grifado, digitado à mão (ADR 0004: sem OCR)
   // `String` e não enum Prisma, e é decisão do `CLAUDE.md`: ele lista
   // `Highlight.color` entre os quatro campos "String validados por
   // z.enum/regex (ainda evoluem)" — o futuro registrado é paleta configurável
@@ -239,7 +258,7 @@ model Highlight {
   // `z.enum(HIGHLIGHT_COLORS)` da borda mais o `assertHighlightColor` do
   // domínio, e o valor gravado é o hex minúsculo de 6 dígitos: UMA grafia por
   // cor, porque o `=` de texto do Postgres é byte-sensível.
-  color  String
+  color      String
   // NULLABLE, e é caso legítimo: dá para grifar sem anotar a página. É a única
   // coluna filtrável nula, e no Postgres `WHERE "page" = 45` contra `NULL` é
   // FALSO — então o filtro por página não traz o grifo sem página. O fake
@@ -247,7 +266,7 @@ model Highlight {
   //
   // `Int` (int32), e é o teto que o `.max(2147483647)` do schema Zod defende:
   // um valor fora dele faz o Prisma LANÇAR, e a rota responderia 500.
-  page   Int?
+  page       Int?
 
   reference   String? // texto livre — capítulo, assunto, o que a pessoa quiser
   // ProseMirror JSON, como veio do editor. HTML nunca é persistido. → ADR 0001,
@@ -275,7 +294,8 @@ model Highlight {
   // desatualizado).
   updatedAt   DateTime
 
-  // As três relações são OBRIGATÓRIAS, e o `onDelete` foi LIDO do SQL que o
+  // As três PRIMEIRAS relações são OBRIGATÓRIAS (a quarta, `planItem`, é
+  // opcional e está logo abaixo), e o `onDelete` foi LIDO do SQL que o
   // Prisma gera (`prisma migrate diff --from-empty --to-schema-datamodel
   // prisma/schema.prisma --script`), não suposto: as três saem
   // `ON DELETE RESTRICT ON UPDATE CASCADE`. É o default do Prisma para relação
@@ -284,9 +304,45 @@ model Highlight {
   // `Note.planItem`). Restrict é o que queremos: apagar um livro, um clube ou
   // uma pessoa que tem grifo tem de FALHAR, não zerar coluna nenhuma — o acervo
   // do clube continua íntegro, com autoria (ADR 0002).
-  club Club @relation(fields: [clubId], references: [id])
-  book Book @relation(fields: [bookId], references: [id])
-  user User @relation(fields: [userId], references: [id])
+  club     Club             @relation(fields: [clubId], references: [id])
+  book     Book             @relation(fields: [bookId], references: [id])
+  user     User             @relation(fields: [userId], references: [id])
+  // A QUARTA relação é OPCIONAL, e ela declara `onDelete: Restrict`
+  // EXPLICITAMENTE (Tarefa 38i). Para relação OPCIONAL o default do Prisma é
+  // `SetNull`, não `Restrict` — e foi exatamente esse implícito que quase
+  // produziu corrupção silenciosa no `Note.planItem`.
+  //
+  // ⚠️ E aqui o `SetNull` seria pior que um descuido, mas NÃO pelo motivo que
+  // este comentário dava até a auditoria da 38i. Ele dizia "é exatamente a tela
+  // mentindo sobre o passado", e não é exatamente: a derivação recusada
+  // REMAPEAVA o grifo para o dia errado (mentira); o `SetNull` o deixa SEM dia
+  // (amnésia). São defeitos diferentes, e a retórica estava mais forte que a
+  // medição.
+  //
+  // ⚠️ **O argumento real é outro, e é MAIS forte: o `null` resultante é
+  // INDISTINGUÍVEL do grifo legitimamente avulso.** A coluna é anulável de
+  // propósito — grifar num dia sem plano é o caso que o ADR 0004 protege —,
+  // então depois do fato ninguém consegue separar "nasceu sem dia" de "o admin
+  // apagou o dia": não há coluna, log nem evento que registre a diferença. A
+  // perda não é só do dado, é da POSSIBILIDADE DE SABER que houve perda, e
+  // nenhuma tela de correção futura teria como desfazê-la. Com `Restrict`,
+  // remover um dia do plano que alguém já grifou FALHA — e falhar é a única
+  // resposta que deixa a informação de pé.
+  //
+  // ⚠️ E a CONSEQUÊNCIA, que o teste estrutural cobrou sozinho: esta é a
+  // QUARTA FK que pode recusar a remoção de um dia no `replacePlanItems`, ao
+  // lado de `Note`, `ReadingLog` e `ActivityEvent`. A guarda de domínio dela é
+  // o `planItemIdsWithAnyHighlight` — 400 com mensagem em vez do `P2003` cru
+  // que a borda relançaria como 500.
+  //
+  // Quem garante que a QUINTA não nasça sem guarda é
+  // `src/usecases/__tests__/plan-item-fk-guards.test.ts`, que LÊ este arquivo.
+  //
+  // NADA de `@@index([planItemId])`: não há consulta por dia do grifo no
+  // escopo (o acervo recorta no CLIENTE), e índice sem consulta é custo de
+  // escrita à toa — a mesma conta que deixou o `ActivityEvent.planItemId`
+  // sem índice.
+  planItem ReadingPlanItem? @relation(fields: [planItemId], references: [id], onDelete: Restrict)
 
   // NENHUM `@@unique`: o grifo é ILIMITADO. Grifar o mesmo trecho outra vez
   // numa releitura, com outra cor, é o caso de uso — um `@@unique` o
@@ -433,7 +489,8 @@ model ActivityEvent {
   // a TERCEIRA FK que pode recusar a remoção de um dia no `replacePlanItems`,
   // ao lado de `Note_planItemId_fkey` e `ReadingLog_planItemId_fkey`.
   //
-  // ⚠️ **As TRÊS têm guarda de domínio na frente desde a Tarefa 34b** (400 com
+  // ⚠️ **As TRÊS DE ENTÃO têm guarda de domínio na frente desde a Tarefa 34b**
+  // (a quarta chegou na 38i, e está no parágrafo do fim deste bloco) — (400 com
   // mensagem, em vez do `P2003` cru que a borda relançava como 500): esta é o
   // `planItemIdsWithAnyActivityEvent`. A lacuna que a Tarefa 34 registrou aqui
   // ACABOU — o caminho era um dia lido e depois DESMARCADO, que perde o
@@ -445,13 +502,18 @@ model ActivityEvent {
   // - a recusa educada, no unitário do UseCase: o `describe('the guard that
   //   refuses to remove a day that has activity')`.
   //
-  // ⚠️ E quem garante que a QUARTA FK não nasça sem guarda não é este
+  // ⚠️ E quem garante que a PRÓXIMA FK não nasça sem guarda não é este
   // comentário: é `src/usecases/__tests__/plan-item-fk-guards.test.ts`, que LÊ
   // este arquivo, acha toda relação com `ReadingPlanItem` que recuse a remoção
   // — o `onDelete: Restrict` declarado E o implícito de relação obrigatória — e
   // fica vermelho nomeando a que estiver sem guarda. Duas fatias seguidas
   // (32→32c, 34→34b) introduziram FK sem guarda; requisito sem guarda
   // automática é intenção (`docs/CONVENCOES-CODIGO.md` §7.9).
+  //
+  // ⚠️ **A QUARTA JÁ CHEGOU — `Highlight.planItemId`, na Tarefa 38i — e foi a
+  // PRIMEIRA a nascer com guarda**, porque esta varredura ficou vermelha no
+  // mesmo commit da coluna. Não houve fatia de conserto. Este parágrafo dizia
+  // "a QUARTA" e ficaria contando uma FK que já existe.
   club     Club             @relation(fields: [clubId], references: [id], onDelete: Restrict)
   user     User             @relation(fields: [userId], references: [id], onDelete: Restrict)
   book     Book             @relation(fields: [bookId], references: [id], onDelete: Restrict)
@@ -578,8 +640,8 @@ model PushSubscription {
 //   seria histórico que envelhece mentindo (o mesmo argumento da decisão G da
 //   Tarefa 33, que deixou o `ActivityEvent` sem o título do dia).
 model NotificationDelivery {
-  id        String @id @default(cuid())
-  userId    String
+  id          String   @id @default(cuid())
+  userId      String
   // `String` e não enum Prisma, e é decisão do `CLAUDE.md`: ele lista
   // `NotificationDelivery.kind` entre os quatro campos "String validados por
   // z.enum/regex (ainda evoluem)", ao lado de `ActivityEvent.type`,
@@ -587,7 +649,7 @@ model NotificationDelivery {
   // `z.enum(NOTIFICATION_KINDS)` de `@clube/shared` e o `assertNotificationKind`
   // do domínio — este último também na LEITURA do repositório, como o
   // `assertActivityType`.
-  kind      String
+  kind        String
   // ⚠️ `String` e NÃO `@db.Date` — a divergência deliberada com
   // `ReadingPlanItem.date`, e é a decisão F da Tarefa 37.
   //
@@ -599,7 +661,7 @@ model NotificationDelivery {
   // string "YYYY-MM-DD" é exatamente o que `localDay(instant, timeZone)`
   // devolve, e é por isso que a comparação do dispatcher é igualdade de string,
   // sem aritmética de data em lugar nenhum (decisão A).
-  localDate String
+  localDate   String
   // SEM `@default(now())`, como o `ReadingLog.readAt` e ao contrário de todo
   // `createdAt` do projeto: o dono do instante é o dispatcher, que lê o relógio
   // UMA vez (ADR 0008 e regra 2 da Tarefa 37). Uma rede de segurança aqui

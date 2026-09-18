@@ -13,6 +13,8 @@ import {
   matchesText,
   MINE_SCOPE,
   type PageRange,
+  readingOf,
+  typeCanCarryReading,
 } from '../acervo-entries';
 
 /**
@@ -86,6 +88,9 @@ function aHighlight(
     clubId: CLUB,
     bookId: BOOK,
     userId: ME,
+    // ⚠️ AUSENTE por padrão (Tarefa 38i): o grifo avulso é o caso que o ADR
+    // 0004 protege, e quem testa a dimensão de leitura o passa explicitamente.
+    planItemId: null,
     quote: 'um trecho qualquer',
     color: YELLOW,
     page: 9,
@@ -717,5 +722,219 @@ describe('⚠️ the sixth dimension is in AND with the other five (rule 3)', ()
         page: pages('300', ''),
       }),
     ).toEqual([]);
+  });
+});
+
+/**
+ * ⚠️ **A DIMENSÃO DE LEITURA PASSA A ALCANÇAR O GRIFO (Tarefa 38i, decisão G).**
+ *
+ * Até aqui `readingOf` devolvia `null` para todo grifo, e `typeCanCarryReading`
+ * respondia "só a anotação do dia": era a verdade enquanto o grifo não tinha
+ * coluna de dia. A emenda de 2026-09-18 ao ADR 0004 deu-lhe `planItemId?`, e o
+ * que muda aqui é o **alcance** da dimensão que já existia — nenhuma dimensão
+ * nova, nenhum controle novo na tela.
+ *
+ * ⚠️ **O que NÃO muda: a decisão central do ADR 0004.** O campo é opcional, e o
+ * grifo avulso — o que nasceu num dia sem plano — continua **sumindo** quando se
+ * escolhe uma leitura, pela mesma fidelidade do §7.1 que exclui a anotação
+ * avulsa: `= 'x'` contra coluna nula é falso.
+ */
+describe('⚠️ the READING dimension now reaches the highlight (decision G)', () => {
+  it('reads the plan day of a highlight, like it already did for the note of the day', () => {
+    expect(readingOf(highlightEntry({ planItemId: 'p-1' }))).toBe('p-1');
+    expect(readingOf(noteEntry({ kind: 'PLAN', planItemId: 'p-1' }))).toBe(
+      'p-1',
+    );
+  });
+
+  /**
+   * ⚠️ **O grifo AVULSO continua sem leitura, e é o caso que o ADR 0004
+   * protege** — grifar num dia em que não há plano, ou em que não se escreveu
+   * nada, continua possível. O par com a avulsa está aqui porque as duas
+   * ausências têm a MESMA causa (coluna nula), e um `readingOf` que devolvesse
+   * `''` ou `undefined` para uma delas quebraria o `!==` do recorte em silêncio.
+   */
+  it('still has no reading for the loose highlight nor for the loose note', () => {
+    expect(readingOf(highlightEntry({ planItemId: null }))).toBeNull();
+    expect(readingOf(noteEntry({ kind: 'FREE', planItemId: null }))).toBeNull();
+  });
+
+  /**
+   * ⚠️ **O controle de leitura passa a existir com o tipo em "Grifo"**, e some
+   * só em "Avulsa" — o único tipo que NUNCA carrega dia. Antes da 38i o grifo
+   * estava do lado da avulsa aqui, e a tela escondia um `<select>` que agora tem
+   * o que casar.
+   */
+  it('lets the HIGHLIGHT carry a reading, and only the FREE note cannot', () => {
+    expect(typeCanCarryReading('HIGHLIGHT')).toBe(true);
+    expect(typeCanCarryReading('PLAN')).toBe(true);
+    expect(typeCanCarryReading(null)).toBe(true);
+    expect(typeCanCarryReading('FREE')).toBe(false);
+  });
+
+  /**
+   * ⚠️ **O FIXTURE NÃO É CÚMPLICE (regra 9):** cada recorte das outras cinco
+   * contém pelo menos uma entrada **fora** do dia `p-1` — o grifo do dia `p-2`,
+   * os dois grifos avulsos, a anotação do outro dia e a avulsa —, e por isso
+   * nenhuma das colunas "sem a leitura" repete a "com a leitura". Um teste de
+   * AND só prova o AND quando a outra dimensão, **sozinha**, devolveria MAIS.
+   */
+  describe('⚠️ and it is in AND with the other five (rule 9)', () => {
+    const DAY = 'p-1';
+    const OTHER_DAY = 'p-2';
+    const RANGE: PageRange = { from: '10', to: '100' };
+
+    const ENTRIES: readonly AcervoEntry[] = [
+      highlightEntry({
+        id: 'h-day-mine',
+        planItemId: DAY,
+        userId: ME,
+        color: YELLOW,
+        page: 20,
+        quote: 'Uma porta redonda na colina',
+        commentDoc: null,
+        commentText: '',
+      }),
+      highlightEntry({
+        id: 'h-day-hers',
+        planItemId: DAY,
+        userId: HER,
+        color: GREEN,
+        page: 120,
+        quote: 'O dragao dormia sobre o ouro',
+        commentText: 'o jantar dos anoes',
+      }),
+      highlightEntry({
+        id: 'h-other-day',
+        planItemId: OTHER_DAY,
+        userId: ME,
+        color: YELLOW,
+        page: 50,
+        quote: 'A colina vista do outro lado',
+        commentDoc: null,
+        commentText: '',
+      }),
+      highlightEntry({
+        id: 'h-loose',
+        planItemId: null,
+        userId: ME,
+        color: YELLOW,
+        page: 30,
+        quote: 'Zangado com o anel',
+        commentText: 'o anel muda de dono',
+      }),
+      highlightEntry({
+        id: 'h-hers-loose',
+        planItemId: null,
+        userId: HER,
+        color: GREEN,
+        page: 5,
+        quote: 'O carneiro assado',
+        commentDoc: null,
+        commentText: '',
+      }),
+      noteEntry({
+        id: 'n-day-hers',
+        kind: 'PLAN',
+        planItemId: DAY,
+        userId: HER,
+        plainText: 'ela abriu a porta antes de todos',
+      }),
+      noteEntry({
+        id: 'n-other-day',
+        kind: 'PLAN',
+        planItemId: OTHER_DAY,
+        userId: ME,
+        plainText: 'a promessa vale o que custa cumpri-la',
+      }),
+      noteEntry({
+        id: 'n-free',
+        kind: 'FREE',
+        planItemId: null,
+        userId: ME,
+        plainText: 'o que ela escreveu sobre a colina',
+      }),
+    ];
+
+    function visible(patch: Partial<AcervoFilter>): string[] {
+      return idsOf(filterEntries(ENTRIES, { ...ALL_FILTER, ...patch }, ME));
+    }
+
+    it('cuts by reading alone, over note AND highlight', () => {
+      expect(visible({ reading: DAY })).toEqual([
+        'h-day-mine',
+        'h-day-hers',
+        'n-day-hers',
+      ]);
+      // A precondição que dá dente: sem a leitura são as oito entradas.
+      expect(visible({})).toHaveLength(8);
+    });
+
+    it('⚠️ AND with PERSON — and the person alone would show more', () => {
+      expect(visible({ reading: DAY, author: MINE_SCOPE })).toEqual([
+        'h-day-mine',
+      ]);
+      expect(visible({ author: MINE_SCOPE })).toHaveLength(5);
+
+      expect(visible({ reading: DAY, author: authorScope(HER) })).toEqual([
+        'h-day-hers',
+        'n-day-hers',
+      ]);
+      expect(visible({ author: authorScope(HER) })).toHaveLength(3);
+    });
+
+    it('⚠️ AND with TYPE — and the type alone would show more', () => {
+      expect(visible({ reading: DAY, type: 'HIGHLIGHT' })).toEqual([
+        'h-day-mine',
+        'h-day-hers',
+      ]);
+      expect(visible({ type: 'HIGHLIGHT' })).toHaveLength(5);
+
+      expect(visible({ reading: DAY, type: 'PLAN' })).toEqual(['n-day-hers']);
+      expect(visible({ type: 'PLAN' })).toHaveLength(2);
+    });
+
+    // ⚠️ "Avulsa" com uma leitura é vazio POR CONSTRUÇÃO — e é o par que prova
+    // que o grifo avulso e a anotação avulsa continuam do mesmo lado.
+    it('⚠️ AND with TYPE free — empty by construction, and the type alone shows one', () => {
+      expect(visible({ reading: DAY, type: 'FREE' })).toEqual([]);
+      expect(visible({ type: 'FREE' })).toEqual(['n-free']);
+    });
+
+    it('⚠️ AND with COLOUR — and the colour alone would show more', () => {
+      expect(visible({ reading: DAY, color: YELLOW })).toEqual(['h-day-mine']);
+      expect(visible({ color: YELLOW })).toHaveLength(3);
+
+      expect(visible({ reading: DAY, color: GREEN })).toEqual(['h-day-hers']);
+      expect(visible({ color: GREEN })).toHaveLength(2);
+    });
+
+    it('⚠️ AND with TEXT — and the text alone would show more', () => {
+      expect(visible({ reading: DAY, text: 'colina' })).toEqual(['h-day-mine']);
+      expect(visible({ text: 'colina' })).toHaveLength(3);
+    });
+
+    it('⚠️ AND with the PAGE RANGE — and the range alone would show more', () => {
+      expect(visible({ reading: DAY, page: RANGE })).toEqual(['h-day-mine']);
+      expect(visible({ page: RANGE })).toHaveLength(3);
+    });
+
+    /**
+     * ⚠️ **AS SEIS JUNTAS**, e o par que prova que a leitura estava valendo:
+     * soltá-la devolve DUAS linhas, porque o grifo do outro dia satisfaz as
+     * outras cinco.
+     */
+    it('⚠️ all SIX together, and dropping the reading shows more', () => {
+      const five: Partial<AcervoFilter> = {
+        author: MINE_SCOPE,
+        type: 'HIGHLIGHT',
+        color: YELLOW,
+        text: 'colina',
+        page: RANGE,
+      };
+
+      expect(visible({ ...five, reading: DAY })).toEqual(['h-day-mine']);
+      expect(visible(five)).toEqual(['h-day-mine', 'h-other-day']);
+    });
   });
 });

@@ -232,4 +232,37 @@ export interface HighlightRepository {
    * e o que chegou é decidido pelo corte do banco.
    */
   find(filter: HighlightFilter): Promise<Highlight[]>;
+  /**
+   * Dos `planItemIds` dados, quais têm **algum** grifo — inclusive arquivado.
+   *
+   * ⚠️ **NASCEU COM A QUARTA FK, e não por especulação** (Tarefa 38i). O
+   * `Highlight.planItemId` da emenda ao ADR 0004 é a **quarta** relação que
+   * recusa a remoção de um dia do plano (`onDelete: Restrict`), ao lado de
+   * `Note`, `ReadingLog` e `ActivityEvent` — e as três anteriores mostraram o
+   * padrão: **duas delas nasceram sem guarda** (32→32c, 34→34b), e nas duas a
+   * lacuna só apareceu porque alguém foi procurar. Sem esta leitura, remover um
+   * dia que só tem grifo estouraria como `P2003` cru, que a borda relança como
+   * **500** — em vez do 400 com mensagem que o `replacePlanItems` dá.
+   *
+   * Quem cobra a existência deste método é automático e não depende de ninguém
+   * lembrar: `usecases/__tests__/plan-item-fk-guards.test.ts` LÊ o
+   * `schema.prisma`, acha toda FK que recusa a remoção e exige o
+   * `planItemIdsWithAny<Modelo>` correspondente. O nome é MECÂNICO de propósito
+   * — é isso que faz a guarda funcionar sozinha para a QUINTA FK.
+   *
+   * **Cego a `status`**, exatamente como o irmão do `NoteRepository`: a FK não
+   * olha `status`, e um grifo arquivado ainda aponta para o item. Filtrar
+   * `ACTIVE` aqui faria a guarda liberar uma remoção que o banco vai recusar.
+   *
+   * **Sem promessa de ordem** e sem repetição: é um conjunto. Devolve **ids de
+   * item de plano**, nunca de grifo, e nada sobre autoria — o admin não precisa
+   * saber quem grifou para entender que não pode remover o dia. Lista vazia na
+   * entrada devolve lista vazia, **sem ida ao banco**.
+   *
+   * Não recebe `clubId` nem `bookId`: os ids vêm do plano que o
+   * `replacePlanItems` acabou de ler do livro já cortado por tenant.
+   */
+  planItemIdsWithAnyHighlight(
+    planItemIds: readonly string[],
+  ): Promise<string[]>;
 }

@@ -208,6 +208,9 @@ export function aHighlight(overrides: Partial<Highlight> = {}): Highlight {
     clubId: 'club-1',
     bookId: 'book-1',
     userId: 'user-1',
+    // Notoriamente NÃO-hoje e notoriamente AUSENTE: o grifo avulso é o caso que
+    // o ADR 0004 protege, e quem testa o dia do plano o passa explicitamente.
+    planItemId: null,
     quote: 'não é o que você tem, é o que você faz com o que tem',
     color: '#facc15',
     page: 45,

@@ -8,11 +8,13 @@ import {
   InvalidBookError,
   NotAMemberError,
 } from '../../domain/errors';
+import type { Highlight } from '../../domain/highlight';
 import type { Note } from '../../domain/note';
 import type { ReadingLog } from '../../domain/reading-log';
 import type { PlanItemDraft } from '../../domain/reading-plan';
 import {
   aBook,
+  aHighlight,
   aMembership,
   anActivityEvent,
   aNote,
@@ -22,6 +24,7 @@ import {
 } from '../../test-support/builders';
 import { ActivityEventRepositoryFake } from '../_fakes/activity-event-repository-fake';
 import { BookRepositoryFake } from '../_fakes/book-repository-fake';
+import { HighlightRepositoryFake } from '../_fakes/highlight-repository-fake';
 import { MembershipRepositoryFake } from '../_fakes/membership-repository-fake';
 import { NoteRepositoryFake } from '../_fakes/note-repository-fake';
 import { ReadingLogRepositoryFake } from '../_fakes/reading-log-repository-fake';
@@ -77,6 +80,7 @@ describe('ReplacePlanItems', () => {
   let notes: NoteRepositoryFake;
   let logs: ReadingLogRepositoryFake;
   let events: ActivityEventRepositoryFake;
+  let highlights: HighlightRepositoryFake;
   let useCase: ReplacePlanItems;
   let stored: Book;
   let planBefore: ReadingPlanItem[];
@@ -91,6 +95,7 @@ describe('ReplacePlanItems', () => {
     notes = new NoteRepositoryFake();
     logs = new ReadingLogRepositoryFake();
     events = new ActivityEventRepositoryFake();
+    highlights = new HighlightRepositoryFake();
     useCase = new ReplacePlanItems(
       new AssertMembership(memberships),
       books,
@@ -98,6 +103,7 @@ describe('ReplacePlanItems', () => {
       notes,
       logs,
       events,
+      highlights,
     );
 
     stored = aBook({ id: BOOK_ID, clubId: CLUB_ID });
@@ -1246,7 +1252,7 @@ describe('ReplacePlanItems', () => {
      * não entra nesta fatia.
      *
      * ⚠️ **Asserta a FRASE, não só a classe.** A frase é a única coisa desta
-     * fatia que o admin lê, e a classe é a mesma nas três guardas — ela não
+     * fatia que o admin lê, e a classe é a mesma nas QUATRO guardas — ela não
      * distingue nada aqui.
      */
     it('refuses to remove a day that was read and then unmarked', async () => {
@@ -1398,25 +1404,264 @@ describe('ReplacePlanItems', () => {
   });
 
   /**
-   * ⚠️ **REGRA 10 — A MENSAGEM NÃO MENTE EM NENHUM DOS QUATRO CASOS**, e é por
-   * isso que as guardas são TRÊS com frases distintas (decisão B da 32c,
-   * reafirmada na decisão E da 34b), e não uma frase combinada.
+   * ⚠️ **A QUARTA GUARDA (Tarefa 38i)** — `Highlight.planItemId` é a quarta FK
+   * `ON DELETE RESTRICT` que aponta para o `ReadingPlanItem`, e ela nasceu COM
+   * guarda: o `plan-item-fk-guards.test.ts` ficou vermelho no mesmo commit da
+   * coluna, nomeando `Highlight.planItem`.
+   *
+   * ⚠️ **Nenhuma das três guardas de cima a enxerga, e o caminho é o normal** —
+   * não uma regressão exótica como o da terceira. O gatilho de atividade do
+   * grifo grava `planItemId: null` no `ActivityEvent` (decisão de produto), e o
+   * grifo não é nota nem leitura: um dia que só tem grifo passava pelas três e
+   * estourava na FK como 500.
+   */
+  describe('the guard that refuses to remove a day that has highlights', () => {
+    /** O grifo do dia 2 — o dia que os testes daqui tentam remover. */
+    function aHighlightOnDayTwo(overrides: Partial<Highlight> = {}): Highlight {
+      const planItemId =
+        overrides.planItemId === undefined ? DAY_TWO : overrides.planItemId;
+      return aHighlight({
+        clubId: CLUB_ID,
+        bookId: BOOK_ID,
+        userId: MEMBER_ID,
+        ...overrides,
+        planItemId,
+        // O id sai do par (dia, cor) e vem DEPOIS do spread: dois grifos do
+        // mesmo dia são duas linhas, e um id repetido faria o upsert do fake
+        // colapsá-las em silêncio — o `counts days, not highlights` perderia
+        // o dente.
+        id: `highlight-${planItemId ?? 'avulso'}-${overrides.color ?? '#facc15'}`,
+      });
+    }
+
+    /** O rascunho que remove o dia 2 e mantém os dias 1 e 3. */
+    const withoutDayTwo: PlanItemDraft[] = [
+      { date: '2026-10-01', title: 'Cap. 1' },
+      { date: '2026-10-03', title: 'Cap. 3' },
+    ];
+
+    // O par POSITIVO, sem o qual uma guarda que recusasse tudo passaria em
+    // todos os testes abaixo. O grifo está no dia 1, que fica.
+    it('removes a day with no highlight at all, exactly as before', async () => {
+      await highlights.save(aHighlightOnDayTwo({ planItemId: DAY_ONE }));
+
+      const { planItems, removed } = await useCase.execute(
+        validInput({
+          planItems: [
+            { date: '2026-10-01', title: 'Cap. 1' },
+            { date: '2026-10-02', title: 'Cap. 2' },
+          ],
+        }),
+      );
+
+      expect(planItems.map((item) => item.id)).toEqual([DAY_ONE, DAY_TWO]);
+      expect(removed).toBe(1);
+      expect(plan.removedIds).toEqual([DAY_THREE]);
+    });
+
+    /**
+     * ⚠️ **O CASO REAL: um dia que só tem GRIFO.** Nem nota, nem log, nem
+     * evento daquele dia — e é o estado mais comum que a coluna nova produz,
+     * porque grifar não exige escrever anotação nenhuma (ADR 0004).
+     *
+     * Asserta a FRASE, não só a classe: `InvalidBookError` é a mesma nas quatro
+     * guardas, então a classe não distingue nada aqui.
+     */
+    it('refuses to remove a day that somebody highlighted', async () => {
+      await highlights.save(aHighlightOnDayTwo());
+
+      // As precondições do caso: nem nota, nem log, nem evento.
+      expect(notes.saved).toEqual([]);
+      expect(logs.saved).toEqual([]);
+      expect(events.saved).toEqual([]);
+
+      const error = await caught(
+        useCase.execute(validInput({ planItems: withoutDayTwo })),
+      );
+
+      expect(error).toBeInstanceOf(InvalidBookError);
+      expect(error.message).toBe(
+        'cannot remove 1 reading plan day(s) that already have highlights',
+      );
+    });
+
+    /**
+     * ⚠️ A recusa vem ANTES de qualquer escrita, e a prova é a CONTAGEM (§7.3).
+     * Sem a guarda, o `replaceForBook` É chamado, a FK estoura no meio da
+     * transação e o admin recebe 500 — e `plan.saved` inalterado não separa os
+     * dois casos, porque o fake é atômico de graça.
+     */
+    it('writes nothing and removes nothing when it refuses', async () => {
+      await highlights.save(aHighlightOnDayTwo());
+
+      await expect(
+        useCase.execute(validInput({ planItems: withoutDayTwo })),
+      ).rejects.toBeInstanceOf(InvalidBookError);
+
+      expect(plan.saved).toEqual(planBefore);
+      expect(plan.saveManyCalls).toBe(saveCallsBefore);
+      expect(plan.replaceForBookCalls).toBe(replaceCallsBefore);
+      expect(plan.removedIds).toEqual([]);
+      expect(highlights.planItemIdsWithAnyHighlightCalls).toBe(1);
+    });
+
+    // O grifo de OUTRO dia não barra nada. Sem isto, um
+    // `planItemIdsWithAnyHighlight` que ignorasse os ids pedidos (devolvendo
+    // todos) passaria em todos os testes acima.
+    it('lets a day go when the highlights are all anchored on the survivors', async () => {
+      await highlights.save(aHighlightOnDayTwo({ planItemId: DAY_ONE }));
+      await highlights.save(aHighlightOnDayTwo({ planItemId: DAY_THREE }));
+
+      const { removed } = await useCase.execute(
+        validInput({ planItems: withoutDayTwo }),
+      );
+
+      expect(removed).toBe(1);
+      expect(plan.removedIds).toEqual([DAY_TWO]);
+    });
+
+    /**
+     * ⚠️ **O GRIFO AVULSO NÃO ANCORA DIA NENHUM — e este é o caso que decide se
+     * a fatia quebrou o produto.** `Highlight.planItemId` é anulável (grifo em
+     * dia sem plano é o caso que o ADR 0004 protege), e `IN (...)` contra nulo
+     * é falso. Uma guarda que os contasse recusaria TODA edição de plano de um
+     * clube que grifa — e **toda linha anterior à migration tem `NULL`**, então
+     * o clube do dono é exatamente esse clube.
+     */
+    it('never counts a highlight that has no reading day', async () => {
+      await highlights.save(aHighlightOnDayTwo({ planItemId: null }));
+
+      // A precondição que dá dente: o grifo existe e é avulso.
+      expect(highlights.saved).toHaveLength(1);
+
+      const { removed } = await useCase.execute(
+        validInput({ planItems: withoutDayTwo }),
+      );
+
+      expect(removed).toBe(1);
+      expect(plan.removedIds).toEqual([DAY_TWO]);
+    });
+
+    /**
+     * ⚠️ **O grifo ARQUIVADO ainda ancora o dia** — a FK não olha `status`, e
+     * uma guarda que filtrasse `ACTIVE` liberaria uma remoção que o banco vai
+     * recusar, trocando o 400 educado pelo 500 mudo.
+     */
+    it('counts an archived highlight, because the foreign key does', async () => {
+      await highlights.save(
+        aHighlightOnDayTwo({
+          status: 'ARCHIVED',
+          archivedAt: new Date('2026-02-01T00:00:00.000Z'),
+        }),
+      );
+
+      const { message } = await caught(
+        useCase.execute(validInput({ planItems: withoutDayTwo })),
+      );
+
+      expect(message).toBe(
+        'cannot remove 1 reading plan day(s) that already have highlights',
+      );
+    });
+
+    // A mensagem diz QUANTOS dias. A frase INTEIRA, e não um `toContain('2')`:
+    // esse casaria com "12", "20" e "21".
+    it('says how many days have highlights', async () => {
+      await highlights.save(aHighlightOnDayTwo());
+      await highlights.save(aHighlightOnDayTwo({ planItemId: DAY_THREE }));
+
+      const error = await caught(
+        useCase.execute(
+          validInput({ planItems: [{ date: '2026-10-01', title: 'C1' }] }),
+        ),
+      );
+
+      expect(error.message).toBe(
+        'cannot remove 2 reading plan day(s) that already have highlights',
+      );
+    });
+
+    // E é UM dia quando é um dia só. Sem este par, um `${removedIds.length}` no
+    // lugar do `${daysWithHighlights.length}` passaria: o rascunho abaixo
+    // remove DOIS dias e só um tem grifo.
+    it('says one day when a single day has highlights', async () => {
+      await highlights.save(aHighlightOnDayTwo());
+
+      const error = await caught(
+        useCase.execute(
+          validInput({ planItems: [{ date: '2026-10-01', title: 'C1' }] }),
+        ),
+      );
+
+      expect(error.message).toContain('1');
+      expect(error.message).not.toContain('2');
+    });
+
+    // Dois grifos no MESMO dia são UM dia. O `Set` do repositório é o dono
+    // disso, e este é o teste que o cobra pelo lado do produto.
+    it('counts days, not highlights', async () => {
+      await highlights.save(aHighlightOnDayTwo({ color: '#facc15' }));
+      await highlights.save(aHighlightOnDayTwo({ color: '#22c55e' }));
+
+      // A precondição que dá dente ao teste: são DOIS grifos no acervo.
+      expect(highlights.saved).toHaveLength(2);
+
+      const { message } = await caught(
+        useCase.execute(validInput({ planItems: withoutDayTwo })),
+      );
+
+      expect(message).toContain('1');
+      expect(message).not.toContain('2');
+    });
+
+    // Só a CONTAGEM. Nem quem grifou, nem o id do dia, nem o trecho:
+    // `error.message` é a única publicada na resposta do 400 (§6.2).
+    it('never names the author, the day nor the quote', async () => {
+      const highlight = aHighlightOnDayTwo();
+      await highlights.save(highlight);
+
+      const { message } = await caught(
+        useCase.execute(validInput({ planItems: withoutDayTwo })),
+      );
+
+      expect(message).not.toContain(MEMBER_ID);
+      expect(message).not.toContain(DAY_TWO);
+      expect(message).not.toContain(highlight.id);
+      expect(message).not.toContain(highlight.quote);
+    });
+  });
+
+  /**
+   * ⚠️ **REGRA 10 — A MENSAGEM NÃO MENTE EM NENHUM DOS CASOS**, e é por isso
+   * que as guardas são **QUATRO** com frases distintas (decisão B da 32c,
+   * reafirmada na decisão E da 34b e na 38i), e não uma frase combinada.
+   *
+   * ⚠️ **Este parágrafo dizia "TRÊS" e "qual dos três é", e a quarta guarda
+   * chegou na Tarefa 38i** — no MESMO arquivo, quatro `it` abaixo. É a regra 11
+   * daquela fatia falhando no lugar mais caro possível: o docblock do
+   * `describe` em que os testes novos entraram.
    *
    * `error.message` é a única publicada ao cliente, e só na classe 400 (§6.2).
    * A frase mais antiga diz *"…that already have notes"*: se um dia com **só
-   * leitura**, ou com **só atividade**, a reaproveitasse, a resposta
-   * **mentiria** para o admin — ele abriria o dia procurando uma anotação que
-   * não existe. E uma frase única ("notes, readings or activity") não mente,
-   * mas obriga a adivinhar qual dos três é: são ações mentais diferentes
-   * ("alguém escreveu ali" × "alguém já leu aquilo" × "aconteceu alguma coisa
-   * ali").
+   * leitura**, com **só atividade** ou com **só grifo** a reaproveitasse, a
+   * resposta **mentiria** para o admin — ele abriria o dia procurando uma
+   * anotação que não existe. E uma frase única ("notes, readings, activity or
+   * highlights") não mente, mas obriga a adivinhar qual dos quatro é: são ações
+   * mentais diferentes ("alguém escreveu ali" × "alguém já leu aquilo" ×
+   * "aconteceu alguma coisa ali" × "alguém grifou ali").
    *
    * ⚠️ **E a terceira frase NÃO pode dizer "leu"** (decisão E da 34b), senão
    * mente exatamente no caso que a fatia existe para consertar: o dia de quem
    * leu **e desmarcou** não tem leitura nenhuma — tem o evento que sobrou.
    *
+   * ⚠️ **A quarta é a ÚLTIMA, e é a única posição que não rouba frase de
+   * ninguém** (38i): um dia com nota **e** grifo continua dizendo "já tem
+   * anotações", que é o que o admin já aprendeu. Os três pares combinados com
+   * grifo estão testados logo abaixo, e o mutante que sobe a guarda para o topo
+   * acusa nos três.
+   *
    * Os testes assertam a **mensagem**, não só a classe do erro — a classe é
-   * `InvalidBookError` em todos, então ela não distingue nada aqui.
+   * `InvalidBookError` nos quatro, então ela não distingue nada aqui.
    */
   describe('the message never lies about which guard refused', () => {
     const withoutDayTwo: PlanItemDraft[] = [
@@ -1458,6 +1703,18 @@ describe('ReplacePlanItems', () => {
           planItemId: DAY_TWO,
           userId: MEMBER_ID,
           type: 'READ',
+        }),
+      );
+    }
+
+    /** O grifo do dia 2 — a quarta âncora (Tarefa 38i). */
+    async function seedHighlight(): Promise<unknown> {
+      return await highlights.save(
+        aHighlight({
+          clubId: CLUB_ID,
+          bookId: BOOK_ID,
+          planItemId: DAY_TWO,
+          userId: MEMBER_ID,
         }),
       );
     }
@@ -1549,6 +1806,57 @@ describe('ReplacePlanItems', () => {
       expect(message).toContain('that somebody already read');
       expect(message).not.toContain('activity');
       expect(message).not.toContain('notes');
+    });
+
+    /**
+     * ⚠️ **A QUARTA FRASE (Tarefa 38i), e ela também não pode mentir.** Um dia
+     * que só tem grifo não tem anotação, não foi lido e não tem evento daquele
+     * dia — as outras três frases mentiriam as três, cada uma do seu jeito.
+     */
+    it('talks about highlights, and about nothing else, when only a highlight anchors the day', async () => {
+      const message = await refusalFor(seedHighlight);
+
+      expect(message).toContain('that already have highlights');
+      expect(message).not.toContain('notes');
+      expect(message).not.toContain('already read');
+      expect(message).not.toContain('activity');
+    });
+
+    /**
+     * ⚠️ **A ORDEM: a guarda de grifo é a ÚLTIMA, e é a única posição que não
+     * rouba mensagem de ninguém.** Um dia com nota **e** grifo continua dizendo
+     * "já tem anotações" — a frase que o admin já aprendeu —, e o mesmo vale
+     * para leitura e atividade. Estes três cenários pinam a ORDEM, não a
+     * existência da guarda: o grifo está presente em todos.
+     */
+    it('keeps the note message when the day has a note and a highlight', async () => {
+      const message = await refusalFor(async () => {
+        await seedNote();
+        await seedHighlight();
+      });
+
+      expect(message).toContain('that already have notes');
+      expect(message).not.toContain('highlights');
+    });
+
+    it('keeps the reading message when the day has a reading and a highlight', async () => {
+      const message = await refusalFor(async () => {
+        await seedReading();
+        await seedHighlight();
+      });
+
+      expect(message).toContain('that somebody already read');
+      expect(message).not.toContain('highlights');
+    });
+
+    it('keeps the activity message when the day has an event and a highlight', async () => {
+      const message = await refusalFor(async () => {
+        await seedActivity();
+        await seedHighlight();
+      });
+
+      expect(message).toContain('that already have activity');
+      expect(message).not.toContain('highlights');
     });
   });
 

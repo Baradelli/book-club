@@ -13,12 +13,16 @@ import {
   aBook,
   aDoc,
   aMembership,
+  aPlanItem,
+  aSettings,
   required,
 } from '../../test-support/builders';
 import { ActivityEventRepositoryFake } from '../_fakes/activity-event-repository-fake';
 import { BookRepositoryFake } from '../_fakes/book-repository-fake';
 import { HighlightRepositoryFake } from '../_fakes/highlight-repository-fake';
 import { MembershipRepositoryFake } from '../_fakes/membership-repository-fake';
+import { ReadingPlanItemRepositoryFake } from '../_fakes/reading-plan-item-repository-fake';
+import { SettingsRepositoryFake } from '../_fakes/settings-repository-fake';
 import { AssertMembership } from '../assert-membership';
 import type { CreateHighlightInput } from '../create-highlight';
 import { CreateHighlight } from '../create-highlight';
@@ -44,6 +48,8 @@ describe('CreateHighlight', () => {
   let memberships: MembershipRepositoryFake;
   let books: BookRepositoryFake;
   let highlights: HighlightRepositoryFake;
+  let planItems: ReadingPlanItemRepositoryFake;
+  let settings: SettingsRepositoryFake;
   let events: ActivityEventRepositoryFake;
   let recordActivity: RecordActivity;
   let useCase: CreateHighlight;
@@ -52,6 +58,8 @@ describe('CreateHighlight', () => {
     memberships = new MembershipRepositoryFake();
     books = new BookRepositoryFake();
     highlights = new HighlightRepositoryFake();
+    planItems = new ReadingPlanItemRepositoryFake();
+    settings = new SettingsRepositoryFake();
     events = new ActivityEventRepositoryFake();
     // O `recordActivity` é um UseCase REAL sobre o fake do repositório, e não
     // um dublê: é o precedente do `AssertMembership` (decisão D), e é o que
@@ -61,6 +69,8 @@ describe('CreateHighlight', () => {
       new AssertMembership(memberships),
       books,
       highlights,
+      planItems,
+      settings,
       recordActivity,
     );
 
@@ -912,6 +922,251 @@ describe('CreateHighlight', () => {
       ).rejects.toBeInstanceOf(InvalidHighlightError);
 
       expect(events.saveCalls).toBe(0);
+    });
+  });
+
+  /**
+   * ⚠️ **O DIA DO PLANO NO GRIFO (Tarefa 38i)** — a emenda de 2026-09-18 ao
+   * `docs/adr/0004-grifo-entidade-propria.md`.
+   *
+   * O grifo nasce com o item do plano de **hoje**, quando existe um naquele
+   * livro, e com `null` quando não existe (decisão F). O campo é **opcional**, e
+   * é por isso que a decisão central do ADR 0004 sobrevive inteira: *"o grifo
+   * não depende de um dia de leitura"* continua verdade.
+   *
+   * ⚠️ **"Hoje" é o dia no `Settings.timezone` DA PESSOA** (decisão D), nunca a
+   * hora do servidor — a mesma conta do dispatcher da Tarefa 37 e da corrente da
+   * ADR 0010. Os fixtures abaixo escolhem um instante em que **São Paulo e UTC
+   * caem em dias diferentes**, de propósito: com um instante "seguro" o mutante
+   * que troca o fuso da pessoa por `'UTC'` ficaria verde, que é a asserção que
+   * se autoajusta do §7.8 na forma de fixture.
+   */
+  describe('the reading day of the plan', () => {
+    /**
+     * ⚠️ **O INSTANTE ESCOLHIDO PARA SEPARAR TRÊS FUSOS, e ele é o fixture mais
+     * importante deste bloco.**
+     *
+     * `2026-09-18T02:00:00Z` cai em **2026-09-17** em `America/Sao_Paulo`
+     * (UTC−3), em **2026-09-18** em UTC e em **2026-09-18** em
+     * `Pacific/Kiritimati` (UTC+14). Um instante do meio do dia daria o MESMO
+     * dia nos três, e então nenhum teste daqui distinguiria "o fuso dela" de "o
+     * fuso do servidor" — §7.8, o corolário de fixture.
+     */
+    const NIGHT = new Date('2026-09-18T02:00:00.000Z');
+    /** O dia de quem está em `America/Sao_Paulo` no instante `NIGHT`. */
+    const DAY_IN_SAO_PAULO = '2026-09-17';
+    /** O dia de quem está em UTC — e em `Pacific/Kiritimati` — no mesmo instante. */
+    const DAY_IN_UTC = '2026-09-18';
+    /** UTC+14: o fuso que prova que a conta usa o `Settings` DA PESSOA. */
+    const KIRITIMATI = 'Pacific/Kiritimati';
+
+    /**
+     * Os dois dias do plano deste livro, e o do livro do OUTRO clube no mesmo
+     * dia — este último é o que impede o `bookIds` de virar decoração.
+     */
+    beforeEach(async () => {
+      await planItems.saveMany([
+        aPlanItem({ bookId: BOOK_ID, date: DAY_IN_SAO_PAULO, order: 0 }),
+        aPlanItem({ bookId: BOOK_ID, date: DAY_IN_UTC, order: 1 }),
+        aPlanItem({ bookId: OTHER_CLUB_BOOK_ID, date: DAY_IN_SAO_PAULO }),
+      ]);
+    });
+
+    function idOfDay(bookId: string, date: string): string {
+      return `plan-${bookId}-${date}`;
+    }
+
+    /**
+     * ⚠️ Decisão C — **preenchimento automático e silencioso na CRIAÇÃO**, sem
+     * nenhum campo novo na tela: o gesto continua de dois toques.
+     */
+    it('is born with the plan day of today, in the timezone of the person', async () => {
+      await settings.save(
+        aSettings({ userId: MEMBER_ID, timezone: 'America/Sao_Paulo' }),
+      );
+
+      const { highlight } = await useCase.execute(validInput({ now: NIGHT }));
+
+      expect(highlight.planItemId).toBe(idOfDay(BOOK_ID, DAY_IN_SAO_PAULO));
+      expect(required(highlights.saved[0]).planItemId).toBe(
+        idOfDay(BOOK_ID, DAY_IN_SAO_PAULO),
+      );
+    });
+
+    /**
+     * ⚠️ **O PAR QUE FAZ O TESTE ACIMA VALER** (§7.8): o MESMO instante, outro
+     * fuso, OUTRO dia. Sem ele, "o dia é o do fuso dela" e "o dia é o do
+     * servidor" seriam indistinguíveis — e no fuso fixo da suíte (`TZ=UTC`,
+     * `vitest.workspace.ts`) o mutante `localDay(now, 'UTC')` passaria verde no
+     * teste de cima sozinho.
+     */
+    it('gives two people in different timezones two different plan days, from one instant', async () => {
+      await settings.save(
+        aSettings({ userId: MEMBER_ID, timezone: 'America/Sao_Paulo' }),
+      );
+      await settings.save(
+        aSettings({ userId: OWNER_ID, timezone: KIRITIMATI }),
+      );
+
+      const mine = await useCase.execute(validInput({ now: NIGHT }));
+      const theirs = await useCase.execute(
+        validInput({ actorUserId: OWNER_ID, now: NIGHT }),
+      );
+
+      expect(mine.highlight.planItemId).toBe(
+        idOfDay(BOOK_ID, DAY_IN_SAO_PAULO),
+      );
+      expect(theirs.highlight.planItemId).toBe(idOfDay(BOOK_ID, DAY_IN_UTC));
+    });
+
+    /**
+     * Sem linha de `Settings` vale o `DEFAULT_SETTINGS` — o padrão do projeto
+     * para quem nunca abriu a tela de preferências (o super-admin do seed nunca
+     * aceitou convite). ⚠️ E o instante é o que separa o **padrão**
+     * (`America/Sao_Paulo`) do **fuso do servidor**: com `TZ=UTC` na suíte, um
+     * fallback para `'UTC'` cairia no outro dia.
+     */
+    it('falls back to the default timezone, not to the clock of the server', async () => {
+      const { highlight } = await useCase.execute(validInput({ now: NIGHT }));
+
+      expect(highlight.planItemId).toBe(idOfDay(BOOK_ID, DAY_IN_SAO_PAULO));
+    });
+
+    /**
+     * ⚠️ **DECISÃO F — dia sem plano grava `null`, e o grifo É CRIADO ASSIM
+     * MESMO.** É o estado normal entre dois livros e nos dias que o plano pula;
+     * falhar aqui seria impedir de grifar. É também o caso que o ADR 0004
+     * protege desde sempre.
+     */
+    it('writes null when the plan has no day for today, and creates the highlight anyway', async () => {
+      const { highlight } = await useCase.execute(
+        // 2026-09-25 em São Paulo: nenhum item do plano cai aí.
+        validInput({ now: new Date('2026-09-25T15:00:00.000Z') }),
+      );
+
+      expect(highlight.planItemId).toBeNull();
+      expect(highlight.quote).not.toBe('');
+      expect(highlights.saveCalls).toBe(1);
+      expect(required(highlights.saved[0]).planItemId).toBeNull();
+    });
+
+    /**
+     * ⚠️ O dia é o do **livro do grifo**, e o `bookIds` do filtro é o que o
+     * garante: o outro livro tem um item do plano exatamente no mesmo dia.
+     */
+    it('never takes the plan day of another book', async () => {
+      await books.save(aBook({ id: 'book-sem-plano', clubId: CLUB_ID }));
+
+      const { highlight } = await useCase.execute(
+        validInput({ bookId: 'book-sem-plano', now: NIGHT }),
+      );
+
+      expect(highlight.planItemId).toBeNull();
+    });
+
+    /**
+     * ⚠️ **REGRA 5 — CONTADOR DE CHAMADAS, NUNCA CRONÔMETRO** (§7.3). A
+     * resolução do dia custa **uma** consulta de plano e **uma** de settings, e
+     * o filtro vai inteiro numa chamada só — não uma pergunta por dia do plano,
+     * nem uma releitura do `Settings` por campo.
+     *
+     * O `findFilters` é o que separa "mandou um filtro só, completo" de "mandou
+     * vários": o RESULTADO é idêntico nos dois casos, e é por isso que o
+     * contador sozinho seria meio teste.
+     */
+    it('costs exactly one settings read and one plan query, with one filter', async () => {
+      await settings.save(
+        aSettings({ userId: MEMBER_ID, timezone: 'America/Sao_Paulo' }),
+      );
+
+      await useCase.execute(validInput({ now: NIGHT }));
+
+      expect(settings.byUserIdCalls).toBe(1);
+      expect(planItems.findCalls).toBe(1);
+      expect(planItems.findFilters).toEqual([
+        { bookIds: [BOOK_ID], date: DAY_IN_SAO_PAULO },
+      ]);
+      // E o `findByBook` — o plano INTEIRO do livro, ~30 dias para descartar
+      // 29 — continua sem chamador aqui (§7.3).
+      expect(planItems.findByBookCalls).toBe(0);
+    });
+
+    /**
+     * ⚠️ **O CORTE DE TENANT VEM ANTES DAS DUAS LEITURAS, e não só antes da
+     * escrita** (§7.3). "Recusou antes de ler" e "leu e depois recusou" dão o
+     * MESMO erro ao cliente: a segunda ordem consulta o plano de um clube — que
+     * é conteúdo do clube tanto quanto a nota — para quem não é dele.
+     */
+    it('reads neither the settings nor the plan when the actor is not a member', async () => {
+      await expect(
+        useCase.execute(
+          validInput({ actorUserId: OTHER_CLUB_MEMBER_ID, now: NIGHT }),
+        ),
+      ).rejects.toBeInstanceOf(NotAMemberError);
+
+      expect(settings.byUserIdCalls).toBe(0);
+      expect(planItems.findCalls).toBe(0);
+      expect(highlights.saveCalls).toBe(0);
+    });
+
+    /**
+     * ⚠️ **REGRA 6 / DECISÃO E — CONTRABANDO, COM O ATOR LEGÍTIMO** (§7.5).
+     *
+     * Testar isto com um ator de fora não provaria nada sobre o campo: a
+     * chamada morreria no corte de tenant, e morreria igual se o contrabando
+     * funcionasse. Aqui o ator é membro, o campo proibido vem junto, e o que se
+     * asserta é **a linha gravada** — a única coisa que muda quando o
+     * contrabando pega.
+     *
+     * ⚠️ E o mutante perigoso não é `input.planItemId` cru: é
+     * `input.planItemId ?? <o resolvido>`, o envenenamento com fallback, que se
+     * comporta normalmente em TODO teste que não manda o campo. O `as unknown
+     * as` é de propósito — é exatamente o que um corpo com chave a mais produz
+     * se algum dia alguém declarar o campo no schema da borda.
+     */
+    it('ignores a planItemId smuggled into the input, for the legitimate actor', async () => {
+      await settings.save(
+        aSettings({ userId: MEMBER_ID, timezone: 'America/Sao_Paulo' }),
+      );
+      const smuggled = {
+        ...validInput({ now: NIGHT }),
+        planItemId: idOfDay(BOOK_ID, DAY_IN_UTC),
+      } as unknown as CreateHighlightInput;
+
+      const { highlight } = await useCase.execute(smuggled);
+
+      // O dia é o de HOJE no fuso dela, não o que o corpo apontou.
+      expect(highlight.planItemId).toBe(idOfDay(BOOK_ID, DAY_IN_SAO_PAULO));
+      expect(required(highlights.saved[0]).planItemId).toBe(
+        idOfDay(BOOK_ID, DAY_IN_SAO_PAULO),
+      );
+    });
+
+    /**
+     * ⚠️ **REGRA 4 — UM RELÓGIO SÓ, e a prova é por CONTAGEM de leituras**
+     * (§7.8). O dia do plano precisa de "agora", e o UseCase **recebe** esse
+     * instante: ele não lê o relógio uma segunda vez para achar o dia.
+     *
+     * As duas leituras têm dono declarado: a `at(1)` é a do grifo (que carimba
+     * `createdAt`/`updatedAt` **e** resolve o dia), a `at(2)` é a do
+     * `ActivityEvent`. Uma leitura a mais para o dia levaria `reads` a 3.
+     *
+     * `CLOCK_BASE_ISO` é `2026-04-01T12:00:00Z`, então `at(1)` é
+     * `2026-04-01T12:00:01Z` — **2026-04-01** em São Paulo. O item do plano
+     * daquele dia é o que prova que a resolução usou o instante do relógio, e
+     * não um segundo `new Date()` qualquer.
+     */
+    it('resolves the day from the same single clock read that stamps the highlight', async () => {
+      await planItems.saveMany([
+        aPlanItem({ bookId: BOOK_ID, date: '2026-04-01', order: 2 }),
+      ]);
+      const clock = installAdvancingClock();
+
+      const { highlight } = await useCase.execute(validInput());
+
+      expect(clock.reads).toBe(2);
+      expect(highlight.createdAt.getTime()).toBe(clock.at(1));
+      expect(highlight.planItemId).toBe(idOfDay(BOOK_ID, '2026-04-01'));
     });
   });
 

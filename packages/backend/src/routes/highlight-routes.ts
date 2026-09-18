@@ -58,6 +58,10 @@ function toHighlightResponse(highlight: Highlight): HighlightResponse {
     // O AUTOR sai na resposta: dentro do clube não há conteúdo privado, e a
     // listagem mostra autoria. → ADR 0002.
     userId: highlight.userId,
+    // O dia do plano em que o grifo nasceu (Tarefa 38i). Sai na resposta porque
+    // é o que o acervo usa para recortar por dia de leitura; não entra em input
+    // nenhum, como o `commentText`.
+    planItemId: highlight.planItemId,
     quote: highlight.quote,
     color: highlight.color,
     page: highlight.page,
@@ -88,6 +92,13 @@ export const highlightRoutes: FastifyPluginAsyncZod<{
     assertMembership,
     repos.books,
     repos.highlights,
+    // O dia do plano de hoje (Tarefa 38i): o grifo nasce ancorado no trecho que
+    // o clube está lendo, quando há um, e com `null` quando não há. É resolvido
+    // aqui e nunca vem do corpo (decisão E / §6.3).
+    repos.planItems,
+    // O fuso DA PESSOA, que é o que decide "que dia é hoje" (decisão D). Sem
+    // linha de `Settings` vale o `DEFAULT_SETTINGS` — nunca a hora do servidor.
+    repos.settings,
     // O gatilho de atividade (Tarefa 33): só o NASCIMENTO do grifo é notícia.
     // Editar e arquivar não entram (decisão B).
     buildRecordActivity(repos),

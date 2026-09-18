@@ -185,6 +185,9 @@ function aHighlight(
     clubId: CLUB_ID,
     bookId: BOOK_ID,
     userId: MARCOS,
+    // ⚠️ AUSENTE por padrão (Tarefa 38i): o grifo avulso é o caso que o ADR
+    // 0004 protege, e quem testa a dimensão de leitura o passa explicitamente.
+    planItemId: null,
     quote: 'A promessa do anao',
     color: PINK,
     page: 9,
@@ -780,13 +783,24 @@ describe('the fixture is hostile to the wrong implementations (§7.2, §7.8)', (
     expect(readings.filter((id) => id === READING_ONE)).toHaveLength(1);
     expect(readings.filter((id) => id === READING_NONE)).toHaveLength(0);
 
-    // ⚠️ E NEM A AVULSA NEM O GRIFO TÊM `planItemId` — é a fidelidade da regra
-    // 10 escrita no fixture (§7.1, 4ª aparição: `= 'x'` contra `NULL` é falso).
+    /*
+      ⚠️ **NEM A AVULSA NEM NENHUM GRIFO DESTE FIXTURE TEM `planItemId`** — é a
+      fidelidade da regra 10 escrita no fixture (§7.1, 4ª aparição: `= 'x'`
+      contra `NULL` é falso).
+
+      ⚠️ **E A ASSERÇÃO DO GRIFO MUDOU DE FORMA NA TAREFA 38i, de propósito.**
+      Ela era `not.toHaveProperty('planItemId')` — a coluna não existia (ADR
+      0004) —, e hoje o grifo TEM a coluna, anulável. Manter o `toHaveProperty`
+      seria pinar a ausência do CAMPO, que é o contrário do que este fixture
+      quer dizer: o que ele escolhe é o grifo **avulso**, com o campo presente e
+      nulo. O par com a dimensão nova está em
+      `⚠️ keeps the HIGHLIGHT that was born on the chosen reading day`.
+    */
     for (const note of allNotes.filter((n) => n.kind === 'FREE')) {
       expect(note.planItemId).toBeNull();
     }
     for (const highlight of allHighlights) {
-      expect(highlight).not.toHaveProperty('planItemId');
+      expect(highlight.planItemId).toBeNull();
     }
 
     // O grifo sem página é o SEGUNDO e o sem comentário é o do MEIO, e este é
@@ -1848,9 +1862,21 @@ describe('⚠️ THE FOUR DIMENSIONS OF THE FILTER (rules 6 to 12)', () => {
     // E a lista é a das avulsas INTEIRA: a leitura não ficou valendo por baixo.
     expect(labelsOnScreen()).toEqual(FREE_LABELS);
 
-    // Idem para "Grifo": ADR 0004 — ele não depende de existir um dia do plano.
+    /*
+      ⚠️ **"GRIFO" SAIU DESTA LISTA NA TAREFA 38i, e este par é o que registra a
+      mudança.** Até a 38h o `<select>` sumia também com o tipo em "Grifo", pelo
+      mesmo argumento da avulsa — e o argumento era verdadeiro: o grifo não tinha
+      coluna de dia (ADR 0004). A emenda de 2026-09-18 lhe deu `planItemId?`
+      (decisão G), então agora o controle EXISTE ali e recorta de verdade.
+
+      ⚠️ E a escolha continua sendo DESCARTADA no toque de tipo — o
+      `setReadingScope(EVERY_READING)` vale para todo tipo, não só para os que
+      escondem o controle. Sem isso, a leitura escolhida em "Do dia"
+      sobreviveria escondida na travessia por "Avulsa".
+    */
     await press(chip(KIND.highlight));
-    expect(screen.queryByLabelText(FILTERS.reading.label)).toBeNull();
+    expect(screen.queryByLabelText(FILTERS.reading.label)).not.toBeNull();
+    expect(readingSelect().value).toBe(EVERY_READING_VALUE);
     expect(labelsOnScreen()).toEqual(HIGHLIGHT_LABELS);
 
     /*
@@ -1873,14 +1899,21 @@ describe('⚠️ THE FOUR DIMENSIONS OF THE FILTER (rules 6 to 12)', () => {
     expectNoGuilt();
   });
 
-  it('⚠️ cuts by READING, and choosing one EXCLUDES the standalone note and the highlight (rule 10)', async () => {
+  it('⚠️ cuts by READING, and choosing one EXCLUDES the standalone note and the LOOSE highlight (rule 10)', async () => {
     /*
       ⚠️ **ISTO NÃO É BUG — É A FIDELIDADE QUE O §7.1 REGISTRA COMO 4ª
       APARIÇÃO.** `WHERE "planItemId" = 'x'` contra coluna **nula** é falso no
-      Postgres, e o grifo nem tem a coluna (ADR 0004: ele não depende de existir
-      um `ReadingPlanItem`). Então escolher uma leitura mostra **só** as
-      anotações do dia daquele dia — a avulsa e o grifo saem, e é o que a pessoa
-      pediu quando pediu "a leitura de tal dia".
+      Postgres, e é isso que tira da lista a anotação avulsa e o grifo AVULSO —
+      aquele que nasceu num dia em que o plano não tinha item. Escolher uma
+      leitura mostra o que está ancorado NAQUELE dia, e é o que a pessoa pediu
+      quando pediu "a leitura de tal dia".
+
+      ⚠️ **O TÍTULO DESTE TESTE DIZIA "and the highlight", sem o "LOOSE", até a
+      Tarefa 38i** — e estava certo: o grifo não tinha a coluna (ADR 0004).
+      Agora tem, e todo grifo DESTE fixture é avulso (pinado no bloco de
+      fixture), então o que este teste prova continua sendo verdade e continua
+      sendo importante. Quem prova o outro lado é
+      `⚠️ keeps the HIGHLIGHT that was born on the chosen reading day`.
 
       Este teste existe para o próximo leitor não "consertar" isso.
     */
@@ -1889,7 +1922,7 @@ describe('⚠️ THE FOUR DIMENSIONS OF THE FILTER (rules 6 to 12)', () => {
 
     await chooseReading(READING_TWO);
 
-    // DUAS anotações do dia, e NENHUMA avulsa e NENHUM grifo.
+    // DUAS anotações do dia, e NENHUMA avulsa e NENHUM grifo avulso.
     expect(labelsOnScreen()).toEqual([NOTE_TITLES[1], NOTE_TITLES[2]]);
     for (const label of [...FREE_LABELS, ...HIGHLIGHT_LABELS]) {
       expect(readableText()).not.toContain(label);
@@ -1903,6 +1936,71 @@ describe('⚠️ THE FOUR DIMENSIONS OF THE FILTER (rules 6 to 12)', () => {
 
     await chooseReading('all');
     expect(labelsOnScreen()).toEqual([...ORDERED_LABELS]);
+    expectNoGuilt();
+  });
+
+  /**
+   * ⚠️ **A DECISÃO G NA TELA (Tarefa 38i): o grifo que NASCEU num dia do plano
+   * sobrevive ao recorte por leitura.**
+   *
+   * O fixture grande desta suíte é todo de grifo **avulso** (pinado em
+   * `has different counts…`), e é o que faz o teste vizinho — o da exclusão —
+   * continuar tendo assunto. Aqui o acervo é trocado por uma lista de DOIS
+   * grifos: um ancorado em `READING_TWO`, outro avulso. Sem os dois, um
+   * `readingOf` que devolvesse o dia para TODO grifo passaria igual.
+   *
+   * ⚠️ E o tipo fica em **"Grifo"** de propósito: é o par de tela do
+   * `typeCanCarryReading('HIGHLIGHT')`, e a combinação que a 38h não podia ter
+   * (o `<select>` sumia ali).
+   */
+  it('⚠️ keeps the HIGHLIGHT that was born on the chosen reading day (decision G)', async () => {
+    const ON_THE_DAY = 'O grifo do dia do plano';
+    const LOOSE = 'O grifo de dia nenhum';
+    await renderAcervo({
+      list: {
+        status: 200,
+        body: [
+          aHighlight({
+            id: 'h-do-dia',
+            planItemId: READING_TWO,
+            quote: ON_THE_DAY,
+            createdAt: '2026-09-04T11:00:00.000Z',
+          }),
+          aHighlight({
+            id: 'h-avulso',
+            planItemId: null,
+            quote: LOOSE,
+            createdAt: '2026-09-04T10:00:00.000Z',
+          }),
+        ],
+      },
+    });
+    await waitForRows(7);
+
+    // A precondição: com "todas as leituras" os dois estão na tela.
+    expect(readableText()).toContain(ON_THE_DAY);
+    expect(readableText()).toContain(LOOSE);
+
+    // ⚠️ Com o tipo em "Grifo" o `<select>` de leitura EXISTE — era o que a
+    // decisão G destravou.
+    await press(chip(KIND.highlight));
+    expect(screen.queryByLabelText(FILTERS.reading.label)).not.toBeNull();
+
+    /*
+      ⚠️ As linhas se contam com `rows()` e não com `labelsOnScreen()`: aquele
+      helper recorta contra o `ORDERED_LABELS` do fixture grande, e estes dois
+      trechos são só deste teste — ele devolveria `[]` para qualquer
+      implementação, o que é a asserção vazia do §7.4.
+    */
+    await chooseReading(READING_TWO);
+    expect(rows()).toHaveLength(1);
+    expect(readableText()).toContain(ON_THE_DAY);
+    expect(readableText()).not.toContain(LOOSE);
+
+    // E o dia SEGUINTE não tem grifo nenhum: o recorte é por aquele dia, não
+    // "tem dia qualquer".
+    await chooseReading(READING_ONE);
+    expect(screen.queryByText(pt.pages.acervo.empty.filtered)).not.toBeNull();
     expectNoGuilt();
   });
 

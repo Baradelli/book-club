@@ -103,6 +103,12 @@ export const bookRoutes: FastifyPluginAsyncZod<{
     // sem este repositório o 500 mudo volta pela terceira vez — agora no dia
     // que alguém leu e **desmarcou**, que perde o log e mantém o evento.
     repos.activityEvents,
+    // E a QUARTA, "…que alguém grifou" (Tarefa 38i): `Highlight.planItemId`
+    // nasceu com a mesma FK `Restrict`, e aqui o caminho não é regressão
+    // nenhuma — é o normal. Grifar não exige escrever anotação (ADR 0004), e o
+    // evento do grifo grava `planItemId: null`, então um dia que só tem grifo
+    // passa pelas três guardas de cima e estoura na FK.
+    repos.highlights,
   );
 
   app.post(

@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import { localDay } from '@clube/shared';
+
 import type { Highlight } from '../domain/highlight';
 import {
   assertHighlightColor,
@@ -8,10 +10,13 @@ import {
   normalizeHighlightQuote,
 } from '../domain/highlight';
 import { optionalText } from '../domain/optional-text';
+import { DEFAULT_SETTINGS } from '../domain/settings';
 import type { AssertMembership } from './assert-membership';
 import { bookForActor } from './book-for-actor';
 import type { BookRepository } from './ports/book-repository';
 import type { HighlightRepository } from './ports/highlight-repository';
+import type { ReadingPlanItemRepository } from './ports/reading-plan-item-repository';
+import type { SettingsRepository } from './ports/settings-repository';
 import type { RecordActivity } from './record-activity';
 import { recordActivitySafely } from './record-activity';
 
@@ -35,6 +40,20 @@ export interface CreateHighlightInput {
   reference?: string;
   /** Ausente ou `null` = grava `null` e `commentText: ''`. → ADR 0001. */
   commentDoc?: unknown;
+  /**
+   * ⚠️ **"Agora", INJETADO e lido UMA vez pelo chamador** (ADR 0008 / §7.8) —
+   * o precedente exato do `GetClubStreaksInput.now`.
+   *
+   * A rota **não** o passa: ele existe para o teste poder escolher o instante
+   * sem mexer no relógio do processo. Um `now` no CORPO seria 400 pelo
+   * `.strict()` do `createHighlightSchema`, como qualquer chave não declarada.
+   *
+   * ⚠️ E **não existe `planItemId` aqui**, de propósito: o dia é resolvido no
+   * servidor, como o `userId` e o `clubId` (decisão E / §6.3). Declará-lo seria
+   * abrir a porta ao `input.planItemId ?? <o resolvido>`, o envenenamento com
+   * fallback que se comporta normalmente em todo teste que não manda o campo.
+   */
+  now?: Date;
 }
 
 export interface CreateHighlightOutput {
@@ -64,6 +83,8 @@ export class CreateHighlight {
     private readonly assertMembership: AssertMembership,
     private readonly books: BookRepository,
     private readonly highlights: HighlightRepository,
+    private readonly planItems: ReadingPlanItemRepository,
+    private readonly settings: SettingsRepository,
     private readonly recordActivity: RecordActivity,
   ) {}
 
@@ -97,13 +118,49 @@ export class CreateHighlight {
     // 1206/1206 testes (§7.1: prosa não é prova). Quem acusa é o
     // `reads the clock once and stamps both createdAt and updatedAt with it`,
     // com o stub de relógio que anda a cada leitura.
-    const now = new Date();
+    const now = input.now ?? new Date();
+
+    /*
+      ⚠️ **O DIA DO PLANO, resolvido AQUI e nunca recebido do cliente** — a
+      emenda de 2026-09-18 ao ADR 0004 (Tarefa 38i), decisões C, D, E e F.
+
+      **Duas consultas, uma cada** (§7.3): o fuso da pessoa e o item do plano de
+      hoje naquele livro. Nada disto é por grifo de um lote — o `execute` cria
+      **um** grifo, e são estas duas leituras por chamada. Um `findByBook` no
+      lugar do `find` traria o plano inteiro (~30 dias) para descartar 29.
+
+      **`localDay` e não a hora do servidor** (decisão D, e `CLAUDE.md`): "que
+      dia é hoje" SEMPRE se calcula no `timezone` do `Settings`. Sem linha de
+      `Settings` vale o `DEFAULT_SETTINGS`, o padrão do projeto para quem nunca
+      abriu a tela — e **não** `'UTC'`, que é o que a hora do servidor daria.
+
+      **`now` vem de cima, de UMA leitura só** (§7.8): a mesma que carimba
+      `createdAt`/`updatedAt`. Um `new Date()` aqui seria a segunda leitura, e
+      quem acusa é o contador do `installAdvancingClock`, nunca a comparação de
+      dois instantes (duas leituras no mesmo tick dão o mesmo milissegundo).
+
+      **No máximo UM item**, sem ordenação nem desempate: a tabela tem
+      `@@unique([bookId, date])`, então "o dia de hoje neste livro" é uma linha
+      ou nenhuma.
+
+      **Nenhum dia hoje → `null`, e o grifo nasce assim mesmo** (decisão F): é o
+      estado normal entre dois livros e nos dias que o plano pula. Falhar aqui
+      impediria de grifar, que é o oposto do que o ADR 0004 protege.
+    */
+    const theirs = await this.settings.byUserId(input.actorUserId);
+    const timeZone = theirs?.timezone ?? DEFAULT_SETTINGS.timezone;
+    const today = await this.planItems.find({
+      bookIds: [book.id],
+      date: localDay(now, timeZone),
+    });
+    const planItemId = today[0]?.id ?? null;
 
     const highlight = await this.highlights.save({
       id: randomUUID(),
       clubId: book.clubId,
       bookId: book.id,
       userId: input.actorUserId,
+      planItemId,
       quote,
       color,
       page,
@@ -127,9 +184,15 @@ export class CreateHighlight {
       **não pode derrubar o grifo da pessoa** (decisão C): quem captura e loga
       é o `recordActivitySafely`, dono único dessa regra nos quatro.
 
-      `planItemId: null` é o caso que decidiu o ADR 0004: grifar **não depende**
-      de eu ter escrito anotação naquele dia, e o grifo não ancora em dia
-      nenhum. Um dia aqui inventaria um vínculo que a entidade não tem.
+      ⚠️ **`planItemId: null` NO EVENTO, e desde a Tarefa 38i isso é uma escolha
+      e não uma consequência.** O grifo passou a ter dia do plano (a emenda ao
+      ADR 0004, logo acima) — mas o `ActivityEvent` continua gravando `null`
+      para `HIGHLIGHT`, como o `schema.prisma` declara por escrito: quem decide
+      o que o feed diz é o produto, e "grifou" é notícia do grifo, não do dia.
+      Propagar o `planItemId` daqui mudaria o TÍTULO da linha do feed (Tarefa
+      38e o resolve pelo item do plano), que é uma decisão de tela e não um
+      efeito colateral desta fatia. Fica registrado como fatia possível, não
+      como lacuna: mudar em silêncio é que seria o defeito.
     */
     await recordActivitySafely(this.recordActivity, {
       clubId: book.clubId,

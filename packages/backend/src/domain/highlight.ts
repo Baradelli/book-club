@@ -21,13 +21,44 @@ import { assertNoteDoc } from './note';
  * super-admin.
  *
  * Sem `noteId`: o ADR 0004 descartou o vínculo com `Note`, e o campo é aditivo
- * se um dia surgir.
+ * se um dia surgir. ⚠️ **E o `planItemId?` da emenda de 2026-09-18 NÃO é esse
+ * campo** — o aviso dentro do ADR explica por que a coluna certa para "os grifos
+ * do capítulo 3" é a do DIA DO PLANO, direta, e não a da anotação: grifo em dia
+ * sem nota não teria `noteId` para carregar, que é justamente o caso que o ADR
+ * protege.
  */
 export interface Highlight {
   id: string;
   clubId: string;
   bookId: string;
   userId: string; // o AUTOR. Sempre o ator; nunca vem do input.
+  /**
+   * O dia do plano em que o grifo nasceu — **opcional**, e é a emenda de
+   * 2026-09-18 ao ADR 0004 (Tarefa 38i).
+   *
+   * ⚠️ **OPCIONAL é o que preserva a decisão central do ADR:** *"o grifo não
+   * depende de um dia de leitura"* continua verdade. Grifar num dia que o plano
+   * pula, ou entre dois livros, continua possível — grava `null` (decisão F).
+   *
+   * ⚠️ **GUARDADO, NÃO DERIVADO NA LEITURA, e essa é a decisão inteira.** Dava
+   * para calcular o dia na tela a partir do `createdAt` e do plano, sem coluna
+   * nenhuma — e foi recusado: a derivação **muda de significado sozinha**. No dia
+   * em que o admin corrigir as datas do plano, todo grifo antigo remapearia em
+   * silêncio, e o que era "Cap. 3" viraria "Cap. 5". A coluna é também o único
+   * lugar onde CABERIA uma correção no dia em que o preenchimento automático
+   * errar (grifar no sábado o que se leu na sexta); a derivação erraria para
+   * sempre, recalculando.
+   *
+   * ⚠️ **O "caberia" é literal: essa correção NÃO existe.** O campo é
+   * **write-once no nascimento** — quem o preenche é o `createHighlight`, **na
+   * criação e em silêncio** (decisão C), com o dia de hoje no
+   * `Settings.timezone` da PESSOA, nunca a hora do servidor e nunca vindo do
+   * corpo da requisição (decisões D e E). **Nenhum `update` o toca**: ele está
+   * fora do `HighlightPatch`, como o `createdAt`, e o `editHighlightSchema` o
+   * recusa com 400. A tela de correção é **fatia própria, e ninguém pediu** —
+   * está registrada assim na emenda do ADR 0004 e na spec da Tarefa 38i.
+   */
+  planItemId: string | null;
   quote: string; // o trecho grifado, digitado à mão (ADR 0004: sem OCR)
   color: HighlightColor; // uma das cinco da paleta fixa de `@clube/shared`
   page: number | null; // inteiro >= 1, ou nada

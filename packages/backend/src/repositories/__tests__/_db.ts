@@ -177,11 +177,17 @@ export async function removeFixtures(fixtures: Fixtures): Promise<void> {
   if (activityAnchors.length > 0) {
     await prisma.activityEvent.deleteMany({ where: { OR: activityAnchors } });
   }
-  // O grifo antes do livro, do clube e do usuário: as TRÊS relações do
-  // `Highlight` são obrigatórias e saem `ON DELETE RESTRICT` (lido do
-  // `prisma migrate diff` na Tarefa 24 — é o default do Prisma para relação
-  // obrigatória, ao contrário do `SetNull` das opcionais). Sem isto a limpeza
-  // estoura na FK, e um teste que falhe no meio vaza fixture no banco de
+  // O grifo antes do PLANO, do livro, do clube e do usuário: as QUATRO relações
+  // do `Highlight` saem `ON DELETE RESTRICT` — as três obrigatórias por default
+  // do Prisma (lido do `prisma migrate diff` na Tarefa 24) e o `planItem`
+  // OPCIONAL da Tarefa 38i, que o declara EXPLICITAMENTE porque para relação
+  // opcional o default seria `SetNull`.
+  //
+  // ⚠️ **A quarta FK acrescentou uma ordem que este bloco já tinha por acaso e
+  // que agora é obrigatória:** o grifo sai antes do `readingPlanItem`, lá
+  // embaixo. Sem isso a limpeza estoura em `Highlight_planItemId_fkey` — é a
+  // mesma armadilha que o `ActivityEvent` da Tarefa 34 e o `PushSubscription`
+  // da 36 pregaram, com os testes verdes e fixture vazando no banco de
   // desenvolvimento do dono. Não tem ordem obrigatória em relação à nota: não
   // há FK entre as duas tabelas.
   if (highlightIds.length > 0) {

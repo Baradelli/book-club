@@ -9,6 +9,7 @@ import type { AssertMembership } from './assert-membership';
 import { bookForActor } from './book-for-actor';
 import type { ActivityEventRepository } from './ports/activity-event-repository';
 import type { BookRepository } from './ports/book-repository';
+import type { HighlightRepository } from './ports/highlight-repository';
 import type { NoteRepository } from './ports/note-repository';
 import type { ReadingLogRepository } from './ports/reading-log-repository';
 import type { ReadingPlanItemRepository } from './ports/reading-plan-item-repository';
@@ -43,21 +44,24 @@ export interface ReplacePlanItemsOutput {
  * - data que desapareceu → item removido.
  *
  * E as guardas "não remover item do plano que já tem nota" (Tarefa 11), "…que
- * alguém já leu" (Tarefa 32c) e "…em que aconteceu alguma coisa" (Tarefa 34b):
- * o `Restrict` das **três** FKs recusaria a remoção de qualquer jeito, mas como
- * erro de banco cru, que a borda relança como **500**. As guardas transformam
- * isso num **400** com mensagem, e antecipam a recusa para antes de qualquer
- * escrita.
+ * alguém já leu" (Tarefa 32c), "…em que aconteceu alguma coisa" (Tarefa 34b) e
+ * "…que alguém grifou" (Tarefa 38i): o `Restrict` das **quatro** FKs recusaria a
+ * remoção de qualquer jeito, mas como erro de banco cru, que a borda relança
+ * como **500**. As guardas transformam isso num **400** com mensagem, e
+ * antecipam a recusa para antes de qualquer escrita.
  *
- * ⚠️ **São exatamente três porque são exatamente três as FKs `ON DELETE
- * RESTRICT` que apontam para o `ReadingPlanItem`** — `Note`, `ReadingLog` e
- * `ActivityEvent` —, e quem garante que a quarta não nasce sem guarda não é
- * este comentário: é o teste estrutural
+ * ⚠️ **São exatamente quatro porque são exatamente quatro as FKs `ON DELETE
+ * RESTRICT` que apontam para o `ReadingPlanItem`** — `Note`, `ReadingLog`,
+ * `ActivityEvent` e `Highlight` —, e quem garante que a QUINTA não nasce sem
+ * guarda não é este comentário: é o teste estrutural
  * `usecases/__tests__/plan-item-fk-guards.test.ts`, que lê o `schema.prisma` e
  * fica **vermelho** no dia em que houver uma FK sem a guarda correspondente.
- * Duas fatias seguidas (32→32c, 34→34b) introduziram FK sem guarda, e nas duas
- * a lacuna só apareceu porque alguém foi procurar (§7.9: requisito sem guarda
- * automática é intenção).
+ *
+ * ⚠️ **E ele já provou que funciona.** Duas fatias seguidas (32→32c, 34→34b)
+ * introduziram FK sem guarda, e nas duas a lacuna só apareceu porque alguém foi
+ * procurar (§7.9: requisito sem guarda automática é intenção). A quarta, a do
+ * `Highlight`, foi a **primeira** em que o vermelho chegou sozinho, no mesmo
+ * commit da coluna — não houve fatia de conserto.
  */
 export class ReplacePlanItems {
   constructor(
@@ -67,6 +71,7 @@ export class ReplacePlanItems {
     private readonly notes: NoteRepository,
     private readonly readingLogs: ReadingLogRepository,
     private readonly activityEvents: ActivityEventRepository,
+    private readonly highlights: HighlightRepository,
   ) {}
 
   async execute(input: ReplacePlanItemsInput): Promise<ReplacePlanItemsOutput> {
@@ -227,6 +232,54 @@ export class ReplacePlanItems {
       // 400 (CONVENCOES-CODIGO §6.2).
       throw new InvalidBookError(
         `cannot remove ${daysWithActivity.length} reading plan day(s) that already have activity`,
+      );
+    }
+
+    /**
+     * A QUARTA GUARDA: nenhum dia que um GRIFO ancora pode ser removido.
+     *
+     * ⚠️ **Ela nasceu JUNTO da FK, e é a primeira das quatro de que isso é
+     * verdade.** `Highlight.planItemId` chegou na Tarefa 38i (a emenda ao ADR
+     * 0004), com o mesmo `onDelete: Restrict` das outras três — e as duas FKs
+     * anteriores (32→32c, 34→34b) nasceram SEM guarda, cada uma descoberta
+     * porque alguém foi procurar. Aqui quem obrigou não foi a memória de
+     * ninguém: `usecases/__tests__/plan-item-fk-guards.test.ts` ficou vermelho
+     * no mesmo commit em que a coluna entrou no `schema.prisma`, nomeando
+     * `Highlight.planItem` e o método a escrever. É a guarda automática
+     * funcionando pela primeira vez (§7.9).
+     *
+     * ⚠️ **NENHUMA das três guardas acima a enxerga, e o caminho é o normal —
+     * não uma regressão exótica como o da terceira.** O gatilho de atividade do
+     * grifo grava `planItemId: null` no `ActivityEvent` (decisão de produto,
+     * declarada no `schema.prisma` e no `createHighlight`), então um dia que só
+     * tem grifo tem `note.count === 0`, `readingLog.count === 0` e evento
+     * nenhum **daquele dia**: passaria pelas três e estouraria na FK como 500.
+     *
+     * **POR ÚLTIMO, e é a única posição que não rouba mensagem de ninguém.** Um
+     * dia com nota **e** grifo tem de continuar dizendo "já tem anotações" — a
+     * frase que o admin já aprendeu —, e o mesmo vale para leitura e atividade.
+     * Colocá-la antes trocaria três mensagens em silêncio para ganhar
+     * especificidade num caso em que as duas frases são verdadeiras.
+     *
+     * ⚠️ **O grifo AVULSO não conta**, e quem garante isso são as duas
+     * implementações do port: `Highlight.planItemId` é anulável (grifo em dia
+     * sem plano é o caso que o ADR 0004 protege) e `IN (...)` contra nulo é
+     * falso. Uma guarda que os contasse recusaria toda edição de plano de um
+     * clube que grifa — que é o clube inteiro, já que a coluna é nova e toda
+     * linha anterior à migration tem `NULL`.
+     *
+     * Chamada sem `if` de lista vazia, como as três de cima: o port declara que
+     * `[]` devolve `[]` sem ida ao banco.
+     */
+    const daysWithHighlights =
+      await this.highlights.planItemIdsWithAnyHighlight(removedIds);
+    if (daysWithHighlights.length > 0) {
+      // Só a CONTAGEM, como nas três guardas de cima e pelo mesmo motivo: o
+      // admin não precisa saber QUEM grifou para entender que não pode remover
+      // o dia, e `error.message` é a única publicada na resposta do 400
+      // (CONVENCOES-CODIGO §6.2).
+      throw new InvalidBookError(
+        `cannot remove ${daysWithHighlights.length} reading plan day(s) that already have highlights`,
       );
     }
 

@@ -187,6 +187,9 @@ function aHighlight(
     clubId: CLUB_ID,
     bookId: BOOK_ID,
     userId: MARCOS,
+    // ⚠️ AUSENTE por padrão (Tarefa 38i): o grifo avulso é o caso que o ADR
+    // 0004 protege, e quem testa a dimensão de leitura o passa explicitamente.
+    planItemId: null,
     quote: 'a porta redonda e verde no meio da colina',
     color: YELLOW,
     page: 9,

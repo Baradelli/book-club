@@ -194,6 +194,23 @@ export const highlightResponseSchema = z.object({
   bookId: z.string(),
   /** O AUTOR. Visível para todo o clube, por decisão: → ADR 0002. */
   userId: z.string(),
+  /**
+   * O dia do plano em que o grifo nasceu, ou `null` — a emenda de 2026-09-18 ao
+   * ADR 0004 (Tarefa 38i).
+   *
+   * **Sai na resposta e NÃO entra em nenhum input**, exatamente como o
+   * `commentText`: é resolvido no servidor, na criação, a partir do
+   * `Settings.timezone` da pessoa (decisões C, D e E). Um `planItemId` no corpo
+   * é **400** pelo `.strict()` dos dois schemas de escrita — quem o manda está
+   * enganado sobre quem manda nele.
+   *
+   * ⚠️ **`.nullable()` e não `.optional()`**: `null` é o valor normal, não a
+   * ausência do campo. Grifo em dia sem plano é o caso que o ADR 0004 protege, e
+   * toda linha anterior à migration tem `null`. O `response` schema é fronteira
+   * de segurança (§6.1) — declará-lo `optional` faria o serializer aceitar uma
+   * resposta sem o campo, e a tela leria `undefined` onde espera `null`.
+   */
+  planItemId: z.string().nullable(),
   quote: z.string(),
   color: highlightColor,
   page: z.number().nullable(),

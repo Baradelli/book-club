@@ -11,6 +11,7 @@ export class HighlightRepositoryFake implements HighlightRepository {
   private saveCallCount = 0;
   private updateCallCount = 0;
   private findFiltersSeen: HighlightFilter[] = [];
+  private planItemIdsWithAnyHighlightCallCount = 0;
 
   /**
    * ⚠️ **NENHUM ÍNDICE ÚNICO É EMULADO AQUI, e é decisão medida** — a direção
@@ -132,6 +133,33 @@ export class HighlightRepositoryFake implements HighlightRepository {
   }
 
   /**
+   * Dos ids dados, quais têm algum grifo — **inclusive arquivado**, como o port
+   * manda (a FK não olha `status`).
+   *
+   * ⚠️ **A fidelidade ao SQL é a MESMA do `matches`** (§7.1): `IN (...)` contra
+   * uma coluna nula é **falso**, então o grifo sem dia de plano — o caso que o
+   * ADR 0004 protege, e que é a maioria dos grifos de hoje — nunca mantém um dia
+   * vivo. Um fake que o contasse reprovaria remoções legítimas de dia do plano,
+   * e a divergência só apareceria contra o banco.
+   */
+  async planItemIdsWithAnyHighlight(
+    planItemIds: readonly string[],
+  ): Promise<string[]> {
+    this.planItemIdsWithAnyHighlightCallCount += 1;
+
+    if (planItemIds.length === 0) return [];
+
+    const asked = new Set(planItemIds);
+    const found = new Set<string>();
+    for (const highlight of this.store.values()) {
+      const { planItemId } = highlight;
+      if (planItemId === null) continue;
+      if (asked.has(planItemId)) found.add(planItemId);
+    }
+    return [...found];
+  }
+
+  /**
    * O acervo, para os testes olharem.
    *
    * ⚠️ **ARMADILHA DELIBERADA — não "conserte" esta ordem.** Enumera na ordem
@@ -212,6 +240,20 @@ export class HighlightRepositoryFake implements HighlightRepository {
    */
   get findFilters(): readonly HighlightFilter[] {
     return this.findFiltersSeen.map((filter) => ({ ...filter }));
+  }
+
+  /**
+   * Quantas vezes `planItemIdsWithAnyHighlight` foi chamado — como o
+   * `findCalls`, e pelo mesmo motivo do irmão no `NoteRepositoryFake`.
+   *
+   * Existe para o `replacePlanItems` poder afirmar que a guarda roda **depois**
+   * do corte de tenant e **depois** da validação do rascunho: quem não é admin
+   * do clube não descobre que existem grifos, e um rascunho malformado não
+   * chega a consultar. Sem contador, "recusou antes de ler" e "leu e depois
+   * recusou" dão o mesmo erro para o cliente (§7.3).
+   */
+  get planItemIdsWithAnyHighlightCalls(): number {
+    return this.planItemIdsWithAnyHighlightCallCount;
   }
 
   private inReverseInsertionOrder(): Highlight[] {

@@ -122,6 +122,9 @@ function aHighlightRow(
     clubId: CLUB_ID,
     bookId: BOOK_ID,
     userId: AUTHOR_ID,
+    // ⚠️ AVULSO por padrão (Tarefa 38i): o grifo sem dia do plano é o caso que o
+    // ADR 0004 protege, e quem testa a coluna nova a passa explicitamente.
+    planItemId: null,
     quote: 'não é o que você tem, é o que você faz com o que tem',
     color: '#facc15',
     page: 45,
@@ -1163,6 +1166,185 @@ describe('PrismaHighlightRepository (contract)', () => {
   });
 
   /**
+   * ⚠️ **O DIA DO PLANO NO GRIFO (Tarefa 38i)** — a coluna, a FK e o método da
+   * quarta guarda, contra o banco de verdade.
+   *
+   * Nada disto é decidível na suíte unitária (§7.10): o fake não tem FK, não tem
+   * `ON DELETE RESTRICT` e não tem catálogo — o que ele reproduz é só o
+   * `IN (...)` contra coluna nula.
+   */
+  describe('the plan day of the highlight', () => {
+    /** Os dias do plano deste bloco, para a limpeza consultar por id. */
+    const planItemIds: string[] = [];
+
+    function trackedPlanItemId(prefix: string): string {
+      const id = prefixedId('t38i', `pi-${prefix}`);
+      planItemIds.push(id);
+      return id;
+    }
+
+    async function aPlanDay(prefix: string, order: number, date: string) {
+      const id = trackedPlanItemId(prefix);
+      await prisma.readingPlanItem.create({
+        data: {
+          id,
+          bookId: BOOK_ID,
+          order,
+          // A coluna é `@db.Date`: a meia-noite UTC é o que o
+          // `calendar-day-mapper` grava.
+          date: new Date(`${date}T00:00:00.000Z`),
+          title: 'Cap. 3 — Três não é demais',
+        },
+      });
+      return id;
+    }
+
+    /**
+     * ⚠️ O grifo sai ANTES do dia do plano — a FK nova é `RESTRICT`, e é
+     * exatamente o que os testes abaixo provam. Uma limpeza na ordem inversa
+     * estouraria no banco de desenvolvimento do dono.
+     */
+    afterAll(async () => {
+      await cleanUpHighlights();
+      await removeFixtures({ planItemIds });
+    });
+
+    it('round-trips a highlight that was born on a plan day', async () => {
+      const dayId = await aPlanDay('roundtrip', 20, '2026-12-01');
+      const highlight = aHighlightRow('comdia', { planItemId: dayId });
+
+      const saved = await repo.save(highlight);
+
+      expect(saved.planItemId).toBe(dayId);
+      expect(await repo.byId(highlight.id)).toEqual(highlight);
+      // E a coluna é SQL NULL de verdade no grifo avulso — não a string
+      // 'null', não um sentinela.
+      const loose = await repo.save(aHighlightRow('semdia'));
+      expect(loose.planItemId).toBeNull();
+      await expect(
+        prisma.highlight.count({
+          where: { id: loose.id, planItemId: null },
+        }),
+      ).resolves.toBe(1);
+    });
+
+    /**
+     * ⚠️ **A COLUNA É UMA FK DE VERDADE.** Sem isto, um `planItemId` inventado
+     * entraria e o acervo recortaria por um dia que não existe — e o fake, que
+     * não tem FK, nunca acusaria (§7.10).
+     */
+    it('refuses a plan day that does not exist', async () => {
+      await expect(
+        repo.save(aHighlightRow('fantasma', { planItemId: 'dia-que-nao-ha' })),
+      ).rejects.toThrow();
+    });
+
+    it('declares planItemId as a NULLABLE column', async () => {
+      const rows = await prisma.$queryRaw<
+        { column_name: string; is_nullable: string }[]
+      >`
+        SELECT column_name, is_nullable
+        FROM information_schema.columns
+        WHERE table_name = 'Highlight' AND column_name = 'planItemId'
+      `;
+
+      expect(rows).toEqual([{ column_name: 'planItemId', is_nullable: 'YES' }]);
+    });
+
+    /**
+     * ⚠️ **O `onDelete` LIDO, e não suposto** — e aqui ele importa mais que nas
+     * outras três: a relação é **OPCIONAL**, e para relação opcional o default
+     * do Prisma é `SetNull`. Um `SetNull` aqui zeraria o dia de todo grifo
+     * quando o admin corrigisse o plano, em silêncio — a tela mentindo sobre o
+     * passado, que é o defeito que esta coluna existe para impedir.
+     */
+    it('declares the planItem foreign key as ON DELETE RESTRICT, not SET NULL', async () => {
+      const rows = await prisma.$queryRaw<
+        { constraint_name: string; rule: string }[]
+      >`
+        SELECT rc.constraint_name, rc.delete_rule AS rule
+        FROM information_schema.referential_constraints rc
+        WHERE rc.constraint_name = 'Highlight_planItemId_fkey'
+      `;
+
+      expect(rows).toEqual([
+        { constraint_name: 'Highlight_planItemId_fkey', rule: 'RESTRICT' },
+      ]);
+    });
+
+    /**
+     * ⚠️ **A REDE EMBAIXO DA GUARDA DE DOMÍNIO.** A recusa EDUCADA (400 com
+     * mensagem de grifo) é do `replacePlanItems` e está no unitário, no
+     * `describe('the guard that refuses to remove a day that has highlights')`.
+     * Esta linha prova a outra metade: a FK morde mesmo sem nota, sem leitura e
+     * sem evento no dia — tirar o `Restrict` porque "agora tem guarda" trocaria
+     * uma proteção estrutural por uma que alguém pode esquecer de chamar.
+     */
+    it('is the net under the domain guard: it refuses to delete a day that only a highlight anchors', async () => {
+      const dayId = await aPlanDay('rede', 21, '2026-12-02');
+      await repo.save(aHighlightRow('rede', { planItemId: dayId }));
+
+      // As precondições: NENHUMA nota, NENHUMA leitura e NENHUM evento ancoram
+      // este dia — a rede que morde abaixo é a FK do GRIFO, e só ela.
+      await expect(
+        prisma.note.count({ where: { planItemId: dayId } }),
+      ).resolves.toBe(0);
+      await expect(
+        prisma.readingLog.count({ where: { planItemId: dayId } }),
+      ).resolves.toBe(0);
+      await expect(
+        prisma.activityEvent.count({ where: { planItemId: dayId } }),
+      ).resolves.toBe(0);
+
+      await expect(
+        prisma.readingPlanItem.delete({ where: { id: dayId } }),
+      ).rejects.toThrow();
+
+      await expect(
+        prisma.readingPlanItem.count({ where: { id: dayId } }),
+      ).resolves.toBe(1);
+    });
+
+    // O outro lado: sem grifo, o dia se apaga normalmente. Sem este par, um
+    // `Restrict` que barrasse TODA remoção passaria no teste de cima.
+    it('deletes a plan day that has no highlight', async () => {
+      const dayId = await aPlanDay('livre', 22, '2026-12-03');
+
+      await prisma.readingPlanItem.delete({ where: { id: dayId } });
+
+      await expect(
+        prisma.readingPlanItem.count({ where: { id: dayId } }),
+      ).resolves.toBe(0);
+    });
+
+    /**
+     * ⚠️ O método da quarta guarda, contra o banco: **cego a `status`** (a FK
+     * não olha status) e **o `IN (...)` contra nulo é falso** (o grifo avulso
+     * nunca mantém um dia vivo). São as duas linhas que o fake reproduz, aqui
+     * provadas contra o Postgres.
+     */
+    it('finds the day of an ARCHIVED highlight, and never the day of a loose one', async () => {
+      const anchored = await aPlanDay('guarda-a', 23, '2026-12-04');
+      const empty = await aPlanDay('guarda-b', 24, '2026-12-05');
+      await repo.save(
+        aHighlightRow('arquivado', {
+          planItemId: anchored,
+          status: 'ARCHIVED',
+          archivedAt: new Date('2026-02-01T00:00:00.000Z'),
+        }),
+      );
+      // Dois grifos no MESMO dia são UM id — o `Set` é contrato.
+      await repo.save(aHighlightRow('segundo', { planItemId: anchored }));
+      await repo.save(aHighlightRow('avulso-guarda'));
+
+      await expect(
+        repo.planItemIdsWithAnyHighlight([anchored, empty]),
+      ).resolves.toEqual([anchored]);
+      await expect(repo.planItemIdsWithAnyHighlight([])).resolves.toEqual([]);
+    });
+  });
+
+  /**
    * ⚠️ REGRAS 1, 2 e 3 — o schema lido do CATÁLOGO DO POSTGRES, não do arquivo
    * do `schema.prisma`. O que importa é o que o banco tem.
    *
@@ -1264,7 +1446,14 @@ describe('PrismaHighlightRepository (contract)', () => {
     });
 
     /**
-     * ⚠️ REGRA 3 — o `onDelete` das três relações, **LIDO** e não suposto.
+     * ⚠️ REGRA 3 — o `onDelete` das três relações **OBRIGATÓRIAS**, **LIDO** e
+     * não suposto.
+     *
+     * ⚠️ **A QUARTA relação — `planItem`, da Tarefa 38i — NÃO está aqui, e é de
+     * propósito:** ela é OPCIONAL, então o default do Prisma para ela seria
+     * `SetNull` e não `Restrict`, e é uma pergunta diferente. Ela tem teste
+     * próprio, no `describe('the plan day of the highlight')`:
+     * `declares the planItem foreign key as ON DELETE RESTRICT, not SET NULL`.
      *
      * O `prisma migrate diff --from-empty --to-schema-datamodel ... --script`
      * (offline) mostrou as três como
