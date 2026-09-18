@@ -1,3 +1,4 @@
+import { HIGHLIGHT_PAGE_MAX } from '@clube/shared';
 import { type FilterGroup, type FilterOption, PersonAvatar } from '@clube/ui';
 import type { TFunction } from 'i18next';
 import type { ReactNode } from 'react';
@@ -11,6 +12,7 @@ import {
   EVERY_TYPE,
   MINE_SCOPE,
   OTHERS_SCOPE,
+  type PageRange,
 } from './acervo-entries';
 import type { MembersState } from './club-names';
 import { TEXT_INPUT_CLASS } from './form-styles';
@@ -22,7 +24,12 @@ import {
 } from './highlight-colors';
 
 /**
- * OS CONTROLES DAS **CINCO** DIMENSÕES DO ACERVO — o vocabulário e a marcação.
+ * OS CONTROLES DAS **SEIS** DIMENSÕES DO ACERVO — o vocabulário e a marcação.
+ *
+ * ⚠️ **A SEXTA — A FAIXA DE PÁGINA — CHEGOU NA TAREFA 38h, e a conta se
+ * repetiu.** *"Os grifos do capítulo 3"* pedido pelo eixo que é do grifo. O
+ * módulo foi de **194** para **257**; o `acervo.tsx` continuou em **511**,
+ * porque o "tentar de novo", escrito três vezes lá, virou um dono só.
  *
  * ⚠️ **A QUINTA — O TEXTO — CHEGOU NA TAREFA 38g, E ELA É A COSTURA QUE ESTE
  * MÓDULO FOI ABERTO PARA RECEBER.** O docblock abaixo dizia, desde a Tarefa 28,
@@ -56,8 +63,8 @@ import {
  * MVP 1 ("divida **antes** de a tela crescer") com o "antes" sendo a fatia
  * seguinte, não um futuro genérico.
  *
- * Este módulo tem **194** linhas canônicas (165 até a Tarefa 38g), e nenhuma
- * delas é estado.
+ * Este módulo tem **257** linhas canônicas (165 até a Tarefa 38g, 194 até a
+ * 38h), e nenhuma delas é estado.
  *
  * ⚠️ **E NÃO FOI PARA O `acervo-entries.ts`, apesar de ser lá que o assunto
  * mora — a razão é MEDIDA e é o próprio motivo daquele módulo existir.** O
@@ -301,6 +308,122 @@ export function TextFilter({ onText, t, text }: TextFilterProps): ReactNode {
         placeholder={t('pages.acervo.filters.text.placeholder')}
         type="search"
         value={text}
+      />
+    </div>
+  );
+}
+
+/**
+ * ⚠️ **OS `id` DAS DUAS PONTAS DA FAIXA — e são DOIS controles, não um.**
+ *
+ * Cada `<input>` tem o SEU rótulo visível e associado, pelo mesmo motivo do
+ * `<select>` de leitura e do campo de texto. Ids fixos bastam porque a tela é
+ * uma por rota.
+ */
+const PAGE_FROM_ID = 'acervo-page-from';
+const PAGE_TO_ID = 'acervo-page-to';
+
+interface PageBoundProps {
+  id: string;
+  label: string;
+  value: string;
+  onValue: (value: string) => void;
+}
+
+/**
+ * UMA PONTA DA FAIXA — rótulo visível + `<input type="number">`.
+ *
+ * ⚠️ **AS DUAS PONTAS SÃO O MESMO CONTROLE ESCRITO UMA VEZ.** Escrevê-lo duas
+ * vezes seria a forma exata pela qual a ponta de baixo e a de cima saem de
+ * sincronia (o teto num e não no outro, o `inputMode` num e não no outro) — é a
+ * lição do `authorLabel` da Tarefa 38g e da decisão G da 27, aplicada antes de
+ * a segunda cópia existir.
+ *
+ * ⚠️ **O TETO É O `HIGHLIGHT_PAGE_MAX` DE `@clube/shared` (decisão F)** — o
+ * contrato da coluna `Int?`, o mesmo que a borda do grifo aplica e o mesmo que
+ * o `isValidPage` do `highlight-fields.tsx` já lê de lá. Um número escrito aqui
+ * seria uma segunda verdade sobre a mesma coluna.
+ *
+ * ⚠️ **E O `min`/`max` DO `<input>` NÃO SÃO A REGRA — são a ajuda do
+ * navegador.** Quem decide o que é um limite é o `boundOf` do
+ * `acervo-entries.ts`, que tem unitário próprio: o `<input type="number">` já
+ * entrega `''` para o que não consegue ler, e uma dimensão que dependesse disso
+ * seria uma regra guardada pelo navegador.
+ */
+function PageBound({ id, label, onValue, value }: PageBoundProps): ReactNode {
+  return (
+    <div className="flex w-36 flex-col gap-1">
+      <label className="text-xs font-medium text-muted" htmlFor={id}>
+        {label}
+      </label>
+      <input
+        autoComplete="off"
+        className={TEXT_INPUT_CLASS}
+        id={id}
+        inputMode="numeric"
+        max={HIGHLIGHT_PAGE_MAX}
+        min={1}
+        onChange={(event) => {
+          onValue(event.target.value);
+        }}
+        type="number"
+        value={value}
+      />
+    </div>
+  );
+}
+
+export interface PageRangeFilterProps {
+  t: TFunction;
+  /** ⚠️ As duas pontas CRUAS. Quem normaliza é o `acervo-entries.ts`. */
+  range: PageRange;
+  onRange: (range: PageRange) => void;
+}
+
+/**
+ * A SEXTA DIMENSÃO — A FAIXA DE PÁGINA (Tarefa 38h).
+ *
+ * ⚠️ **NENHUM `<fieldset>`, E A AUSÊNCIA É A MESMA REGRA DO `role="group"` DO
+ * DOCBLOCK DO TOPO.** Um `<fieldset>` tem `role="group"` implícito: ele criaria
+ * uma **quarta** fronteira acessível de grupo nesta tela, ao lado das três do
+ * `FilterBar`, sem passar pelo componente que é o dono dela (decisão C da
+ * Tarefa 27). Os dois rótulos se bastam — "Da página" e "Até a página" dizem
+ * sozinhos o que cada campo recorta, e é por isso que o catálogo não tem um
+ * terceiro texto por cima deles.
+ *
+ * ⚠️ **QUEM DECIDE SE ELE EXISTE É A TELA**, como o `ReadingSelect`: a faixa só
+ * faz sentido quando o tipo pode incluir grifo (decisão C), e essa pergunta tem
+ * **um** dono — o `typeCanIncludeHighlight` do `acervo-entries.ts`, que a tela
+ * já chama para o grupo de cor. Um `if` aqui dentro seria um segundo dono da
+ * regra de existência.
+ *
+ * ⚠️ **CONTROLADO, como os outros cinco** (decisão A da Tarefa 27): nada aqui
+ * guarda estado, e as duas pontas viajam juntas — quem digita numa delas recebe
+ * a faixa inteira de volta, que é o que impede "o de" e "o até" de virarem dois
+ * estados que discordam.
+ */
+export function PageRangeFilter({
+  onRange,
+  range,
+  t,
+}: PageRangeFilterProps): ReactNode {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <PageBound
+        id={PAGE_FROM_ID}
+        label={t('pages.acervo.filters.page.from')}
+        onValue={(from) => {
+          onRange({ ...range, from });
+        }}
+        value={range.from}
+      />
+      <PageBound
+        id={PAGE_TO_ID}
+        label={t('pages.acervo.filters.page.to')}
+        onValue={(to) => {
+          onRange({ ...range, to });
+        }}
+        value={range.to}
       />
     </div>
   );

@@ -346,8 +346,9 @@ export const pt = {
 
       ⚠️ **O FILTRO É NAVEGAÇÃO, NÃO PERMISSÃO** (`docs/adr/0002-*.md`).
       Nenhuma frase daqui pode sugerir que exista anotação ou grifo que o clube
-      não vê: nada de "só você", "privada", "visível para". As quatro dimensões
-      olham o MESMO acervo — pessoa, tipo, leitura e cor são formas de OLHAR.
+      não vê: nada de "só você", "privada", "visível para". As seis dimensões
+      olham o MESMO acervo — pessoa, tipo, leitura, cor, palavra e faixa de
+      página são formas de OLHAR.
 
       ⚠️ **E O GRIFO NÃO É UM TIPO DE ANOTAÇÃO** (ADR 0004): ele é entidade
       própria, e o vocabulário tem de deixar isso claro sem o leitor adivinhar.
@@ -443,6 +444,30 @@ export const pt = {
         text: {
           label: 'Palavra neste livro',
           placeholder: 'Uma palavra do que vocês escreveram',
+        },
+        /*
+          A SEXTA DIMENSÃO — A FAIXA DE PÁGINA (Tarefa 38h).
+
+          ⚠️ **NÃO HÁ RÓTULO DE GRUPO, e a ausência é decisão.** Os dois rótulos
+          se bastam ("Da página", "Até a página"), e um terceiro texto por cima
+          deles só existiria para ser o nome acessível de um `<fieldset>` — que
+          tem `role="group"` implícito. A fronteira acessível de grupo desta
+          tela é do `FilterBar` de `packages/ui` (decisão C da Tarefa 27), e
+          escrevê-la numa segunda casa é o jeito silencioso de a segunda sair de
+          sincronia.
+
+          ⚠️ **E AS DUAS PONTAS SÃO OPCIONAIS (decisão D):** só "de", só "até",
+          ou as duas. Por isso nenhuma frase promete uma faixa fechada — em
+          branco é "sem limite deste lado", nunca "página zero".
+
+          ⚠️ **A FAIXA É DO GRIFO, e o vocabulário não pode sugerir que ela
+          alcance a anotação:** anotação não tem página (decisão B), some da
+          faixa como já some da cor, e o controle inteiro desaparece quando o
+          tipo exclui grifo.
+        */
+        page: {
+          from: 'Da página',
+          to: 'Até a página',
         },
       },
       item: {

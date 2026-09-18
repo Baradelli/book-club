@@ -4,7 +4,7 @@ import type { MessageKey } from './form-errors';
 import { HIGHLIGHT_COLORS, type HighlightColor } from './highlight-colors';
 
 /**
- * O MODELO DO ACERVO — a entrada, a ordem e as **cinco** dimensões de recorte.
+ * O MODELO DO ACERVO — a entrada, a ordem e as **seis** dimensões de recorte.
  *
  * ⚠️ **MÓDULO PRÓPRIO, E O MOTIVO É MEDIDO — não é gosto por abstração.** O
  * `acervo.tsx` nasceu com **703 linhas** pelo contador canônico (o comando está
@@ -35,9 +35,16 @@ import { HIGHLIGHT_COLORS, type HighlightColor } from './highlight-colors';
  * `acervo-filters.tsx` (**165 → 194**), e o `acervo.tsx` ficou nas mesmas
  * **511**. Sem os dois vizinhos, a fatia não teria onde acontecer.
  *
+ * ⚠️ **E SE PAGOU DE NOVO NA TAREFA 38h, a SEXTA dimensão (a faixa de
+ * página).** Mesma conta e mesmo teto: o casamento nasceu aqui (**142 → 167**),
+ * os dois campos no `acervo-filters.tsx` (**194 → 257**), e o `acervo.tsx`
+ * ficou nas mesmas **511** — desta vez porque o "tentar de novo", que estava
+ * escrito TRÊS vezes lá, virou o `retryButton`. A cada fatia a tela paga a
+ * dimensão nova com uma repetição a menos.
+ *
  * ⚠️ **E A COSTURA NÃO FOI ESCOLHIDA PELO TAMANHO, foi pelo ASSUNTO.** O que
  * mora aqui é a parte que **não sabe o que é React**: o que é uma entrada do
- * acervo, em que ordem elas ficam, o que cada uma das cinco dimensões exclui e
+ * acervo, em que ordem elas ficam, o que cada uma das seis dimensões exclui e
  * qual das três frases de vazio a tela diz. O que ficou na tela é apresentação
  * — estado de requisição, linhas, chips, `<select>`, campo, `Sheet`. É a mesma
  * partição de `paths.ts`, `highlight-colors.tsx`, `form-errors.ts` e
@@ -67,6 +74,14 @@ import { HIGHLIGHT_COLORS, type HighlightColor } from './highlight-colors';
  * fixture da tela, escrito para a ordem e para as quatro dimensões, não os
  * carrega — e a tela continua sendo o acusador de que a dimensão CHEGA ao DOM e
  * COMBINA com as outras quatro.
+ *
+ * ⚠️ **A SEXTA — A FAIXA DE PÁGINA (Tarefa 38h) — SEGUIU O MESMO CAMINHO, e
+ * pela mesma razão.** A regra 1 daquela fatia manda testar a função pura ANTES
+ * da tela, e os casos que decidem as decisões D e E são baratos aqui e caros lá:
+ * "o que não é um inteiro não é um limite" (`'quarenta'`, `'40,5'`) e as duas
+ * pontas inclusivas exigiriam um fixture de tela com uma página em cada borda.
+ * O que a tela prova é o que só ela decide: os dois campos, o recorte sem ida à
+ * rede, o controle que SOME com o tipo em anotação, e o AND com as outras cinco.
  *
  * ⚠️ **E ELE NÃO PODE VIRAR `.tsx`, o que decidiu onde o construtor dos
  * `FilterGroup[]` foi morar.** A auditoria pediu esse construtor aqui ("é função
@@ -161,6 +176,23 @@ export function readingOf(entry: AcervoEntry): string | null {
 /** A cor de uma entrada — `null` quando ela não é grifo. */
 export function colorOf(entry: AcervoEntry): HighlightColor | null {
   return entry.type === 'HIGHLIGHT' ? entry.highlight.color : null;
+}
+
+/**
+ * A página de uma entrada — `null` nos DOIS casos em que ela não existe.
+ *
+ * ⚠️ **SÃO DOIS, e o segundo é o que ninguém escreve:** a anotação, que não tem
+ * a coluna (o `Note` não tem `page`), e o **grifo com `page` nula** — grifar sem
+ * anotar a página é caso previsto, a coluna é `Int?` de propósito, e o
+ * `highlight-fields.tsx` trata o campo em branco como AUSÊNCIA (regra 15 da
+ * Tarefa 24), nunca como zero.
+ *
+ * É o irmão exato do `colorOf`, e a consequência é a mesma: escolher uma faixa
+ * **exclui** quem não tem página, como escolher uma cor já exclui as anotações
+ * desde a Tarefa 28.
+ */
+export function pageOf(entry: AcervoEntry): number | null {
+  return entry.type === 'HIGHLIGHT' ? entry.highlight.page : null;
 }
 
 /**
@@ -436,6 +468,85 @@ export function matchesText(entry: AcervoEntry, text: string): boolean {
 }
 
 /**
+ * A FAIXA COMO O CAMPO A ENTREGA — **duas strings cruas** (Tarefa 38h).
+ *
+ * ⚠️ **AS DUAS PONTAS SÃO OPCIONAIS (decisão D)**: só "de", só "até", ou as
+ * duas. Vazio é "sem limite daquele lado" — "a partir da 40" é pedido real e
+ * não custa nada.
+ *
+ * ⚠️ **E ELAS SÃO `string`, como o `Draft` do formulário de grifo**, porque é o
+ * que um `<input>` entrega. Guardar número aqui obrigaria a tela a decidir o
+ * que fazer com "40," enquanto a pessoa ainda digita — e a decisão é uma só, do
+ * `boundOf`, logo abaixo.
+ */
+export interface PageRange {
+  readonly from: string;
+  readonly to: string;
+}
+
+/** Nenhuma das duas pontas escrita — a faixa que não recorta. */
+export const EVERY_PAGE: PageRange = { from: '', to: '' };
+
+/**
+ * ⚠️ **O QUE NÃO É UMA PÁGINA INTEIRA NÃO É UM LIMITE — é "ainda não me
+ * disseram até onde", nunca "não achei nada".**
+ *
+ * É a mesma decisão do `termOf` vazio: uma dimensão só recorta depois que
+ * alguém disse o que procurar. O `<input type="number">` já entrega `''` para o
+ * que ele não consegue ler, mas esta função **não depende disso** — ela é o
+ * dono da pergunta, e o unitário passa "quarenta" e "40,5" por ela.
+ *
+ * ⚠️ **E NÃO HÁ TETO ESCRITO AQUI (decisão F).** O teto é o
+ * `HIGHLIGHT_PAGE_MAX` de `@clube/shared`, que a borda do grifo já aplica e que
+ * o campo repete no `max` do `<input>` (`acervo-filters.tsx`). Um teto próprio
+ * nesta função seria uma **segunda verdade** sobre o contrato da coluna `Int?`
+ * — e uma faixa acima do teto já devolve vazio sozinha, porque não existe
+ * página gravada lá em cima.
+ */
+function boundOf(value: string): number | null {
+  const clean = value.trim();
+  if (clean === '') return null;
+  const parsed = Number(clean);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+/**
+ * A SEXTA DIMENSÃO — a faixa de página, **no cliente** (decisão A).
+ *
+ * ⚠️ **ELA EXCLUI QUEM NÃO TEM PÁGINA (decisão B), e isso não é escolha nova:**
+ * é o precedente da COR, medido nesta tela. O `colorOf(note)` é `null` e
+ * escolher uma cor **já exclui as anotações**; a página faz o mesmo com a
+ * anotação **e** com o grifo de `page` nula. O port do grifo documenta a mesma
+ * coisa do lado do servidor — no Postgres `WHERE "page" = 45` contra `NULL` é
+ * **falso** —, então cliente e servidor concordam (§7.1, a fidelidade).
+ *
+ * ⚠️ **AS DUAS PONTAS SÃO INCLUSIVAS**: "os grifos do capítulo 3" é uma faixa
+ * fechada, e quem escreve 40 e 55 está falando das páginas 40 e 55 também.
+ *
+ * ⚠️ **E A FAIXA INVERTIDA DEVOLVE VAZIO, LITERALMENTE (decisão E).** Não há
+ * troca silenciosa das pontas: é o que a pessoa escreveu, e um filtro que
+ * desobedece é pior que um filtro que devolve nada — quem digitou 100 e 10 vê a
+ * lista vazia, entende o que fez e conserta.
+ *
+ * ⚠️ **NADA AQUI PERGUNTA AO SERVIDOR.** O `HighlightRepository` diz por escrito
+ * que a faixa "é aditiva e **ninguém pediu**", e continua verdadeiro: quem pediu
+ * foi a TELA, e a tela não passa por lá — ela recorta o acervo que já está na
+ * memória desde a carga. Fazer o port crescer criaria um **segundo** filtro sem
+ * consumidor (o `page` que já existe lá não tem UM chamador no app, medido), e
+ * o projeto já nomeia esse erro por escrito no `book.ts`.
+ */
+export function matchesPage(entry: AcervoEntry, range: PageRange): boolean {
+  const from = boundOf(range.from);
+  const to = boundOf(range.to);
+  if (from === null && to === null) return true;
+
+  const page = pageOf(entry);
+  if (page === null) return false;
+  if (from !== null && page < from) return false;
+  return to === null || page <= to;
+}
+
+/**
  * ⚠️ **QUAL DAS **TRÊS** FRASES DE VAZIO — decisão F, e são três, não duas.**
  *
  * "Não há nada aqui", "o filtro não achou" e "esta palavra não achou" são
@@ -459,7 +570,7 @@ export function emptyTitleKey(hasEntries: boolean, text: string): MessageKey {
     : 'pages.acervo.empty.noMatch';
 }
 
-/** As cinco dimensões, já normalizadas: `null` (ou `''`) é "não recorta". */
+/** As seis dimensões, já normalizadas: `null` (ou `''`) é "não recorta". */
 export interface AcervoFilter {
   /** O `value` do chip de pessoa, já derivado para um que existe. */
   author: string;
@@ -468,6 +579,8 @@ export interface AcervoFilter {
   reading: string | null;
   /** ⚠️ O texto CRU do campo — quem normaliza é o `termOf`, um dono só. */
   text: string;
+  /** ⚠️ As duas pontas CRUAS do campo — quem normaliza é o `boundOf`. */
+  page: PageRange;
 }
 
 /**
@@ -510,7 +623,7 @@ export function matchesAuthor(
 }
 
 /**
- * REGRA 11 — AS **CINCO** DIMENSÕES EM **AND**, sobre a lista já carregada.
+ * REGRA 11 — AS **SEIS** DIMENSÕES EM **AND**, sobre a lista já carregada.
  *
  * ⚠️ **A QUINTA É O TEXTO (Tarefa 38g), e o AND com as outras quatro é o ponto
  * inteiro daquela fatia:** a frase de aceite do MVP 2 promete *"em qualquer
@@ -518,17 +631,22 @@ export function matchesAuthor(
  * coexistido numa listagem — o acervo recortava por pessoa/tipo/leitura/cor sem
  * texto, e a `/busca` recortava por texto sem as outras quatro.
  *
+ * ⚠️ **A SEXTA É A FAIXA DE PÁGINA (Tarefa 38h)** — *"os grifos do capítulo 3"*
+ * pedido pelo eixo que é do grifo, e no cliente como todas as outras.
+ *
  * ⚠️ **E O "AND" É HONESTO SOBRE O QUE CADA DIMENSÃO EXCLUI.** Uma dimensão com
  * valor escolhido descarta a entrada que **não carrega aquele campo**, e é a
  * fidelidade do §7.1 (4ª aparição: `= 'x'` contra coluna nula é falso):
  *
  * - escolher uma **leitura** exclui a avulsa e o grifo (nenhum tem
  *   `planItemId`) — regra 10, e é o comportamento certo;
- * - escolher uma **cor** exclui as anotações (nenhuma tem cor).
+ * - escolher uma **cor** exclui as anotações (nenhuma tem cor);
+ * - escolher uma **faixa de página** exclui as anotações **e** o grifo de
+ *   `page` nula (decisão B da 38h).
  *
- * As duas juntas, portanto, devolvem **vazio por construção** — e a tela mostra
- * o estado "filtrado sem resultado", nunca uma lista que ignora um dos
- * recortes.
+ * Leitura com cor, e leitura com faixa, devolvem portanto **vazio por
+ * construção** — e a tela mostra o estado "filtrado sem resultado", nunca uma
+ * lista que ignora um dos recortes.
  */
 export function filterEntries(
   entries: readonly AcervoEntry[],
@@ -542,6 +660,7 @@ export function filterEntries(
       return false;
     }
     if (!matchesText(entry, filter.text)) return false;
+    if (!matchesPage(entry, filter.page)) return false;
     return matchesAuthor(entry, filter.author, myId);
   });
 }

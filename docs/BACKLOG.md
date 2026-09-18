@@ -3100,7 +3100,7 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       virou função pura, e o “Você × o nome” — que estava escrito DUAS vezes no arquivo, uma
       por metade da lista — virou o `authorLabel`, um dono só._
 
-- [ ] **38h** — A faixa de página no acervo (`p. 40–60`). ⚠️ **FATIA GERADA PELA RESPOSTA DO
+- [x] **38h** — A faixa de página no acervo (`p. 40–60`). ⚠️ **FATIA GERADA PELA RESPOSTA DO
       DONO à pergunta 4 do MVP 2, opção (c)** (2026-09-18).
       _✅ **O próprio código já tinha previsto esta extensão, por escrito.** O
       `HighlightRepository` diz: *"Sem faixa de página (`pageFrom`/`pageTo`): é aditiva e
@@ -3112,8 +3112,28 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       _⚠️ **As três armadilhas de `page` que o port já mediu valem para a faixa:** fração (o
       Prisma **trunca**), fora do int32 (o Prisma **lança** → 500), e o teto `.max(2147483647)`
       do Zod, que é o que defende a borda._
-      _Port cresce + impl Prisma na **mesma unidade** (§6.9), fake acompanhando nos dois
-      sentidos. **Nenhuma migration.**_
+      _~~Port cresce + impl Prisma na **mesma unidade** (§6.9), fake acompanhando nos dois
+      sentidos.~~ **CORRIGIDO ANTES DE EXECUTAR, e a correção ENCOLHEU a fatia: o backend NÃO
+      foi tocado.** O `page` exato que já existe no port **não tem UM consumidor no app**
+      (`grep` por `?page=` em `packages/app/src` e `packages/shared/src/client`: nada), e o
+      acervo — a tela que pediu a faixa — recorta no CLIENTE desde a Tarefa 28. Crescer o port
+      criaria um **segundo** filtro sem cliente, que é o erro que o `book.ts` já nomeia por
+      escrito ("a `/writers` equivalente existe sem cliente nenhum desde a Tarefa 11"). ✅ E a
+      frase do port ("é aditiva e ninguém pediu") **continua verdadeira**: quem pediu foi a
+      tela, e a tela não passa por lá. **Nenhuma migration.**_
+      _✅ **ENTREGUE (2026-09-18).** O acervo filtra pelas **seis** dimensões em AND. O
+      casamento é função pura (`matchesPage`, em `acervo-entries.ts`), com unitário próprio
+      escrito ANTES da tela; os dois campos são o `PageRangeFilter` do `acervo-filters.tsx`,
+      e o controle inteiro SOME quando o tipo exclui grifo, pelo `typeCanIncludeHighlight` que
+      já existia. Nota e grifo sem página **somem** da faixa (é o precedente da COR); faixa
+      invertida devolve vazio, sem "consertar" a entrada. Contagens: **587** shared · **195**
+      ui · **1943** backend · **799** app (+22: 16 unitários e 6 de tela). Chunk de entrada
+      **433.794 B** (teto 450.000), precache 16 / 900,62 KiB._
+      _**O `acervo.tsx` NÃO cresceu: 511 antes, 511 depois**, pelo contador canônico
+      (`acervo-filters.tsx` 194 → 257, `acervo-entries.ts` 142 → 167). O saldo da tela saiu de
+      um lugar só: o **"tentar de novo", que estava escrito TRÊS vezes ali** — um por carga que
+      pode falhar —, virou o `retryButton`. É o `authorLabel` da 38g de novo: a dimensão nova
+      se paga com uma repetição a menos._
 
 - [ ] **38i** — O grifo ganha o dia do plano (`planItemId?`). ⚠️ **FATIA GERADA PELA RESPOSTA
       DO DONO à pergunta 4 do MVP 2, opção (d)** (2026-09-18). ⚠️ **A ÚNICA DAS TRÊS COM

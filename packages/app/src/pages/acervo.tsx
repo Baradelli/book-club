@@ -30,6 +30,7 @@ import {
   colorFromChipValue,
   COMMENT_EXCERPT_LENGTH,
   emptyTitleKey,
+  EVERY_PAGE,
   EVERY_READING,
   EVERY_TYPE,
   excerptOf,
@@ -47,6 +48,7 @@ import {
 import {
   authorOptions,
   filterGroups,
+  PageRangeFilter,
   type PlanDay,
   ReadingSelect,
   TextFilter,
@@ -81,7 +83,7 @@ import { highlightNewPath, highlightPath } from './paths';
  * inconsistências visíveis ao dono: "Anotações" listava na própria tela do
  * livro e "Grifos" navegava, e só a metade das anotações dizia o NOME de quem
  * escreveu. Agora é uma lista, com o tipo explícito em cada linha (ADR 0004: o
- * grifo **não** é um tipo de anotação) e **cinco** dimensões de recorte.
+ * grifo **não** é um tipo de anotação) e **seis** dimensões de recorte.
  *
  * ⚠️ **A QUINTA É O TEXTO, e ela chegou na Tarefa 38g — dez fatias depois.** A
  * frase de aceite do MVP 2 promete *"em qualquer listagem eu filtro… por
@@ -97,6 +99,18 @@ import { highlightNewPath, highlightPath } from './paths';
  * e não há debounce a pagar nem espera a mostrar. O casamento mora no
  * `acervo-entries.ts` (`matchesText`) e o campo no `acervo-filters.tsx`
  * (`TextFilter`); esta tela só guarda o estado e amarra os dois.
+ *
+ * ⚠️ **A SEXTA É A FAIXA DE PÁGINA (Tarefa 38h)** — *"os grifos do capítulo 3"*
+ * pedido pelo eixo que é do GRIFO (`docs/ACEITE-MVP.md`, MVP 2, pergunta 4). Ela
+ * **exclui quem não tem página**: a anotação, que nunca tem, e o grifo de `page`
+ * nula. Não é regra nova — é o precedente da COR, que já exclui as anotações
+ * desde a Tarefa 28.
+ *
+ * ⚠️ **E O BACKEND NÃO FOI TOCADO NAQUELA FATIA, de propósito.** O
+ * `HighlightRepository` já aceita um `page` exato desde a Tarefa 24 e ele **não
+ * tem UM consumidor no app** (medido); crescer o port para `pageFrom`/`pageTo`
+ * criaria um SEGUNDO filtro sem cliente. Quem pediu a faixa foi esta tela, e
+ * esta tela recorta no cliente.
  *
  * ⚠️ **O NÚMERO DE LINHAS VEM DE UM COMANDO, e é o único do projeto** — a
  * auditoria da Tarefa 25 achou **três** contagens diferentes para o mesmo
@@ -118,8 +132,8 @@ import { highlightNewPath, highlightPath } from './paths';
  *
  * ```
  * acervo.tsx          511   a tela: estado de requisição, linhas, orquestração
- * acervo-filters.tsx  194   o vocabulário e a marcação dos CINCO controles
- * acervo-entries.ts   142   o modelo: entrada, ordem, o que cada dimensão exclui
+ * acervo-filters.tsx  257   o vocabulário e a marcação dos SEIS controles
+ * acervo-entries.ts   167   o modelo: entrada, ordem, o que cada dimensão exclui
  * club-names.ts        23   `userId` → nome, dividido com o `book.tsx`
  * ```
  *
@@ -130,6 +144,13 @@ import { highlightNewPath, highlightPath } from './paths';
  * escolha entre as três frases de vazio virou função pura no
  * `acervo-entries.ts`, e o "Você × o nome" — que estava escrito DUAS vezes
  * aqui, uma por metade da lista — virou o `authorLabel`, um dono só.
+ *
+ * ⚠️ **E A TAREFA 38h ACRESCENTOU A SEXTA E A TELA FICOU EM 511 OUTRA VEZ.** A
+ * regra 5 daquela fatia repetiu a proibição, e o saldo veio do mesmo tipo de
+ * lugar: os dois campos e o casamento nasceram nos vizinhos, e o **"tentar de
+ * novo" — que estava escrito TRÊS vezes aqui, uma por carga que pode falhar —**
+ * virou o `retryButton`. É o `authorLabel` de novo: cada dimensão nova se paga
+ * com uma repetição a menos, e não com um arquivo maior.
  *
  * ⚠️ **OS DOIS PRIMEIROS NÚMEROS ESTAVAM DESATUALIZADOS (514 e 113), e foram
  * remedidos na Tarefa 32b.** Eles ficaram para trás na Tarefa 29 (a busca), e
@@ -167,7 +188,7 @@ import { highlightNewPath, highlightPath } from './paths';
  *
  * ⚠️ **O FILTRO É NAVEGAÇÃO, NÃO PERMISSÃO** —
  * `docs/adr/0002-visibilidade-total-no-clube.md`. Dentro do clube não existe
- * conteúdo privado: as cinco dimensões olham o MESMO acervo, e nenhuma esconde
+ * conteúdo privado: as seis dimensões olham o MESMO acervo, e nenhuma esconde
  * nada de ninguém. Nunca rotular como privacidade, nunca cadeado. O que muda
  * entre "meu" e "dela" é **affordance**, não visibilidade — o que a outra
  * pessoa escreveu aparece inteiro.
@@ -297,6 +318,15 @@ export function AcervoPage() {
    * há requisição a poupar nem espera a mostrar.
    */
   const [text, setText] = useState('');
+  /**
+   * ⚠️ **A SEXTA DIMENSÃO — as duas pontas CRUAS da faixa (Tarefa 38h).**
+   *
+   * Cruas pelo mesmo motivo do texto: quem decide o que é um limite é o
+   * `boundOf` do `acervo-entries.ts`, um dono só. E elas são **um** estado, não
+   * dois: "de" e "até" são as duas metades da mesma pergunta, e dois `useState`
+   * seriam dois lugares de onde uma faixa pela metade poderia sair.
+   */
+  const [pageRange, setPageRange] = useState(EVERY_PAGE);
   /** O id do grifo que a confirmação de arquivamento está segurando. */
   const [confirming, setConfirming] = useState<string | null>(null);
   const [archiveFailed, setArchiveFailed] = useState(false);
@@ -474,6 +504,29 @@ export function AcervoPage() {
       setArchiveFailed(true);
       setConfirming(null);
     }
+  }
+
+  /**
+   * O "TENTAR DE NOVO" — **um dono só, TRÊS chamadores** (Tarefa 38h).
+   *
+   * ⚠️ **É o mesmo motivo do `authorLabel` da 38g, e o mesmo da decisão G da
+   * 27:** este botão estava escrito TRÊS vezes neste arquivo — o do `/me`, o do
+   * livro e o do acervo —, com a mesma chave, a mesma variante e três gatilhos
+   * diferentes. Três escritos do mesmo botão é a forma pela qual dois deles
+   * saem de sincronia sem ninguém ver (foi o que aconteceu com o nome de quem
+   * escreveu, entre as duas metades da lista, na Tarefa 27).
+   *
+   * ⚠️ **E O QUE ELE NÃO DECIDE É METADE DO DESENHO:** quem retenta, e **se**
+   * vale retentar, continua sendo de quem chama — o `isRetriable` recusa o 404
+   * do livro, e cada carga tem o próprio contador de tentativas. Ele é a
+   * MARCAÇÃO do botão, não a política.
+   */
+  function retryButton(onRetry: () => void): ReactNode {
+    return (
+      <Button onClick={onRetry} variant="ghost">
+        {t('pages.acervo.retry')}
+      </Button>
+    );
   }
 
   /**
@@ -655,16 +708,9 @@ export function AcervoPage() {
     if (acervo.status === 'failed') {
       return (
         <Notice
-          action={
-            <Button
-              onClick={() => {
-                setAcervoAttempt((previous) => previous + 1);
-              }}
-              variant="ghost"
-            >
-              {t('pages.acervo.retry')}
-            </Button>
-          }
+          action={retryButton(() => {
+            setAcervoAttempt((previous) => previous + 1);
+          })}
           title={t('pages.acervo.unavailable')}
         />
       );
@@ -690,17 +736,26 @@ export function AcervoPage() {
 
     /**
      * ⚠️ **DECISÃO E, GENERALIZADA: cada dimensão condicional EXISTE só quando o
-     * tipo selecionado pode carregar aquele campo** (`acervo-entries.ts`). A cor
-     * pede tipo ∈ {Tudo, Grifo}; a leitura pede tipo ∈ {Tudo, Do dia}.
+     * tipo selecionado pode carregar aquele campo** (`acervo-entries.ts`). São
+     * **três** dimensões condicionais desde a Tarefa 38h: a cor e a faixa de
+     * página pedem tipo ∈ {Tudo, Grifo} — a MESMA pergunta, e por isso o MESMO
+     * booleano —, e a leitura pede tipo ∈ {Tudo, Do dia}.
      *
      * ⚠️ **E SÃO DUAS REGRAS COM UM DONO CADA, não uma regra com dois donos.**
      * Estes dois booleanos decidem se o controle **EXISTE** (é só render); o
      * `onSelect` do grupo de tipo, mais abaixo, decide se a escolha
-     * **SOBREVIVE** (`setColor(null)` + `setReadingScope(EVERY_READING)`). O
-     * recorte em si **não** repete nenhuma das duas.
+     * **SOBREVIVE** (`setColor(null)` + `setReadingScope(EVERY_READING)` +
+     * `setPageRange(EVERY_PAGE)`). O recorte em si **não** repete nenhuma das
+     * duas.
+     *
+     * ⚠️ **DOIS BOOLEANOS PARA TRÊS CONTROLES, e não é descuido:** a cor e a
+     * faixa fazem a mesma pergunta ao mesmo tipo, então um segundo
+     * `pageApplies` seria um segundo nome para o MESMO valor — que é como um dos
+     * dois deixa de acompanhar o outro (decisão C da 38h, e a razão de o
+     * booleano ter deixado de se chamar `colorApplies`).
      *
      * A primeira versão desta fatia repetia: ela passava
-     * `color: colorApplies ? color : null` ao `filterEntries`, e a auditoria
+     * `color: <o booleano> ? color : null` ao `filterEntries`, e a auditoria
      * mediu o preço — mutar aquela condição para `color,` dava **0 acusadores em
      * 557**, porque não existe caminho com cor escolhida e grupo escondido (o
      * reset roda em TODO toque de tipo). Era código morto com um docblock
@@ -708,14 +763,33 @@ export function AcervoPage() {
      * pegou no `isRetriable`.
      *
      * ⚠️ **REMEDIDO na rodada de correção da Tarefa 38g, na direção de hoje:**
-     * reintroduzir `color: colorApplies ? color : null` aqui dá **0 acusadores
-     * em 777**. Os dois escritos continuam indistinguíveis; o que envelheceu era
-     * só o denominador (557 era o tamanho da suíte do app na Tarefa 28), e um
-     * número velho o bastante faz o próximo leitor desconfiar da afirmação que
-     * está certa.
+     * reintroduzir aquela condição aqui dá **0 acusadores em 777**. Os dois
+     * escritos continuam indistinguíveis; o que envelheceu era só o denominador
+     * (557 era o tamanho da suíte do app na Tarefa 28), e um número velho o
+     * bastante faz o próximo leitor desconfiar da afirmação que está certa.
+     *
+     * ⚠️ **O NOME DO BOOLEANO NÃO É CITADO NOS DOIS PARÁGRAFOS ACIMA, e a
+     * omissão é deliberada:** eles descrevem um mutante que alguém pode querer
+     * reaplicar, e até a 38h diziam `colorApplies` — um `const` que já não
+     * existia. Quem for remedir lê o nome no código, três linhas abaixo, não
+     * numa citação que envelhece sozinha.
      */
     const typeFilter = typeFromChipValue(typeScope);
-    const colorApplies = typeCanIncludeHighlight(typeFilter);
+    /*
+      ⚠️ **UM BOOLEANO PARA AS DUAS DIMENSÕES DE GRIFO — decisão C da Tarefa
+      38h, e ela diz "reuse-o; não escreva um segundo".**
+
+      A faixa de página faz a MESMA pergunta que a cor já fazia ("o tipo
+      selecionado pode incluir um grifo?"), e a resposta é a mesma função. Um
+      `pageApplies = typeCanIncludeHighlight(typeFilter)` ao lado seria um
+      segundo nome para o MESMO valor — e dois nomes é como um dos dois deixa de
+      acompanhar o outro. Por isso o booleano deixou de se chamar `colorApplies`
+      aqui: ele nunca foi sobre a cor, era sobre o GRIFO.
+
+      A prop do `filterGroups` continua `colorApplies` porque lá ela é sobre o
+      grupo de cor, que é o único que aquele módulo constrói.
+    */
+    const highlightApplies = typeCanIncludeHighlight(typeFilter);
     const readingApplies = typeCanCarryReading(typeFilter);
 
     /*
@@ -740,6 +814,7 @@ export function AcervoPage() {
         color,
         reading: selectedReading === EVERY_READING ? null : selectedReading,
         text,
+        page: pageRange,
       },
       myId,
     );
@@ -780,7 +855,7 @@ export function AcervoPage() {
     const groups = filterGroups({
       authors,
       color,
-      colorApplies,
+      colorApplies: highlightApplies,
       onAuthor: setScope,
       onColor: (value) => {
         setColor(colorFromChipValue(value));
@@ -788,8 +863,8 @@ export function AcervoPage() {
       onType: (value) => {
         setTypeScope(value);
         /*
-          ⚠️ **AS DUAS ESCOLHAS CONDICIONAIS SÃO DESCARTADAS — regra 9, segunda
-          direção, e nas DUAS dimensões.**
+          ⚠️ **AS TRÊS ESCOLHAS CONDICIONAIS SÃO DESCARTADAS — regra 9, segunda
+          direção, e nas TRÊS dimensões** (a faixa de página entrou na 38h).
 
           Sem isto elas ficariam valendo por baixo de um controle que
           desapareceu, e voltariam a acender sozinhas quando o tipo voltasse a
@@ -797,11 +872,21 @@ export function AcervoPage() {
           plano) sem ninguém ter tocado naquele controle.
 
           ⚠️ **ESTE É O ÚNICO DONO DA REGRA, e é o que o recorte NÃO repete**: os
-          booleanos `colorApplies`/`readingApplies` decidem se o controle EXISTE;
-          estas duas linhas decidem se a escolha SOBREVIVE. Repetir a condição no
-          `filterEntries` foi medido como código morto e saiu — 0 acusadores em
-          557 na Tarefa 28, e 0 em 777 quando a rodada de correção da 38g
-          remediu.
+          booleanos `highlightApplies`/`readingApplies` decidem se o controle
+          EXISTE; estas TRÊS linhas decidem se a escolha SOBREVIVE. Repetir a
+          condição no `filterEntries` foi medido como código morto e saiu — 0
+          acusadores em 557 na Tarefa 28, e 0 em 777 quando a rodada de correção
+          da 38g remediu.
+
+          ⚠️ **ESTE PARÁGRAFO DIZIA `colorApplies` E "estas duas linhas" até a
+          rodada de correção da 38h** — metade do comentário tinha sido
+          atualizada (o cabeçalho, três linhas acima, já dizia TRÊS) e esta
+          metade não, que é justamente a que se lê primeiro ao chegar nos
+          setters. O `colorApplies` não existia mais como declaração: o `const`
+          passou a se chamar `highlightApplies` quando a faixa de página herdou
+          a MESMA pergunta. É a lição do `dayRange` do `CLAUDE.md` — um nome
+          que não existe faz o próximo leitor procurar, não achar, e inventar um
+          terceiro.
 
           ⚠️ **E A LINHA DA LEITURA É O CONSERTO DA RODADA:** ela faltava, e a
           justificativa escrita ("generalizar tornaria a regra 11 impossível")
@@ -810,6 +895,7 @@ export function AcervoPage() {
         */
         setColor(null);
         setReadingScope(EVERY_READING);
+        setPageRange(EVERY_PAGE);
       },
       selectedAuthor,
       t,
@@ -854,6 +940,20 @@ export function AcervoPage() {
                 t={t}
               />
             )}
+
+            {/*
+              ⚠️ **A FAIXA DE PÁGINA SÓ EXISTE QUANDO O TIPO PODE INCLUIR GRIFO**
+              (decisão C da 38h) — é a decisão E de novo, pelo MESMO booleano do
+              grupo de cor: página só existe em grifo, e um controle que só pode
+              esvaziar a lista é pior que um controle escondido.
+
+              ⚠️ **E QUEM DECIDE É ESTA TELA**, como no `<select>` de leitura: um
+              `if` dentro do `PageRangeFilter` seria um segundo dono da regra de
+              existência.
+            */}
+            {highlightApplies ? (
+              <PageRangeFilter onRange={setPageRange} range={pageRange} t={t} />
+            ) : null}
           </div>
         )}
 
@@ -889,11 +989,7 @@ export function AcervoPage() {
     if (meStatus === 'failed') {
       return (
         <Notice
-          action={
-            <Button onClick={reload} variant="ghost">
-              {t('pages.acervo.retry')}
-            </Button>
-          }
+          action={retryButton(reload)}
           title={messageFor(t, resolveApiError(meError, { fields: [] }).key)}
         />
       );
@@ -907,16 +1003,11 @@ export function AcervoPage() {
       return (
         <Notice
           action={
-            isRetriable(book.error) ? (
-              <Button
-                onClick={() => {
+            isRetriable(book.error)
+              ? retryButton(() => {
                   setBookAttempt((previous) => previous + 1);
-                }}
-                variant="ghost"
-              >
-                {t('pages.acervo.retry')}
-              </Button>
-            ) : undefined
+                })
+              : undefined
           }
           title={messageFor(
             t,

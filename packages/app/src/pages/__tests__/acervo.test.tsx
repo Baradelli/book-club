@@ -8,7 +8,7 @@ import type {
   NoteResponse,
   PlanItemResponse,
 } from '@clube/shared';
-import { HIGHLIGHT_COLORS } from '@clube/shared';
+import { HIGHLIGHT_COLORS, HIGHLIGHT_PAGE_MAX } from '@clube/shared';
 import { TOKEN_STORAGE_KEY } from '@clube/shared/client';
 import { pt } from '@clube/shared/locales';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
@@ -652,6 +652,30 @@ async function typeText(value: string): Promise<void> {
   await act(async () => {
     fireEvent.change(textField(), { target: { value } });
   });
+}
+
+/**
+ * AS DUAS PONTAS DA FAIXA DE PÁGINA — a sexta dimensão (Tarefa 38h).
+ *
+ * ⚠️ Cada uma pelo SEU `<label>` associado, como o `<select>` de leitura e o
+ * campo de texto: os dois rótulos se bastam ("Da página", "Até a página"), e é
+ * por isso que não há um `<fieldset>` com nome de grupo — ele criaria uma
+ * quarta fronteira acessível de grupo nesta tela, fora do `FilterBar`.
+ */
+function pageBound(label: string): HTMLInputElement {
+  return screen.getByLabelText(label) as HTMLInputElement;
+}
+
+async function typePage(label: string, value: string): Promise<void> {
+  await act(async () => {
+    fireEvent.change(pageBound(label), { target: { value } });
+  });
+}
+
+/** A faixa inteira, numa chamada: é o que a pessoa faz nos dois campos. */
+async function typeRange(from: string, to: string): Promise<void> {
+  await typePage(FILTERS.page.from, from);
+  await typePage(FILTERS.page.to, to);
 }
 
 function acervoSource(): string {
@@ -2364,6 +2388,255 @@ describe('⚠️ THE FIFTH DIMENSION OF THE FILTER — TEXT (task 38g)', () => {
     expect(screen.queryByText(pt.pages.acervo.empty.filtered)).not.toBeNull();
     expect(screen.queryByText(pt.pages.acervo.empty.noMatch)).toBeNull();
     expect(pressedIn(FILTERS.person.label)).toEqual([personChip('Zeca')]);
+    expectNoGuilt();
+  });
+});
+
+/**
+ * ⚠️ **A SEXTA DIMENSÃO — A FAIXA DE PÁGINA (Tarefa 38h).**
+ *
+ * *"Os grifos do capítulo 3"* passa a ser pedível — pelo eixo que é do GRIFO, a
+ * página (`docs/ACEITE-MVP.md`, MVP 2, pergunta 4, opção (c)).
+ *
+ * ⚠️ **O QUE A FAIXA CASA ESTÁ PROVADO NO UNITÁRIO**
+ * (`acervo-entries.test.ts`): as duas pontas opcionais, as duas inclusivas, a
+ * faixa invertida vazia, o que não é um limite, e os DOIS que somem (a anotação
+ * e o grifo de `page` nula). O que se prova AQUI é o que só a tela decide — que
+ * os dois campos existem com rótulo associado, que eles recortam **sem ir ao
+ * servidor**, que o controle SOME quando o tipo exclui grifo (e a escolha é
+ * descartada), e que a faixa entra em AND com as outras cinco.
+ *
+ * ⚠️ **E O BACKEND NÃO FOI TOCADO.** O `page` que já existe no
+ * `HighlightRepository` não tem **um** consumidor no app (medido), e o acervo
+ * recorta no cliente desde a Tarefa 28 — fazer o port crescer criaria um
+ * segundo filtro sem cliente.
+ */
+describe('⚠️ THE SIXTH DIMENSION OF THE FILTER — PAGE RANGE (task 38h)', () => {
+  /** As quatro linhas que TÊM página, na ordem da tela (112, 58, 31, 9). */
+  const PAGED_LABELS = [QUOTES[0], QUOTES[2], QUOTES[3], QUOTES[4]];
+
+  it('⚠️ draws TWO number fields with VISIBLE labels, beside the other controls', async () => {
+    await renderAcervo();
+    await waitForRows(10);
+
+    for (const label of [FILTERS.page.from, FILTERS.page.to]) {
+      const field = pageBound(label);
+      expect(field.tagName).toBe('INPUT');
+      expect(field.getAttribute('type')).toBe('number');
+      // O rótulo é VISÍVEL e associado: um `aria-label` solto daria nome a
+      // quem OUVE a tela e deixaria quem VÊ sem saber o que o campo recorta.
+      expect(field.getAttribute('aria-label')).toBeNull();
+      /*
+        ⚠️ **O TETO É O `HIGHLIGHT_PAGE_MAX` DE `@clube/shared` (decisão F)** —
+        o contrato da coluna `Int?`, o mesmo que a borda do grifo aplica. Um
+        número escrito na tela seria uma segunda verdade sobre a mesma coluna, e
+        é exatamente assim que as duas pontas divergiriam.
+      */
+      expect(field.getAttribute('max')).toBe(String(HIGHLIGHT_PAGE_MAX));
+      expect(field.getAttribute('min')).toBe('1');
+    }
+
+    /*
+      ⚠️ **E OS GRUPOS CONTINUAM TRÊS.** Um `<fieldset>` em volta das duas
+      pontas teria `role="group"` implícito e criaria uma QUARTA fronteira
+      acessível de grupo, fora do `FilterBar` — que é o dono dela desde a
+      decisão C da Tarefa 27. Os dois rótulos se bastam.
+    */
+    expect(screen.getAllByRole('group')).toHaveLength(3);
+    expectNoGuilt();
+  });
+
+  it('⚠️ cuts the collection by the RANGE, without asking the server again', async () => {
+    const calls = await renderAcervo();
+    await waitForRows(10);
+
+    // A faixa fechada: as páginas 31 e 58 estão DENTRO dela (as duas pontas
+    // são inclusivas), e a 112 e a 9 ficam de fora.
+    await typeRange('31', '58');
+    expect(labelsOnScreen()).toEqual([QUOTES[2], QUOTES[3]]);
+
+    // E apagar as duas pontas devolve as dez, na mesma ordem: o recorte é
+    // derivado, nunca destrutivo.
+    await typeRange('', '');
+    expect(labelsOnScreen()).toEqual([...ORDERED_LABELS]);
+
+    /*
+      ⚠️ **NENHUMA REQUISIÇÃO NOVA — é a decisão A da fatia.** O
+      `HighlightRepository` até aceita `page` desde a Tarefa 24, mas o acervo
+      deste livro já está na memória: digitar um número não vira ida à rede, e
+      é por isso que a fatia não fez o port crescer.
+    */
+    expect(requestsTo(calls, '/notes')).toHaveLength(1);
+    expect(requestsTo(calls, '/highlights?')).toHaveLength(1);
+    expectNoGuilt();
+  });
+
+  it('⚠️ makes the NOTE and the highlight with NO PAGE disappear (rule 2, decision B)', async () => {
+    await renderAcervo();
+    await waitForRows(10);
+
+    /*
+      ⚠️ **NÃO É ESCOLHA NOVA: é o precedente da COR.** Escolher uma cor já
+      exclui as anotações desde a Tarefa 28, porque anotação não tem cor.
+      Anotação não tem página tampouco — e o grifo com `page` nula é o caso que
+      ninguém escreve: grifar sem anotar a página é previsto, e a coluna é
+      anulável de propósito.
+    */
+    await typePage(FILTERS.page.from, '1');
+    expect(labelsOnScreen()).toEqual(PAGED_LABELS);
+    // As cinco anotações sumiram…
+    for (const title of NOTE_TITLES) {
+      expect(labelsOnScreen()).not.toContain(title);
+    }
+    // …e o grifo sem página também, embora seja grifo.
+    expect(labelsOnScreen()).not.toContain(NO_PAGE_QUOTE);
+    expectNoGuilt();
+  });
+
+  it('⚠️ takes ONE end alone, and gives back NOTHING for an inverted range (decisions D, E)', async () => {
+    await renderAcervo();
+    await waitForRows(10);
+
+    // Só "de": "a partir da 58", sem teto.
+    await typePage(FILTERS.page.from, '58');
+    expect(labelsOnScreen()).toEqual([QUOTES[0], QUOTES[2]]);
+
+    // Só "até": "até a 31", sem piso.
+    await typeRange('', '31');
+    expect(labelsOnScreen()).toEqual([QUOTES[3], QUOTES[4]]);
+
+    /*
+      ⚠️ **A FAIXA INVERTIDA DEVOLVE VAZIO, LITERALMENTE.** Nada de trocar as
+      duas pontas em silêncio: é o que a pessoa escreveu, e um filtro que
+      desobedece é pior que um filtro que devolve nada. O vazio é o do FILTRO —
+      a mesma frase de sempre, porque não há palavra escrita nenhuma.
+    */
+    await typeRange('58', '31');
+    expect(
+      screen.queryByRole('list', { name: pt.pages.acervo.label }),
+    ).toBeNull();
+    expect(screen.queryByText(pt.pages.acervo.empty.filtered)).not.toBeNull();
+    expect(screen.queryByText(pt.pages.acervo.empty.noMatch)).toBeNull();
+    expect(screen.queryByText(pt.pages.acervo.empty.title)).toBeNull();
+    // E os dois campos continuam com o que a pessoa escreveu: a tela não
+    // "conserta" a entrada nem apaga o que ela digitou.
+    expect(pageBound(FILTERS.page.from).value).toBe('58');
+    expect(pageBound(FILTERS.page.to).value).toBe('31');
+    expectNoGuilt();
+  });
+
+  it('⚠️ hides the RANGE when the type cannot include a highlight, and DISCARDS it (decision C)', async () => {
+    await renderAcervo();
+    await waitForRows(10);
+
+    await typeRange('31', '58');
+    expect(labelsOnScreen()).toEqual([QUOTES[2], QUOTES[3]]);
+
+    /*
+      ⚠️ **DIREÇÃO 1: com o tipo em "Avulsa", a faixa DESAPARECE** — é a decisão
+      E da Tarefa 28 aplicada à sexta dimensão, pelo MESMO
+      `typeCanIncludeHighlight`. Uma faixa de página com o tipo em anotação é um
+      filtro que **garante zero resultados**, e mostrar um controle que só pode
+      esvaziar a lista é pior que escondê-lo.
+    */
+    await press(chip(KIND.free));
+    expect(screen.queryByLabelText(FILTERS.page.from)).toBeNull();
+    expect(screen.queryByLabelText(FILTERS.page.to)).toBeNull();
+    // E a lista é a das avulsas INTEIRA: a faixa não ficou valendo por baixo.
+    expect(labelsOnScreen()).toEqual(FREE_LABELS);
+
+    await press(chip(KIND.plan));
+    expect(screen.queryByLabelText(FILTERS.page.from)).toBeNull();
+    expect(labelsOnScreen()).toEqual(PLAN_LABELS);
+
+    /*
+      ⚠️ DIREÇÃO 2: voltando a um tipo que PODE incluir grifo, o controle volta
+      — e volta VAZIO. Se a faixa tivesse sobrevivido, o acervo apareceria
+      recortado por duas páginas sem ninguém ter tocado nos campos.
+    */
+    await press(chip(ALL_TYPES));
+    expect(pageBound(FILTERS.page.from).value).toBe('');
+    expect(pageBound(FILTERS.page.to).value).toBe('');
+    expect(labelsOnScreen()).toEqual([...ORDERED_LABELS]);
+
+    // E com o tipo em "Grifo" ela continua lá: grifo TEM página.
+    await press(chip(KIND.highlight));
+    await typePage(FILTERS.page.to, '31');
+    expect(labelsOnScreen()).toEqual([QUOTES[3], QUOTES[4]]);
+    expectNoGuilt();
+  });
+
+  it('⚠️ combines the RANGE with each of the other five dimensions, with AND (rule 3)', async () => {
+    await renderAcervo();
+    await waitForRows(10);
+
+    /*
+      ⚠️ **CADA PAR MOSTRA OS DOIS TAMANHOS — com a faixa e sem ela.** Um teste
+      de AND só prova o AND quando a outra dimensão, SOZINHA, devolveria mais: a
+      38g descobriu isso do jeito difícil, com um fixture em que o recorte por
+      cor já devolvia a mesma lista que o recorte por texto.
+
+      ⚠️ **MAS A MEDIÇÃO POR PAR MORA NO UNITÁRIO, e este `it` não a substitui.**
+      São cinco pares em SEQUÊNCIA dentro de um `it` só: sob mutação ele morre no
+      PRIMEIRO `expect` e os outros quatro nunca são avaliados — a resolução dele
+      é "algum par quebrou", não "os cinco quebraram". Quem quiser saber QUAL par
+      um mutante mata lê o `acervo-entries.test.ts`, onde os seis pares são seis
+      `it` separados, porque lá isso é barato (o fixture é uma lista, não uma
+      tela). Aqui o que se prova é que a dimensão chega ao DOM e convive com as
+      outras cinco em sequência real de toques — ⚠️ **não leia "5 acusadores na
+      tela" como "cinco pares medidos"**.
+    */
+    // PESSOA ∧ faixa — a pessoa sozinha mostra CINCO, a faixa sozinha DUAS.
+    await typeRange('31', '58');
+    await press(chip(FILTERS.person.mine));
+    expect(labelsOnScreen()).toEqual([QUOTES[2]]);
+    await typeRange('', '');
+    expect(labelsOnScreen()).toEqual(MY_LABELS);
+
+    // COR ∧ faixa — o amarelo sozinho mostra TRÊS, a faixa sozinha DUAS.
+    await press(chip(EVERYONE));
+    await press(chip(COLOR_NAMES.yellow));
+    expect(labelsOnScreen()).toEqual(YELLOW_LABELS);
+    await typeRange('31', '58');
+    expect(labelsOnScreen()).toEqual([QUOTES[2]]);
+
+    /*
+      TIPO ∧ faixa — o tipo sozinho mostra os CINCO grifos, e a faixa recorta
+      DENTRO deles. ⚠️ A outra direção do par é o teste de cima: com o tipo em
+      anotação o controle inteiro some, porque ali a faixa só poderia esvaziar.
+    */
+    await press(chip(ALL_COLORS));
+    await press(chip(KIND.highlight));
+    await typeRange('', '');
+    expect(labelsOnScreen()).toEqual(HIGHLIGHT_LABELS);
+    await typeRange('31', '58');
+    expect(labelsOnScreen()).toEqual([QUOTES[2], QUOTES[3]]);
+
+    /*
+      TEXTO ∧ faixa — e os dois mordem: a palavra sozinha mostra TRÊS entradas
+      (por três campos diferentes), a faixa larga sozinha mostra as QUATRO com
+      página, e juntas sobra uma.
+    */
+    await press(chip(ALL_TYPES));
+    await typeRange('9', '112');
+    expect(labelsOnScreen()).toEqual(PAGED_LABELS);
+    await typeText('porta');
+    expect(labelsOnScreen()).toEqual([QUOTES[0]]);
+    await typeRange('', '');
+    expect(labelsOnScreen()).toEqual([QUOTES[0], QUOTES[1], NOTE_TITLES[3]]);
+
+    /*
+      LEITURA ∧ faixa — vazio POR CONSTRUÇÃO, e é o mesmo vazio que cor +
+      leitura já produziam: a leitura só existe na anotação do dia, a página só
+      existe no grifo. A leitura sozinha mostra DUAS.
+    */
+    await typeText('');
+    await chooseReading(READING_TWO);
+    expect(labelsOnScreen()).toEqual([NOTE_TITLES[1], NOTE_TITLES[2]]);
+    await typeRange('1', '112');
+    expect(
+      screen.queryByRole('list', { name: pt.pages.acervo.label }),
+    ).toBeNull();
     expectNoGuilt();
   });
 });
