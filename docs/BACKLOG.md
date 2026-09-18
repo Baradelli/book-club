@@ -3098,15 +3098,26 @@ pessoa achar que o buraco nunca existiu.
    aceita como *variante de deploy*. ⚠️ **Continua sendo passo de ambiente**, só que de uma
    linha em vez de um cron de sistema: sem a chave, nada é agendado (é o padrão seguro, e
    com duas instâncias é o que se quer). Quem liga pela primeira vez é o dono.
-2. **Push no celular pela rede local não funciona** — contexto seguro, a mesma limitação que
-   impede o PWA de instalar pelo IP. Exige `localhost` ou túnel HTTPS.
+2. ~~**Push no celular pela rede local não funciona** — contexto seguro, a mesma limitação
+   que impede o PWA de instalar pelo IP. Exige `localhost` ou túnel HTTPS.~~
+   ✅ **FECHADO pela medição do dono** (2026-09-18): *"push pela rede local também está ok"*.
+   ⚠️ **E este é o único dos três que fechou sem ninguém escrever código nem explicar o
+   porquê.** Contexto seguro é regra do navegador, não nossa; `http://<ip>` não é origem
+   segura pela especificação. Alguma condição do ambiente dele difere do que o documento
+   supunha, e **ninguém mediu qual** — a frase original era **previsão**, e ficou três MVPs
+   no `COMO-TESTAR.md` com cara de fato. ⚠️ **Instalar como PWA pelo IP continua fora**: não
+   foi medido junto, e é a mesma regra de navegador.
 3. **As chaves VAPID não estão configuradas** por padrão, e nunca estarão — são segredo, e o
    `.env` não vai para o repositório. Sem elas a metade de notificação fica desligada, e **a
    tela diz isso** sem parecer erro. (⚠️ No `.env` **do dono** elas já estão, desde
    2026-09-17 — o buraco é de ambiente, e o ambiente dele deixou de tê-lo.)
 
-Os dois que sobram têm passo a passo no `COMO-TESTAR.md` (§6.6 e §6.7). Nenhum é dívida
-escondida.
+⚠️⚠️ **OS TRÊS FECHARAM — e vale registrar COMO, porque os três caminhos foram
+diferentes:** o nº 1 por **fatia** (a 38f, com auditoria e mutação); o nº 3 por **configuração
+do dono** (as chaves VAPID no `.env` dele, que nunca vão ao repositório); e o nº 2 por
+**medição que contradisse o documento**, sem código nenhum. Os passos continuam no
+`COMO-TESTAR.md` (§6.6 e §6.7). Nenhum era dívida escondida — e o nº 2 mostra que um deles
+nem era buraco.
 
 ---
 

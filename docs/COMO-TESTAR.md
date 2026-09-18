@@ -45,13 +45,22 @@
   (HTTPS ou `localhost`), e `http://192.168.0.83:5173` não é nenhum dos dois — o navegador
   não vai oferecer "instalar". Isso **não afeta** o teste de escrita sem conexão do §6.1: o
   rascunho e a fila vivem no IndexedDB, que funciona em `http` normalmente.
-- ⚠️ **ATIVAR NOTIFICAÇÃO PELO IP DA REDE — a MESMA limitação, e ela pega o caso principal.**
-  Push exige contexto seguro pelo mesmo motivo do PWA, então `http://192.168.0.83:5173` **não
-  vai funcionar no celular**: o botão "ativar neste aparelho" vai dizer, com todas as letras,
-  que o endereço não é seguro. A tela **explica** em vez de falhar calada — foi decisão de
-  desenho —, mas a consequência prática é que **testar push no celular pela rede local não
-  dá**. Os caminhos que funcionam: abrir pelo `localhost` da própria máquina, ou expor por um
-  túnel HTTPS. ⚠️ **E no iPhone há uma segunda condição**: push em PWA só funciona com o app
+- ⚠️ ~~**ATIVAR NOTIFICAÇÃO PELO IP DA REDE — a MESMA limitação, e ela pega o caso
+  principal.** Push exige contexto seguro pelo mesmo motivo do PWA, então
+  `http://192.168.0.83:5173` **não vai funcionar no celular**.~~ ✅ **O DONO MEDIU O CONTRÁRIO
+  em 2026-09-18: pela rede local funcionou.** A frase riscada era previsão, não medição, e
+  ficou três MVPs no documento como se fosse fato.
+  ⚠️⚠️ **O MECANISMO NÃO ESTÁ REGISTRADO, e é a única coisa frágil nesta linha.**
+  Contexto seguro é regra do NAVEGADOR, não código nosso: `http://<ip>` não é origem segura
+  pela especificação. Se funcionou, alguma condição do ambiente do dono difere do que este
+  documento supunha — aparelho, navegador, flag, ou o app já instalado a partir de uma origem
+  segura anterior. **Ninguém mediu qual.** Registrado assim de propósito: no dia em que parar
+  de funcionar, é aqui que se procura, e a resposta "mas funcionava" não vai bastar.
+  ✅ **O que continua verdade, e não é a mesma coisa:** a tela **explica** a recusa quando ela
+  acontece, em vez de falhar calada — são quatro frases diferentes, uma por motivo. E os
+  caminhos que sempre funcionam continuam sendo `localhost` na própria máquina e o túnel
+  HTTPS. ⚠️ **Instalar como PWA pelo IP continua fora** — é o item acima, e ele não foi
+  medido junto. ⚠️ **E no iPhone há uma segunda condição**: push em PWA só funciona com o app
   **adicionado à tela de início** — fora dela o navegador expõe a API e simplesmente nunca
   concede a permissão. A tela também diz isso, com uma frase própria.
 - ⚠️ **BUSCAR SEM ACENTO.** Procurar `coracao` **não** acha "coração", e procurar `coração`
@@ -571,9 +580,16 @@ Mais abaixo há **"ativar neste aparelho"**. Ele só aparece se o servidor tiver
 configurada (veja abaixo); sem chave, a seção diz que a função está indisponível — **não é
 erro**, é o estado normal de quem não configurou.
 
-⚠️ **Onde isso FUNCIONA, e a ressalva é grande:** push exige **contexto seguro**. Pelo
-`http://192.168.0.83:5173` da rede local **não vai funcionar** — a tela vai dizer, com todas
-as letras, que o endereço não é seguro. Os caminhos que funcionam:
+⚠️ **Onde isso funciona.** ~~Pelo `http://192.168.0.83:5173` da rede local **não vai
+funcionar**.~~ ✅ **Medido pelo dono em 2026-09-18: pela rede local funcionou** — ver o §1.
+⚠️⚠️ **O MECANISMO NÃO ESTÁ REGISTRADO, e é a única coisa frágil nesta linha.**
+  Contexto seguro é regra do NAVEGADOR, não código nosso: `http://<ip>` não é origem segura
+  pela especificação. Se funcionou, alguma condição do ambiente do dono difere do que este
+  documento supunha — aparelho, navegador, flag, ou o app já instalado a partir de uma origem
+  segura anterior. **Ninguém mediu qual.** Registrado assim de propósito: no dia em que parar
+  de funcionar, é aqui que se procura, e a resposta "mas funcionava" não vai bastar.
+
+Os caminhos que **sempre** funcionam, medidos desde a Tarefa 36b:
 
 - **`http://localhost:5173` na sua própria máquina** — é o caminho mais rápido para ver o push
   aparecer;

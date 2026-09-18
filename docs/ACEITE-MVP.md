@@ -581,11 +581,25 @@ home."*
 
 Marque o que funcionou. O que falhar, escreva **o que você viu**, não o que acha que é.
 
-⚠️ **Antes de começar, uma coisa que muda o roteiro:** as duas metades do MVP 3 se testam em
-lugares diferentes. **Marcar leitura e o feed** funcionam no celular pelo IP da rede, como
-sempre. **Notificação não** — push exige contexto seguro (HTTPS ou `localhost`), a mesma
-limitação que impede o PWA de instalar pelo IP. Faça a parte A.1 no celular e a parte A.3 no
-`localhost` do computador (ou por um túnel HTTPS, se quiser ver no aparelho).
+⚠️ ~~**Antes de começar, uma coisa que muda o roteiro:** … **Notificação não** — push exige
+contexto seguro (HTTPS ou `localhost`) … Faça a parte A.1 no celular e a parte A.3 no
+`localhost` do computador.~~
+
+✅ **CAIU EM 2026-09-18, e foi você quem mediu:** *"push pela rede local também está ok"*.
+**O roteiro inteiro pode ser feito no celular** — A.1 e A.3 no mesmo aparelho, pelo IP da
+rede. A ressalva riscada era **previsão**, escrita a partir da regra de contexto seguro, e
+ficou aqui três MVPs com cara de fato.
+
+⚠️⚠️ **O MECANISMO NÃO ESTÁ REGISTRADO, e é a única coisa frágil nesta linha.**
+  Contexto seguro é regra do NAVEGADOR, não código nosso: `http://<ip>` não é origem segura
+  pela especificação. Se funcionou, alguma condição do ambiente do dono difere do que este
+  documento supunha — aparelho, navegador, flag, ou o app já instalado a partir de uma origem
+  segura anterior. **Ninguém mediu qual.** Registrado assim de propósito: no dia em que parar
+  de funcionar, é aqui que se procura, e a resposta "mas funcionava" não vai bastar.
+
+✅ **O que continua valendo:** a tela **explica** a recusa quando ela acontece (quatro frases,
+uma por motivo), e `localhost` e túnel HTTPS continuam sendo caminhos garantidos.
+⚠️ **Instalar como PWA pelo IP continua fora** — não foi medido junto.
 
 ### A.1 — O circuito do MVP 3, no celular
 
