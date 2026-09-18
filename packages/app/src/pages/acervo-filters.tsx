@@ -22,7 +22,15 @@ import {
 } from './highlight-colors';
 
 /**
- * OS CONTROLES DAS QUATRO DIMENSÕES DO ACERVO — o vocabulário e a marcação.
+ * OS CONTROLES DAS **CINCO** DIMENSÕES DO ACERVO — o vocabulário e a marcação.
+ *
+ * ⚠️ **A QUINTA — O TEXTO — CHEGOU NA TAREFA 38g, E ELA É A COSTURA QUE ESTE
+ * MÓDULO FOI ABERTO PARA RECEBER.** O docblock abaixo dizia, desde a Tarefa 28,
+ * que "é dentro do `collection()` que o campo de busca da Tarefa 29 entra, ao
+ * lado destes controles". Entrou — dez fatias depois, e **inteiro aqui**: o
+ * `acervo.tsx` estava em 511 linhas canônicas contra um teto de 400, e a regra
+ * 5 da 38g proibia que ele subisse uma linha. O módulo foi de **165** para
+ * **194**; a tela ficou onde estava.
  *
  * ⚠️ **MÓDULO PRÓPRIO, E A COSTURA FOI CORRIGIDA POR MEDIÇÃO.** O relatório da
  * Tarefa 28 nomeou a linha de grifo como a próxima costura do `acervo.tsx`; a
@@ -48,7 +56,8 @@ import {
  * MVP 1 ("divida **antes** de a tela crescer") com o "antes" sendo a fatia
  * seguinte, não um futuro genérico.
  *
- * Este módulo tem **165** linhas canônicas, e nenhuma delas é estado.
+ * Este módulo tem **194** linhas canônicas (165 até a Tarefa 38g), e nenhuma
+ * delas é estado.
  *
  * ⚠️ **E NÃO FOI PARA O `acervo-entries.ts`, apesar de ser lá que o assunto
  * mora — a razão é MEDIDA e é o próprio motivo daquele módulo existir.** O
@@ -222,6 +231,79 @@ export function filterGroups({
   }
 
   return groups;
+}
+
+/**
+ * ⚠️ **O `id` DO CAMPO DE TEXTO — o mesmo motivo do `<select>` de leitura.**
+ *
+ * O rótulo é VISÍVEL e associado, nunca um `aria-label` solto: um `aria-label`
+ * daria nome a quem OUVE a tela e deixaria quem VÊ sem saber o que aquele campo
+ * recorta. Um `id` fixo basta porque a tela é uma por rota.
+ */
+const TEXT_FILTER_ID = 'acervo-text';
+
+export interface TextFilterProps {
+  t: TFunction;
+  /** ⚠️ O texto CRU do campo. Quem normaliza é o `acervo-entries.ts`. */
+  text: string;
+  onText: (value: string) => void;
+}
+
+/**
+ * A QUINTA DIMENSÃO — O TEXTO (Tarefa 38g), ao lado das outras quatro.
+ *
+ * ⚠️ **O CAMPO MORA AQUI, E NÃO NO `acervo.tsx`, POR MEDIÇÃO.** Aquela tela
+ * está em **511** linhas pelo contador canônico do docblock dela e o teto do
+ * projeto é 400 — ela já passou, e a regra 5 desta fatia diz que ela não pode
+ * subir **uma** linha. Este módulo existe exatamente para isto: o docblock do
+ * `acervo.tsx` até PREVIA o campo por escrito ("é aqui que o campo de busca da
+ * Tarefa 29 entra"), previu o lugar e não previu o tamanho.
+ *
+ * ⚠️ **NÃO É UM `<form>`, e é decisão — a mesma da `/busca`:** não há "enviar".
+ * O recorte é DERIVADO do que está no campo, a cada tecla, **no cliente**
+ * (decisão A: nada aqui pergunta ao servidor, então não há debounce a pagar nem
+ * espera a mostrar). Um `<form>` daria um submit por Enter que não teria o que
+ * fazer, e no celular ainda fecharia o teclado.
+ *
+ * ⚠️ **`type="search"` E NÃO `type="text"`**: o papel é `searchbox`, o teclado
+ * do celular mostra a tecla de busca, e o navegador dá o botão de limpar de
+ * graça.
+ *
+ * ⚠️ **E O RÓTULO NÃO USA O `Field` DE `packages/ui`, ao contrário da
+ * `/busca`.** O `Field` pinta o rótulo como rótulo de FORMULÁRIO
+ * (`text-sm text-content`), e aqui ele fica encostado no rótulo do `<select>`
+ * de leitura, que é `text-xs text-muted`. Dois rótulos irmãos com pesos
+ * diferentes na mesma barra de filtros é a inconsistência que ninguém vê
+ * olhando **um** dos dois. O que o `Field` entrega de verdade — `htmlFor`
+ * ligado ao `id` — está escrito aqui do mesmo jeito que o `ReadingSelect` já o
+ * escrevia, e o acusador é o `getByLabelText` da suíte, que só acha o controle
+ * se a associação existir.
+ *
+ * ⚠️ **CONTROLADO, como os outros quatro** (decisão A da Tarefa 27): nada aqui
+ * guarda estado, e quem decide se o campo EXISTE é a tela.
+ */
+export function TextFilter({ onText, t, text }: TextFilterProps): ReactNode {
+  return (
+    <div className="flex flex-col gap-1">
+      <label
+        className="text-xs font-medium text-muted"
+        htmlFor={TEXT_FILTER_ID}
+      >
+        {t('pages.acervo.filters.text.label')}
+      </label>
+      <input
+        autoComplete="off"
+        className={TEXT_INPUT_CLASS}
+        id={TEXT_FILTER_ID}
+        onChange={(event) => {
+          onText(event.target.value);
+        }}
+        placeholder={t('pages.acervo.filters.text.placeholder')}
+        type="search"
+        value={text}
+      />
+    </div>
+  );
 }
 
 /** Só o que o `<select>` de leitura precisa do plano: o id e o tema do dia. */

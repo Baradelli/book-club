@@ -1,27 +1,47 @@
 import type { HighlightResponse, NoteResponse } from '@clube/shared';
 
+import type { MessageKey } from './form-errors';
 import { HIGHLIGHT_COLORS, type HighlightColor } from './highlight-colors';
 
 /**
- * O MODELO DO ACERVO — a entrada, a ordem e as quatro dimensões de recorte.
+ * O MODELO DO ACERVO — a entrada, a ordem e as **cinco** dimensões de recorte.
  *
  * ⚠️ **MÓDULO PRÓPRIO, E O MOTIVO É MEDIDO — não é gosto por abstração.** O
  * `acervo.tsx` nasceu com **703 linhas** pelo contador canônico (o comando está
  * no docblock dele), o que o faria a maior tela do app **no commit que existe
  * justamente para encolher a segunda maior** — o `book.tsx`, de 486 para 247.
  * A lição nº 8 do MVP 1 é dividir **antes** de a tela crescer, e uma tela que
- * nasce grande já é "depois" no dia seguinte. Depois dos três cortes: **514** na
- * tela, **165** no `acervo-filters.tsx`, **113** aqui e **23** no
- * `club-names.ts` — e a tela deixou de ser a maior do app (o `free-note.tsx`
- * tem 565).
+ * nasce grande já é "depois" no dia seguinte. Depois dos três cortes, os
+ * números **colados na época** foram: 514 na tela, 165 no
+ * `acervo-filters.tsx`, 113 aqui e 23 no `club-names.ts` — e a tela deixou de
+ * ser a maior do app (o `free-note.tsx` tem 565).
+ *
+ * ⚠️ **DOIS DAQUELES QUATRO NÚMEROS ESTAVAM ERRADOS, e ficaram assim aqui até a
+ * rodada de correção da Tarefa 38g.** A 32b já os havia remedido no
+ * `acervo.tsx` ("os dois primeiros estavam desatualizados: 514 e 113") e este
+ * docblock não foi junto — os valores certos daquela época eram **511** na tela
+ * e **120** aqui.
+ *
+ * ⚠️ **ELES FICAM DATADOS EM VEZ DE CONSERTADOS EM SILÊNCIO, porque o defeito
+ * que eles registram é o próprio assunto deste parágrafo:** número copiado
+ * envelhece sozinho, e este arquivo chegou a dizer 113 e 120 para SI MESMO, no
+ * MESMO docblock, depois que a Tarefa 38g escreveu o parágrafo de baixo. Quem
+ * quiser o número de hoje roda o comando canônico (ele está no docblock do
+ * `acervo.tsx`); quem quiser o de uma fatia lê o parágrafo daquela fatia.
+ *
+ * ⚠️ **E O INVESTIMENTO SE PAGOU NA TAREFA 38g**, que acrescentou a QUINTA
+ * dimensão (o texto) a uma tela que já estava **111 linhas acima do teto de
+ * 400**: o casamento nasceu aqui (**120 → 142**), o campo no
+ * `acervo-filters.tsx` (**165 → 194**), e o `acervo.tsx` ficou nas mesmas
+ * **511**. Sem os dois vizinhos, a fatia não teria onde acontecer.
  *
  * ⚠️ **E A COSTURA NÃO FOI ESCOLHIDA PELO TAMANHO, foi pelo ASSUNTO.** O que
  * mora aqui é a parte que **não sabe o que é React**: o que é uma entrada do
- * acervo, em que ordem elas ficam, e o que cada uma das quatro dimensões
- * exclui. O que ficou na tela é apresentação — estado de requisição, linhas,
- * chips, `<select>`, `Sheet`. É a mesma partição de `paths.ts`,
- * `highlight-colors.tsx`, `form-errors.ts` e `router-link.tsx`, que já são
- * módulos neutros de `pages/`.
+ * acervo, em que ordem elas ficam, o que cada uma das cinco dimensões exclui e
+ * qual das três frases de vazio a tela diz. O que ficou na tela é apresentação
+ * — estado de requisição, linhas, chips, `<select>`, campo, `Sheet`. É a mesma
+ * partição de `paths.ts`, `highlight-colors.tsx`, `form-errors.ts` e
+ * `router-link.tsx`, que já são módulos neutros de `pages/`.
  *
  * ⚠️ **CHAMADOR ÚNICO, E ISSO É DECLARADO.** O §7.1 do
  * `docs/CONVENCOES-CODIGO.md` registra que "helper compartilhado sem segundo
@@ -31,12 +51,22 @@ import { HIGHLIGHT_COLORS, type HighlightColor } from './highlight-colors';
  * Tarefa 29 precisar recortar o mesmo acervo, ela é a segunda chamadora — e não
  * muda nada neste arquivo.
  *
- * ⚠️ **E O ACUSADOR CONTINUA SENDO O MESMO.** Nada aqui ganhou teste próprio, e
- * é deliberado: estas funções são provadas **através da tela**
- * (`__tests__/acervo.test.tsx`), com o fixture hostil do §7.2 — a ordem, o AND
- * das quatro dimensões e o que cada uma exclui são todos decidíveis no DOM. Um
- * unitário aqui seria um segundo acusador da mesma propriedade, não um a mais;
- * a extração é um MOVE, e nenhuma propriedade mudou de dono.
+ * ⚠️ **E O ACUSADOR DAS QUATRO PRIMEIRAS DIMENSÕES CONTINUA SENDO O MESMO.** A
+ * ordem, o AND das quatro e o que cada uma exclui são provados **através da
+ * tela** (`__tests__/acervo.test.tsx`), com o fixture hostil do §7.2 — todos
+ * decidíveis no DOM. Um unitário para eles seria um segundo acusador da mesma
+ * propriedade, não um a mais; a extração foi um MOVE, e nenhuma propriedade
+ * mudou de dono.
+ *
+ * ⚠️ **A QUINTA — O TEXTO (Tarefa 38g) — GANHOU UNITÁRIO PRÓPRIO, e a exceção
+ * é declarada em `__tests__/acervo-entries.test.ts`.** A regra 1 daquela fatia
+ * manda testar a função pura ANTES da tela, e os dois casos que decidem a
+ * decisão B não têm observável barata no DOM: o grifo que casa **só pelo
+ * trecho** exige um grifo de comentário VAZIO, e a anotação que casa só pelo
+ * `plainText` exige um título que contém a palavra e um `plainText` que não. O
+ * fixture da tela, escrito para a ordem e para as quatro dimensões, não os
+ * carrega — e a tela continua sendo o acusador de que a dimensão CHEGA ao DOM e
+ * COMBINA com as outras quatro.
  *
  * ⚠️ **E ELE NÃO PODE VIRAR `.tsx`, o que decidiu onde o construtor dos
  * `FilterGroup[]` foi morar.** A auditoria pediu esse construtor aqui ("é função
@@ -52,8 +82,11 @@ import { HIGHLIGHT_COLORS, type HighlightColor } from './highlight-colors';
  *
  * ⚠️ **ELE NÃO IMPORTA NENHUMA TELA**, e é isso que o mantém livre do ciclo que
  * a auditoria da Tarefa 20 mediu (uma `const` de módulo de um lendo a do outro
- * derruba a rota no import). Os únicos imports são dois TIPOS de
- * `@clube/shared` e a paleta, que é ela mesma um módulo neutro.
+ * derruba a rota no import). Os imports são dois TIPOS de `@clube/shared`, a
+ * paleta (ela mesma um módulo neutro) e — desde a Tarefa 38g — o TIPO
+ * `MessageKey` do `form-errors.ts`, que é `import type` puro, não tem valor em
+ * runtime e não sabe o que é React tampouco. A propriedade que este arquivo
+ * promete continua de pé.
  */
 
 /**
@@ -329,13 +362,112 @@ export function typeCanCarryReading(type: AcervoEntry['type'] | null): boolean {
 /** O `value` da opção "todas as leituras" do `<select>`. */
 export const EVERY_READING = 'all';
 
-/** As quatro dimensões, já normalizadas: `null` é "não recorta". */
+/**
+ * ⚠️ **O TERMO DE BUSCA — UM DONO SÓ PARA "O QUE ESTÁ ESCRITO NO CAMPO VIRA
+ * ISTO"** (Tarefa 38g).
+ *
+ * São duas normalizações e cada uma é uma decisão da fatia:
+ *
+ * - **`trim()`** — `'  '` não é uma busca, é um espaço sobrando. O corte é
+ *   sobre o termo JÁ sem as pontas, como o `MIN_TERM_LENGTH` da `/busca`;
+ * - **`toLowerCase()`** — decisão C: sem sensibilidade a maiúscula, que é o que
+ *   o `ILIKE` do servidor faz. De graça, e consistente com a `/busca`.
+ *
+ * ⚠️ **E O QUE ELE NÃO FAZ É A DECISÃO D: NÃO HÁ `normalize('NFD')` AQUI.** O
+ * acento continua significativo. Normalizar seria **grátis** no cliente — e é
+ * exatamente por isso que a ausência precisa estar escrita: o dono acabou de
+ * decidir **não** ligar o `unaccent` no Postgres (pergunta 1 do MVP 2,
+ * 2026-09-18), e um acervo que achasse "coracao" enquanto a `/busca` do clube
+ * não acha seria **duas verdades sobre a mesma pergunta**. ⚠️ **Esta é a ponta
+ * barata:** no dia em que o `unaccent` entrar no banco, é UMA linha aqui, e as
+ * duas telas se movem juntas. O acusador que fica vermelho é
+ * `⚠️ keeps the ACCENT significant…`, em `__tests__/acervo-entries.test.ts`.
+ */
+function termOf(text: string): string {
+  return text.trim().toLowerCase();
+}
+
+/**
+ * ⚠️ **OS CAMPOS QUE A PALAVRA OLHA — DECISÃO B: O MESMO QUE A `/busca` DO
+ * CLUBE OLHA.**
+ *
+ * - **na anotação, o `plainText`** — e **não** o título, embora seja o título
+ *   que a LINHA mostra como conteúdo principal. O `PrismaNoteRepository.find`
+ *   filtra `plainText` e só ele;
+ * - **no grifo, o `quote` E o `commentText`** — as duas colunas em OR, que é
+ *   literalmente o `OR: [{ quote }, { commentText }]` do
+ *   `PrismaHighlightRepository.find`.
+ *
+ * ⚠️ **O TRECHO É O QUE NINGUÉM LEMBRA, e o dono acabou de preservá-lo** (a
+ * pergunta 2 do MVP 2, 2026-09-18: "manter os dois"). Um grifo **sem
+ * comentário** guarda string **vazia** — nunca nulo, porque o `commentText` é
+ * DERIVADO do `commentDoc` no backend (ADR 0001) —, então ele só pode ser
+ * achado pelo trecho. Se o acervo casasse menos que a `/busca`, as duas telas
+ * discordariam sobre o que "achar por texto" significa, e **a que mente é a
+ * nova**.
+ *
+ * O `plainText` e o `commentText` são derivados no backend exatamente para
+ * isto: percorrer N documentos ProseMirror a cada tecla seria caro e ilegível.
+ */
+function textsOf(entry: AcervoEntry): readonly string[] {
+  return entry.type === 'HIGHLIGHT'
+    ? [entry.highlight.quote, entry.highlight.commentText]
+    : [entry.note.plainText];
+}
+
+/**
+ * A QUINTA DIMENSÃO — o casamento por texto, **no cliente** (decisão A).
+ *
+ * ⚠️ **NADA AQUI PERGUNTA AO SERVIDOR, e é o que faz o filtro custar zero
+ * requisição.** O `text` que existe no `NoteFilter`/`HighlightFilter` do
+ * backend é da `/busca` (Tarefa 29), que atravessa o CLUBE inteiro e por isso
+ * **tem** de perguntar. Aqui o acervo de UM livro já está na memória desde a
+ * carga da tela — é o mesmo modelo das outras quatro dimensões desde a Tarefa
+ * 28, e é o que faz tocar num chip (ou digitar uma letra) não virar uma ida à
+ * rede.
+ *
+ * Termo vazio **não recorta**: é "ainda não me disseram o que procurar", nunca
+ * "não achei nada".
+ */
+export function matchesText(entry: AcervoEntry, text: string): boolean {
+  const term = termOf(text);
+  if (term === '') return true;
+  return textsOf(entry).some((field) => field.toLowerCase().includes(term));
+}
+
+/**
+ * ⚠️ **QUAL DAS **TRÊS** FRASES DE VAZIO — decisão F, e são três, não duas.**
+ *
+ * "Não há nada aqui", "o filtro não achou" e "esta palavra não achou" são
+ * estados diferentes, e a pessoa faz coisas diferentes com cada um: no primeiro
+ * ela escreve, no segundo ela solta um chip, no terceiro ela troca a palavra. É
+ * a lição das Tarefas 19, 25 e 28, e o feed já a paga (decisão G da 35).
+ *
+ * ⚠️ **O ACERVO VAZIO GANHA DO TEXTO, e a ordem dos `if` é a decisão:** com o
+ * acervo sem uma linha sequer não existe o que a palavra pudesse achar, e
+ * mandar trocar o termo seria falar de uma busca que não tinha onde procurar.
+ *
+ * ⚠️ **ELE DEVOLVE UMA CHAVE, não uma frase**, e é o que o mantém neste módulo
+ * sem quebrar a promessa dele: `MessageKey` é `import type` puro, o `t()` é da
+ * tela, e a escolha fica ao lado do `filterEntries` — que é o que impede a
+ * frase e o recorte de discordarem.
+ */
+export function emptyTitleKey(hasEntries: boolean, text: string): MessageKey {
+  if (!hasEntries) return 'pages.acervo.empty.title';
+  return termOf(text) === ''
+    ? 'pages.acervo.empty.filtered'
+    : 'pages.acervo.empty.noMatch';
+}
+
+/** As cinco dimensões, já normalizadas: `null` (ou `''`) é "não recorta". */
 export interface AcervoFilter {
   /** O `value` do chip de pessoa, já derivado para um que existe. */
   author: string;
   type: AcervoEntry['type'] | null;
   color: HighlightColor | null;
   reading: string | null;
+  /** ⚠️ O texto CRU do campo — quem normaliza é o `termOf`, um dono só. */
+  text: string;
 }
 
 /**
@@ -346,8 +478,9 @@ export interface AcervoFilter {
  * armadilha nomeada da Tarefa 18.
  *
  * ⚠️ **E O RAMO `myId === null` É INALCANÇÁVEL PELO ÚNICO CHAMADOR DE HOJE, com
- * a medição colada: mutá-lo para `return false` dá 0 acusadores em 557.** O
- * `body()` do `acervo.tsx` devolve a frase de carregamento enquanto
+ * a medição colada: mutá-lo para `return false` dá 0 acusadores — 557 na Tarefa
+ * 28, e 777 na rodada de correção da 38g, que o remediu.** O `body()` do
+ * `acervo.tsx` devolve a frase de carregamento enquanto
  * `me === null`, então a lista nunca é montada sem `myId` — a garantia da Tarefa
  * 18 migrou para um mecanismo mais forte, "nada é pedido nem renderizado até o
  * `/me` chegar", que TEM acusador
@@ -377,7 +510,13 @@ export function matchesAuthor(
 }
 
 /**
- * REGRA 11 — AS QUATRO DIMENSÕES EM **AND**, sobre a lista já carregada.
+ * REGRA 11 — AS **CINCO** DIMENSÕES EM **AND**, sobre a lista já carregada.
+ *
+ * ⚠️ **A QUINTA É O TEXTO (Tarefa 38g), e o AND com as outras quatro é o ponto
+ * inteiro daquela fatia:** a frase de aceite do MVP 2 promete *"em qualquer
+ * listagem eu filtro… por texto"*, e até ali as duas metades nunca tinham
+ * coexistido numa listagem — o acervo recortava por pessoa/tipo/leitura/cor sem
+ * texto, e a `/busca` recortava por texto sem as outras quatro.
  *
  * ⚠️ **E O "AND" É HONESTO SOBRE O QUE CADA DIMENSÃO EXCLUI.** Uma dimensão com
  * valor escolhido descarta a entrada que **não carrega aquele campo**, e é a
@@ -402,6 +541,7 @@ export function filterEntries(
     if (filter.reading !== null && readingOf(entry) !== filter.reading) {
       return false;
     }
+    if (!matchesText(entry, filter.text)) return false;
     return matchesAuthor(entry, filter.author, myId);
   });
 }

@@ -316,9 +316,27 @@ comentário — e vejo a coleção de grifos do livro filtrada por cor e por pes
 listagem eu filtro por pessoa, por tipo de anotação (do dia × avulsa), por capítulo e por
 texto."*
 
-⚠️ **Dois pedaços dessa frase NÃO estão cumpridos, e estão medidos** — são as perguntas **3** e
-**4** abaixo. Eu não os escondi na entrega e não os implementei por conta própria: são decisão
-sua.
+⚠️ **Dois pedaços dessa frase NÃO estavam cumpridos, e estavam medidos** — eram as perguntas
+**3** e **4** abaixo. Eu não os escondi na entrega e não os implementei por conta própria: eram
+decisão sua.
+
+✅ **O pedaço "e por texto" foi cumprido na Tarefa 38g** (pergunta 3, respondida em 2026-09-18):
+o acervo do livro ganhou um campo de texto, e ele entra em **AND** com as outras quatro
+dimensões — pessoa, tipo, leitura e cor. É a primeira listagem do app em que as duas metades
+coexistem.
+
+⚠️ **E "em QUALQUER listagem" continua sendo uma frase mais larga do que o produto, de
+propósito.** Continuam sendo **duas telas com propósitos diferentes**, e isso é decisão sua na
+mesma resposta ("a busca do clube continua como está"):
+
+- o **acervo do livro** filtra pelas cinco dimensões — mas **dentro de um livro**;
+- a **busca do clube** (`/busca`) filtra por **texto** em qualquer livro — e **não** tem as
+  outras quatro.
+
+O que deixou de ser verdade é "as duas metades nunca coexistem". O que continua é "nem toda
+listagem tem as cinco": a busca do clube não tem, e não vai ter enquanto a resposta for esta.
+⚠️ **O pedaço "por capítulo" continua em aberto** — é a pergunta 4, e ela virou as fatias 38h e
+38i.
 
 ## O que mudou desde o MVP 1, em uma linha cada
 
@@ -505,6 +523,28 @@ recursos** — port, fake, UseCase, repositório Prisma, borda e integração. F
 ⚠️ **O que a fatia NÃO pode mudar:** o acervo recorta no **cliente** o que já carregou (decisão
 registrada da Tarefa 28, e é o que faz o toque no chip custar zero requisição). O campo de texto
 segue o mesmo modelo — nada de perguntar ao servidor a cada tecla.
+
+**✅ ENTREGUE — Tarefa 38g.** ~~as quatro dimensões e o texto **nunca coexistem** numa
+listagem~~ → **coexistem no acervo do livro**, em AND, e há teste para cada par.
+
+⚠️ **E UMA CORREÇÃO AO "JÁ ESTÁ MEDIDO, FALTA SÓ O CAMPO NA TELA": estava CERTO sobre o fato e
+ERRADO sobre a razão.** O filtro `text` existe mesmo em todas as camadas dos dois recursos — e
+**nenhuma delas é usada aqui**. O acervo não pergunta ao servidor: ele carrega as notas e os
+grifos do livro **uma vez** e recorta no cliente. O `text` do backend é da `/busca`. A fatia
+continuou barata, mas por outro motivo — o casamento é uma função pura sobre o que já está na
+memória (`matchesText`, em `packages/app/src/pages/acervo-entries.ts`).
+
+⚠️ **O QUE CONTINUA NÃO SENDO VERDADE, e é decisão sua:** *"em **qualquer** listagem"*. São duas
+telas com propósitos diferentes — o acervo tem as cinco dimensões **num livro**, a `/busca` tem
+só o texto **no clube inteiro**. A frase de aceite é mais larga que o produto, e fica assim
+enquanto a resposta desta pergunta for "a busca do clube continua como está".
+
+⚠️ **E o que o campo casa é exatamente o que a `/busca` casa** (sua resposta à pergunta 2 desta
+mesma rodada): na anotação, o texto escrito (`plainText`) — **nunca** o título; no grifo, o
+**trecho** E o comentário. Sem sensibilidade a maiúscula e **com** sensibilidade a acento, como
+o `ILIKE` do Postgres — normalizar o acento no cliente seria grátis, e seria a única tela do app
+achando "coracao" onde a busca do clube não acha. No dia em que você mandar ligar o `unaccent`
+(pergunta 1 desta rodada, respondida "não"), as duas se movem juntas.
 
 ### 4. ⚠️ "Por capítulo" não existe para grifo, em lugar nenhum
 

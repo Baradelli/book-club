@@ -3064,7 +3064,7 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       para isso**; fica aqui como dívida nomeada. O `windowMinutesFromEnv` em si é testado no
       `dispatch-script.test.ts`; o que falta é o fio, não a peça._
 
-- [ ] **38g** — Um campo de texto no acervo do livro. ⚠️ **FATIA GERADA PELA RESPOSTA DO DONO
+- [x] **38g** — Um campo de texto no acervo do livro. ⚠️ **FATIA GERADA PELA RESPOSTA DO DONO
       à pergunta 3 do MVP 2** (2026-09-18). → `docs/ACEITE-MVP.md`, MVP 2, pergunta 3.
       _⚠️ **A frase de aceite do MVP 2 promete "em qualquer listagem eu filtro… por texto", e
       isso NUNCA foi verdade:** o acervo filtra por pessoa/tipo/leitura/cor **sem texto**, e a
@@ -3079,6 +3079,26 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       _⚠️ **Contador de linhas do `acervo.tsx`:** as três fatias desta rodada mexem na MESMA
       barra de filtro. Se passar de 400 pelo contador canônico, corta antes de crescer — é a
       lição nº 8 do MVP 1._
+      _✅ **ENTREGUE (2026-09-18).** O acervo filtra pelas **cinco** dimensões em AND. O
+      casamento é função pura (`matchesText`, em `acervo-entries.ts`), com unitário próprio
+      escrito ANTES da tela; o campo é o `TextFilter` do `acervo-filters.tsx`. Contagens:
+      **587** shared · **195** ui · **1943** backend · **777** app (+20: 15 unitários e 5 de
+      tela). Chunk de entrada **432.726 B** (teto 450.000), precache 16 / 899,54 KiB._
+      _DUAS CORREÇÕES AO QUE ESTAVA ESCRITO AQUI, as duas medidas:_
+      _1. O **“já está medido, falta só o campo na tela”** estava CERTO sobre o fato e ERRADO
+      sobre a razão: nenhuma daquelas camadas é usada aqui. O acervo **não pergunta ao
+      servidor** — ele carrega as notas e os grifos do livro uma vez e recorta no cliente, e o
+      `text` do backend é da `/busca`. A fatia continuou barata, por outro motivo._
+      _2. O **“o `filter-bar.tsx` do `ui` já é o lugar”** não era: o `FilterBar` é agnóstico de
+      dimensão e desenha GRUPOS DE CHIPS, um campo de texto não é um chip, e `packages/ui` não
+      traduz (decisão B da Tarefa 13). O campo nasceu no `acervo-filters.tsx`, onde o
+      vocabulário e a marcação dos outros quatro controles já moram — **zero linha nova em
+      `packages/ui`**._
+      _**O `acervo.tsx` NÃO cresceu: 511 antes, 511 depois**, pelo contador canônico. Os
+      vizinhos absorveram a fatia (`acervo-filters.tsx` 165 → 194, `acervo-entries.ts` 120 →
+      142), e o saldo da tela saiu de dois lugares: a escolha entre as TRÊS frases de vazio
+      virou função pura, e o “Você × o nome” — que estava escrito DUAS vezes no arquivo, uma
+      por metade da lista — virou o `authorLabel`, um dono só._
 
 - [ ] **38h** — A faixa de página no acervo (`p. 40–60`). ⚠️ **FATIA GERADA PELA RESPOSTA DO
       DONO à pergunta 4 do MVP 2, opção (c)** (2026-09-18).

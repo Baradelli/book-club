@@ -636,6 +636,24 @@ async function chooseReading(value: string): Promise<void> {
   });
 }
 
+/**
+ * O CAMPO DE TEXTO, pelo `<label>` associado — a quinta dimensão (Tarefa 38g).
+ *
+ * ⚠️ Como o `<select>` de leitura, ele é achado pelo RÓTULO e não por um
+ * `aria-label`: o `getByLabelText` só acha o controle se a associação existir de
+ * verdade, e um rótulo visível é o que deixa quem VÊ a tela saber o que aquele
+ * campo recorta.
+ */
+function textField(): HTMLInputElement {
+  return screen.getByLabelText(FILTERS.text.label) as HTMLInputElement;
+}
+
+async function typeText(value: string): Promise<void> {
+  await act(async () => {
+    fireEvent.change(textField(), { target: { value } });
+  });
+}
+
 function acervoSource(): string {
   return readFileSync(resolve(__dirname, '..', 'acervo.tsx'), 'utf8');
 }
@@ -2133,10 +2151,20 @@ describe('⚠️ THE FOUR DIMENSIONS OF THE FILTER (rules 6 to 12)', () => {
     await waitFor(() => {
       expect(screen.queryByText(pt.pages.acervo.empty.title)).not.toBeNull();
     });
-    // Nem chip, nem `<select>`: filtrar o vazio é oferecer uma escolha que não
-    // muda nada.
+    /*
+      Nem chip, nem `<select>`, nem campo de texto: filtrar o vazio é oferecer
+      uma escolha que não muda nada.
+
+      ⚠️ **E É POR ISSO QUE O RAMO "acervo vazio ganha do texto" do
+      `emptyTitleKey` É INALCANÇÁVEL PELA TELA** (§7.10, com o endereço da
+      prova): sem campo não há como haver termo, então `text` é sempre `''`
+      aqui. A ordem dos dois `if` daquela função é decidível no unitário, e é lá
+      que ela tem acusador — `acervo-entries.test.ts`,
+      `says "there is nothing here" when the collection itself is empty`.
+    */
     expect(screen.queryAllByRole('group')).toHaveLength(0);
     expect(screen.queryByLabelText(FILTERS.reading.label)).toBeNull();
+    expect(screen.queryByLabelText(FILTERS.text.label)).toBeNull();
     expectNoGuilt();
   });
 
@@ -2150,8 +2178,192 @@ describe('⚠️ THE FOUR DIMENSIONS OF THE FILTER (rules 6 to 12)', () => {
     await waitForRows(10);
 
     expect(screen.queryByLabelText(FILTERS.reading.label)).toBeNull();
-    // Os três grupos de chips continuam: eles não dependem do plano.
+    // Os três grupos de chips continuam, e o campo de texto também: nenhum
+    // deles depende do plano.
     expect(screen.getAllByRole('group')).toHaveLength(3);
+    expect(screen.queryByLabelText(FILTERS.text.label)).not.toBeNull();
+    expectNoGuilt();
+  });
+});
+
+/**
+ * ⚠️ **A QUINTA DIMENSÃO — O TEXTO (Tarefa 38g).**
+ *
+ * A frase de aceite do MVP 2 promete *"em qualquer listagem eu filtro… por
+ * texto"*, e isso **nunca tinha sido verdade**: este acervo recortava por
+ * pessoa/tipo/leitura/cor **sem texto**, e a `/busca` recortava por texto no
+ * clube inteiro **sem as outras quatro**. As duas metades nunca tinham
+ * coexistido numa listagem — e é isso, e não o campo, que esta fatia entrega.
+ *
+ * ⚠️ **O QUE O TEXTO CASA ESTÁ PROVADO NO UNITÁRIO**
+ * (`acervo-entries.test.ts`): o trecho sozinho, o comentário sozinho, a
+ * maiúscula e o acento. O que se prova AQUI é o que só a tela decide — que o
+ * campo existe com rótulo associado, que ele recorta **sem ir ao servidor**,
+ * que ele entra em AND com as outras quatro, e que o vazio dele tem frase
+ * própria.
+ */
+describe('⚠️ THE FIFTH DIMENSION OF THE FILTER — TEXT (task 38g)', () => {
+  it('⚠️ draws a searchbox with a VISIBLE label, beside the other four controls', async () => {
+    await renderAcervo();
+    await waitForRows(10);
+
+    const field = textField();
+    expect(field.tagName).toBe('INPUT');
+    /*
+      `type="search"` e não `type="text"`: o papel é `searchbox`, o teclado do
+      celular mostra a tecla de busca, e o navegador dá o botão de limpar de
+      graça. É o mesmo do campo da `/busca`.
+    */
+    expect(field.getAttribute('type')).toBe('search');
+    expect(field.getAttribute('aria-label')).toBeNull();
+    expect(field.getAttribute('placeholder')).toBe(FILTERS.text.placeholder);
+    // ⚠️ E ele NÃO é um grupo de chips: os três grupos continuam três.
+    expect(screen.getAllByRole('group')).toHaveLength(3);
+    expectNoGuilt();
+  });
+
+  it('⚠️ cuts the collection by TEXT, without asking the server again', async () => {
+    const calls = await renderAcervo();
+    await waitForRows(10);
+
+    /*
+      "porta" casa TRÊS entradas por TRÊS campos diferentes — é o que faz este
+      termo valer mais que um que casasse só um: o COMENTÁRIO do meu grifo
+      ("...quando a porta se fechou"), o TRECHO do grifo dela ("Uma porta
+      redonda...") e o `plainText` da anotação do dia dela.
+    */
+    await typeText('porta');
+    expect(labelsOnScreen()).toEqual([QUOTES[0], QUOTES[1], NOTE_TITLES[3]]);
+
+    // E apagar devolve as dez, na mesma ordem: o recorte é derivado, nunca
+    // destrutivo.
+    await typeText('');
+    expect(labelsOnScreen()).toEqual([...ORDERED_LABELS]);
+
+    /*
+      ⚠️ **NENHUMA REQUISIÇÃO NOVA — é a decisão A da fatia.** As duas listagens
+      aceitam `text` desde a Tarefa 29, e usá-lo aqui faria cada TECLA virar uma
+      ida ao servidor (e exigiria debounce, e um estado de espera, e o acervo
+      inteiro deixaria de estar na memória). Sem esta asserção, a implementação
+      que pergunta ao servidor passaria em todas as de cima.
+    */
+    expect(requestsTo(calls, '/notes')).toHaveLength(1);
+    expect(requestsTo(calls, '/highlights?')).toHaveLength(1);
+    expectNoGuilt();
+  });
+
+  it('⚠️ finds a highlight by its QUOTE alone, and another by its COMMENT alone (rule 2)', async () => {
+    await renderAcervo();
+    await waitForRows(10);
+
+    /*
+      ⚠️ **O GRIFO QUE CASA SÓ PELO TRECHO É O QUE NINGUÉM ESCREVE** — o do
+      fixture não tem comentário nenhum (`commentDoc: null`, `commentText: ''`),
+      e é exatamente o caso que o dono preservou na pergunta 2 do MVP 2. Um
+      casamento que olhasse só o comentário o perderia em silêncio.
+    */
+    await typeText('carneiro');
+    expect(labelsOnScreen()).toEqual([NO_COMMENT_QUOTE]);
+    expect(paragraphsIn(rowOf(NO_COMMENT_QUOTE))).toHaveLength(1);
+
+    // E o outro lado: "paragrafo" só existe no COMENTÁRIO do grifo dela — o
+    // trecho dele fala de porta e colina.
+    await typeText('paragrafo');
+    expect(labelsOnScreen()).toEqual([NO_PAGE_QUOTE]);
+
+    /*
+      ⚠️ **E O TÍTULO DA ANOTAÇÃO NÃO CASA (decisão B).** "pagina" está no
+      título "Uma ideia da pagina 112" e em nenhum `plainText`, trecho ou
+      comentário — a `/busca` do clube filtra `plainText` e só ele, e um acervo
+      que achasse o título acharia aqui o que ela não acha lá.
+    */
+    await typeText('pagina');
+    expect(
+      screen.queryByRole('list', { name: pt.pages.acervo.label }),
+    ).toBeNull();
+    expectNoGuilt();
+  });
+
+  it('⚠️ combines the TEXT with each of the other four dimensions, with AND (rule 3)', async () => {
+    await renderAcervo();
+    await waitForRows(10);
+    await typeText('porta');
+
+    // PESSOA ∧ texto — e a pessoa sozinha mostraria CINCO.
+    await press(chip(FILTERS.person.mine));
+    expect(labelsOnScreen()).toEqual([QUOTES[0]]);
+    await typeText('');
+    expect(labelsOnScreen()).toEqual(MY_LABELS);
+
+    // TIPO ∧ texto — e o tipo sozinho mostraria os CINCO grifos.
+    await press(chip(EVERYONE));
+    await press(chip(KIND.highlight));
+    await typeText('porta');
+    expect(labelsOnScreen()).toEqual([QUOTES[0], QUOTES[1]]);
+    await typeText('');
+    expect(labelsOnScreen()).toEqual(HIGHLIGHT_LABELS);
+
+    // COR ∧ texto — e a cor sozinha mostraria os TRÊS amarelos.
+    await press(chip(COLOR_NAMES.yellow));
+    expect(labelsOnScreen()).toEqual(YELLOW_LABELS);
+    await typeText('porta');
+    expect(labelsOnScreen()).toEqual([QUOTES[0], QUOTES[1]]);
+
+    /*
+      LEITURA ∧ texto — e é o par mais forte, porque a leitura sozinha mostra
+      DUAS e o texto a esvazia: nenhuma das duas anotações daquele dia diz
+      "porta". O tipo volta ao neutro primeiro, que é o que faz a cor e a
+      leitura serem descartadas (regra 9) e o `<select>` reaparecer.
+    */
+    await press(chip(ALL_TYPES));
+    await typeText('');
+    await chooseReading(READING_TWO);
+    expect(labelsOnScreen()).toEqual([NOTE_TITLES[1], NOTE_TITLES[2]]);
+    await typeText('porta');
+    expect(
+      screen.queryByRole('list', { name: pt.pages.acervo.label }),
+    ).toBeNull();
+
+    // E a LEITURA em que ela cabe: uma linha, e é a anotação do dia dela.
+    await chooseReading(READING_ONE);
+    expect(labelsOnScreen()).toEqual([NOTE_TITLES[3]]);
+    expectNoGuilt();
+  });
+
+  it('⚠️ has its OWN empty state for a word that found nothing (decision F)', async () => {
+    await renderAcervo();
+    await waitForRows(10);
+
+    /*
+      ⚠️ **TRÊS ESTADOS DE VAZIO, E NENHUM DIZ O QUE O OUTRO DIZ.** "Não há
+      nada aqui" manda escrever, "nada com este filtro" manda soltar um chip, e
+      este manda trocar a palavra — a pessoa faz coisas diferentes com cada um,
+      e é a lição das Tarefas 19, 25 e 28.
+    */
+    await typeText('esmeralda');
+    expect(
+      screen.queryByRole('list', { name: pt.pages.acervo.label }),
+    ).toBeNull();
+    expect(screen.queryByText(pt.pages.acervo.empty.noMatch)).not.toBeNull();
+    expect(screen.queryByText(pt.pages.acervo.empty.filtered)).toBeNull();
+    expect(screen.queryByText(pt.pages.acervo.empty.title)).toBeNull();
+    expect(screen.queryByText(pt.pages.acervo.empty.description)).toBeNull();
+    expectNoGuilt();
+
+    /*
+      ⚠️ **E A PALAVRA GANHA DO CHIP quando os dois estão valendo**: a Zeca não
+      escreveu nada, mas com um termo no campo a frase que ajuda é a da palavra
+      — mandar soltar um chip enquanto há um termo escrito é mandar consertar o
+      que não está errado.
+    */
+    await press(chip(personChip('Zeca')));
+    expect(screen.queryByText(pt.pages.acervo.empty.noMatch)).not.toBeNull();
+
+    // Apagado o termo, volta a ser o vazio do FILTRO — o chip continua aceso.
+    await typeText('   ');
+    expect(screen.queryByText(pt.pages.acervo.empty.filtered)).not.toBeNull();
+    expect(screen.queryByText(pt.pages.acervo.empty.noMatch)).toBeNull();
+    expect(pressedIn(FILTERS.person.label)).toEqual([personChip('Zeca')]);
     expectNoGuilt();
   });
 });
@@ -2205,10 +2417,21 @@ describe('the source of the collection screen (rules 6, 18)', () => {
 
     expect(red).toHaveLength(1);
     expect(red[0]).toContain('text-danger');
-    // O lado positivo do par: o arquivo lido é o certo (um arquivo VAZIO
-    // passaria calado — §7.4 escrito como varredura de fonte).
+    /*
+      O lado positivo do par: o arquivo lido é o certo (um arquivo VAZIO
+      passaria calado — §7.4 escrito como varredura de fonte).
+
+      ⚠️ **A SENTINELA MUDOU NA TAREFA 38g, e o motivo é que a antiga saiu do
+      arquivo.** Era `pages.acervo.empty.filtered`; a fatia do texto fez a
+      ESCOLHA entre as três frases de vazio virar função pura
+      (`emptyTitleKey`, em `acervo-entries.ts`, com unitário próprio), e as
+      três chaves foram junto. `pages.acervo.empty.description` continua
+      escrita aqui — é a única das quatro que não é escolha, e por isso ficou
+      na tela. A sentinela é sobre o ARQUIVO ter sido lido, não sobre qual
+      chave é.
+    */
     expect(stripComments(acervoSource())).toContain(
-      'pages.acervo.empty.filtered',
+      'pages.acervo.empty.description',
     );
   });
 });

@@ -29,6 +29,7 @@ import {
   ALL_SCOPE,
   colorFromChipValue,
   COMMENT_EXCERPT_LENGTH,
+  emptyTitleKey,
   EVERY_READING,
   EVERY_TYPE,
   excerptOf,
@@ -48,6 +49,7 @@ import {
   filterGroups,
   type PlanDay,
   ReadingSelect,
+  TextFilter,
 } from './acervo-filters';
 import { Notice, Screen, TEXT_LINK_CLASS } from './chrome';
 import {
@@ -79,7 +81,22 @@ import { highlightNewPath, highlightPath } from './paths';
  * inconsistências visíveis ao dono: "Anotações" listava na própria tela do
  * livro e "Grifos" navegava, e só a metade das anotações dizia o NOME de quem
  * escreveu. Agora é uma lista, com o tipo explícito em cada linha (ADR 0004: o
- * grifo **não** é um tipo de anotação) e quatro dimensões de recorte.
+ * grifo **não** é um tipo de anotação) e **cinco** dimensões de recorte.
+ *
+ * ⚠️ **A QUINTA É O TEXTO, e ela chegou na Tarefa 38g — dez fatias depois.** A
+ * frase de aceite do MVP 2 promete *"em qualquer listagem eu filtro… por
+ * texto"*, e isso **nunca tinha sido verdade**: esta tela recortava por
+ * pessoa/tipo/leitura/cor **sem texto**, e a `/busca` (Tarefa 29) recortava por
+ * texto no clube inteiro **sem as outras quatro**. As duas metades nunca tinham
+ * coexistido numa listagem, e é isso — não o campo — que aquela fatia entrega.
+ *
+ * ⚠️ **E O RECORTE POR TEXTO TAMBÉM É NO CLIENTE** (decisão A da 38g): o
+ * `text` que existe no `NoteFilter`/`HighlightFilter` do backend é da `/busca`,
+ * que atravessa o CLUBE e por isso **tem** de perguntar. Aqui o acervo de um
+ * livro já está na memória, então digitar uma letra custa **zero** requisição —
+ * e não há debounce a pagar nem espera a mostrar. O casamento mora no
+ * `acervo-entries.ts` (`matchesText`) e o campo no `acervo-filters.tsx`
+ * (`TextFilter`); esta tela só guarda o estado e amarra os dois.
  *
  * ⚠️ **O NÚMERO DE LINHAS VEM DE UM COMANDO, e é o único do projeto** — a
  * auditoria da Tarefa 25 achou **três** contagens diferentes para o mesmo
@@ -101,10 +118,18 @@ import { highlightNewPath, highlightPath } from './paths';
  *
  * ```
  * acervo.tsx          511   a tela: estado de requisição, linhas, orquestração
- * acervo-filters.tsx  165   o vocabulário e a marcação dos quatro controles
- * acervo-entries.ts   120   o modelo: entrada, ordem, o que cada dimensão exclui
+ * acervo-filters.tsx  194   o vocabulário e a marcação dos CINCO controles
+ * acervo-entries.ts   142   o modelo: entrada, ordem, o que cada dimensão exclui
  * club-names.ts        23   `userId` → nome, dividido com o `book.tsx`
  * ```
+ *
+ * ⚠️ **A TAREFA 38g ACRESCENTOU UMA DIMENSÃO E A TELA FICOU EM 511 — remedido,
+ * não estimado.** A regra 5 daquela fatia proibia subir **uma** linha, e o
+ * arquivo já estava 111 acima do teto de 400. O saldo saiu de três lugares: o
+ * campo e o casamento nasceram nos vizinhos (é para isso que eles existem), a
+ * escolha entre as três frases de vazio virou função pura no
+ * `acervo-entries.ts`, e o "Você × o nome" — que estava escrito DUAS vezes
+ * aqui, uma por metade da lista — virou o `authorLabel`, um dono só.
  *
  * ⚠️ **OS DOIS PRIMEIROS NÚMEROS ESTAVAM DESATUALIZADOS (514 e 113), e foram
  * remedidos na Tarefa 32b.** Eles ficaram para trás na Tarefa 29 (a busca), e
@@ -123,6 +148,13 @@ import { highlightNewPath, highlightPath } from './paths';
  * lugar exato onde o campo de busca da Tarefa 29 entra. Cortei o `collection()`
  * (146 → **98**) e deixei o card, que é o menor e não é o que a 29 cresce.
  *
+ * ⚠️ **E A PREVISÃO SE CUMPRIU NA 38g — no lugar certo e pelo motivo errado.**
+ * O campo entrou de fato dentro do `collection()`, ao lado dos outros
+ * controles, exatamente como este parágrafo dizia. O que ele não previu foi o
+ * TAMANHO: quando o campo chegou, a tela já estava em 511 contra um teto de
+ * 400, e a fatia só coube porque o campo e o casamento nasceram nos vizinhos.
+ * Prever o lugar não é prever o custo.
+ *
  * ⚠️ **A COSTURA QUE FICA REGISTRADA E NÃO CORTADA:** o card de grifo (63
  * linhas) tem quatro dependências da tela — `t`, o nome de quem escreveu, o
  * `bookId` e o `setConfirming`. Ele é fatia própria, com desenho de props, e
@@ -135,7 +167,7 @@ import { highlightNewPath, highlightPath } from './paths';
  *
  * ⚠️ **O FILTRO É NAVEGAÇÃO, NÃO PERMISSÃO** —
  * `docs/adr/0002-visibilidade-total-no-clube.md`. Dentro do clube não existe
- * conteúdo privado: as quatro dimensões olham o MESMO acervo, e nenhuma esconde
+ * conteúdo privado: as cinco dimensões olham o MESMO acervo, e nenhuma esconde
  * nada de ninguém. Nunca rotular como privacidade, nunca cadeado. O que muda
  * entre "meu" e "dela" é **affordance**, não visibilidade — o que a outra
  * pessoa escreveu aparece inteiro.
@@ -253,6 +285,18 @@ export function AcervoPage() {
   /** O `value` da opção do `<select>` — 'all' ou um `planItemId`. */
   const [readingScope, setReadingScope] = useState<string>(EVERY_READING);
   const [color, setColor] = useState<HighlightColor | null>(null);
+  /**
+   * ⚠️ **A QUINTA DIMENSÃO — o texto CRU do campo (Tarefa 38g).**
+   *
+   * Cru de propósito: quem normaliza (as pontas e a maiúscula) é o `termOf` do
+   * `acervo-entries.ts`, um dono só. Guardar aqui o valor já aparado faria o
+   * campo perder o espaço no meio de duas palavras enquanto se digita.
+   *
+   * ⚠️ E ele **não** tem debounce, ao contrário do campo da `/busca`: o recorte
+   * é no CLIENTE (decisão A), sobre o acervo que já está na memória, então não
+   * há requisição a poupar nem espera a mostrar.
+   */
+  const [text, setText] = useState('');
   /** O id do grifo que a confirmação de arquivamento está segurando. */
   const [confirming, setConfirming] = useState<string | null>(null);
   const [archiveFailed, setArchiveFailed] = useState(false);
@@ -444,21 +488,34 @@ export function AcervoPage() {
    * A diferença visual entre as duas é o ADR 0004 visível: um grifo não se
    * parece com uma anotação porque não é uma anotação.
    */
+  /**
+   * REGRA 3 — AUTORIA EM TEXTO, e **uma** decisão para as duas metades.
+   *
+   * "Você" ganha do nome quando a linha é minha: eu não me leio pelo nome numa
+   * lista em que também estão os outros. E o genérico entra quando a tela não
+   * conhece as pessoas (o `/members` que falhou).
+   *
+   * ⚠️ **ELA VIROU FUNÇÃO NA TAREFA 38g, e o motivo é o mesmo da decisão G da
+   * 27:** esta expressão estava escrita DUAS vezes neste arquivo — uma na linha
+   * de anotação, outra na de grifo —, que é exatamente a forma pela qual as
+   * duas metades voltaram a discordar sobre o nome da mesma pessoa na Tarefa
+   * 27. O `nameOfWriter` já era um dono só; o "Você × o nome" não era.
+   */
+  function authorLabel(mine: boolean, writerName: string | null): string {
+    return mine
+      ? t('pages.acervo.item.author.you')
+      : (writerName ?? t('pages.acervo.item.author.other'));
+  }
+
   function noteRow(entry: NoteEntry, bookIdOfScreen: string): ReactNode {
     const { note } = entry;
     const mine = note.userId === myId;
-    const writerName = nameOfWriter(note.userId, me, memberNames);
     /*
-      REGRA 3 — autoria em TEXTO, não só na cor do avatar. O avatar vai sem
-      `label` de propósito: o nome já está escrito ao lado, e um `aria-label`
-      igual faria o leitor de tela repetir.
-
-      "Você" ganha do nome quando a anotação é minha: eu não me leio pelo nome
-      numa lista em que também estão os outros.
+      O avatar vai sem `label` de propósito: o nome já está escrito ao lado, e
+      um `aria-label` igual faria o leitor de tela repetir.
     */
-    const author = mine
-      ? t('pages.acervo.item.author.you')
-      : (writerName ?? t('pages.acervo.item.author.other'));
+    const writerName = nameOfWriter(note.userId, me, memberNames);
+    const author = authorLabel(mine, writerName);
     const excerpt = excerptOf(note.plainText, NOTE_EXCERPT_LENGTH);
 
     return (
@@ -523,11 +580,7 @@ export function AcervoPage() {
             ) : null}
             {/* REGRA 3 — o MESMO `nameOfWriter` da anotação (decisão G). */}
             <PersonAvatar id={highlight.userId} name={writerName} size="sm" />
-            <span>
-              {mine
-                ? t('pages.acervo.item.author.you')
-                : (writerName ?? t('pages.acervo.item.author.other'))}
-            </span>
+            <span>{authorLabel(mine, writerName)}</span>
           </div>
 
           <p className="text-content">
@@ -653,6 +706,13 @@ export function AcervoPage() {
      * reset roda em TODO toque de tipo). Era código morto com um docblock
      * afirmando que ele era o dono único — a forma do §7.4 que esta sessão já
      * pegou no `isRetriable`.
+     *
+     * ⚠️ **REMEDIDO na rodada de correção da Tarefa 38g, na direção de hoje:**
+     * reintroduzir `color: colorApplies ? color : null` aqui dá **0 acusadores
+     * em 777**. Os dois escritos continuam indistinguíveis; o que envelheceu era
+     * só o denominador (557 era o tamanho da suíte do app na Tarefa 28), e um
+     * número velho o bastante faz o próximo leitor desconfiar da afirmação que
+     * está certa.
      */
     const typeFilter = typeFromChipValue(typeScope);
     const colorApplies = typeCanIncludeHighlight(typeFilter);
@@ -679,6 +739,7 @@ export function AcervoPage() {
         type: typeFilter,
         color,
         reading: selectedReading === EVERY_READING ? null : selectedReading,
+        text,
       },
       myId,
     );
@@ -693,9 +754,24 @@ export function AcervoPage() {
      *
      * ⚠️ **E O CONSTRUTOR MORA EM `acervo-filters.tsx`, por medição.** Este
      * `collection()` tinha **146** linhas — o dobro do card de grifo (63) —, e é
-     * aqui que o campo de busca da Tarefa 29 entra. O docblock daquele módulo
-     * tem a conta por função e explica por que ele não pôde ir para o
-     * `acervo-entries.ts` (o `FilterOption.start` é `ReactNode`).
+     * aqui que o campo de texto mora. O docblock daquele módulo tem a conta por
+     * função e explica por que ele não pôde ir para o `acervo-entries.ts` (o
+     * `FilterOption.start` é `ReactNode`).
+     *
+     * ⚠️ **ESTE PARÁGRAFO DIZIA "é aqui que o campo de busca da Tarefa 29
+     * ENTRA", no futuro — e o campo já entrou.** Ele é o `<TextFilter/>`,
+     * algumas linhas abaixo, neste mesmo `collection()`, e veio da **Tarefa
+     * 38g**, não da 29: a 29 construiu a `/busca` do CLUBE, em tela própria, e
+     * a 38g é que trouxe o texto para cá.
+     *
+     * ⚠️ **A PREVISÃO ESTAVA ESCRITA EM TRÊS LUGARES, e esta foi a que ficou
+     * para trás — dentro da função onde o campo vive.** As outras duas (o
+     * docblock do topo e o do `acervo-filters.tsx`) foram corrigidas na entrega
+     * da 38g; esta sobrou, e é o pior lugar possível para uma promessa já
+     * cumprida: quem lê o `collection()` lia que o campo ainda vai entrar, ao
+     * lado do campo. Achado MÉDIO da auditoria da 38g, e é a forma exata que
+     * este repositório audita — duas verdades sobre a mesma coisa, uma delas
+     * no futuro.
      *
      * ⚠️ **A DERIVAÇÃO DO QUE ESTÁ ACESO CONTINUA AQUI, e é regra 12:** a tela
      * precisa do MESMO valor para recortar a lista, e dois lugares calculando
@@ -723,8 +799,9 @@ export function AcervoPage() {
           ⚠️ **ESTE É O ÚNICO DONO DA REGRA, e é o que o recorte NÃO repete**: os
           booleanos `colorApplies`/`readingApplies` decidem se o controle EXISTE;
           estas duas linhas decidem se a escolha SOBREVIVE. Repetir a condição no
-          `filterEntries` foi medido como código morto (0 acusadores em 557) e
-          saiu.
+          `filterEntries` foi medido como código morto e saiu — 0 acusadores em
+          557 na Tarefa 28, e 0 em 777 quando a rodada de correção da 38g
+          remediu.
 
           ⚠️ **E A LINHA DA LEITURA É O CONSERTO DA RODADA:** ela faltava, e a
           justificativa escrita ("generalizar tornaria a regra 11 impossível")
@@ -748,6 +825,8 @@ export function AcervoPage() {
         {all.length === 0 ? null : (
           <div className="flex flex-col gap-3">
             <FilterBar groups={groups} />
+
+            <TextFilter onText={setText} t={t} text={text} />
 
             {/*
               ⚠️ **QUEM DECIDE SE A LEITURA EXISTE É ESTA TELA**, e são DUAS
@@ -780,19 +859,22 @@ export function AcervoPage() {
 
         {visible.length === 0 ? (
           /*
-            REGRA 5: o vazio não cobra ninguém, e o vazio do FILTRO tem frase
-            própria — "registre o primeiro" seria mentira embaixo de um recorte
-            que só escondeu o que já existe.
+            REGRA 5: o vazio não cobra ninguém, e são **TRÊS** vazios desde a
+            Tarefa 38g — "registre o primeiro" seria mentira embaixo de um
+            recorte que só escondeu o que já existe, e "solte um chip" seria
+            mentira embaixo de uma palavra que não achou.
+
+            ⚠️ **QUAL DAS TRÊS FRASES É DECISÃO DO MODELO** (`emptyTitleKey`, em
+            `acervo-entries.ts`): ela é pura, tem unitário próprio e fica ao
+            lado do `filterEntries` — que é o que impede a FRASE e o RECORTE de
+            discordarem. A descrição fica aqui porque ela não é uma escolha:
+            só o acervo realmente vazio tem o que sugerir.
           */
           <Notice
             description={
               all.length === 0 ? t('pages.acervo.empty.description') : undefined
             }
-            title={
-              all.length === 0
-                ? t('pages.acervo.empty.title')
-                : t('pages.acervo.empty.filtered')
-            }
+            title={t(emptyTitleKey(all.length > 0, text))}
           />
         ) : (
           <List aria-label={t('pages.acervo.label')} className="gap-2">

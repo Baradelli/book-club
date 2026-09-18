@@ -427,6 +427,23 @@ export const pt = {
           label: 'Leitura do dia',
           all: 'Todas as leituras',
         },
+        /*
+          A QUINTA DIMENSÃO — O TEXTO (Tarefa 38g).
+
+          ⚠️ **O RÓTULO É VISÍVEL, pelo mesmo motivo do `<select>` de leitura**:
+          um `aria-label` solto daria nome a quem OUVE a tela e deixaria quem VÊ
+          sem saber o que aquele campo recorta. E ele diz "neste livro" porque
+          esta tela é o acervo de UM livro — a `/busca` do clube, que atravessa
+          todos, tem rótulo próprio em `pages.busca.field`.
+
+          ⚠️ **E A FRASE NÃO PROMETE MAIS DO QUE O RECORTE FAZ** (decisão B): a
+          palavra é procurada no que foi escrito — o texto da anotação, o trecho
+          do grifo e o comentário dele —, nunca no título da anotação.
+        */
+        text: {
+          label: 'Palavra neste livro',
+          placeholder: 'Uma palavra do que vocês escreveram',
+        },
       },
       item: {
         /* Só aparece quando o grifo TEM página — a ausência é silenciosa. */
@@ -450,6 +467,15 @@ export const pt = {
         /* O recorte do filtro sem nada dentro: é navegação, não ausência —
            "escreva a primeira" seria mentira embaixo de um filtro. */
         filtered: 'Nada por aqui com este filtro.',
+        /*
+          ⚠️ **O TERCEIRO VAZIO (decisão F da Tarefa 38g), e ele é DISTINTO dos
+          outros dois** — a pessoa faz coisas diferentes com cada um: no
+          primeiro ela escreve, no segundo ela solta um chip, aqui ela troca a
+          palavra. A frase fala da PALAVRA, nunca de quem escreveu pouco — e ela
+          é só TÍTULO: o único vazio com descrição é o do acervo sem nada, onde
+          há o que sugerir ("toque em Nova anotação").
+        */
+        noMatch: 'Nada por aqui com esta palavra.',
       },
       archive: {
         /* Arquivar pede confirmação, e cancelar não chama a API. */
