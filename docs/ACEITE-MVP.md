@@ -122,7 +122,13 @@ coisas de uma vez — o chip vira `de <nome>` e o avatar passa a dizer quem escr
 informação completa (o complemento de "minhas" é exatamente "dela"), mas o **nome** no avatar
 vale por si, e vocês vão querer isso antes de convidar uma terceira pessoa.
 
-**Resposta:**
+**Resposta (2026-09-18): ⚠️ ESTA PERGUNTA NUNCA PRECISOU DE RESPOSTA — ela foi ENTREGUE.**
+A **Tarefa 26a** criou o `GET /clubs/:clubId/members` e a **27** pôs o nome no chip e no
+avatar, ainda no MVP 2 — exatamente o que a recomendação acima pedia. ⚠️ **O que falhou foi o
+registro:** o §C do aceite do MVP 2 já dizia "FECHADA pelo MVP 2", e esta linha continuou em
+branco por dois MVPs, fazendo a pergunta reaparecer em toda varredura. **Conferido em disco
+antes de escrever isto**, e não por memória: a rota está em `club-routes.ts` e o nome sai pelo
+`nameOfWriter`.
 
 ### 2. Vocês vão continuar em duas pessoas, ou entra mais gente?
 
@@ -133,7 +139,15 @@ quebra com mais gente, mas duas ficam ruins.
 **Recomendação:** se entra mais gente no MVP 2, a pergunta 1 deixa de ser "vale a pena" e passa
 a ser obrigatória.
 
-**Resposta:**
+**Resposta (2026-09-18):** ✅ **Duas pessoas, por ora.**
+
+**Consequência: nada muda, e nada vira dívida.** As três suposições continuam confortáveis — o
+filtro é informação completa num clube de dois (o complemento de "minhas" é exatamente "dela"),
+e sem paginação as listas aguentam anos. ⚠️ **O gatilho de reabertura, escrito para ser
+achado:** reabra esta pergunta **antes** de mandar o terceiro convite, não depois. Três coisas
+mudam de uma vez — paginação (a busca já corta em **500** sem avisar), os textos que dizem "a
+outra pessoa", e ⚠️ **o desenho anti-placar, que é o mais difícil**: o foguinho com duas pessoas
+é um par; com dez é um ranking.
 
 ### 3. A anotação do dia arquivada
 
@@ -147,7 +161,14 @@ vazio e tratar a arquivada como passado; (c) desarquivar explicitamente, com reg
 **Recomendação:** (a). O texto é seu, e recuperá-lo em silêncio é mais gentil do que escondê-lo.
 Mas é o seu texto, então é a sua escolha.
 
-**Resposta:**
+**Resposta (2026-09-18):** ✅ **(a) deixar como está.**
+
+**Consequência: nada a construir**, e o comportamento fica **documentado em vez de acidental** —
+que é a diferença que importa. ⚠️ **O custo, dito com todas as letras:** "arquivar" vira um
+gesto que se desfaz sem você perceber. Se você arquivou para tirar da frente e depois abriu
+aquele dia, o texto voltou. A escolha foi pela gentileza (recuperar em silêncio é melhor que
+esconder), **sabendo disso**. As opções (b) e (c) continuam existindo se incomodar — a (c),
+desarquivar com registro, já está prevista no MVP 4.
 
 ### 4. Arquivar livro não tem tela
 
@@ -158,7 +179,13 @@ não sai.
 **Recomendação:** deixar para o MVP 2, junto de uma tela de administração do clube. Só suba de
 prioridade se você cadastrar um livro duplicado e ele te incomodar na estante.
 
-**Resposta:**
+**Resposta (2026-09-18):** ✅ **MVP 4, junto da administração do clube.**
+
+**Consequência:** vira item do MVP 4 em vez de dívida solta. É onde ele cai naturalmente —
+arquivar livro, remover membro e mudar papel são a **mesma tela** e o **mesmo conjunto de
+guardas de permissão**; sozinho agora, seria uma tela de uma coisa só. ⚠️ **Conferido em disco
+em 2026-09-18: continua sem tela** — a rota existe, o gesto não. A saída pela API continua
+sendo a única, e ela está no `COMO-TESTAR.md`.
 
 ### 5. Abrir o app sem rede (cache de leitura)
 
@@ -192,7 +219,13 @@ backend não tem chave de idempotência (seria uma fatia de backend, não de tel
 **Recomendação:** deixar como está até acontecer com você de verdade. Se acontecer, me diga —
 a correção é conhecida.
 
-**Resposta:**
+**Resposta (2026-09-18):** ✅ **Deixar como está.**
+
+**Consequência: nada a construir** — e ⚠️ **a sua resposta à pergunta 5 esvaziou esta aqui**:
+"lemos em casa, com wi-fi" tira do caminho o caso que a tornava incômoda. O rascunho não se
+perde em momento nenhum; só o **envio** espera a rede voltar. Se um dia voltar a incomodar, o
+conserto continua conhecido e é de **backend**, não de tela: uma chave de idempotência que o
+cliente gera, para reenviar a mesma chave devolver a mesma nota em vez de criar outra.
 
 ### 7. Manter o inglês?
 
@@ -247,7 +280,13 @@ em português deixam de ser dívida — eles eram a pergunta 6 do MVP 2.
 Esta é a pergunta mais importante do aceite. O MVP 1 foi executado a partir de um plano escrito
 antes de existir tela nenhuma — depois de usar o app de verdade, o que está faltando?
 
-**Resposta:**
+**Resposta (2026-09-18):** ✅ **Nada. O núcleo faz o que eu esperava.**
+
+**Consequência:** o MVP 1 fica **sem nenhuma pergunta aberta** — as oito estão respondidas,
+contando a nº 1 que era entrega e não pergunta. ⚠️ **E isto é um dado sobre o processo, não um
+elogio:** o MVP 1 foi executado a partir de um plano escrito **antes de existir tela nenhuma**,
+e nove meses de uso depois não apareceu buraco no núcleo. O que apareceu — o foguinho, o tema
+no feed — nasceu **do uso**, que é exatamente onde essas coisas deviam nascer.
 
 ---
 
@@ -385,7 +424,18 @@ que é honesta mas é remendo de texto.
 **Recomendação:** **fatia própria no MVP 3**, se a busca virar hábito. Se você usar a busca
 muito no celular, ela sobe de prioridade.
 
-**Resposta:**
+**Resposta (2026-09-18):** ❌ **Deixar como está — sem `unaccent`.**
+
+**Consequência: nada a construir**, e o custo evitado é real: extensão de banco que o Prisma não
+gera sozinho, índice funcional para a busca não virar varredura de tabela, e um **ADR novo**
+porque muda decisão fechada.
+
+⚠️⚠️ **E aqui vai o registro mais honesto que eu consigo fazer desta rodada: na minha leitura,
+esta é a pergunta fechada com MAIOR chance de voltar.** Buscar com pressa é buscar sem acento, e
+a busca vazia parece *"não existe"* em vez de *"escrevi diferente"*. A tela mitiga com uma frase
+no estado sem resultado — é honesta, mas é remendo de texto. **Se voltar, o gatilho será você
+procurando uma coisa que você sabe que escreveu e não achando.** Está escrito aqui para o
+próximo leitor não achar que foi descuido.
 
 ### 2. A busca de grifo deve casar o trecho grifado, ou só o comentário?
 
@@ -407,7 +457,18 @@ grifo sem comentário é caso legítimo e comum.
 **Recomendação:** **manter os dois.** Se você discordar, o conserto é pequeno e localizado: uma
 cláusula a remover.
 
-**Resposta:**
+**Resposta (2026-09-18):** ✅ **Manter os dois — trecho grifado E comentário.**
+
+**Consequência: nada muda no código, e uma decisão que eu tomei no seu lugar deixa de ser
+minha.** Era a única da entrega inteira nessa situação: eu li a decisão fechada do MVP 2 como
+sendo sobre o **mecanismo** (`ILIKE`, nada de vetor) e não uma lista exaustiva de campos, e
+segui sem perguntar. ✅ **Você confirmou, então ela vira decisão sua e para de ser uma leitura
+minha esperando ser derrubada.**
+
+⚠️ **E o custo do contrário continua medido, para quem reabrir:** grifo sem comentário guarda
+string **vazia** (não nulo), e `'' ILIKE '%qualquer%'` é **falso** no Postgres — com só o
+comentário, **todo grifo registrado sem escrever nada junto ficaria inalcançável pela busca,
+para sempre**. E grifo sem comentário é caso legítimo e comum.
 
 ### 3. ⚠️ "Em qualquer listagem eu filtro… por texto" não é verdade. Qual das duas metades você quer?
 
@@ -434,7 +495,16 @@ e o acervo já tem o lugar para o campo. É uma fatia curta de tela.
 está. Motivo: "achar o que escrevemos neste livro" é o caso frequente, e "achar em qualquer
 livro" é o raro — e é assim que as duas telas param de competir.
 
-**Resposta:**
+**Resposta (2026-09-18):** ✅ **Um campo de texto no acervo do livro.** A busca do clube
+continua como está.
+
+**Consequência: é fatia** — a **38g** no `docs/BACKLOG.md`. ✅ **E é a mais barata das três desta
+rodada, porque já está medido:** o filtro `text` **existe em todas as camadas dos dois
+recursos** — port, fake, UseCase, repositório Prisma, borda e integração. Falta o campo na tela.
+
+⚠️ **O que a fatia NÃO pode mudar:** o acervo recorta no **cliente** o que já carregou (decisão
+registrada da Tarefa 28, e é o que faz o toque no chip custar zero requisição). O campo de texto
+segue o mesmo modelo — nada de perguntar ao servidor a cada tecla.
 
 ### 4. ⚠️ "Por capítulo" não existe para grifo, em lugar nenhum
 
@@ -463,7 +533,30 @@ isso até a auditoria da última fatia.
 **Recomendação:** **(c)**, se e quando você sentir falta. É a única que fala a língua do grifo
 (página), em vez de forçar o vocabulário da anotação (dia de leitura) sobre ele.
 
-**Resposta:**
+**Resposta (2026-09-18):** ✅ **(c) E (d) — por página E por dia.** As duas.
+
+**Consequência: são duas fatias**, a **38h** (faixa de página) e a **38i** (o dia do plano), e
+só a segunda mexe no modelo.
+
+✅ **A (c) já estava prevista pelo próprio código:** o `HighlightRepository` diz por escrito
+*"sem faixa de página (`pageFrom`/`pageTo`): é aditiva e **ninguém pediu**"*. Agora pediram, e
+a extensão entra pela porta que ela mesma deixou aberta.
+
+⚠️⚠️ **E A OPÇÃO (d) ACIMA CITA O ADR 0004 ERRADO — erro meu, e ele estava aqui desde que esta
+pergunta foi escrita.** A frase *"o ADR 0004 já registra que o campo seria aditivo"* é
+verdadeira sobre **`noteId?`** — vínculo com a **anotação** —, e é esse o campo que o ADR
+discute, com as perguntas de cascata dele (*"o que acontece com o grifo se a nota é
+arquivada?"*). **Não é** sobre vínculo com o **dia do plano**.
+
+⚠️ **E a diferença não é acadêmica: ela decide a coluna.** Para *"os grifos do capítulo 3"* a
+coluna certa é **`planItemId?`**, direta. Passar pela anotação quebraria justamente o caso que
+o ADR 0004 protegeu com todas as letras — *"eu quero registrar um grifo em um dia que não
+escrevi anotação nenhuma"* —, porque grifo em dia sem nota não teria `noteId` para carregar.
+
+✅ **O que sobrevive intacto:** a decisão central do ADR — **o grifo não depende de um dia de
+leitura** — continua de pé, porque o campo é **opcional**. E o **preenchimento é automático**
+(escolha sua): se existe item de plano para hoje naquele livro, o grifo nasce com ele, sem
+campo novo na tela e sem toque a mais. O gesto continua sendo de dois toques.
 
 ### 5. Você quer o número de resultados na tela?
 
@@ -526,11 +619,22 @@ que impede o próximo componente de acrescentar a 34ª.
 Foi a pergunta mais útil do aceite do MVP 1. Depois de usar os grifos e o acervo de verdade — o
 que falta?
 
-**Resposta:**
+**Resposta (2026-09-18):** ✅ **Nada. Faz o que eu esperava.**
+
+**Consequência:** com as seis respondidas acima, o MVP 2 fica **sem nenhuma pergunta aberta**.
+⚠️ **Com uma ressalva que é justa:** duas fatias desta rodada (38g, e 38h/38i) nasceram das
+perguntas **3** e **4** deste mesmo aceite — ou seja, "nada faltou" quer dizer *nada que você
+não tenha acabado de pedir*. As duas perguntas existiam justamente porque a auditoria achou a
+frase de aceite do MVP 2 prometendo mais do que as telas entregavam.
 
 ---
 
-## C. As perguntas do MVP 1 que continuam sem resposta
+## C. ~~As perguntas do MVP 1 que continuam sem resposta~~ — **nenhuma continua**
+
+⚠️ **ESTA SEÇÃO ESVAZIOU EM 2026-09-18.** As oito perguntas do MVP 1 estão respondidas (a nº 1
+nunca precisou de resposta — foi entregue). O título fica riscado em vez de reescrito porque a
+seção virou **histórico**: ela registra o que estava aberto **enquanto o MVP 2 era executado**,
+e é isso que explica por que certas decisões daquele MVP foram conservadoras.
 
 Elas **afetaram** o MVP 2 e eu segui com o padrão conservador, sem decidir no seu lugar:
 
@@ -544,9 +648,13 @@ Elas **afetaram** o MVP 2 e eu segui com o padrão conservador, sem decidir no s
   Não era, dado o uso real. A resposta está na pergunta 5 do MVP 1.
 - **Pergunta 2** (entra mais gente no clube?) — o MVP 2 assumiu **"duas hoje, mais amanhã"**:
   nada na estrutura assume duas (o filtro por pessoa é por membro, com nome), e o texto de
-  interface continua simples enquanto forem duas.
-- **Perguntas 3, 4, 6, 7 e 8** — sem resposta, e nenhuma bloqueou o MVP 2. A **7** virou a
-  pergunta **6** desta seção.
+  interface continua simples enquanto forem duas. ✅ **RESPONDIDA em 2026-09-18: duas pessoas,
+  por ora** — a suposição do MVP 2 estava certa.
+- **Perguntas 3, 4, 6, 7 e 8** — ~~sem resposta, e nenhuma bloqueou o MVP 2.~~ ✅ **TODAS
+  RESPONDIDAS** (a **7**, o inglês, em 2026-09-17, e virou a Tarefa 38d; as outras em
+  2026-09-18). A **7** virou a pergunta **6** desta seção. ⚠️ **E o registro que importa é
+  este: nenhuma delas bloqueou o MVP 2, e nenhuma mudou de resposta depois de dois MVPs de
+  uso.** O padrão conservador — "sem resposta, não entra" — custou zero retrabalho aqui.
 
 ---
 
@@ -887,7 +995,16 @@ a mais no servidor e nenhuma toca o modelo; o que muda é onde a junção aconte
 
 ---
 
-## C. As perguntas dos MVPs 1 e 2 que continuam sem resposta
+## C. ~~As perguntas dos MVPs 1 e 2 que continuam sem resposta~~ — **nenhuma continua**
+
+⚠️⚠️ **ESTA SEÇÃO ESVAZIOU EM 2026-09-18, e é a primeira vez em três MVPs que isso acontece.**
+As onze que restavam foram respondidas numa rodada só: seis viraram **registro** (nada a
+construir), três viraram **fatia** (38g, 38h, 38i) e duas eram "faltou alguma coisa?", com a
+mesma resposta — **nada**.
+
+O título fica riscado em vez de apagado porque a seção é **histórico**: ela explica por que o
+MVP 3 tomou as decisões conservadoras que tomou, e apagá-la faria o próximo leitor achar que
+elas foram gratuitas.
 
 Elas **afetaram** o MVP 3, e eu segui com o padrão conservador, sem decidir no seu lugar:
 
@@ -897,24 +1014,39 @@ Elas **afetaram** o MVP 3, e eu segui com o padrão conservador, sem decidir no 
   aqui, com o argumento novo de que a notificação leva a pessoa para um app que pede rede.
   **O argumento era bom e a premissa era minha, não sua.** Com a resposta, a fatia sai do
   radar e a pergunta para de reaparecer a cada fechamento.
-- **Pergunta 1 do MVP 2** (busca sem acento, `unaccent`) — sem resposta, não entrou.
+- ✅ **Pergunta 1 do MVP 2** (busca sem acento, `unaccent`) — ~~sem resposta, não entrou.~~
+  **RESPONDIDA em 2026-09-18: fica de fora**, por decisão e não por omissão — exigiria extensão
+  de banco, índice funcional e ADR novo. ⚠️ **E está registrado lá, com todas as letras, que na
+  minha leitura ela é a pergunta fechada com MAIOR chance de voltar no uso real.**
 - **Pergunta 2 do MVP 1** (entra mais gente no clube?) — o MVP 3 assumiu **"duas hoje, mais
   amanhã"**, e desta vez com consequência medida: o feed é uma **frase por linha**, e o leque
   de notificação percorre **todos os membros ativos** menos o autor. Nenhum dos dois assume
   duas pessoas; mas **o desenho anti-placar é mais difícil com dez** do que com duas, e essa é
-  a hora de você dizer se o clube vai crescer.
+  a hora de você dizer se o clube vai crescer. ✅ **RESPONDIDA em 2026-09-18: duas pessoas, por
+  ora**, com o gatilho de reabertura escrito na própria pergunta — **antes** do terceiro
+  convite, não depois. ⚠️ E o aviso acima envelheceu bem: o foguinho entrou depois disto, e com
+  dez pessoas ele **é** um ranking.
 - ✅ **Pergunta 7 do MVP 1** (manter o inglês?) — **FECHADA em 2026-09-17: "só português —
   apagar o inglês".** E o aviso de que o custo **subia a cada MVP** se confirmou na conta
   final: além dos dois catálogos, sai a maquinaria inteira da **Tarefa 29a**, que só existe
   por causa do `en`. **É fatia própria**, está no `docs/BACKLOG.md`, e a lista do que sai está
   na resposta da pergunta.
-- **Perguntas 3, 4, 6 e 8 do MVP 1** — sem resposta, e nenhuma bloqueou o MVP 3.
+- ✅ **Perguntas 3, 4, 6 e 8 do MVP 1** — ~~sem resposta, e nenhuma bloqueou o MVP 3.~~
+  **TODAS RESPONDIDAS em 2026-09-18**, e nenhuma gerou fatia: a nota arquivada fica como está
+  (o comportamento passa a ser documentado em vez de acidental), arquivar livro é MVP 4, criar
+  avulsa offline fica como está, e "faltou alguma coisa no MVP 1?" fechou com **nada**.
+- ✅ **Perguntas 2, 3, 4 e 7 do MVP 2** — respondidas em 2026-09-18. Duas delas geraram as
+  **três fatias** desta rodada: o campo de texto no acervo (**38g**) e os dois eixos novos do
+  grifo — **faixa de página** (38h) e **dia do plano** (38i).
 - ✅ **Pergunta 5 do MVP 2** (o número de resultados na tela) — **respondida em 2026-09-17, e
   ela é a mais sutil das quatro.** O gatilho que ela mesma escreveu (*"se você quiser o número,
   diga explicitamente"*) **disparou** — você pediu o foguinho. Mas a guarda **não foi
   relaxada**, e o contador de resultados **continua fora**: leia a resposta lá, porque a
   diferença entre "um número" e "este número" é o que manteve a rede de pé.
 - ⚠️ **O que continua sem dono, e não é pergunta:** a busca corta em **500** e **não avisa**.
+  O conserto honesto não é o contador — é o **servidor** dizer que truncou, e isso é mudança de
+  contrato da API. ⚠️ **Fica mais provável de doer agora**, porque a 38g põe um campo de texto
+  no acervo e você vai buscar mais.
 
 ---
 

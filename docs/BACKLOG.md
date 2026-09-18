@@ -3064,6 +3064,58 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       para isso**; fica aqui como dívida nomeada. O `windowMinutesFromEnv` em si é testado no
       `dispatch-script.test.ts`; o que falta é o fio, não a peça._
 
+- [ ] **38g** — Um campo de texto no acervo do livro. ⚠️ **FATIA GERADA PELA RESPOSTA DO DONO
+      à pergunta 3 do MVP 2** (2026-09-18). → `docs/ACEITE-MVP.md`, MVP 2, pergunta 3.
+      _⚠️ **A frase de aceite do MVP 2 promete "em qualquer listagem eu filtro… por texto", e
+      isso NUNCA foi verdade:** o acervo filtra por pessoa/tipo/leitura/cor **sem texto**, e a
+      busca filtra por texto no clube inteiro **sem os outros quatro**. As duas metades nunca
+      coexistiram, e a auditoria da Tarefa 29 foi quem nomeou isso._
+      _✅ **É a mais barata das três desta rodada, e já está medido:** o filtro `text` existe em
+      **todas** as camadas dos **dois** recursos — port, fake, UseCase, repositório Prisma,
+      borda e integração. Falta o campo na tela, e o `filter-bar.tsx` do `ui` já é o lugar._
+      _⚠️ **O que a fatia não pode mudar:** o acervo recorta no **cliente** o que já carregou
+      (decisão registrada da Tarefa 28 — é o que faz o toque no chip custar zero requisição).
+      Nada de perguntar ao servidor a cada tecla._
+      _⚠️ **Contador de linhas do `acervo.tsx`:** as três fatias desta rodada mexem na MESMA
+      barra de filtro. Se passar de 400 pelo contador canônico, corta antes de crescer — é a
+      lição nº 8 do MVP 1._
+
+- [ ] **38h** — A faixa de página no acervo (`p. 40–60`). ⚠️ **FATIA GERADA PELA RESPOSTA DO
+      DONO à pergunta 4 do MVP 2, opção (c)** (2026-09-18).
+      _✅ **O próprio código já tinha previsto esta extensão, por escrito.** O
+      `HighlightRepository` diz: *"Sem faixa de página (`pageFrom`/`pageTo`): é aditiva e
+      **ninguém pediu**"*. Agora pediram, e ela entra pela porta que o port deixou aberta._
+      _⚠️ **`Highlight.page` é ANULÁVEL**, e o port já documenta a consequência: no Postgres
+      `WHERE "page" = 45` contra `NULL` é **falso**. A faixa herda isso — **grifo sem página
+      não entra em faixa nenhuma** —, e isso precisa de teste explícito nos DOIS lados
+      (§7.1)._
+      _⚠️ **As três armadilhas de `page` que o port já mediu valem para a faixa:** fração (o
+      Prisma **trunca**), fora do int32 (o Prisma **lança** → 500), e o teto `.max(2147483647)`
+      do Zod, que é o que defende a borda._
+      _Port cresce + impl Prisma na **mesma unidade** (§6.9), fake acompanhando nos dois
+      sentidos. **Nenhuma migration.**_
+
+- [ ] **38i** — O grifo ganha o dia do plano (`planItemId?`). ⚠️ **FATIA GERADA PELA RESPOSTA
+      DO DONO à pergunta 4 do MVP 2, opção (d)** (2026-09-18). ⚠️ **A ÚNICA DAS TRÊS COM
+      MIGRATION.** → emenda de 2026-09-18 em `docs/adr/0004-grifo-entidade-propria.md`.
+      _⚠️⚠️ **O ACEITE CITAVA O ADR ERRADO, e o erro estava lá desde que a pergunta foi
+      escrita.** A opção (d) dizia *"o ADR 0004 já registra que o campo seria aditivo"* — e o
+      ADR registra isso sobre **`noteId?`**, vínculo com a **anotação**, não com o dia do
+      plano. ⚠️ **A diferença decide a coluna:** passar pela anotação quebraria o caso que o
+      ADR protege por escrito — *"quero registrar um grifo num dia que não escrevi anotação
+      nenhuma"* —, porque grifo em dia sem nota não teria `noteId` para carregar. A coluna é
+      **`planItemId?`**, direta._
+      _✅ **A decisão central do ADR 0004 sobrevive por um detalhe: o campo é OPCIONAL.** "O
+      grifo não depende de um dia de leitura" continua verdade._
+      _**Preenchimento automático e silencioso** (decisão do dono, perguntado): se existe item
+      de plano para **hoje** naquele livro, o grifo nasce com ele. ⚠️ **Nenhum campo novo na
+      tela** — o gesto continua de dois toques, que é o §1 do plano. E ⚠️ **"hoje" é o dia no
+      `Settings.timezone` da pessoa**, por `localDay`, nunca a hora do servidor; o
+      `planItemId` **não vem do corpo** (§6.3)._
+      _⚠️ **Migration só via `prisma migrate dev --name <nome>`**, no executor desta fatia,
+      **nunca SQL à mão** (`CLAUDE.md`). O banco é o de desenvolvimento do dono, com
+      super-admin de seed — e o banco tem de ser **provado idêntico por consulta** depois._
+
 ## Definição de "MVP 3 pronto"
 
 Eu marco que li o trecho de hoje e vejo onde eu e o clube estamos no livro. Recebo um

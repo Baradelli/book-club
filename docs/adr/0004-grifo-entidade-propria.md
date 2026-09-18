@@ -46,10 +46,49 @@ para não parecer bug, mas os mecanismos não se cruzam.
   manter, com regras de cascata (o que acontece com o grifo se a nota é arquivada?) para
   ganhar uma navegação que hoje ninguém pediu. Se surgir a necessidade, o campo é aditivo —
   adicionar `noteId?` depois não quebra nada.
+
+  > ⚠️⚠️ **CUIDADO AO CITAR ESTE PARÁGRAFO — ele já foi citado errado uma vez, e o erro
+  > durou até 2026-09-18.** O `docs/ACEITE-MVP.md` (MVP 2, pergunta 4, opção **d**) usou o
+  > "o campo é aditivo" daqui para justificar um vínculo do grifo com o **dia do plano**.
+  > **Não é sobre isso.** Este parágrafo fala de `noteId?` — vínculo com a **anotação** —, e
+  > as regras de cascata que ele levanta são as da nota.
+  >
+  > ⚠️ **E a diferença decide a coluna.** Para *"os grifos do capítulo 3"* a coluna certa é
+  > **`planItemId?`**, direta. Passar pela anotação quebraria justamente o caso que este ADR
+  > protege — *"eu quero registrar um grifo em um dia que não escrevi anotação nenhuma"* —,
+  > porque grifo em dia sem nota não teria `noteId` para carregar. **O `noteId?` continua
+  > não existindo, e continua sem ninguém pedindo.**
 - **Grifo como um tipo de `Note` (`kind = HIGHLIGHT`).** Reaproveita tabela e rotas. Mas
   `quote`, `color` e `page` ficariam ou como colunas nulas em toda anotação, ou dentro de um
   campo `Json` sem tipo — e a tela de grifos passaria a filtrar `Note` por `kind` em toda
   query. Economia falsa: uma tabela a menos, um monte de condicional a mais.
+
+## Emenda de 2026-09-18 — o grifo ganha `planItemId?` (Tarefa 38i)
+
+**Pedido do dono** no fechamento das perguntas abertas (`ACEITE-MVP.md`, MVP 2, pergunta 4,
+opções **c** e **d**): poder pedir "os grifos do capítulo 3".
+
+✅ **A decisão central deste ADR sobrevive inteira, e é por um detalhe:** o campo é
+**opcional**. *"O grifo não depende de um dia de leitura"* continua verdade — grifar num dia em
+que você não escreveu nada continua possível, e é o caso que derrubou a alternativa "grifo como
+marca dentro da anotação" lá em cima.
+
+**O que entra:**
+
+- coluna **`planItemId String?`** em `Highlight` — **não** `noteId?`, pelo motivo do aviso
+  acima;
+- **preenchimento automático e silencioso**: se existe item de plano para **hoje** naquele
+  livro, o grifo nasce com ele. ⚠️ **Nenhum campo novo na tela** — o gesto de registrar grifo
+  continua sendo de dois toques, que é o §1 do plano ("atrito mínimo") e foi decisão explícita
+  do dono quando perguntado;
+- ⚠️ **"hoje" é o dia no `Settings.timezone` da pessoa**, por `localDay`, nunca a hora do
+  servidor; e o `planItemId` **não vem do corpo da requisição** — é resolvido no servidor,
+  como o `userId` e o `clubId`.
+
+**O que NÃO entra:** o `noteId?`. Ele continua sendo a alternativa recusada que este ADR
+descreve, e continua sem ninguém pedindo.
+
+---
 
 ## Consequências
 
