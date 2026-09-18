@@ -633,10 +633,35 @@ Reinicie a API depois de editar o `.env`.
 
 ---
 
-## 6.7. O lembrete diário — rodar o dispatcher à mão (MVP 3, Tarefa 37)
+## 6.7. O lembrete diário — sozinho ou à mão (MVP 3, Tarefas 37 e 38f)
 
-O lembrete **não** roda sozinho: não existe cron dentro do servidor, de propósito. Quem chama
-é um cron externo — ou você, à mão:
+~~O lembrete **não** roda sozinho: não existe cron dentro do servidor, de propósito.~~
+⚠️ **MUDOU NA TAREFA 38f (2026-09-17): agora ele PODE rodar sozinho, se você ligar.** A frase
+riscada era verdade até aqui, e continua sendo o padrão: **sem a chave, nada é agendado.**
+
+**Para ele sair sozinho**, ponha no `packages/backend/.env`:
+
+```
+NOTIFICATIONS_CRON=on
+```
+
+e reinicie a API. No boot ela escreve **uma linha** dizendo o que ficou valendo:
+
+| A linha do boot | O que significa |
+|---|---|
+| `reminder cron is ON (*/5 * * * *), VAPID configured` | agendado de 5 em 5 minutos, e o push sai de verdade |
+| `reminder cron is ON (...) but VAPID is NOT configured...` | agendado, mas toda passada vai parar em `vapid-not-configured` (§6.6) |
+| `reminder cron is OFF (NOTIFICATIONS_CRON is not "on")...` | nada agendado — só sai se você rodar o comando abaixo |
+
+⚠️ **Só a palavra `on` liga.** `true`, `1`, `ON` e `sim` **não** ligam — é de propósito: com
+duas instâncias do backend, a chave ligada nas duas seria trabalho dobrado, e desligado é o
+padrão seguro. Nesse caso, use um cron externo chamando o comando abaixo.
+
+⚠️ **A primeira passada depois de ligar pode mandar push na hora** (se o seu horário de
+lembrete já passou e ainda está dentro da janela de 10 minutos) — e ela **gasta o lembrete do
+dia**, que não volta.
+
+**Para rodar à mão** (é o que o cron externo faz, e continua valendo):
 
 ```bash
 pnpm --filter @clube/backend notifications:dispatch

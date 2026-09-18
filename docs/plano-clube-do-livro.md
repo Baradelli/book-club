@@ -106,8 +106,12 @@ fazer isso?", a pergunta é: isso é do ritmo do grupo, ou é da escrita de algu
 - **Logs imutáveis para o ritmo.** `ReadingLog` e `ActivityEvent` não têm `status` nem
   `archivedAt`. Desmarcar "li" é hard delete — a única exceção, documentada.
 - **Progresso é sempre calculado.** Nada de contador denormalizado que sai de sincronia.
-- **Push VAPID com dispatcher pull-based.** Sem cron dentro do processo: um script chamado
-  por cron externo a cada 5–10 min, com idempotência garantida por claim no banco.
+- **Push VAPID com dispatcher pull-based.** ~~Sem cron dentro do processo:~~ um script
+  chamado por cron externo a cada 5–10 min, com idempotência garantida por claim no banco.
+  ⚠️ **Ressalva de 2026-09-17 (Tarefa 38f):** o cron interno existe, **desligado por
+  padrão**, atrás de `NOTIFICATIONS_CRON=on` — é a **variante 2** do ADR 0006, e ela chama
+  exatamente a mesma passada. O que a decisão sempre disse continua de pé: o disparo é
+  pull-based e idempotente por claim, e **quem chama a passada é assunto de deploy**.
   → `docs/adr/0006-*.md` e `docs/NOTIFICACOES.md`.
   > _Nota de atenção:_ no projeto que serviu de referência, essa feature nasceu furando as
   > camadas (`$queryRaw` direto na rota) e sem um único teste. Aqui ela entra com port,

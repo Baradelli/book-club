@@ -141,6 +141,7 @@ VAPID_PUBLIC_KEY=
 VAPID_PRIVATE_KEY=
 VAPID_SUBJECT="mailto:admin@localhost"
 NOTIFICATION_WINDOW_MINUTES=10
+NOTIFICATIONS_CRON=
 SEED_ADMIN_EMAIL="admin@clube.local"
 SEED_ADMIN_PASSWORD="troque-isto"
 ```
@@ -163,6 +164,20 @@ Notas:
 - **VAPID vazio desliga as notificações inteiras, de forma limpa.** Não precisa configurar
   para desenvolver. Quando chegar o MVP 3:
   `pnpm --filter @clube/backend exec web-push generate-vapid-keys`.
+- ⚠️ **`NOTIFICATIONS_CRON` é o AGENDAMENTO DO LEMBRETE — o passo de deploy que o ADR 0006
+  promete registrar aqui** (Tarefa 38f, 2026-09-17). Duas formas, e só uma por deploy:
+  - **`NOTIFICATIONS_CRON=on`** — a própria API agenda a passada de **5 em 5 minutos**
+    (`node-cron` dentro do processo do Fastify; é a **variante 2** do ADR 0006). É a forma
+    certa para **uma instância só**, que é o caso hoje. No boot a API escreve uma linha
+    dizendo se ligou e se as chaves VAPID estão configuradas.
+  - **Vazio (o padrão) + um cron externo** chamando
+    `pnpm --filter @clube/backend notifications:dispatch` a cada 5–10 min. É a forma certa
+    para **duas ou mais instâncias**: com a chave ligada em todas, cada uma faria a varredura
+    (ninguém recebe duas vezes — o claim no banco impede —, mas é trabalho jogado fora).
+
+  ⚠️ **Só a palavra `on` liga.** `true`, `1` e `ON` não ligam, de propósito: desligado é o
+  padrão seguro, e uma segunda instância que suba sem ninguém ler nada não passa a varrer.
+  **Se ninguém fizer nenhuma das duas, nenhum lembrete sai** — e o app não avisa.
 
 ---
 

@@ -1,10 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 
-import { buildRepositories } from '../http/repositories';
-import type { OpenedDeps } from './dispatch-script';
-import { runDispatch, windowMinutesFromEnv } from './dispatch-script';
+import { buildDispatchPass } from './dispatch-pass';
+import { windowMinutesFromEnv } from './dispatch-script';
 import { getVapidConfig } from './vapid';
-import { WebPushSender } from './web-push-sender';
 
 /**
  * ⚠️ **A ENTRADA DO SCRIPT DE CRON — `pnpm --filter @clube/backend
@@ -55,41 +53,19 @@ async function main(): Promise<void> {
   const vapid = getVapidConfig();
 
   try {
-    await runDispatch({
+    // ⚠️ **A MONTAGEM DA PASSADA SAIU DAQUI NA TAREFA 38f** (`dispatch-pass.ts`),
+    // quando ela ganhou o segundo chamador: o agendador dentro do Fastify. A
+    // fiação é a mesma; o que muda é o `closeAfterPass` — aqui o processo morre
+    // logo depois, então desconectar é o certo.
+    await buildDispatchPass({
+      prisma,
       vapid,
-      // ⚠️ **A LINHA DA TRANSIÇÃO (Tarefa 38).** Era `sender: null`; agora é o
-      // envio de verdade. Sem VAPID continua `null`, e o `runDispatch` não
-      // gasta claim de ninguém.
-      sender:
-        vapid === null
-          ? null
-          : new WebPushSender(
-              buildRepositories(prisma).pushSubscriptions,
-              vapid,
-            ),
-      open: async (): Promise<OpenedDeps> => {
-        const repositories = buildRepositories(prisma);
-        return {
-          // O `buildRepositories` fala o vocabulário da composição HTTP; o
-          // dispatcher fala o dele. A tradução é esta linha, e é aqui que ela
-          // deve estar — não dentro do UseCase.
-          repositories: {
-            settings: repositories.settings,
-            memberships: repositories.memberships,
-            books: repositories.books,
-            planItems: repositories.planItems,
-            readingLogs: repositories.readingLogs,
-            pushSubscriptions: repositories.pushSubscriptions,
-            deliveries: repositories.notificationDeliveries,
-          },
-          close: () => prisma.$disconnect(),
-        };
-      },
       windowMinutes: windowMinutesFromEnv(process.env),
+      closeAfterPass: () => prisma.$disconnect(),
       log: (line) => {
         console.log(line);
       },
-    });
+    })();
   } finally {
     // O `open` preguiçoso pode nem ter sido chamado (feature desligada), e aí
     // ninguém fechou o cliente. `$disconnect` é idempotente.

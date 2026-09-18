@@ -682,28 +682,40 @@ Confiro a definição frase por frase, e digo o que está entregue e o que depen
 | --- | --- |
 | *"Eu marco que li o trecho de hoje"* | ✅ **Entregue.** ⚠️ **Só o dia de hoje** — um dia passado não se marca pela tela (é a pergunta 2 desta seção) |
 | *"e vejo onde eu e o clube estamos no livro"* | ✅ **Entregue duas vezes, e a segunda reverteu a primeira.** Primeiro como **presença** (a sua resposta à pergunta 1); depois, a seu pedido, também como **número** — a corrente de dias seguidos, visível para o clube (Tarefa 38c, ADR 0010). ⚠️ **É o pedaço a julgar com mais cuidado no aceite**, porque as duas formas respondem à mesma frase e puxam o clube para lados opostos |
-| *"Recebo um lembrete no horário que eu escolhi"* | ⚠️ **Entregue, mas NÃO AUTOMÁTICO — ver abaixo** |
+| *"Recebo um lembrete no horário que eu escolhi"* | ~~⚠️ **Entregue, mas NÃO AUTOMÁTICO**~~ → ✅ **Entregue, e automático desde a Tarefa 38f** (2026-09-17): `NOTIFICATIONS_CRON=on` no `.env` do backend. ⚠️ **Desligado é o padrão** — sem a chave, vale a linha riscada. Ver abaixo |
 | *"e não recebo se eu já li"* | ✅ **Entregue**, e é o item que eu mais quero que você teste (A.2) |
 | *"quando ela lê, escreve ou grifa, meu celular avisa"* | ⚠️ **Entregue, com duas condições — ver abaixo** |
 | *"e a atividade aparece no feed da home"* | ✅ **Entregue** |
 
-⚠️ **O QUE NÃO TEM DONO — leia isto antes de dar o MVP por pronto:**
+⚠️ **O QUE NÃO TEM DONO — leia isto antes de dar o MVP por pronto. Eram três; o nº 1 FECHOU
+na Tarefa 38f (2026-09-17), e sobram DOIS.** A numeração fica como estava e o fechado fica
+riscado em vez de apagado: a lista é histórica, e apagar faria a próxima leitura achar que o
+buraco nunca existiu.
 
-1. **NINGUÉM CHAMA O LEMBRETE.** Não existe cron instalado, e é decisão de desenho
+1. ~~**NINGUÉM CHAMA O LEMBRETE.** Não existe cron instalado, e é decisão de desenho
    (`NOTIFICACOES.md` §6: não há agendador dentro do servidor). Hoje o lembrete só sai **se
    você rodar o comando à mão**. Para ele virar automático, alguém tem de instalar um cron
    externo (a cada 5–10 min) na máquina onde o backend roda — e isso **não é fatia de código**,
    é operação. ⚠️ **É o maior buraco entre a frase e a realidade**, e eu o deixo explícito em
-   vez de escondê-lo atrás de "entregue".
+   vez de escondê-lo atrás de "entregue".~~
+   ✅ **FECHADO pela Tarefa 38f** (2026-09-17), a pedido seu: ponha **`NOTIFICATIONS_CRON=on`**
+   no `packages/backend/.env` e reinicie a API — ela passa a chamar a passada do lembrete de
+   **5 em 5 minutos** sozinha, e o boot escreve uma linha dizendo se ligou e se as chaves
+   VAPID estão configuradas. ⚠️ **Sem a chave, nada é agendado** (é o padrão seguro: com duas
+   instâncias do backend, um cron externo continua sendo o jeito certo). ⚠️ **Ligar é seu**:
+   com VAPID configurado, a primeira passada manda push de verdade no seu aparelho e gasta o
+   lembrete do dia. O passo a passo está no `COMO-TESTAR.md` §6.7.
 2. **PUSH NO CELULAR PELA REDE LOCAL NÃO FUNCIONA.** Contexto seguro. A frase diz "meu celular
    avisa"; na sua rede, hoje, isso exige um túnel HTTPS ou rodar no `localhost`. Também é
    operação, não código.
 3. **AS CHAVES VAPID NÃO ESTÃO CONFIGURADAS** e nunca estarão por padrão — elas são segredo, e
    o projeto roda sem elas de propósito. Enquanto não estiverem no `.env`, a metade de
-   notificação do MVP 3 fica desligada e **a tela diz isso**, sem parecer erro.
+   notificação do MVP 3 fica desligada e **a tela diz isso**, sem parecer erro. (⚠️ No **seu**
+   `.env` elas já estão, desde 2026-09-17 — o buraco é do ambiente, e o seu deixou de tê-lo.)
 
-Os três são a mesma família: **o código está pronto e o ambiente não está.** Nenhum deles é
-dívida técnica escondida; os três estão escritos no `COMO-TESTAR.md` com o passo a passo.
+Os dois que sobram são a mesma família do que fechou: **o código está pronto e o ambiente não
+está.** Nenhum é dívida técnica escondida; os dois estão escritos no `COMO-TESTAR.md` com o
+passo a passo.
 
 ## B. As perguntas — o que só você decide
 

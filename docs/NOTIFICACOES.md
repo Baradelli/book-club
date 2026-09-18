@@ -229,8 +229,14 @@ sendPushToUser(config, userId, payload): Promise<{ sent: number; disabled: numbe
 
 ## 6. Agendamento — dispatcher pull-based
 
-**Não existe cron dentro do processo do Fastify.** Um script é chamado por cron externo a
-cada 5–10 min:
+~~**Não existe cron dentro do processo do Fastify.**~~ ⚠️ **RESSALVA DE 2026-09-17 (Tarefa
+38f):** existe, **desligado por padrão**, atrás de `NOTIFICATIONS_CRON=on` — é a **variante 2**
+registrada no ADR 0006, e ela usa exatamente a passada descrita abaixo. A frase riscada
+continua valendo como *arquitetura*: o disparo é pull-based e idempotente por claim no banco,
+e **quem chama a passada é assunto de deploy**. Com duas instâncias do backend, deixe a chave
+desligada e use o cron externo.
+
+Um script é chamado por cron externo a cada 5–10 min:
 
 ```
 pnpm --filter @clube/backend notifications:dispatch

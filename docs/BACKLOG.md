@@ -3027,6 +3027,43 @@ ela, e o MVP 2 seguiu sem. Hoje é a coisa mais valiosa de fora.
       mantido como segunda barreira de tenant). ⚠️ **A recusa da 35 continua inteira:** o
       `ActivityEvent` **não ganhou coluna** e não houve migration._
 
+- [x] **38f** — O lembrete passa a sair sozinho: `node-cron` atrás de `NOTIFICATIONS_CRON=on`.
+      ⚠️ **FATIA PEDIDA PELO DONO no fechamento do MVP 3** (2026-09-17), depois de ele
+      configurar as chaves VAPID e conferir a notificação no aparelho. Ela fecha o **primeiro
+      dos três buracos de ambiente** do MVP 3 (*"ninguém chama o lembrete"*, abaixo).
+      → `docs/tasks/38f-cron-do-lembrete.md`.
+      _⚠️⚠️ **O ADR 0006 RECUSOU `node-cron` por escrito, e esta fatia NÃO o emenda — ela é
+      uma VARIANTE REGISTRADA nele.** Dos três argumentos da recusa, **dois caíram** quando o
+      claim no banco foi entregue (Tarefa 37: com `ON CONFLICT DO NOTHING`, duas instâncias
+      não duplicam e a idempotência não mora na memória do processo), e o terceiro (*"o
+      agendamento morre com o processo"*) **continua valendo e foi aceito conscientemente**. O
+      que a mantém sendo variante é a **chave de ambiente**: num deploy com duas instâncias
+      ela fica desligada e o cron externo assume, **sem tocar uma linha de código**._
+      _✅ **ENTREGUE.** `notifications/reminder-cron.ts` (o portão, a expressão de 5 em 5
+      minutos, a rejeição que não derruba o processo e a guarda de uma passada por vez) não
+      conhece `node-cron` nem Prisma — o agendamento é decidível em teste **sem relógio real**
+      (§7.3). A única linha que amarra o `node-cron` é o `http/main.ts`, e a expressão é
+      medida contra a biblioteca de verdade (`createTask` sem `start()`): ela casa os minutos
+      múltiplos de 5 e **os mesmos instantes com ou sem `timezone`**, até em `Asia/Kathmandu`
+      (UTC+05:45). ⚠️ **Desligado é o padrão**: só a string `on` liga. Sem migration._
+      _⚠️⚠️ **RODADA DE CORREÇÃO (auditoria da 38f): a FIAÇÃO não tinha um acusador, e
+      isso virou código.** Três mutações plantadas no `http/main.ts` deixavam os 1938 testes
+      verdes — `cron.schedule` → `cron.createTask` (tarefa criada e **nunca iniciada**),
+      `env: process.env` → `env: {}` (a chave no `.env` deixa de ser lida) e
+      `vapidConfigured: vapid !== null` → `true` (a linha de boot mente) —, e as três dão o
+      mesmo sintoma: **um lembrete que não chega**, com todo documento dizendo que o buraco
+      fechou. A fiação saiu para `notifications/install-reminder-cron.ts`, com teste por
+      comportamento (duplo de cron com `schedule` **e** `createTask` instrumentados, ambiente
+      do processo e chaves VAPID efêmeras). Acusadores depois: **4 · 2 · 1**. Uma quarta
+      mutação, achada nesta rodada, também sobrevivia — a passada montada com `vapid: null`
+      apesar das chaves — e ganhou teste (**1** acusador)._
+      _⚠️ **O QUE FICOU SEM GUARDA, medido e registrado de propósito:** dentro do
+      `dispatch-pass.ts` continuam sem acusador a fiação do `windowMinutes` (mutante para `1`:
+      **0 acusadores**), o mapeamento dos sete repositórios e a construção do `WebPushSender`
+      — todos só decidíveis com uma passada de verdade, que exige banco. **Não emendei fatia
+      para isso**; fica aqui como dívida nomeada. O `windowMinutesFromEnv` em si é testado no
+      `dispatch-script.test.ts`; o que falta é o fio, não a peça._
+
 ## Definição de "MVP 3 pronto"
 
 Eu marco que li o trecho de hoje e vejo onde eu e o clube estamos no livro. Recebo um
@@ -3041,24 +3078,35 @@ botão de testar; e 38c, o foguinho). Só uma linha mudou de sentido, e ela est�
 | --- | --- |
 | *"marco que li o trecho de hoje"* | ✅ ⚠️ **só o dia de hoje** — dia passado não se marca pela tela (pergunta 2) |
 | *"vejo onde eu e o clube estamos no livro"* | ✅ ⚠️ **entregue duas vezes, e a segunda reverteu a primeira.** Primeiro como ~~**presença, não número**~~ (resposta do dono à pergunta 1, tornada estrutural: a rota da atividade não devolve contagem — **e isso continua verdade**); depois, a pedido dele, **também como número** — a corrente de dias, visível para o clube (Tarefa 38c, ADR 0010) |
-| *"recebo um lembrete no horário que eu escolhi"* | ⚠️ **entregue, NÃO automático** |
+| *"recebo um lembrete no horário que eu escolhi"* | ~~⚠️ **entregue, NÃO automático**~~ → ✅ **entregue e automático desde a Tarefa 38f** (2026-09-17), com `NOTIFICATIONS_CRON=on` no `.env` do backend. ⚠️ **Desligado é o padrão** — sem a chave, continua valendo a linha riscada |
 | *"e não recebo se eu já li"* | ✅ |
 | *"meu celular avisa"* | ⚠️ **entregue, com duas condições de ambiente** |
 | *"a atividade aparece no feed da home"* | ✅ |
 
-⚠️ **O QUE NÃO TEM DONO — três buracos entre a frase e a realidade, e os três são de
-AMBIENTE, não de código:**
+⚠️ **O QUE NÃO TEM DONO — eram três buracos entre a frase e a realidade, todos de AMBIENTE.
+O nº 1 FECHOU na Tarefa 38f (2026-09-17); sobram DOIS.** A numeração fica como estava, e o
+fechado fica riscado em vez de apagado: esta lista é histórica, e apagar faria a próxima
+pessoa achar que o buraco nunca existiu.
 
-1. **Ninguém chama o lembrete.** Não existe cron instalado, e é decisão de desenho
+1. ~~**Ninguém chama o lembrete.** Não existe cron instalado, e é decisão de desenho
    (`NOTIFICACOES.md` §6: não há agendador dentro do Fastify). Hoje o lembrete só sai se
    alguém rodar `notifications:dispatch`. Virar automático é instalar um cron externo a cada
-   5–10 min na máquina do backend — **operação, não fatia**. É o maior dos três.
+   5–10 min na máquina do backend — **operação, não fatia**. É o maior dos três.~~
+   ✅ **FECHADO pela Tarefa 38f** (2026-09-17): `NOTIFICATIONS_CRON=on` no `.env` do backend
+   agenda a passada de 5 em 5 minutos **dentro do processo do Fastify** — a variante
+   registrada do ADR 0006, que continua recusando o cron interno como *arquitetura* e o
+   aceita como *variante de deploy*. ⚠️ **Continua sendo passo de ambiente**, só que de uma
+   linha em vez de um cron de sistema: sem a chave, nada é agendado (é o padrão seguro, e
+   com duas instâncias é o que se quer). Quem liga pela primeira vez é o dono.
 2. **Push no celular pela rede local não funciona** — contexto seguro, a mesma limitação que
    impede o PWA de instalar pelo IP. Exige `localhost` ou túnel HTTPS.
-3. **As chaves VAPID não estão configuradas**, e nunca estarão por padrão — são segredo. Sem
-   elas a metade de notificação fica desligada, e **a tela diz isso** sem parecer erro.
+3. **As chaves VAPID não estão configuradas** por padrão, e nunca estarão — são segredo, e o
+   `.env` não vai para o repositório. Sem elas a metade de notificação fica desligada, e **a
+   tela diz isso** sem parecer erro. (⚠️ No `.env` **do dono** elas já estão, desde
+   2026-09-17 — o buraco é de ambiente, e o ambiente dele deixou de tê-lo.)
 
-Os três têm passo a passo no `COMO-TESTAR.md` (§6.6 e §6.7). Nenhum é dívida escondida.
+Os dois que sobram têm passo a passo no `COMO-TESTAR.md` (§6.6 e §6.7). Nenhum é dívida
+escondida.
 
 ---
 
