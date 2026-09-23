@@ -37,6 +37,10 @@ Leia sob demanda:
 - **`docs/EDITOR.md`** — antes da Tarefa 14. É a spec do editor, e o motivo deste projeto
   existir. Não improvise em cima dela.
 - **`docs/NOTIFICACOES.md`** — antes do Bloco I (MVP 3).
+- **`docs/new-ui.md`** e **`docs/ui/prints/`** — antes do Bloco J (MVP 3.5). O primeiro é
+  o briefing de reestruturação da UI que originou o MVP 3.5 (é dele que saem as decisões
+  fechadas do `docs/BACKLOG.md`); o segundo são os 23 prints das telas **como elas eram**
+  antes da reestruturação — o "antes" contra o qual o "depois" se compara.
 - **`docs/adr/*.md`** — quando quiser saber **por que** uma regra é assim, ou quando for
   tomar uma decisão nova (aí você escreve o próximo ADR).
 
@@ -53,6 +57,8 @@ Leia sob demanda:
 | `docs/tasks/NN-*.md` | o que fazer nesta fatia, com testes e limites | regra geral do projeto |
 | `docs/adr/*.md` | uma decisão, com alternativas e consequências | tutorial |
 | `docs/EDITOR.md` | spec de uma peça específica | opcional |
+| `docs/new-ui.md` | o briefing da reestruturação da UI (MVP 3.5) e o link do canvas de design | decisão fechada — quem fecha é o `BACKLOG.md` |
+| `docs/ui/prints/` | os 23 prints das telas ANTES do MVP 3.5 | o alvo visual — esse é o canvas |
 | `docs/ACEITE-MVP.md` | o roteiro e as perguntas de fechamento de cada MVP; as respostas do dono | detalhe de fatia |
 | `docs/PROMPT-MVP-2.md` | o prompt que pôs uma IA orquestradora para executar o MVP 2 inteiro | spec de tarefa |
 | `docs/PROMPT-MVP-3.md` | o mesmo, para o MVP 3 — e ele carrega as **20 lições medidas** dos MVPs 1 e 2 | spec de tarefa |
@@ -87,8 +93,14 @@ Tarefa 01 — depois, é um find-and-replace no código todo. Os lugares:
    seguem o mesmo prefixo (`@clube/ui/editor.css`).
 4. **`docker-compose.yml`** — `container_name`, `POSTGRES_USER/PASSWORD/DB`, o volume, e o
    `DATABASE_URL` correspondente no `.env` (`docs/SETUP.md` §2 e §3).
-5. **Prefixo dos tokens de CSS** — `--clube-*` em `packages/ui/src/theme.css` e nos
-   componentes (`docs/EDITOR.md` §13). É o único lugar onde o nome vira parte do estilo.
+5. ~~**Prefixo dos tokens de CSS** — `--clube-*` em `packages/ui/src/theme.css` e nos
+   componentes (`docs/EDITOR.md` §13). É o único lugar onde o nome vira parte do estilo.~~
+   ⚠️ **Este item MORREU na Tarefa 39 (2026-09-19)**, e por isso os lugares passaram de
+   **sete para seis**: a decisão A do MVP 3.5 tirou o prefixo dos tokens, que hoje se
+   chamam como o canvas de design os chama (`--bg`, `--surface`, `--accent`). Era mesmo o
+   único lugar onde o nome do projeto virava parte do ESTILO — e renomear o projeto deixou
+   de tocar uma linha de CSS. O item fica riscado em vez de apagado para que a numeração
+   abaixo não mude de significado para quem já a citou.
 6. **Manifest do PWA** — `name` e `short_name` em `packages/app/vite.config.ts`, e o
    `<title>` do `index.html`. Este é o nome que aparece na tela do celular; pode ser diferente
    do nome técnico.
