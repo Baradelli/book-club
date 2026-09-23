@@ -58,9 +58,38 @@ export function FilterChip({
       aria-pressed={pressed}
       className={cx(
         'inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors',
+        /*
+          ⚠️ O REPOUSO É O DO CANVAS, E ELE JÁ ESTAVA CERTO — a Tarefa 41a
+          tentou repintá-lo e a auditoria reverteu, porque a medição original
+          era do elemento errado.
+
+          A primeira versão desta fatia citou `Acervo.dc.html:63,65` e trocou
+          para `bg-surface-raised text-content`. Medido depois: `:63` é um
+          **contêiner** e `:65` é um `<span>` de 30px **não interativo** — o
+          chip REMOVÍVEL de filtro aplicado, componente que nem existe aqui
+          (quem o cria é a Tarefa 46).
+
+          ⚠️ O `FilterChip` de verdade está desenhado em
+          `CorrigirGrifo.dc.html:59-63` e `NovoGrifo.dc.html:60-64`, dentro do
+          `<fieldset><legend>Cor da caneta</legend>` — que é o que
+          `highlight-fields.tsx:138` renderiza com este componente. Lá o
+          repouso é `<button height:44px>` com `background:none`,
+          `border:1px solid var(--border)`, `border-radius:999px` e
+          **`color:var(--text-muted)`**. É exatamente isto.
+
+          ⚠️ E A ALTURA NÃO É DIVERGÊNCIA: o canvas desenha este chip com
+          **44px**, o mesmo piso da decisão F. (A pílula "Refinar" de 36px é do
+          `FilterBar`, não deste componente, e ali o piso vence.)
+
+          O pressionado do canvas é a cor da CANETA (`background:var(--pen-a)`,
+          `border:1.5px solid var(--gold)`) — dado por opção, e `HIGHLIGHT_COLORS`
+          é dado persistido. Quem pinta isso é a Tarefa 47, pelo `start`/
+          `className` da opção; o `bg-accent` daqui é o estado "escolhido"
+          genérico, das dimensões que não têm cor própria.
+        */
         pressed
           ? 'border-accent bg-accent text-accent-fg'
-          : 'border-line bg-surface text-muted hover:border-line-strong hover:text-content',
+          : 'border-line bg-transparent text-muted hover:border-line-strong hover:text-content',
         FOCUS_RING,
         className,
       )}

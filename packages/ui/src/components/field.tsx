@@ -106,18 +106,42 @@ export function Field({
   };
 
   return (
-    <div className={cx('flex flex-col gap-1.5', className)}>
+    <div className={cx('flex flex-col gap-2', className)}>
       {/* REGRA 10: `htmlFor` = `id` do controle, então clicar no rótulo foca o
-          campo — o alvo de toque do rótulo passa a valer também. */}
-      <label className="text-sm font-medium text-content" htmlFor={controlId}>
+          campo — o alvo de toque do rótulo passa a valer também.
+
+          ⚠️ A PINTURA É DO CANVAS (Tarefa 41a, decisão F), medida em
+          `Main.dc.html:48` e `Convite.dc.html:45`: `font-family:'Geist Mono'` ·
+          `font-size:9.5px` · `letter-spacing:0.12em` ·
+          `text-transform:uppercase` · `color:var(--text-muted)`.
+
+          O `text-sm font-medium text-content` que estava aqui era rótulo de
+          formulário de aplicativo; o caderno encadernado põe rótulo de seção em
+          monoespaçada maiúscula. `text-micro` é o degrau de 9,5px da escala, e
+          `text-muted` é o cinza que passa 4,5:1 nas três superfícies nos dois
+          temas (medido na Tarefa 39). */}
+      <label
+        className="font-mono text-micro uppercase tracking-[0.12em] text-muted"
+        htmlFor={controlId}
+      >
         {label}
       </label>
+      {children(control)}
+      {/*
+        ⚠️ A DICA VEM DEPOIS DO CONTROLE, e é a única mudança de ordem do DOM
+        desta fatia. Ela é do canvas: em `Convite.dc.html:47,56` a dica
+        ("Mínimo de 8 caracteres.") está SOB o `<input>`, em 11,5px
+        `--text-muted`.
+
+        E a fiação não muda: `aria-describedby` continua dica→erro, porque dica
+        e erro continuam nesta ordem RELATIVA no DOM — é a propriedade do GOV.UK
+        Design System, e o teste da regra 12 continua verde sem uma edição.
+      */}
       {hint !== undefined ? (
-        <p className="text-sm text-subtle" id={hintId}>
+        <p className="text-label text-muted" id={hintId}>
           {hint}
         </p>
       ) : null}
-      {children(control)}
       {error !== undefined ? (
         /*
           Sem `role="alert"` de propósito: com `aria-describedby` apontando

@@ -258,4 +258,118 @@ describe('FilterBar', () => {
 
     expect(colourOnly.value).toBe('yellow');
   });
+
+  /*
+    ============================================================================
+    RECOLHIDA — Tarefa 41a, decisão H
+    ============================================================================
+
+    ⚠️ ADITIVA: os 7 `it()` acima não passam `collapsed`, e não foram tocados.
+    Quem recolhe de verdade é a Tarefa 46; aqui nasce só a CAPACIDADE.
+
+    Medido em `Acervo.dc.html:57-60`: recolhida, a barra é uma linha de resumo
+    em monoespaçada maiúscula ("De todo mundo · Tudo · Todas as cores") mais uma
+    pílula "Refinar" de 36px à direita, dentro de um bloco com filete em cima e
+    embaixo.
+  */
+  describe('collapsed (decision H)', () => {
+    it('sums the dimensions up from the groups themselves, with no new text', () => {
+      /*
+        ⚠️ O RESUMO É DERIVADO, e isso é a decisão J do MVP 3.5 no compilador:
+        `packages/ui` não chama `t()` e não ganha chave de catálogo. A frase da
+        linha de resumo é a concatenação dos RÓTULOS das opções escolhidas — que
+        a tela já traduziu para pôr nos chips. Se ela fosse uma prop de texto, a
+        Tarefa 46 teria de manter um segundo mapa valor → rótulo, que é
+        exatamente o que o `onSelect(option)` desta barra existe para evitar.
+      */
+      render(
+        <FilterBar
+          collapsed
+          groups={twoGroups()}
+          onRefine={vi.fn()}
+          refineLabel="Refinar"
+        />,
+      );
+
+      expect(screen.getByText('Tudo · Amarelo')).not.toBeNull();
+      // E os chips saem do caminho: recolhida é recolhida.
+      expect(screen.queryByRole('group')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Minhas' })).toBeNull();
+    });
+
+    it('skips a dimension whose selection is not in its options', () => {
+      // O lado negativo: um `selected` solto (a tela mudou a URL antes de a
+      // lista de opções chegar) não pode virar `undefined` no meio da frase.
+      render(
+        <FilterBar
+          collapsed
+          groups={twoGroups({ color: { selected: 'nao-existe' } })}
+          onRefine={vi.fn()}
+          refineLabel="Refinar"
+        />,
+      );
+
+      expect(screen.getByText('Tudo')).not.toBeNull();
+    });
+
+    it('calls onRefine when the pill is pressed, and moves nothing by itself', () => {
+      const onRefine = vi.fn();
+      render(
+        <FilterBar
+          collapsed
+          groups={twoGroups()}
+          onRefine={onRefine}
+          refineLabel="Refinar"
+        />,
+      );
+
+      const pill = screen.getByRole('button', { name: 'Refinar' });
+      fireEvent.click(pill);
+
+      expect(onRefine).toHaveBeenCalledTimes(1);
+      // Decisão A: a barra continua controlada — abrir o painel é da tela.
+      expect(screen.getByText('Tudo · Amarelo')).not.toBeNull();
+    });
+
+    it('keeps the refine pill a real button, above the 44px floor', () => {
+      /*
+        ⚠️ O canvas desenha a pílula com 36px (`Acervo.dc.html:59`), abaixo do
+        piso da decisão F. O piso vence — é o mesmo caso do chip de 30px.
+
+        E ela é `<button type="button">`: um `<div role="button">` responde ao
+        Enter pelo clique sintético do React e fica MUDO no Espaço, que é a
+        tecla de quem usa leitor de tela.
+      */
+      render(
+        <FilterBar
+          collapsed
+          groups={twoGroups()}
+          onRefine={vi.fn()}
+          refineLabel="Refinar"
+        />,
+      );
+
+      const pill = screen.getByRole('button', { name: 'Refinar' });
+      expect(pill.tagName).toBe('BUTTON');
+      expect(pill.getAttribute('type')).toBe('button');
+      expect(minHeightPxFromClass(pill.className)).toBeGreaterThanOrEqual(
+        MIN_TOUCH_TARGET_PX,
+      );
+      expect(pill.className).toContain('focus-visible:outline-focus');
+      // O glifo do canvas vem do `lucide-react` e não fala: o nome acessível é
+      // o rótulo (`adr-0002-iconography.test.ts` proíbe `<svg>` à mão).
+      expect(pill.querySelector('svg')?.getAttribute('aria-hidden')).toBe(
+        'true',
+      );
+    });
+
+    it('renders no refine pill at all when it is not collapsed', () => {
+      // O lado negativo do par: uma barra que mostrasse a pílula sempre
+      // apareceria nas duas telas que já usam o `FilterBar` hoje.
+      render(<FilterBar groups={twoGroups()} />);
+
+      expect(screen.queryByRole('button', { name: 'Refinar' })).toBeNull();
+      expect(screen.getAllByRole('group')).toHaveLength(2);
+    });
+  });
 });

@@ -1,18 +1,39 @@
 import { User } from 'lucide-react';
 
 import { cx } from '../cx';
-import { avatarBackgroundClass } from './avatar-color';
 import { initialsFromName } from './initials';
 
 export type PersonAvatarSize = 'sm' | 'md';
 
+/**
+ * Os dois tamanhos do canvas, medidos: 20px dentro de uma linha
+ * (`Acervo.dc.html:92`, com a inicial em 9px) e 26px como marca do autor de uma
+ * anotação (`Dia.dc.html:90`, inicial em 11px). O artboard do acervo também
+ * usa 24px/10px na linha principal; os dois degraus daqui a cercam.
+ *
+ * ⚠️ ELE ENCOLHEU, e de propósito: `md` era `size-11` (44px), o alvo de toque
+ * de um BOTÃO. O avatar não é botão — é uma marca dentro de uma linha que já é
+ * o alvo —, e 44px de marca empurrava o título do item para o canto.
+ */
 const SIZE_CLASS: Record<PersonAvatarSize, string> = {
-  sm: 'size-8 text-xs',
-  md: 'size-11 text-sm',
+  sm: 'size-5 text-micro',
+  md: 'size-6.5 text-label',
 };
 
 export interface PersonAvatarProps {
-  /** `User.id`. É dele que sai a cor (decisão E). */
+  /**
+   * `User.id`.
+   *
+   * ⚠️ ELE NÃO PINTA MAIS NADA, e isto é a decisão F do MVP 3.5: a paleta de 6
+   * cores derivada do `id` morreu, e ficou o par único `--person-*` do canvas.
+   * Quem carrega identidade é a INICIAL.
+   *
+   * A prop FICA, e a razão é medida: 8 telas passam `id=` hoje, e removê-la do
+   * tipo faria o `tsc` acusar oito arquivos de `packages/app/src/pages/` — que é
+   * exatamente o que a decisão K desta fatia proíbe tocar. É dívida registrada
+   * para as Tarefas 42–48, que reescrevem essas telas: quem mexer numa delas
+   * tira o `id` de lá, e quando a última sair esta prop sai também.
+   */
   id: string;
   /** `User.name` é nullable no banco — daí o `| null`. */
   name: string | null;
@@ -48,7 +69,6 @@ export interface PersonAvatarProps {
  */
 export function PersonAvatar({
   className,
-  id,
   label,
   name,
   size = 'md',
@@ -61,11 +81,23 @@ export function PersonAvatar({
       aria-hidden={label === undefined ? true : undefined}
       aria-label={label}
       className={cx(
-        'inline-flex shrink-0 select-none items-center justify-center rounded-full font-semibold text-avatar-fg',
+        /*
+          ⚠️ O PAR ÚNICO DO CANVAS (decisão F do MVP 3.5), medido em
+          `Acervo.dc.html:79,92,100,113` e `Dia.dc.html:90`: `--person-bg` de
+          fundo, filete de 1px em `--person-border`, inicial em `--person-fg`
+          e em MONOESPAÇADA.
+
+          O filete não é enfeite: o avatar aparece dentro de um chip e de uma
+          linha que também são claros, e sem a borda a marca se dissolve na
+          superfície. E a inicial é mono porque é a mesma família de todo
+          rótulo/dado curto do desenho — o avatar é um dado, não uma palavra.
+
+          `font-semibold` saiu: o canvas não pesa a inicial, e mono já tem
+          largura de traço uniforme. O contraste do par é medido nos dois temas
+          por `src/__tests__/avatar-contrast.test.ts`.
+        */
+        'inline-flex shrink-0 select-none items-center justify-center rounded-full border border-person-line bg-person font-mono text-person-fg',
         SIZE_CLASS[size],
-        // A cor vem do `id` e o contraste contra `text-avatar-fg` é testado nos
-        // dois temas (regra 32) — o gerador não pode sortear um par ilegível.
-        avatarBackgroundClass(id),
         className,
       )}
       role={label === undefined ? undefined : 'img'}

@@ -61,4 +61,65 @@ describe('FilterChip', () => {
 
     expect(onPress).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps the resting chip hollow and muted, the way the canvas draws IT (Tarefa 41a)', () => {
+    /*
+      ⚠️ ESTE TESTE NASCEU MEDINDO O ELEMENTO ERRADO, E A AUDITORIA PEGOU.
+
+      A primeira versão citava `Acervo.dc.html:63,65` e exigia
+      `bg-surface-raised text-content`. Medido: `:63` é um **contêiner** e `:65`
+      é um `<span>` de 30px **não interativo** — o chip REMOVÍVEL de filtro
+      aplicado, um componente que nem existe em `packages/ui` (quem o cria é a
+      Tarefa 46). Não é o `FilterChip`.
+
+      ⚠️ O `FilterChip` DE VERDADE está no canvas duas vezes, e é a paleta de
+      canetas: `CorrigirGrifo.dc.html:59-63` e `NovoGrifo.dc.html:60-64`, dentro
+      do `<fieldset><legend>Cor da caneta</legend>` — que é literalmente o que
+      `highlight-fields.tsx:138` renderiza com este componente. Medido lá, valor
+      a valor:
+
+      - repouso: `<button height:44px>` com `background:none`,
+        `border:1px solid var(--border)`, `border-radius:999px`, Geist 13px e
+        **`color:var(--text-muted)`**;
+      - pressionado: `background:var(--pen-a)` (a cor da própria caneta) com
+        `border:1.5px solid var(--gold)` e `color:var(--text)`.
+
+      Ou seja: o `bg-transparent text-muted` que estava aqui desde a Tarefa 13
+      **é o do canvas**, e o repinte era opinião de desenho minha contra a
+      fonte. Revertido. O canvas manda — é decisão fechada do MVP 3.5.
+
+      ⚠️ E O PRESSIONADO NÃO FOI TOCADO: no canvas ele é a cor da CANETA, que é
+      dado por opção (e `HIGHLIGHT_COLORS` é dado persistido). Pintar isso é da
+      Tarefa 47, pelo `start`/`className` da opção; o `bg-accent` genérico daqui
+      é o que o projeto já tinha e continua sendo o estado "escolhido" das
+      dimensões que não têm cor própria.
+
+      O que este teste guarda é a DIFERENÇA entre os dois estados: um chip que
+      pintasse igual solto e pressionado deixaria `aria-pressed` como único
+      portador da informação — o mesmo defeito que o `filter-bar.test.tsx`
+      proíbe do outro lado (cor não pode ser o único portador; o inverso vale).
+    */
+    const { rerender } = render(
+      <FilterChip label="Amarelo" onPress={vi.fn()} pressed={false} />,
+    );
+
+    const resting = screen
+      .getByRole('button', { name: 'Amarelo' })
+      .className.split(/\s+/u);
+    expect(resting).toContain('rounded-full');
+    expect(resting).toContain('bg-transparent');
+    expect(resting).toContain('text-muted');
+    expect(resting).toContain('border-line');
+    expect(resting).not.toContain('bg-surface-raised');
+
+    rerender(<FilterChip label="Amarelo" onPress={vi.fn()} pressed />);
+
+    const pressed = screen
+      .getByRole('button', { name: 'Amarelo' })
+      .className.split(/\s+/u);
+    expect(pressed).toContain('bg-accent');
+    expect(pressed).toContain('text-accent-fg');
+    expect(pressed).not.toContain('bg-transparent');
+    expect(pressed).not.toContain('text-muted');
+  });
 });

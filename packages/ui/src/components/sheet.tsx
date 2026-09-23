@@ -190,10 +190,17 @@ function SheetPanel({
         O backdrop é IRMÃO do painel, não pai: assim o clique dentro do painel
         nunca borbulha até aqui, e a regra 17 ("clique dentro NÃO fecha") não
         depende de `stopPropagation` espalhado pelo conteúdo.
+
+        ⚠️ `bg-scrim` e não `bg-black/50` (Tarefa 39, decisão G). O véu é token
+        do canvas (`--scrim`), e a troca é o que permitiu `--color-*: initial`
+        ficar SEM EXCEÇÃO NENHUMA no `@theme inline`: `--color-black` era a
+        única sobrevivente da paleta do Tailwind, e uma exceção é uma porta por
+        onde uma cor de fora do sistema compila e pinta. A opacidade mora dentro
+        do `rgba()` do token, então não há mais modificador `/50` aqui.
       */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-black/50"
+        className="absolute inset-0 bg-scrim"
         data-sheet-backdrop=""
         onClick={onClose}
       />
@@ -201,7 +208,36 @@ function SheetPanel({
         aria-labelledby={titleId}
         aria-modal="true"
         className={cx(
-          'relative flex max-h-[90dvh] w-full flex-col overflow-y-auto bg-surface-raised text-content shadow-sheet',
+          /*
+            ⚠️ `bg-surface` E NÃO `bg-surface-raised` — decisão do dono de
+            2026-09-21, e é o que o canvas desenha (`Avulsa.dc.html:79`:
+            `background:var(--surface)`). Era `--surface-2` desde a Tarefa 13.
+
+            ⚠️ MEDIDO, porque o medo que adiou a troca era o oposto da verdade:
+            `--text-subtle` (a dica de campo, que aparece DENTRO do sheet) dá
+            **4,93:1** sobre `--surface` contra **4,54:1** sobre `--surface-2`.
+            Trocar o papel do sheet MELHORA o pior caso de contraste da Tarefa
+            39 — não o invalida.
+
+            E o desenho fecha o argumento: um painel que flutua SOBRE a página
+            sendo mais ESCURO que ela é o contrário de elevação. O que separa o
+            sheet do fundo são outras três coisas, e as três estão aqui: o
+            scrim, a sombra que sobe (`--shadow-sheet`, negativa no Y) e o
+            filete de topo.
+          */
+          'relative flex max-h-[90dvh] w-full flex-col overflow-y-auto border-t border-line bg-surface text-content shadow-sheet',
+          /*
+            ⚠️ `--radius-sheet` VALE 10px DESDE A TAREFA 41a (decisão I), e até
+            então valia 4px: a escala de quatro raios não tinha o 10px que o
+            canvas desenha (`Avulsa.dc.html:79`,
+            `border-radius: 10px 10px 0 0`), então o token apontava para
+            `--r-3`. A pendência estava escrita na nota nº 4 da Tarefa 39, e o
+            `--r-4` nasceu para fechá-la.
+
+            O par é uma decisão só: só o topo arredonda no celular (o painel
+            sobe de baixo) e os quatro cantos arredondam no desktop (ele fica
+            centrado).
+          */
           'rounded-t-sheet sm:max-w-lg sm:rounded-sheet',
           FOCUS_RING,
           className,
@@ -210,6 +246,24 @@ function SheetPanel({
         role="dialog"
         tabIndex={-1}
       >
+        {/*
+          A ALÇA do canvas (`Avulsa.dc.html:80`): 36×4 em `--border-strong`,
+          centrada, com raio de pílula. Ela diz "isto sobe e desce" no celular.
+
+          ⚠️ `<div aria-hidden>` e NÃO `<button>`: ela é decoração. Quem ouve a
+          tela já recebe "diálogo, <título>" pelo `aria-labelledby`, e uma alça
+          focável poria um elemento que não faz nada na frente do ciclo de Tab
+          (regra 18).
+
+          `sm:hidden`: no desktop o painel é CENTRADO (decisão D da Tarefa 13) e
+          não sobe de lugar nenhum — uma alça ali seria um enfeite mentindo
+          sobre o gesto.
+        */}
+        <div
+          aria-hidden="true"
+          className="mx-auto mt-3 h-1 w-9 shrink-0 rounded-pill bg-line-strong sm:hidden"
+          data-sheet-handle=""
+        />
         <header className="flex items-start justify-between gap-3 border-b border-line p-4">
           <h2 className="text-lg font-semibold" id={titleId}>
             {title}

@@ -102,6 +102,86 @@ describe('Field', () => {
   });
 
   /*
+    ============================================================================
+    A PINTURA DO CANVAS — Tarefa 41a, decisão F
+    ============================================================================
+
+    ⚠️ Os `it()` acima NÃO foram tocados, e é isso que a decisão F promete: a
+    pintura não tem permissão para mexer na associação rótulo↔controle. Os dois
+    abaixo medem só o que o canvas mudou.
+
+    ⚠️ E SÃO **SEIS**, NÃO SETE. A spec da Tarefa 41a (regra 6 e a tabela "por
+    que a 41 virou 41a e 41b") diz "os 7 `it()` do `field.test.tsx`", e o
+    número foi CONTADO nesta fatia: `grep -c "^\s*it("` dá 6 aqui, e o próprio
+    vitest reportou 6 antes de os dois de baixo nascerem. Com isso o total da
+    fatia é **68** `it()`, não 69 — os outros oito arquivos batem com a tabela
+    (button 10 · list 9 · filter-bar 7 · filter-chip 3 · sheet 11 ·
+    person-avatar 17 · styles 3 · avatar-contrast 2).
+  */
+  it('writes the label in the mono uppercase of the canvas (decision F)', () => {
+    /*
+      Medido em `Main.dc.html:48` e `Convite.dc.html:45`, valor a valor:
+      `font-family:'Geist Mono'` · `font-size:9.5px` · `letter-spacing:0.12em` ·
+      `text-transform:uppercase` · `color:var(--text-muted)`.
+
+      O rótulo do caderno encadernado é rótulo de seção em monoespaçada
+      maiúscula, não um `text-sm font-medium` de formulário de aplicativo.
+      `text-micro` é o degrau de 9,5px da escala (`--size-micro`), e
+      `text-muted` é o cinza que passa 4,5:1 nas três superfícies (medido na
+      Tarefa 39).
+    */
+    renderField();
+
+    const label = screen.getByText('E-mail');
+    for (const utility of [
+      'font-mono',
+      'text-micro',
+      'uppercase',
+      'text-muted',
+    ]) {
+      expect(label.className.split(/\s+/u)).toContain(utility);
+    }
+  });
+
+  it('puts the hint BELOW the control, the way the canvas draws it (decision F)', () => {
+    /*
+      ⚠️ ESTA É A ÚNICA MUDANÇA DE ORDEM DO DOM DA FATIA, e ela é do canvas:
+      em `Convite.dc.html` a dica ("É como o clube vai te ver…",
+      "Mínimo de 8 caracteres.") vem DEPOIS do `<input>`, não antes.
+
+      E a ordem do `aria-describedby` continua dica→erro (o teste da regra 12,
+      intocado): dica e erro continuam nesta ordem RELATIVA no DOM, então quem
+      lê a tela e quem ouve a tela continuam recebendo a mesma sequência. É a
+      propriedade que o GOV.UK Design System fixa, e ela sobrevive à mudança.
+    */
+    renderField({
+      error: 'Informe um e-mail válido',
+      hint: 'Usamos só para entrar',
+    });
+
+    const nodes = [
+      screen.getByText('E-mail'),
+      control(),
+      screen.getByText('Usamos só para entrar'),
+      screen.getByText('Informe um e-mail válido'),
+    ];
+
+    for (let index = 1; index < nodes.length; index += 1) {
+      const previous = nodes[index - 1];
+      const current = nodes[index];
+      if (previous === undefined || current === undefined) {
+        throw new Error('o fixture do Field não montou os quatro nós');
+      }
+      // `DOCUMENT_POSITION_FOLLOWING` = 4. Comparar POSIÇÃO e não índice de
+      // filho: o controle é do consumidor e pode vir embrulhado.
+      expect(
+        previous.compareDocumentPosition(current) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  /*
     ⚠️ A REGRA 14 NÃO TEM MAIS TESTES PRÓPRIOS AQUI, e é uma remoção medida.
 
     Havia dois — `shows the message it was given, and nothing it invented` e

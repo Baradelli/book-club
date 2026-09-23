@@ -1,22 +1,80 @@
-import { Loader2 } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import type { ButtonHTMLAttributes, MouseEvent, ReactNode } from 'react';
 
 import { cx } from '../cx';
 import { FOCUS_RING, SPACING_STEP_PX } from './styles';
 
-export type ButtonVariant = 'primary' | 'ghost' | 'danger';
+export type ButtonVariant = 'primary' | 'ghost' | 'seal';
 export type ButtonSize = 'md' | 'lg';
 
 /**
- * UMA cor de ação (`--clube-accent`), e o que separa as variantes é
+ * UMA cor de ação (`--accent`), e o que separa `primary` de `ghost` é
  * preenchimento × fantasma — não matiz. O app não tem hierarquia de botão
- * colorido, e `danger` não é "mais importante": é destrutivo.
+ * colorido.
+ *
+ * ============================================================================
+ * TAREFA 41a — `ghost` FICA COM O NOME, `danger` MORRE, `seal` NASCE
+ * ============================================================================
+ *
+ * ⚠️ `secondary` NÃO nasceu, e a razão é medida: `variant="ghost"` tem **29
+ * usos em 12 arquivos, todos em `packages/app/src/pages/` e nenhum de teste**
+ * (`grep -rn 'variant="ghost"' packages/app/src` dá 29; `grep -rln`, 12), e o
+ * `ghost` de hoje **já é** o secundário do canvas (borda `--border`, sem
+ * preenchimento). Renomeá-lo tocaria 29 lugares para o nome descrever a mesma
+ * coisa — churn sem ganho, e a fatia perderia a propriedade "nenhuma tela
+ * tocada", que é o que a torna auditável.
+ *
+ * (A spec da 41a e o `BACKLOG.md` diziam "15 telas". São 12 — contado. O 29
+ * está certo. Corrigido nos três lugares, porque foi este docblock que ficou
+ * com o número errado mais tempo, e é ele que o próximo agente lê primeiro.)
+ *
+ * ⚠️ `danger` SAIU DO TIPO **E** DAQUI (decisão B, §7.1 nos dois sentidos).
+ * Medido antes: **zero** consumidores em `packages/{app,ui}/src`, conferido com
+ * aspas duplas, aspas simples e ternário — a única ocorrência era a própria
+ * declaração do tipo. É o mesmo caso do `--success` da Tarefa 39: o que não tem
+ * consumidor não é contrato, é peso.
+ *
+ * ⚠️ **NÃO CONFUNDIR COM `text-danger`/`border-danger`**, que continuam vivos e
+ * fora desta tabela: o erro de formulário é deles, e são **8 telas** de
+ * `packages/app/src/pages/` que o escrevem — `accept-invite`, `acervo`,
+ * `book-form`, `free-note`, `highlight-fields`, `highlight-form`, `login` e
+ * `plan-editor` — mais o `form-styles.ts:28,33` que as serve e o `field.tsx`
+ * daqui. (Contado por `grep -rln "FORM_ERROR_CLASS\|text-danger\|border-danger"`
+ * em `packages/app/src`, descontando `book.tsx` e `home.tsx`, que só citam os
+ * nomes em prosa de docblock para dizer que NÃO usam vermelho. ⚠️ Não confundir
+ * com as **9** telas do `TEXT_INPUT_CLASS`: é outra classe e outra conta.)
+ *
+ * E a guarda `DANGER_STYLE` da varredura anti-culpa casa o nome deles por regex.
+ * Um botão destrutivo VOLTA no dia em que existir um — e então ele volta com
+ * consumidor.
+ *
+ * ⚠️ `seal` É ESTADO, NÃO HIERARQUIA. Ele é o "li hoje" **marcado**
+ * (`Livro.dc.html:55`: "Li hoje — tirar a marca"), e é dourado por isso: o ouro
+ * é o filete da edição crítica — o dia de hoje, a abertura de seção — e não uma
+ * terceira cor de ação. Medido nos dois artboards, valor a valor:
+ * `background: var(--gold-soft)` · `border: 1px solid var(--gold-line)` ·
+ * `color: var(--gold-strong)`.
+ *
+ * O `hover` muda a BORDA (`--gold-line` → `--gold`) e não o fundo, e isto é
+ * medição, não gosto: `--surface-today` **é** `--gold-soft` nos dois temas
+ * (nota nº 13 da Tarefa 39), então um `hover:bg-surface-today` seria um hover
+ * que não muda um pixel. Os critérios de aceite do MVP 3.5 pedem hover mudando
+ * COR, sem `transform` — e a borda é a cor que sobrou.
  */
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
   primary: 'bg-accent text-accent-fg hover:bg-accent-hover',
   ghost: 'border border-line bg-transparent text-content hover:bg-surface',
-  danger: 'bg-danger text-danger-fg hover:opacity-90',
+  seal: 'border border-gold-line bg-gold-soft text-gold-strong hover:border-gold',
 };
+
+/**
+ * Exportado só para o teste das decisões B e C — a tela usa `variant`.
+ *
+ * ⚠️ Ele existe porque o `Record<ButtonVariant, string>` obriga a CHAVE e não
+ * obriga o VALOR: medido, um `seal: ''` (variante no tipo, sem pintura) passava
+ * nos 201 testes de `@clube/ui`.
+ */
+export const BUTTON_VARIANTS = VARIANT_CLASS;
 
 /**
  * O `heightClass` e o `heightPx` são a MESMA decisão escrita duas vezes, e é
@@ -117,6 +175,25 @@ export function Button({
       <span
         className={cx('inline-flex items-center gap-2', loading && 'invisible')}
       >
+        {/*
+          O SELO do canvas, e só na variante `seal`.
+
+          `lucide-react` (`CLAUDE.md`), não o `<polyline>` do artboard: SVG
+          inline em `ui/src` é proibido por `adr-0002-iconography.test.ts`,
+          porque a varredura de termos do ADR 0002 pega PALAVRA e desenho não
+          tem palavra nenhuma para ela achar. Com o glifo vindo do lucide, o
+          NOME importado (`Check`) cai na varredura.
+
+          Ele mora DENTRO do `<span>` do rótulo de propósito: assim ele some
+          junto com o rótulo no `loading` (regra 7) em vez de ficar ao lado do
+          spinner, e a largura do botão não muda.
+
+          `aria-hidden`: o nome acessível é o rótulo. "Marca de seleção, Li
+          hoje — tirar a marca" é a mesma coisa dita duas vezes.
+        */}
+        {variant === 'seal' ? (
+          <Check aria-hidden="true" className="size-4" focusable="false" />
+        ) : null}
         {children}
       </span>
       {loading ? (

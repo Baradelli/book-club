@@ -4,8 +4,10 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   Button,
   BUTTON_SIZES,
+  BUTTON_VARIANTS,
   type ButtonProps,
   type ButtonSize,
+  type ButtonVariant,
 } from '../button';
 import { MIN_TOUCH_TARGET_PX, SPACING_STEP_PX } from '../styles';
 
@@ -139,5 +141,87 @@ describe('Button', () => {
     // Sem esta linha o `it.each` acima é meio teste: uma tabela esvaziada não
     // roda caso nenhum e a suíte fica verde (§7.4).
     expect(Object.keys(BUTTON_SIZES).sort()).toEqual(['lg', 'md']);
+  });
+
+  /*
+    ============================================================================
+    AS VARIANTES — Tarefa 41a, decisões A, B e C
+    ============================================================================
+
+    ⚠️ O QUE ESTE BLOCO GUARDA, E POR QUE ELE PRECISOU EXISTIR: até a Tarefa 41a
+    a tabela `VARIANT_CLASS` não tinha acusador NENHUM. Medido: apagar o estilo
+    de uma variante e deixá-la no tipo passava em 201 testes de `@clube/ui` —
+    o `Record<ButtonVariant, string>` obriga a chave, mas nada obrigava o VALOR
+    a pintar coisa alguma, e um `seal: ''` renderiza um botão sem selo.
+
+    A decisão B mata `danger` (zero consumidores, medido: a única ocorrência era
+    a própria declaração do tipo) e a decisão C faz nascer `seal`. Os dois
+    sentidos do §7.1: a variante sai do TIPO e do ESTILO.
+  */
+  it('offers exactly the three variants the canvas draws (decisions B and C)', () => {
+    // ⚠️ `danger` MORREU aqui, e é o pino que impede a ressurreição por
+    // hábito: quem devolver a variante tem de vir a esta linha e explicar.
+    // (Os utilitários `text-danger`/`border-danger` continuam vivos — o erro de
+    // formulário de 8 telas é deles (contado; ver o docblock do `button.tsx`),
+    // e a guarda `DANGER_STYLE` da varredura
+    // anti-culpa depende deles. Variante de botão é outra coisa.)
+    expect(Object.keys(BUTTON_VARIANTS).sort()).toEqual([
+      'ghost',
+      'primary',
+      'seal',
+    ]);
+  });
+
+  it.each(Object.keys(BUTTON_VARIANTS) as ButtonVariant[])(
+    'gives variant %s a style that actually paints (decisions B and C)',
+    (variant) => {
+      // O lado que faltava: chave presente e valor vazio é o jeito silencioso
+      // de ter uma variante que não existe na tela.
+      const classes = BUTTON_VARIANTS[variant];
+      expect(classes.split(/\s+/u).filter(Boolean).length).toBeGreaterThan(1);
+      expect(classes).not.toContain('danger');
+
+      renderButton({ variant });
+      expect(screen.getByRole('button').className).toContain(
+        classes.split(/\s+/u)[0],
+      );
+    },
+  );
+
+  it('paints the seal with the three gold tokens of the canvas (decision C)', () => {
+    // `Livro.dc.html:55` (e `LivroDesktop.dc.html:55`): o estado "li hoje"
+    // MARCADO é `background: var(--gold-soft)`, `border: 1px solid
+    // var(--gold-line)`, `color: var(--gold-strong)`. Não é uma terceira
+    // hierarquia de ação — é um ESTADO, e é por isso que ele é dourado e não
+    // verde. Os três tokens andam juntos: fundo dourado com tinta de outra cor
+    // é ilegível, e borda sem fundo é o `ghost`.
+    renderButton({ children: 'Li hoje — tirar a marca', variant: 'seal' });
+
+    const className = screen.getByRole('button').className;
+    expect(className).toContain('bg-gold-soft');
+    expect(className).toContain('border-gold-line');
+    expect(className).toContain('text-gold-strong');
+  });
+
+  it('marks the seal with a lucide glyph, out of the screen reader path (rule 8)', () => {
+    // O canvas desenha um "check" dentro do botão. Ele vem do `lucide-react`
+    // (`CLAUDE.md`), e não de um `<polyline>` à mão: SVG inline em `ui/src` é
+    // proibido por `adr-0002-iconography.test.ts`, porque a varredura de termos
+    // do ADR 0002 pega PALAVRA — e desenho não tem palavra.
+    renderButton({ children: 'Li hoje — tirar a marca', variant: 'seal' });
+
+    const button = screen.getByRole('button');
+    const glyph = button.querySelector('svg');
+    expect(glyph).not.toBeNull();
+    expect(glyph?.getAttribute('aria-hidden')).toBe('true');
+    // O rótulo continua sendo o nome acessível: o glifo não fala.
+    expect(button.textContent).toContain('Li hoje — tirar a marca');
+  });
+
+  it('keeps the seal glyph out of the OTHER variants', () => {
+    // O lado negativo do par: um `Check` desenhado sempre poria um selo em
+    // todo botão "Salvar" do app.
+    renderButton({ children: 'Salvar', variant: 'primary' });
+    expect(screen.getByRole('button').querySelector('svg')).toBeNull();
   });
 });

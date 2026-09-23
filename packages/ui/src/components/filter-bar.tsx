@@ -1,7 +1,9 @@
+import { ListFilter } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { cx } from '../cx';
 import { FilterChip } from './filter-chip';
+import { FOCUS_RING } from './styles';
 
 /**
  * Uma opção do filtro — um chip.
@@ -70,9 +72,69 @@ export interface FilterGroup {
   onSelect: (option: FilterOption) => void;
 }
 
-export interface FilterBarProps {
+/**
+ * ⚠️ A CAPACIDADE DE RECOLHER (decisão H da Tarefa 41a), e ela é uma UNIÃO de
+ * propósito.
+ *
+ * O canvas (`Acervo.dc.html:57-60`) recolhe as seis dimensões numa linha de
+ * resumo mais uma pílula "Refinar". A pílula precisa de um rótulo, e
+ * `packages/ui` não chama `t()` (decisão B da Tarefa 13, decisão J do MVP 3.5):
+ * o texto entra por prop, já traduzido.
+ *
+ * ⚠️ E É POR ISSO QUE `collapsed` NÃO É UM `boolean` SOLTO: uma barra recolhida
+ * sem `onRefine` é um beco sem saída — o usuário vê o resumo e não tem como
+ * abrir o painel —, e uma com `onRefine` sem rótulo é um botão sem nome
+ * acessível. As três props andam juntas ou não andam, e é o compilador que
+ * cobra. (A spec da 41a nomeia duas props; a terceira é o preço da decisão J, e
+ * está registrada nas notas de reconciliação da fatia.)
+ */
+type FilterBarCollapse =
+  | { collapsed?: false; onRefine?: never; refineLabel?: never }
+  | { collapsed: true; onRefine: () => void; refineLabel: string };
+
+export type FilterBarProps = {
   groups: readonly FilterGroup[];
   className?: string;
+} & FilterBarCollapse;
+
+/**
+ * A linha de resumo, DERIVADA dos grupos — nunca uma prop de texto.
+ *
+ * O rótulo de cada opção já veio traduzido da tela para ir no chip; reusá-lo
+ * aqui é o que impede a Tarefa 46 de manter um segundo mapa valor → rótulo (a
+ * mesma razão de o `onSelect` devolver a OPÇÃO e não o `value`).
+ *
+ * Um `selected` que não está em `options` é pulado: a tela pode ter mudado a
+ * URL antes de a lista de membros chegar, e `undefined` no meio da frase seria
+ * um "· undefined ·" na cara do usuário.
+ *
+ * ⚠️ **REGISTRADO PARA A TAREFA 46, NÃO CONSERTADO AQUI: esta frase não passa
+ * por guarda anti-culpa nenhuma.**
+ *
+ * A varredura anti-culpa (`COUNTER_SHAPE`, `GUILT_TERMS`) vive em
+ * `packages/shared` e é exercitada pelos testes de TELA do `packages/app`; não
+ * existe uma em `packages/ui`, e mover o `COUNTER_SHAPE` para cá é decisão do
+ * dono, não desta fatia. Medido: um rótulo de opção que diga "3 de 12" entra
+ * inteiro nesta frase, e hoje só é pego por **igualdade de texto** nos três
+ * testes de `collapsed` do `filter-bar.test.tsx`.
+ *
+ * ⚠️ O risco de HOJE é baixo, e por uma razão que é medição e não sorte: o
+ * separador é ` · `, que não casa o `\d+ de \d+` do `COUNTER_SHAPE` — a frase
+ * só ficaria culposa se um RÓTULO já fosse culposo, e rótulo vem do catálogo,
+ * que já é varrido.
+ *
+ * **O que a Tarefa 46 tem de fazer quando ligar o `collapsed`:** o estado
+ * recolhido da tela do acervo cai no `expectNoGuilt()` como qualquer outro
+ * estado dela. É lá que a frase passa a existir para a varredura de DOM.
+ */
+function summaryOf(groups: readonly FilterGroup[]): string {
+  return groups
+    .map(
+      (group) =>
+        group.options.find((option) => option.value === group.selected)?.label,
+    )
+    .filter((label): label is string => label !== undefined)
+    .join(' · ');
 }
 
 /**
@@ -106,7 +168,51 @@ export interface FilterBarProps {
  * grupo de tipo, na Tarefa 28, pode não ter. E o rótulo dele é texto, que só a
  * tela sabe traduzir (`packages/ui` não conhece i18n — decisão B da Tarefa 13).
  */
-export function FilterBar({ className, groups }: FilterBarProps) {
+export function FilterBar({
+  className,
+  collapsed = false,
+  groups,
+  onRefine,
+  refineLabel,
+}: FilterBarProps) {
+  if (collapsed && onRefine !== undefined && refineLabel !== undefined) {
+    return (
+      /*
+        O BLOCO RECOLHIDO — `Acervo.dc.html:57`: filete em cima e embaixo,
+        `padding:12px 0`, o resumo à esquerda e a pílula à direita. Não é
+        cartão: o desenho é caderno encadernado, e o que delimita é o filete.
+      */
+      <div
+        className={cx(
+          'flex items-center justify-between gap-3 border-y border-line-soft py-3',
+          className,
+        )}
+      >
+        {/* Rótulo de seção em monoespaçada maiúscula (§A.6), medido em
+            `Acervo.dc.html:58`: 10px, `letter-spacing:0.08em`, `--text-muted`. */}
+        <span className="font-mono text-eyebrow uppercase tracking-[0.08em] text-muted">
+          {summaryOf(groups)}
+        </span>
+        <button
+          className={cx(
+            'inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-line px-4 text-sm text-content',
+            'transition-colors hover:border-line-strong hover:bg-surface',
+            FOCUS_RING,
+          )}
+          onClick={onRefine}
+          type="button"
+        >
+          {/* `lucide-react` (`CLAUDE.md`), não as três linhas do artboard:
+              `adr-0002-iconography.test.ts` proíbe `<svg>` inline em `ui/src`,
+              porque a varredura do ADR 0002 pega PALAVRA e desenho não tem
+              palavra. O nome acessível é o rótulo; o glifo não fala. */}
+          <ListFilter aria-hidden="true" className="size-4" focusable="false" />
+          {refineLabel}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className={cx('flex flex-col gap-2', className)}>
       {groups.map((group) => (
