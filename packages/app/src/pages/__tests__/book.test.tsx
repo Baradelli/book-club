@@ -19,6 +19,7 @@ import { mentionsPrivacyTerm, PRIVACY_TERMS } from './adr-0002-dom';
 import {
   DANGER_STYLE,
   expectNoGuilt,
+  expectNoGuiltWithPlanPosition,
   stripComments,
   withoutDiacritics,
 } from './anti-guilt-dom';
@@ -425,19 +426,36 @@ function rowOf(title: string): HTMLElement {
 /**
  * Os avatares de quem ESCREVEU.
  *
- * ⚠️ **O `:not([data-read-mark])` é a metade de teste da decisão C** (Tarefa
- * 32b): as duas sobreposições convivem na mesma linha e as duas são
+ * ⚠️ **O recorte por `data-read-mark` é a metade de teste da decisão C**
+ * (Tarefa 32b): as duas sobreposições convivem na mesma linha e as duas são
  * `role="img"` com nome acessível — sem o recorte, este helper contaria as
  * marcas de leitura como avatares de escrita e os testes da Tarefa 27 (as
  * iniciais, a frase nomeada) passariam a falar de outra coisa.
+ *
+ * ⚠️ **O `data-read-mark` PASSOU A SER UM ENVOLTÓRIO na Tarefa 44 (decisão
+ * B).** Quem desenha as duas marcas agora é o MESMO componente
+ * (`PresenceMark`, de `packages/ui`), que não aceita atributo arbitrário — e
+ * alargar a API dele para um chamador seria o "peso" que a decisão B da 41a
+ * proíbe. Então o gancho ficou no `<span>` de fora, e os dois helpers passaram
+ * a devolver o elemento de DENTRO: é nele que estão a classe, a inicial e o
+ * `aria-label` que todos os `it()` desta suíte leem.
+ *
+ * ⚠️ **NÃO troque este recorte por um recorte pelo `aria-label`.** Seria
+ * circular: metade dos testes daqui mede justamente que os dois rótulos são
+ * diferentes, e selecionar por rótulo transformaria essas asserções na
+ * tautologia do §7.8.
  */
 function avatarsIn(row: HTMLElement): HTMLElement[] {
-  return Array.from(row.querySelectorAll('[role="img"]:not([data-read-mark])'));
+  return Array.from(row.querySelectorAll<HTMLElement>('[role="img"]')).filter(
+    (element) => element.closest('[data-read-mark]') === null,
+  );
 }
 
 /** As marcas de quem LEU. */
 function readMarksIn(row: HTMLElement): HTMLElement[] {
-  return Array.from(row.querySelectorAll('[data-read-mark]'));
+  return Array.from(
+    row.querySelectorAll<HTMLElement>('[data-read-mark] [role="img"]'),
+  );
 }
 
 function labelsOf(elements: readonly HTMLElement[]): Array<string | null> {
@@ -477,6 +495,35 @@ function linkIn(row: HTMLElement): HTMLElement {
   const link = row.querySelector('a');
   if (link === null) throw new Error('a linha do plano não é um link');
   return link;
+}
+
+/** As classes do ALVO da linha — é nele que o tom do sumário é pintado. */
+function classesOf(row: HTMLElement): string {
+  return linkIn(row).getAttribute('class') ?? '';
+}
+
+/**
+ * O CONDUTOR pontilhado da linha do sumário (`data-sumario-leader`, nascido na
+ * Tarefa 41a). Ele é o único gancho estrutural que o `ListItem` expõe para a
+ * meta da direita: o slot `end` é o IRMÃO SEGUINTE dele.
+ */
+function leaderOf(row: HTMLElement): HTMLElement {
+  const leader = row.querySelector<HTMLElement>('[data-sumario-leader]');
+  if (leader === null) throw new Error('a linha do plano não é um sumário');
+  return leader;
+}
+
+/**
+ * O slot `end` — a meta em monoespaçada à direita (`Livro.dc.html:78`).
+ *
+ * ⚠️ Achado por POSIÇÃO relativa ao condutor, e não por classe: a classe é
+ * decisão de `packages/ui` e muda lá; o que esta suíte precisa saber é que a
+ * data e a referência estão **depois** do condutor, que é o que a decisão A da
+ * Tarefa 44 move. Uma linha sem `end` devolve string vazia, e é isso que o
+ * caso `reference: null` exercita.
+ */
+function endOf(row: HTMLElement): string {
+  return leaderOf(row).nextElementSibling?.textContent ?? '';
 }
 
 async function press(element: HTMLElement): Promise<void> {
@@ -520,6 +567,16 @@ function pageSource(file: string): string {
 function bookSource(): string {
   return pageSource('book.tsx');
 }
+
+/*
+  ⚠️ **AQUI VIVIA `testSource()`, o leitor do fonte DESTA suíte**, e ele morreu
+  com o pino que o justificava (veja o bilhete no fim deste arquivo, onde o
+  `it()` estava). O argumento escrito era que a propriedade "este estado chama
+  a variante estrita" só seria observável no TEXTO do arquivo; a medição da
+  rodada de correção da Tarefa 44 mostrou que ela é observável no DOM, desde
+  que as duas variantes sejam mutuamente exclusivas — e aí o acusador mora no
+  `it()` de verdade, não numa contagem de ocorrências.
+*/
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -609,7 +666,7 @@ describe('the book screen draws the book and its plan (rules 1, 2)', () => {
     expect(requestsTo(calls, '/books/').map((call) => call.url)).toEqual([
       `https://api.teste/books/${BOOK_ID}`,
     ]);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('keeps the order the API returned, without reordering it (rule 2)', async () => {
@@ -629,7 +686,7 @@ describe('the book screen draws the book and its plan (rules 1, 2)', () => {
       PLAN_TITLES.find((title) => row.textContent?.includes(title)),
     );
     expect(titles).toEqual(PLAN_TITLES);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('shows the day and the reference of each item, and no reference when there is none', async () => {
@@ -644,7 +701,7 @@ describe('the book screen draws the book and its plan (rules 1, 2)', () => {
     const withoutReference = rowOf('A porta redonda').textContent ?? '';
     expect(withoutReference).not.toContain('null');
     expect(withoutReference).not.toContain('undefined');
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 });
 
@@ -669,7 +726,7 @@ describe('⚠️ ONLY TODAY IS HIGHLIGHTED, AND NOTHING ELSE IS (rules 3, 4)', (
     expect(rowOf('O carneiro assado').textContent).toContain(
       pt.pages.book.plan.today,
     );
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('marks NO other day — not the past ones, not the future ones (rule 4)', async () => {
@@ -679,22 +736,43 @@ describe('⚠️ ONLY TODAY IS HIGHLIGHTED, AND NOTHING ELSE IS (rules 3, 4)', (
       expect(planRows()).toHaveLength(3);
     });
     /*
-      As DUAS metades. "Hoje" aparece UMA vez (um `getAllByText` de tamanho 1
-      recusa "marca todos"), e a marca VISUAL — o anel de destaque — está só na
-      linha de hoje. Sem a segunda, uma tela que desenhasse o anel em todas as
-      linhas passaria, porque a palavra continuaria única.
+      As DUAS metades. "Hoje" aparece UMA vez (uma lista de tamanho 1 recusa
+      "marca todos"), e a marca VISUAL está só na linha de hoje. Sem a segunda,
+      uma tela que desenhasse o destaque em todas as linhas passaria, porque a
+      palavra continuaria única.
 
       E a ausência de cobrança no dia PASSADO é o que o `expectNoGuilt` varre:
       sem vermelho, sem contagem, sem "atrasado".
+
+      ⚠️ **AS DUAS ASSERÇÕES MUDARAM DE FORMA NA TAREFA 44 — não de força.**
+
+      (a) A palavra era procurada por `getAllByText(…)`, que casa o texto
+      INTEIRO de um elemento. Desde a decisão A ela divide o slot `end` com a
+      referência do dia ("Hoje · p. 31-58", como `Livro.dc.html:146` desenha),
+      então o casamento exato deixou de existir — e a asserção passou a dizer
+      ONDE a palavra está, que é mais do que ela dizia antes;
+
+      (b) a marca visual era o anel `ring-accent` da Tarefa 17. O canvas não
+      desenha anel nenhum: o dia de hoje tem PAPEL próprio (`--surface-today`)
+      e um filete DOURADO em cima e embaixo (`Livro.dc.html:139`). O par
+      negativo continua inteiro — nenhuma outra linha os tem —, e o anel morto
+      ganhou asserção própria para não voltar por engano.
     */
-    expect(screen.getAllByText(pt.pages.book.plan.today)).toHaveLength(1);
+    const saidToday = planRows().filter((row) =>
+      endOf(row).startsWith(pt.pages.book.plan.today),
+    );
+    expect(saidToday).toHaveLength(1);
+    expect(saidToday[0]?.textContent).toContain('O carneiro assado');
 
     const highlighted = planRows().filter((row) =>
-      /ring-accent/u.test(linkIn(row).getAttribute('class') ?? ''),
+      /bg-surface-today/u.test(classesOf(row)),
     );
     expect(highlighted).toHaveLength(1);
     expect(highlighted[0]?.textContent).toContain('O carneiro assado');
-    expectNoGuilt();
+    for (const row of planRows()) {
+      expect(classesOf(row)).not.toContain('ring-accent');
+    }
+    expectNoGuiltWithPlanPosition();
   });
 
   it('reads the day of the plan in the TIME ZONE of whoever is looking, not in UTC', async () => {
@@ -758,7 +836,7 @@ describe('⚠️ ONLY TODAY IS HIGHLIGHTED, AND NOTHING ELSE IS (rules 3, 4)', (
       expect(rowOf('O dia seguinte').textContent).not.toContain(
         pt.pages.book.plan.today,
       );
-      expectNoGuilt();
+      expectNoGuiltWithPlanPosition();
     } finally {
       vi.useRealTimers();
     }
@@ -784,12 +862,110 @@ describe('⚠️ ONLY TODAY IS HIGHLIGHTED, AND NOTHING ELSE IS (rules 3, 4)', (
       expect(planRows()).toHaveLength(2);
     });
     expect(screen.queryByText(pt.pages.book.plan.today)).toBeNull();
+    // ⚠️ O papel de hoje no lugar do anel da Tarefa 17 — a decisão D da 44.
     expect(
-      planRows().filter((row) =>
-        /ring-accent/u.test(linkIn(row).getAttribute('class') ?? ''),
-      ),
+      planRows().filter((row) => /bg-surface-today/u.test(classesOf(row))),
     ).toEqual([]);
     expectNoGuilt();
+  });
+});
+
+describe('⚠️ THE PLAN IS A SUMÁRIO, NOT A LIST OF ROWS (task 44, decisions A, D)', () => {
+  it('⚠️ puts the day and the reference in the END slot, in mono — the subtitle is gone (decision A)', async () => {
+    /*
+      ⚠️ **A NOTA DO `ListItemLook` PREVIU ESTA MIGRAÇÃO POR ESCRITO** (Tarefa
+      41a, `packages/ui/src/components/list.tsx`): o braço `sumario` declara
+      `subtitle?: never`, então o `subtitle={subtitleFor(item, locale)}` que
+      esta tela passava desde a Tarefa 17 **não compila** com `variant="sumario"`.
+
+      A informação não se perde: ela MUDA de lugar. No canvas a data e a
+      referência estão à direita, em monoespaçada, depois do condutor pontilhado
+      (`Livro.dc.html:78`: `8 SET · 9`) — e é isso que este teste fixa, para
+      que "migrar" não vire "apagar" numa fatia futura.
+    */
+    await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    for (const row of planRows()) {
+      // A coluna de marcas existe MESMO VAZIA: é ela que alinha os títulos
+      // entre o dia lido e o dia que ainda não chegou (`Livro.dc.html:150`).
+      expect(row.querySelector('[data-sumario-marks]')).not.toBeNull();
+      expect(leaderOf(row).getAttribute('aria-hidden')).toBe('true');
+    }
+
+    // A meta está no `end`, em mono, e traz a referência do dia.
+    const today = rowOf('O carneiro assado');
+    expect(endOf(today)).toContain('p. 31-58');
+    expect(leaderOf(today).nextElementSibling?.className).toContain(
+      'font-mono',
+    );
+
+    // E o dia PASSADO traz a data formatada, não "Hoje".
+    const past = rowOf('Zumbis e anões');
+    expect(endOf(past)).not.toContain(pt.pages.book.plan.today);
+    expect(endOf(past)).toMatch(/\d/u);
+
+    /*
+      O par negativo do `reference: null` (§7.4): sem referência o `end` é só a
+      data — nunca "null", nunca um " · " pendurado no fim.
+    */
+    const withoutReference = endOf(rowOf('A porta redonda'));
+    expect(withoutReference).not.toContain('null');
+    expect(withoutReference).not.toContain('·');
+
+    expectNoGuiltWithPlanPosition();
+  });
+
+  it('⚠️ gives TODAY its own paper and a GOLD fillet, and the future gets text-subtle (decision D)', async () => {
+    /*
+      ⚠️ **`--text-subtle` NO DIA FUTURO, E NÃO `--text-faint`** — decisão do
+      dono de 2026-09-21, registrada na nota nº 5 de `tasks/41a-*.md`. O canvas
+      pinta o futuro com `--text-faint` (`Livro.dc.html:149`), que dá 2,45:1 no
+      claro contra 4,5:1 de piso; os três cinzas de legenda não cabem todos
+      acima do piso, e o dono escolheu preservar a INTENÇÃO (o futuro mais
+      apagado que a linha lida) com o cinza que passa.
+
+      A asserção negativa é a que vale: `text-faint` aqui acenderia também a
+      guarda de primeiro uso da Tarefa 39
+      (`theme-tokens.test.ts › refuses the FIRST USE of text-faint`).
+    */
+    await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    const today = classesOf(rowOf('O carneiro assado'));
+    expect(today).toContain('bg-surface-today');
+    expect(today).toContain('border-gold-line');
+    expect(today).toContain('border-y-2');
+    expect(leaderOf(rowOf('O carneiro assado')).className).toContain(
+      'border-gold-line',
+    );
+
+    const future = rowOf('A porta redonda');
+    expect(classesOf(future)).toContain('text-subtle');
+    expect(classesOf(future)).not.toContain('text-faint');
+    expect(leaderOf(future).className).toContain('border-leader-future');
+
+    /*
+      ⚠️ **O PASSADO NÃO É APAGADO NEM DESTACADO** — é o §1 do plano na forma de
+      par negativo. Apagar o que já passou é cobrança desenhada; destacá-lo
+      seria "você não leu isto". Ele fica exatamente como uma linha comum.
+    */
+    const past = classesOf(rowOf('Zumbis e anões'));
+    expect(past).not.toContain('text-subtle');
+    expect(past).not.toContain('text-faint');
+    expect(past).not.toContain('bg-surface-today');
+    expect(past).not.toContain('border-gold-line');
+    expect(leaderOf(rowOf('Zumbis e anões')).className).toContain(
+      'border-leader',
+    );
+
+    expectNoGuiltWithPlanPosition();
   });
 });
 
@@ -819,7 +995,7 @@ describe('who already wrote, and NEVER how much (rules 6, 7)', () => {
       // ouviria "imagem" e nada mais.
       expect(avatar.getAttribute('aria-label')).not.toBeNull();
     }
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('⚠️ gives EVERY avatar of the plan the real name — spoken and visual (rule 7 of the fix round)', async () => {
@@ -858,7 +1034,7 @@ describe('who already wrote, and NEVER how much (rules 6, 7)', () => {
         pt.pages.book.plan.writerNamed.replace('{{name}}', 'Zeca'),
       ].sort(),
     );
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('⚠️ falls back to the generic phrase and the neutral glyph when it does not know the people', async () => {
@@ -891,7 +1067,7 @@ describe('who already wrote, and NEVER how much (rules 6, 7)', () => {
     expect(labels).toContain(
       pt.pages.book.plan.writerNamed.replace('{{name}}', 'Marcos'),
     );
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('puts the avatars on the day the writers entry names, not on the first row (rule 6)', async () => {
@@ -904,7 +1080,7 @@ describe('who already wrote, and NEVER how much (rules 6, 7)', () => {
     // poria os avatares no primeiro dia, e é isto que o acusa.
     expect(avatarsIn(rowOf('A porta redonda'))).toHaveLength(2);
     expect(avatarsIn(rowOf('Zumbis e anões'))).toHaveLength(0);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('shows nothing in the place of a day nobody wrote on — not even "nobody" (rule 7)', async () => {
@@ -925,7 +1101,7 @@ describe('who already wrote, and NEVER how much (rules 6, 7)', () => {
     expect(linkIn(quiet).getAttribute('href')).toBe(
       `/books/${BOOK_ID}/days/p-c`,
     );
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 });
 
@@ -952,7 +1128,7 @@ describe('⚠️ WHO ALREADY READ EACH DAY, AND NEVER HOW MANY (task 32b, rules 
       readerLabel('Maria'),
       readerLabel('Zeca'),
     ]);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('leaves a day nobody read without a mark and without a phrase (rule 6)', async () => {
@@ -974,7 +1150,7 @@ describe('⚠️ WHO ALREADY READ EACH DAY, AND NEVER HOW MANY (task 32b, rules 
     expect(spoken).not.toContain('ninguem');
     expect(spoken).not.toContain('leu');
 
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('⚠️ says nothing about reading on a day that has WRITING and no reading (rule 6)', async () => {
@@ -1003,7 +1179,7 @@ describe('⚠️ WHO ALREADY READ EACH DAY, AND NEVER HOW MANY (task 32b, rules 
     expect(readMarksIn(written)).toHaveLength(0);
     expect(withoutDiacritics(written.textContent ?? '')).not.toContain('leu');
     expect(readableText()).not.toContain(pt.pages.book.plan.reader);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('⚠️ tells READING apart from WRITING on the same row, without leaning on colour (rule 7)', async () => {
@@ -1013,12 +1189,29 @@ describe('⚠️ WHO ALREADY READ EACH DAY, AND NEVER HOW MANY (task 32b, rules 
       ("duas coisas que falam a mesma frase", que já mentiu numa tela deste
       projeto).
 
-      As duas sobreposições dividem a linha do último dia. As DUAS metades:
+      ⚠️⚠️ **A PROPRIEDADE MUDOU DE FORMA NA TAREFA 44 (decisão B) — NÃO DE
+      FORÇA, e é por isso que este `it()` foi REESCRITO em vez de apagado.**
 
-      - **forma**: a marca de leitura é um glifo (SVG, sem letra nenhuma) num
-        quadrado; o avatar de escrita é a INICIAL (letra, sem SVG) num círculo.
-        Um teste que olhasse só o rótulo passaria com as duas desenhadas
-        idênticas;
+      Até aqui o portador era **glifo × letra**: a marca de leitura era um
+      `<Check>` do lucide (SVG, sem letra) e o avatar de escrita era a INICIAL
+      (letra, sem SVG). No canvas os dois são o MESMO desenho — círculo de
+      18×18 com a inicial em monoespaçada — e o que os separa é
+      **vazado × cheio**: `Livro.dc.html:83` é `border:1px solid
+      var(--border-strong)` sem preenchimento nenhum, e `:73` é
+      `background:var(--accent)` sem filete.
+
+      A propriedade que SOBREVIVE, e que este teste continua medindo com a
+      mesma força, é: *leu e escreveu* tem de ser distinguível de *só leu*
+      **sem depender de cor**. As três metades:
+
+      - **forma**: uma tem preenchimento e a outra NÃO TEM NENHUM. Isso é
+        estrutural, não matiz — quem não distingue as cores continua vendo um
+        disco cheio e um anel. Um "vazado" que virasse um cheio de outra tinta
+        (o mutante iii da regra 2) passaria por um teste que só comparasse os
+        nomes das classes, e não passa por este;
+      - **conteúdo**: as DUAS carregam a inicial, e é a MESMA letra da MESMA
+        pessoa. É essa igualdade que impede o teste de passar de graça: se a
+        distinção viesse do texto, ela não estaria vindo da forma;
       - **fala**: os textos acessíveis não são iguais — e não são iguais NEM
         para a mesma pessoa, que é o caso que a Zeca cobre (ela leu E escreveu
         naquele dia).
@@ -1035,15 +1228,41 @@ describe('⚠️ WHO ALREADY READ EACH DAY, AND NEVER HOW MANY (task 32b, rules 
     expect(marks).toHaveLength(1);
     expect(avatars).toHaveLength(2);
 
-    const mark = marks[0];
-    if (mark === undefined) throw new Error('unreachable: length asserted');
-    expect(mark.querySelector('svg')).not.toBeNull();
-    expect(mark.textContent).toBe('');
+    const hollow = marks[0];
+    if (hollow === undefined) throw new Error('unreachable: length asserted');
+    /*
+      ⚠️ A MESMA pessoa nos dois papéis: a inicial não pode ser o que
+      distingue. Quem asserta a metade CHEIA é o `throw` logo abaixo — a busca
+      é por `textContent === 'Z'`, e não achar significa que a inicial da Zeca
+      não está no avatar de escrita.
 
-    for (const avatar of avatars) {
-      expect(avatar.querySelector('svg')).toBeNull();
-      expect(avatar.textContent ?? '').toMatch(/^\p{Lu}+$/u);
-    }
+      ⚠️ **E NÃO HÁ `expect(filled.textContent).toBe('Z')` AQUI, de propósito.**
+      Ele existiu até a rodada de correção da Tarefa 44 e era TAUTOLÓGICO: o
+      `filled` acabara de ser escolhido por essa mesma igualdade, então os dois
+      lados da asserção vinham do mesmo lugar e ela não podia ficar vermelha.
+      É o §7.8 em miniatura — "quem escolheu o valor esperado?" — na versão
+      mais curta possível.
+    */
+    const filled = avatars.find((avatar) => avatar.textContent === 'Z');
+    if (filled === undefined) throw new Error('a Zeca escreveu naquele dia');
+
+    expect(hollow.textContent).toBe('Z');
+
+    /*
+      ⚠️ **VAZADO = SEM PREENCHIMENTO NENHUM, não "com outro fundo".** A regex
+      procura QUALQUER utilitário `bg-*`: é ela que mata o mutante que troca a
+      forma por matiz (um `bg-surface-2` no lugar do filete continuaria
+      "diferente" e deixaria de ser distinguível sem cor).
+    */
+    expect(hollow.className).not.toMatch(/(?<![\w-])bg-[\w-]+/u);
+    expect(hollow.className).toContain('border-line-strong');
+    expect(filled.className).toMatch(/(?<![\w-])bg-[\w-]+/u);
+    expect(filled.className).not.toContain('border-line-strong');
+
+    // E as duas são o MESMO desenho de base: círculo, e não quadrado × círculo
+    // (a silhueta que o docblock da Tarefa 32b media e que ninguém acusava).
+    expect(hollow.className).toContain('rounded-full');
+    expect(filled.className).toContain('rounded-full');
 
     // E a MESMA pessoa (a Zeca) é falada de dois jeitos diferentes.
     expect(labelsOf(marks)).toEqual([readerLabel('Zeca')]);
@@ -1051,7 +1270,7 @@ describe('⚠️ WHO ALREADY READ EACH DAY, AND NEVER HOW MANY (task 32b, rules 
       [writerLabel('Zeca'), writerLabel('Marcos')].sort(),
     );
     expect(labelsOf(marks)[0]).not.toBe(labelsOf(avatars)[0]);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('names WHO read, with the same nameOfWriter the rest of the screen uses (rule 8)', async () => {
@@ -1066,7 +1285,7 @@ describe('⚠️ WHO ALREADY READ EACH DAY, AND NEVER HOW MANY (task 32b, rules 
     expect(labelsOf(readMarksIn(rowOf('O carneiro assado')))).toEqual([
       readerLabel('Maria'),
     ]);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('falls back to the NEUTRAL reading phrase when it does not know the people (rule 8)', async () => {
@@ -1086,7 +1305,7 @@ describe('⚠️ WHO ALREADY READ EACH DAY, AND NEVER HOW MANY (task 32b, rules 
       pt.pages.book.plan.reader,
     ]);
     expect(readableText()).not.toContain(readerLabel('Maria'));
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('⚠️ puts NO number next to the marks — one more reader is one more mark (rule 9)', async () => {
@@ -1114,7 +1333,7 @@ describe('⚠️ WHO ALREADY READ EACH DAY, AND NEVER HOW MANY (task 32b, rules 
       expect(mark.textContent ?? '').not.toMatch(/\d/u);
     }
     expect(row.textContent ?? '').not.toMatch(/\d\s*(?:leitor|pessoa)/u);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 });
 
@@ -1126,7 +1345,7 @@ describe('⚠️ "LI HOJE" — THE FIRST-PERSON TOUCH (task 32b, rules 10 to 14)
       expect(planRows()).toHaveLength(3);
     });
     expect(readButton(false)).not.toBeNull();
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('⚠️ offers NO touch at all when the plan has no day of today (rule 10, decision E)', async () => {
@@ -1168,7 +1387,7 @@ describe('⚠️ "LI HOJE" — THE FIRST-PERSON TOUCH (task 32b, rules 10 to 14)
     });
     expect(readButton(false)).not.toBeNull();
     expect(readButton(true)).toBeNull();
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('says the OTHER state when I am among the readers of today (rule 10)', async () => {
@@ -1185,7 +1404,7 @@ describe('⚠️ "LI HOJE" — THE FIRST-PERSON TOUCH (task 32b, rules 10 to 14)
     });
     expect(readButton(true)).not.toBeNull();
     expect(readButton(false)).toBeNull();
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('⚠️ does not show itself as marked while it still does not know who I am (rule 10)', async () => {
@@ -1223,7 +1442,7 @@ describe('⚠️ "LI HOJE" — THE FIRST-PERSON TOUCH (task 32b, rules 10 to 14)
     // E a marca da Maria continua lá: quem leu é informação do clube, e não
     // depende de o app saber quem está olhando.
     expect(readMarksIn(rowOf('O carneiro assado'))).toHaveLength(1);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('marks with ONE PUT, to TODAY plan item, counted (rule 11)', async () => {
@@ -1242,7 +1461,7 @@ describe('⚠️ "LI HOJE" — THE FIRST-PERSON TOUCH (task 32b, rules 10 to 14)
     expect(written[0]?.method).toBe('PUT');
     // E em NENHUM outro dia: a tela não oferece auditoria retroativa.
     expect(requestsTo(calls, '/reading-log')).toHaveLength(1);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('unmarks with ONE DELETE, counted (rule 11)', async () => {
@@ -1267,7 +1486,7 @@ describe('⚠️ "LI HOJE" — THE FIRST-PERSON TOUCH (task 32b, rules 10 to 14)
     await waitFor(() => {
       expect(readButton(false)).not.toBeNull();
     });
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('⚠️ refetches the book after marking, and the overlay shows the new state (rule 12)', async () => {
@@ -1308,7 +1527,7 @@ describe('⚠️ "LI HOJE" — THE FIRST-PERSON TOUCH (task 32b, rules 10 to 14)
     expect(labelsOf(readMarksIn(rowOf('O carneiro assado'))).sort()).toEqual(
       [readerLabel('Marcos'), readerLabel('Maria')].sort(),
     );
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('⚠️ a double tap does NOT send two PUTs (rule 13)', async () => {
@@ -1341,14 +1560,14 @@ describe('⚠️ "LI HOJE" — THE FIRST-PERSON TOUCH (task 32b, rules 10 to 14)
     // O segundo toque, com a primeira requisição ainda no ar.
     await press(button);
     expect(readingLogCalls(calls, TODAY_ID)).toHaveLength(1);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
 
     release?.();
     await waitFor(() => {
       expect(requestsTo(calls, '/books/')).toHaveLength(2);
     });
     expect(readingLogCalls(calls, TODAY_ID)).toHaveLength(1);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('keeps the list, says so without charging anyone, and the RETRY works (rule 14)', async () => {
@@ -1387,7 +1606,7 @@ describe('⚠️ "LI HOJE" — THE FIRST-PERSON TOUCH (task 32b, rules 10 to 14)
     expect(readableText()).not.toContain('Internal Server Error');
     expect(bookScreenIsUp()).toBe(true);
     expect(requestsTo(calls, '/books/')).toHaveLength(1);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
 
     // ⚠️ A METADE QUE IMPORTA: repetir REFAZ a requisição.
     await press(screen.getByRole('button', { name: pt.pages.book.retry }));
@@ -1399,7 +1618,7 @@ describe('⚠️ "LI HOJE" — THE FIRST-PERSON TOUCH (task 32b, rules 10 to 14)
       expect(readButton(true)).not.toBeNull();
     });
     expect(screen.queryByText(pt.pages.book.read.failed)).toBeNull();
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('shows the marking in flight without losing the plan, and charges nothing there either (rule 15)', async () => {
@@ -1425,13 +1644,13 @@ describe('⚠️ "LI HOJE" — THE FIRST-PERSON TOUCH (task 32b, rules 10 to 14)
     // botão anuncia que está ocupado, e nada cobra ninguém.
     expect(planRows()).toHaveLength(3);
     expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
 
     release?.();
     await waitFor(() => {
       expect(requestsTo(calls, '/books/')).toHaveLength(2);
     });
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 });
 
@@ -1449,7 +1668,7 @@ describe('tapping a day goes to the note of that day (rule 8)', () => {
     expect(link.getAttribute('href')).toBe(
       `/books/${BOOK_ID}/days/${TODAY_ID}`,
     );
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
 
     await act(async () => {
       fireEvent.click(link);
@@ -1491,6 +1710,500 @@ describe('tapping a day goes to the note of that day (rule 8)', () => {
         new URL(call.url).searchParams.get('planItemId'),
       ),
     ).toEqual([TODAY_ID]);
+  });
+});
+
+describe('⚠️ THE POSITION IN THE PLAN, AND THE COUNTER EXEMPTION IT EXERCISES (task 40, decision F)', () => {
+  it('⚠️ says WHERE today is in the plan, and the exemption actually SUBTRACTS it', async () => {
+    /*
+      ⚠️⚠️ **ESTA É A PRIMEIRA TELA A EXERCITAR A ISENÇÃO DO CONTADOR.**
+
+      `COUNTER_EXEMPT_KEYS` e `expectNoGuiltWithPlanPosition()` nasceram na
+      Tarefa 40, foram medidos e **nunca foram chamados por uma tela** — a
+      decisão H daquela fatia dizia, por escrito, que o consumidor viria nas
+      42–48. A variante mede tudo o que o `expectNoGuilt()` mede **e** exige
+      ≥ 1 subtração efetiva: sem ela, uma isenção que nunca isenta nada
+      continuaria verde para sempre e isentaria, no dia em que um texto novo
+      tivesse o mesmo formato, um placar de verdade.
+
+      ⚠️ **A DIVERGÊNCIA DECLARADA:** o canvas desenha "Dia 11 de 30" no
+      INÍCIO (`Inicio.dc.html:41`, `InicioDesktop.dc.html:42`) e na tela do dia
+      em desktop (`DiaDesktop.dc.html:51`) — **não** em `Livro.dc.html` nem em
+      `LivroDesktop.dc.html`, conferido com o script que imprime a linha
+      citada. Aqui ela ocupa a linha de monoespaçada do cabeçalho, que é onde
+      os dois artboards do livro põem a meta do mês (`Livro.dc.html:50`:
+      "Setembro de 2026 · 288 p."). O conteúdo daquela linha não pôde ser
+      reproduzido porque "p." e o mês por extenso seriam chaves NOVAS, e a
+      regra 9 desta fatia não permite nenhuma.
+    */
+    await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    // Hoje é o item do MEIO de três: "Dia 2 de 3", derivado da POSIÇÃO no
+    // plano — nunca de quantos dias alguém leu.
+    expect(readableText()).toContain(
+      pt.pages.book.plan.dayOfPlan
+        .replace('{{number}}', '2')
+        .replace('{{total}}', '3'),
+    );
+    expectNoGuiltWithPlanPosition();
+  });
+
+  it('⚠️ writes the header META LINE as an Eyebrow: the month, then the position (owner decision, 2026-09-22)', async () => {
+    /*
+      ⚠️⚠️ **DECISÃO DO DONO NA RODADA DE CORREÇÃO DA TAREFA 44, e ela
+      desfaz uma afirmação FALSA da execução.**
+
+      A execução daquela fatia escreveu, em três lugares, que reproduzir a
+      linha de mono do canvas pediria chaves NOVAS — "o mês por extenso e o
+      'p.'". Metade disso é falso, e foi medido: o mês por extenso NÃO é chave
+      nenhuma. Ele sai do `formatClubMonth` (hoje em `./club-month`, extraído
+      do `home.tsx`), que formata `"2024-03"` com `Intl`, e `book.month` já vem
+      no `bookResponseSchema` que esta tela carrega.
+
+      O "288 p." **continua fora**: esse, sim, seria chave nova (`pt.ts` só tem
+      `bookForm.fields.totalPages = 'Total de páginas'`, rótulo de campo).
+
+      ⚠️ **E A TIPOGRAFIA PASSOU A SER O COMPONENTE — MUTANTE SOBREVIVENTE
+      M15.** A linha copiava À MÃO, byte a byte, a string de classes do
+      `Eyebrow` (`font-mono text-eyebrow uppercase tracking-[0.12em]` +
+      `text-muted`): era o TERCEIRO sítio de tipografia de rótulo no arquivo,
+      dois pelo componente e um copiado. Trocar a cópia inteira por
+      `text-ui text-muted` passava por **926 testes**, e a frase que justifica
+      a fatia inteira ficava sem forma nenhuma. Agora o dono da tipografia é um
+      só, e mudar o `tracking` do `Eyebrow` move os três juntos.
+
+      ⚠️ **O TOM É `muted`, E FOI MEDIDO NO ARTBOARD CERTO.** `Inicio.dc.html:41`
+      desenha "Dia 11 de 30" em `var(--gold)`, mas isso é a HOME. Nesta tela o
+      slot é o da meta do mês: `Livro.dc.html:50` usa `color:var(--text-muted)`
+      e `LivroDesktop.dc.html:53` usa `#565b52`, que é o valor de `--text-muted`
+      no tema claro (`theme.css:122`). O `Eyebrow` sem `tone` é exatamente esse.
+
+      ⚠️ **DIVERGÊNCIAS DECLARADAS, com a linha citada:** o canvas põe a linha em
+      9,5px/0,1em no celular e 10px/0,1em no desktop; o `Eyebrow` é 10px/0,12em
+      nas duas. A cópia à mão que saiu daqui já era 10px/0,12em — ou seja, a
+      divergência é antiga e não nasceu deste conserto.
+    */
+    await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    /*
+      O valor esperado é escrito À MÃO (§7.8): "março de 2024" é o `month` do
+      `aBook()` formatado em `pt`, não o que o `formatClubMonth` devolver. Se
+      alguém trocar o fuso do formatador pelo local, esta linha vira "fevereiro
+      de 2024" em qualquer fuso negativo — e é o único jeito de esse bug de um
+      dia ficar vermelho.
+    */
+    const meta = screen.getByText(
+      `março de 2024 · ${pt.pages.book.plan.dayOfPlan
+        .replace('{{number}}', '2')
+        .replace('{{total}}', '3')}`,
+    );
+
+    // A tipografia do `Eyebrow`, valor a valor — é isto que o mutante M15
+    // apagava sem um vermelho.
+    expect(meta.className).toContain('font-mono');
+    expect(meta.className).toContain('text-eyebrow');
+    expect(meta.className).toContain('uppercase');
+    expect(meta.className).toContain('tracking-[0.12em]');
+    expect(meta.className).toContain('text-muted');
+    // E o tom da HOME não vaza para cá (`Inicio.dc.html:41` é `--gold`).
+    expect(meta.className).not.toContain('text-gold');
+
+    /*
+      ⚠️ **A COPIA À MÃO NÃO PODE VOLTAR.** O `Eyebrow` é um `<span>` por
+      decisão escrita, e o que prova que ele é o dono é a fonte: nenhuma outra
+      linha desta tela escreve a tipografia do rótulo à mão.
+    */
+    const source = stripComments(bookSource());
+    expect(source).not.toContain('font-mono text-eyebrow');
+
+    expectNoGuiltWithPlanPosition();
+  });
+
+  it('⚠️ says NOTHING about the position when the plan has no day of today', async () => {
+    /*
+      O par negativo, e ele é a metade que impede a frase de virar decoração:
+      um livro do mês passado não tem "hoje", e uma posição inventada ("Dia 0
+      de 30") seria exatamente a cobrança que o §1 proíbe — o vazio anunciado.
+
+      E é por isso que ESTE estado chama o `expectNoGuilt()` de sempre: sem a
+      frase isenta na tela, exigir uma subtração seria a asserção vazia do §7.4
+      virada do avesso.
+    */
+    await renderBook({
+      book: [
+        bookReply(aBook({ id: BOOK_ID }), [
+          aPlanItem({ id: 'p-1', order: 1, date: dayShifted(-10) }),
+          aPlanItem({ id: 'p-2', order: 2, date: dayShifted(-9) }),
+        ]),
+      ],
+    });
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(2);
+    });
+
+    expect(readableText()).not.toContain('Dia 1 de 2');
+    expect(readableText()).not.toContain('Dia 0 de 2');
+
+    /*
+      ⚠️ **O MÊS FICA, E SOZINHO — sem o "·" pendurado.** A meta do cabeçalho
+      é do LIVRO; quem depende de haver um dia de hoje é só a posição. Um
+      separador órfão ("março de 2024 · ") é o tipo de sujeira que nenhuma
+      varredura pega e que o olho do dono acha no primeiro scroll.
+    */
+    expect(screen.queryByText('março de 2024')).not.toBeNull();
+    expect(readableText()).not.toContain('março de 2024 ·');
+
+    /*
+      ⚠️ E É AQUI QUE A VARIANTE DE SEMPRE MORDE O DEFEITO INVERSO: se a
+      posição vazasse para um livro sem dia de hoje ("Dia 0 de 2", o vazio
+      anunciado que o §1 proíbe), o `expectNoGuilt()` ficaria vermelho por
+      conta própria — `scanGuilt()` devolveria 1 e a exigência é `toBe(0)`.
+      Antes da rodada de correção da Tarefa 44 nada acusava esse lado.
+    */
+    expectNoGuilt();
+  });
+
+  it('⚠️ still catches a REAL scoreboard, with the exemption switched on (rule 7, decision H)', async () => {
+    /*
+      ⚠️ **O CASO (b) DO PAR POSITIVO DA TAREFA 40, CHEGANDO A UMA TELA DE
+      VERDADE.**
+
+      A isenção subtrai a frase do plano **caractere por caractere**, com buraco
+      só de dígito. O atalho óbvio — `replace(/\d+ de \d+/g, '')` — entregaria
+      esta suíte verde e isentaria TODO contador do app: a guarda continuaria
+      no relatório e teria parado de guardar, que é a pior das duas falhas.
+
+      Aqui o placar é plantado no conteúdo (o tema de um dia do plano), a frase
+      isenta está na tela ao mesmo tempo, e a varredura TEM de acusar mesmo
+      assim. Sem este teste, a decisão H ("as contagens de inventário são
+      inventário, não placar") não teria como ser lida senão como confiança.
+    */
+    await renderBook({
+      book: [
+        bookReply(aBook({ id: BOOK_ID }), [
+          aPlanItem({
+            id: 'p-placar',
+            order: 1,
+            date: today(),
+            title: 'Anotacoes 18 de 27',
+          }),
+        ]),
+      ],
+    });
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(1);
+    });
+
+    // A frase isenta ESTÁ na tela — a precondição do caso (b).
+    expect(readableText()).toContain(
+      pt.pages.book.plan.dayOfPlan
+        .replace('{{number}}', '1')
+        .replace('{{total}}', '1'),
+    );
+    // E o placar plantado continua acusado, com a isenção ligada.
+    expect(() => {
+      expectNoGuiltWithPlanPosition();
+    }).toThrow();
+  });
+});
+
+describe('⚠️ THE BOOK GETS A SPINE, A SEAL AND A MARGIN (task 44, decisions C, E, F, G)', () => {
+  it('⚠️ draws the typographic SPINE in the two sizes the canvas measures (decision C)', async () => {
+    /*
+      O app não tem imagem de capa e não vai ter: cadastrar um livro é digitar
+      título, autor e plano. A lombada é o que dá cara de estante sem pedir
+      arquivo a ninguém — `Livro.dc.html:44` (58×84) e
+      `LivroDesktop.dc.html:47` (88×128).
+
+      ⚠️ **DUAS LOMBADAS NO DOM, e é decisão declarada:** o `BookSpine` recebe o
+      tamanho por prop (`md`/`lg`), e o corte de 1120px é media query. As duas
+      ficam montadas e uma delas é escondida por CSS — o jsdom não aplica CSS,
+      então o que esta suíte pode provar é que os DOIS tamanhos existem e que
+      nenhuma das duas fala (as duas são `aria-hidden`, porque o título está
+      escrito ao lado, no `h1`).
+    */
+    await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    const spineBoxes = Array.from(document.querySelectorAll('span')).filter(
+      (element) => element.querySelector('[class*="writing-mode"]') !== null,
+    );
+    expect(spineBoxes).toHaveLength(2);
+    // Os dois tamanhos do canvas, e nenhum terceiro.
+    expect(spineBoxes[0]?.className).toContain('h-21');
+    expect(spineBoxes[1]?.className).toContain('h-32');
+
+    /*
+      ⚠️⚠️ **E CADA UMA APARECE NA SUA LARGURA — ESTA ASSERÇÃO NASCEU DE UM
+      MUTANTE SOBREVIVENTE.** Apagar o `hidden min-[1120px]:flex` da lombada de
+      desktop passava por **926 testes**, e o efeito na tela é **duas lombadas
+      lado a lado em toda largura** — o desenho do canvas desfeito sem um
+      vermelho.
+
+      É a classe que a nota nº 20 da Tarefa 43 nomeou: *divergência declarada
+      sem guarda é a próxima fatia a desfazê-la sem querer*. Aqui a
+      "divergência" é a duplicação no DOM, que eu declarei no docblock da tela
+      — e o que a torna aceitável é EXATAMENTE o par de media queries. Sem
+      elas, a declaração vira defeito.
+    */
+    expect(spineBoxes[0]?.className).toContain('min-[1120px]:hidden');
+    expect(spineBoxes[1]?.className).toContain('hidden');
+    expect(spineBoxes[1]?.className).toContain('min-[1120px]:flex');
+
+    // A lombada não fala: quem diz o título é o `h1`.
+    for (const spine of spineBoxes) {
+      expect(spine.getAttribute('aria-hidden')).toBe('true');
+      expect(spine.getAttribute('aria-label')).toBeNull();
+      expect(spine.textContent).toBe('O Hobbit');
+    }
+    // E nenhuma imagem: a lombada é `span` e borda (regra 8 da Tarefa 41b).
+    expect(document.querySelector('img')).toBeNull();
+    expectNoGuiltWithPlanPosition();
+  });
+
+  it('⚠️ the MARKED touch is the golden SEAL; the unmarked one is not (decision F)', async () => {
+    /*
+      ⚠️ **O PRIMEIRO CONSUMIDOR DA VARIANTE `seal`**, que nasceu na Tarefa 41a
+      sem nenhum. `Livro.dc.html:55`: `background:var(--gold-soft)`,
+      `border:1px solid var(--gold-line)`, `color:var(--gold-strong)`.
+
+      `seal` é ESTADO, não hierarquia: o ouro é o filete da edição crítica — o
+      dia de hoje, a abertura de seção —, e o botão só o veste quando a marca
+      de hoje já existe. Desmarcado ele continua `ghost`, e é o par negativo
+      que impede "ouro em todo botão".
+    */
+    await renderBook({
+      book: [
+        bookReply(aBook({ id: BOOK_ID }), plan(), WRITERS, [
+          { planItemId: TODAY_ID, userIds: [MARCOS] },
+        ]),
+      ],
+    });
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    const marked = readButtonOrThrow(true);
+    expect(marked.className).toContain('bg-gold-soft');
+    expect(marked.className).toContain('border-gold-line');
+    expect(marked.className).toContain('text-gold-strong');
+
+    /*
+      O par negativo NA MESMA TELA: a tela tem outros botões (o "editar o
+      plano" do admin), e nenhum deles veste o ouro. Sem isto, um `seal` posto
+      no `Button` por padrão passaria.
+    */
+    const golden = Array.from(document.querySelectorAll('button')).filter(
+      (button) => button.className.includes('bg-gold-soft'),
+    );
+    expect(golden).toEqual([marked]);
+    expect(document.querySelectorAll('button').length).toBeGreaterThan(1);
+    expectNoGuiltWithPlanPosition();
+  });
+
+  it('⚠️ keeps the UNMARKED touch a ghost — the gold is the STATE, not a rank (decision F)', async () => {
+    await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    const unmarked = readButtonOrThrow(false);
+    expect(unmarked.className).not.toContain('bg-gold-soft');
+    expect(unmarked.className).not.toContain('text-gold-strong');
+    expect(unmarked.className).toContain('border-line');
+    expectNoGuiltWithPlanPosition();
+  });
+
+  it('⚠️ puts the MARKS legend in the margin, and the two samples differ by FILL (decision E)', async () => {
+    /*
+      `LivroDesktop.dc.html:180-192`: a margem de 320px com o bloco "As marcas"
+      — uma amostra vazada com "Leu neste dia" e uma cheia com "Leu e
+      escreveu". São as três chaves que a Tarefa 40 criou e que ninguém
+      consumia (`pages.book.marks.{heading,read,wrote}`).
+
+      ⚠️ **ABAIXO DE 1120px A MARGEM DESCE PARA O FLUXO** — isso é do
+      `MarginRail` e é media query, não condição de render. A legenda aparece
+      nas duas larguras, e a alternativa (esconder por media query) seria
+      invisível para o teste, que é a armadilha que a Tarefa 43 registrou na
+      nota nº 20.
+    */
+    await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    const rail = document.querySelector('aside');
+    expect(rail).not.toBeNull();
+    expect(rail?.textContent).toContain(pt.pages.book.marks.heading);
+    expect(rail?.textContent).toContain(pt.pages.book.marks.read);
+    expect(rail?.textContent).toContain(pt.pages.book.marks.wrote);
+    // A divergência declarada da Tarefa 43 (nota 20), com guarda: a seção NÃO
+    // se esconde no celular.
+    expect(rail?.className ?? '').not.toContain('hidden');
+
+    /*
+      ⚠️ **AS DUAS AMOSTRAS SE DISTINGUEM POR PREENCHIMENTO, não por matiz** —
+      é a mesma propriedade que a linha do plano carrega, e ela é medida aqui
+      também porque a legenda é justamente o que explica a forma a quem vê.
+    */
+    const marks = Array.from(rail?.querySelectorAll('[role="img"]') ?? []);
+    const samples = marks.map((element) => element.className);
+    expect(samples).toHaveLength(2);
+    const [hollow, filled] = samples;
+    expect(hollow ?? '').not.toMatch(/(?<![\w-])bg-[\w-]+/u);
+    expect(filled ?? '').toMatch(/(?<![\w-])bg-[\w-]+/u);
+
+    /*
+      ⚠️⚠️ **A AMOSTRA NÃO FALA — E ESTA ASSERÇÃO NASCEU DE UM MUTANTE
+      SOBREVIVENTE (M7).** Tirar o `aria-hidden="true"` do envoltório do
+      `PresenceMark` passava por **926 testes, com ZERO acusadores**, e o
+      efeito é auditivo: cada linha da legenda passa a anunciar a frase DUAS
+      vezes — uma pelo `role="img"` + `aria-label` da marca, outra pelo texto
+      escrito ao lado. É a lição nº 16 do MVP 2 ("duas coisas que falam a mesma
+      frase"), que o docblock deste `describe` **cita por escrito** e que
+      ninguém tinha transformado em guarda.
+
+      ⚠️ **AS LOMBADAS TÊM A ASSERÇÃO ANÁLOGA** (`draws the typographic SPINE`,
+      que exige `aria-hidden="true"` nas duas); a legenda não tinha. É a mesma
+      classe da nota nº 20 da Tarefa 43: decisão declarada em prosa, sem
+      guarda.
+
+      O `PresenceMark` exige `label` e é certo que exija — na linha do plano
+      ele é a ÚNICA coisa que diz quem passou por ali. Quem o silencia é o
+      CHAMADOR, e só onde a informação já está escrita ao lado.
+    */
+    for (const mark of marks) {
+      expect(mark.closest('[aria-hidden="true"]')).not.toBeNull();
+    }
+
+    /*
+      O par positivo, na mesma tela: na LINHA DO PLANO a mesma marca continua
+      falando. Sem isto, "silenciar tudo" passaria — e aí o dia com leitor
+      viraria uma bolinha muda para quem ouve.
+    */
+    const spoken = Array.from(document.querySelectorAll('[role="img"]')).filter(
+      (mark) => mark.closest('[aria-hidden="true"]') === null,
+    );
+    expect(spoken.length).toBeGreaterThan(0);
+
+    expectNoGuiltWithPlanPosition();
+  });
+
+  it('⚠️ draws NO margin at all while there is no book yet, nor when it failed', async () => {
+    /*
+      ⚠️ **ESTE `it()` NASCEU DE UM MUTANTE SOBREVIVENTE, e a medição é o
+      argumento.** Trocar o `rail={state.status === 'ready' ? rail() : undefined}`
+      por `rail={rail()}` — a margem montada SEMPRE — passava por **925 testes
+      do app sem um vermelho**, e o efeito na tela é um `<aside>` de 320px com
+      um filete vertical ao lado de "Carregando…" e ao lado do 404.
+
+      É exatamente a classe que a Tarefa 42 mediu ao criar a prop (**2
+      acusadores**, os dois nascidos do caso VAZIO) e que a Tarefa 43 repetiu:
+      **ausente ≠ vazio**. A capacidade tem guarda em `chrome.test.tsx` e na
+      tela do dia; nesta tela ela não tinha nenhuma, porque o acusador da
+      legenda só olha o estado feliz.
+
+      Os DOIS estados sem livro, porque eles chegam por caminhos diferentes: o
+      carregamento (o primeiro frame, antes da resposta) e a falha (o 404, que
+      não reabre).
+    */
+    await renderBook({
+      book: [{ status: 404, body: { error: 'Not found' } }],
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText(pt.pages.book.bookUnavailable)).not.toBeNull();
+    });
+    expect(document.querySelector('aside')).toBeNull();
+    // E a tela continua de pé: o que falta é a margem, não a página.
+    expect(bookScreenIsUp()).toBe(true);
+    expectNoGuilt();
+  });
+
+  it('⚠️ labels the plan section with the Eyebrow, and hangs the marks hint beside it (decision G)', async () => {
+    /*
+      `Livro.dc.html:66-68`: o rótulo de seção em mono maiúscula à esquerda e a
+      legenda "Cheio = escreveu" à direita, sobre um filete de 2px em
+      `--accent`. O `Eyebrow` (Tarefa 41b) é essa tipografia — mono 10px,
+      0.12em, maiúscula —, e a Tarefa 43 já o pôs em uso na tela do dia: duas
+      tipografias de rótulo na mesma tela é a "correção incompleta" que este
+      bloco já pagou duas vezes.
+
+      ⚠️ **DIVERGÊNCIA DECLARADA:** o canvas escreve "Plano de leitura" e a tela
+      escreve "Dias do plano de leitura", que é o valor de
+      `pages.book.plan.label` — a chave que já nomeava a lista. Encurtá-la
+      exigiria uma chave NOVA, e a regra 9 não permite nenhuma.
+    */
+    await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    const label = screen.getByText(pt.pages.book.plan.label);
+    expect(label.className).toContain('font-mono');
+    expect(label.className).toContain('text-eyebrow');
+    expect(label.className).toContain('uppercase');
+    // ⚠️ O `Eyebrow` é um `<span>` por decisão escrita (a tipografia do
+    // rótulo, não a semântica dele): quem carrega a seção é o `<h2>` em volta.
+    expect(label.tagName).toBe('SPAN');
+    expect(label.parentElement?.tagName).toBe('H2');
+
+    // A legenda das marcas, que é a quarta chave órfã da Tarefa 40.
+    const hint = screen.getByText(pt.pages.book.marks.hint);
+    expect(hint).not.toBeNull();
+
+    /*
+      ⚠️⚠️ **ELA APARECE NAS DUAS LARGURAS — E ESTA ASSERÇÃO NASCEU DE UM
+      MUTANTE SOBREVIVENTE (M12).** Pôr `hidden` nesta legenda — escondê-la em
+      TODA largura — passava por **926 testes**. O jsdom não aplica CSS, então
+      um `hidden` (ou um `min-[1120px]:hidden`) some da tela e não some do DOM:
+      é exatamente a armadilha que a nota nº 20 da Tarefa 43 nomeou e que a
+      nota 8.7 da execução desta fatia **escreveu por extenso** — "esconder por
+      media query seria invisível para o teste" — sem escrever a guarda.
+
+      O `<aside>` da margem tem a guarda análoga três `it()` acima
+      (`not.toContain('hidden')`); esta linha faltava. A divergência declarada
+      é que o canvas desenha a frase só no celular (`Livro.dc.html:68`) e a
+      tela a mostra nas duas — declarada É, mas agora com acusador.
+    */
+    expect(hint.className).not.toContain('hidden');
+    expect(hint.parentElement?.className ?? '').not.toContain('hidden');
+
+    /*
+      ⚠️ **O FILETE DE 2px EM `--accent` QUE ABRE A SEÇÃO — E ESTA ASSERÇÃO
+      NASCEU DE UM MUTANTE SOBREVIVENTE.** Apagar o `border-b-2 border-accent`
+      da linha do rótulo passava por **926 testes**, e o que some da tela é o
+      traço que separa o cabeçalho do livro do sumário — `Livro.dc.html:66` e
+      `LivroDesktop.dc.html:65`, os dois com `border-bottom:2px solid
+      var(--accent)`.
+
+      Um filete a menos não muda texto, nem papel, nem foco: é exatamente o
+      tipo de coisa que a Tarefa 42 descobriu que passa despercebida (o
+      `rule="none"` das três telas sem filete de abertura).
+    */
+    const header = label.parentElement?.parentElement;
+    expect(header?.className).toContain('border-b-2');
+    expect(header?.className).toContain('border-accent');
+    // E o rótulo e a legenda dividem ESSA linha — não duas.
+    expect(header?.contains(hint)).toBe(true);
+    expectNoGuiltWithPlanPosition();
   });
 });
 
@@ -1560,7 +2273,7 @@ describe('⚠️ ONE LINK TO THE COLLECTION, IN PLACE OF THE TWO TABS (rule 14 o
     expect(
       screen.getAllByRole('link', { name: pt.pages.book.acervoLink }),
     ).toHaveLength(1);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('⚠️ navigates by the ROUTER, not by a raw anchor that reloads the PWA', async () => {
@@ -1681,7 +2394,7 @@ describe('the book screen when the book or the network goes away (rules 9, 10, 1
       expect(planRows()).toHaveLength(3);
     });
     expect(screen.queryByText(pt.errors.network)).toBeNull();
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('never puts a word the API wrote on the screen, attributes included (rule 14)', async () => {
@@ -1758,7 +2471,7 @@ describe('the book screen when the book or the network goes away (rules 9, 10, 1
       expect(planRows()).toHaveLength(3);
     });
     expect(requestsTo(calls, '/books/')).toHaveLength(1);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 });
 
@@ -1832,7 +2545,7 @@ describe('⚠️ THE SHELF OF THE HOME LINKS HERE, AND THE CLICK DOES NOT RELOAD
     // E a home saiu de cena: é navegação de rota, não um cartão que abre um
     // painel.
     expect(screen.queryByText(pt.pages.home.shelf.heading)).toBeNull();
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 });
 
@@ -1919,6 +2632,31 @@ describe('the source of the book screen (rules 5, 15, 16)', () => {
     expect(source).toContain('clubMembersResponseSchema');
     expect(source).toContain('pages.book.plan.writerNamed');
   });
+
+  /*
+    ⚠️⚠️ **AQUI VIVIA O PINO DE FONTE `scans the plan-position states with the
+    EXEMPTION-EXERCISING variant`, E ELE FOI APAGADO na rodada de correção da
+    Tarefa 44 — com a medição que o desmente.**
+
+    Ele lia o próprio fonte deste arquivo e exigia ≥ 45 chamadas da variante,
+    sob a afirmação de que o mutante obrigatório da regra 3 **sobreviveria por
+    construção**, porque "trocar a variante estrita pela frouxa remove uma
+    asserção, e asserção removida nunca fica vermelha sozinha".
+
+    ⚠️ **A afirmação era FALSA.** O mutante sobrevivia pela FORMA ANINHADA do
+    helper — a variante estrita chamava a de sempre e somava uma exigência, o
+    que a tornava superconjunto —, não por construção. Reestruturado o helper
+    em torno de um núcleo `scanGuilt(): number`, as duas variantes ficaram
+    MUTUAMENTE EXCLUSIVAS (`toBe(0)` contra `toBeGreaterThan(0)`), e o mesmo
+    mutante fica vermelho no `it()` em que acontece — medido, com o pino já
+    fora: `⚠️ says WHERE today is in the plan, and the exemption actually
+    SUBTRACTS it`.
+
+    O desenho novo é estritamente mais forte: ele pega também o defeito
+    INVERSO — uma frase de posição vazando num estado que não deveria
+    mostrá-la —, que o pino de contagem não via. E não sobra número escrito à
+    mão para envelhecer.
+  */
 
   it('imports no editor, so the bundle stays without TipTap (rule 16)', () => {
     /*

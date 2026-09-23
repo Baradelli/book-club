@@ -2,8 +2,7 @@ import {
   noContentResponseSchema,
   readingLogResponseSchema,
 } from '@clube/shared';
-import { Button } from '@clube/ui';
-import { Check } from 'lucide-react';
+import { Button, PresenceMark } from '@clube/ui';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -52,29 +51,44 @@ import { nameOfWriter } from './club-names';
  * (decisão C). As duas convivem na MESMA linha do plano, e a lição nº 12 do
  * MVP 2 (varrer palavra não pega desenho, e cor sozinha não é portadora) mais
  * a nº 16 ("duas coisas que falam a mesma frase") já mentiram numa tela deste
- * projeto. Então as duas diferem em **conteúdo** e em **fala**:
+ * projeto.
  *
- * |            | conteúdo                  | `aria-label`                |
- * | ---------- | ------------------------- | --------------------------- |
- * | escreveu   | a INICIAL (letra, sem SVG)| "{nome} escreveu neste dia" |
- * | leu        | um GLIFO (SVG, sem letra) | "{nome} leu este dia"       |
+ * ⚠️⚠️ **E A NATUREZA DO PORTADOR MUDOU NA TAREFA 44 (decisão B).** A tabela
+ * abaixo dizia:
  *
- * ⚠️ **E o portador PROVADO é glifo × letra, não quadrado × círculo.** Medido:
- * trocar o `rounded-sm` desta marca por `rounded-full`, mantendo o `<Check/>`,
- * **sobrevive** à suíte — a silhueta não tem acusador, e prometê-la no
- * docblock seria a fidelidade afirmada em comentário que o §7.1 condena. O
- * `rounded-sm` fica porque ajuda o olho; quem carrega a distinção em teste é o
- * conteúdo (e o rótulo).
+ * | ~~escreveu~~ | ~~a INICIAL (letra, sem SVG)~~ | ~~"{nome} escreveu neste dia"~~ |
+ * | ~~leu~~      | ~~um GLIFO (SVG, sem letra)~~  | ~~"{nome} leu este dia"~~       |
  *
- * O acusador das duas metades é
+ * ...e ela **fica riscada, não apagada**, porque a linha de baixo só se
+ * entende sabendo o que havia antes. No canvas os dois são o MESMO desenho —
+ * círculo de 18×18 com a inicial em monoespaçada — e o que os separa é
+ * **vazado × cheio**:
+ *
+ * |            | forma                              | `aria-label`                |
+ * | ---------- | ---------------------------------- | --------------------------- |
+ * | escreveu   | disco CHEIO (`Livro.dc.html:73`)   | "{nome} escreveu neste dia" |
+ * | leu        | disco VAZADO (`Livro.dc.html:83`)  | "{nome} leu este dia"       |
+ *
+ * ⚠️ **O "sem depender de cor" NÃO enfraqueceu, e a razão é que a diferença é
+ * ESTRUTURAL:** o vazado não tem preenchimento NENHUM. Um "vazado" repintado
+ * com outro fundo continuaria diferente no código e deixaria de ser
+ * distinguível por quem não separa matizes — e é exatamente esse mutante que
+ * o acusador mata, procurando qualquer utilitário `bg-*` no vazado.
+ *
+ * ⚠️ **E A SILHUETA DEIXOU DE SER O ARGUMENTO.** O docblock antigo registrava,
+ * medido, que trocar `rounded-sm` por `rounded-full` **sobrevivia** — a
+ * silhueta não tinha acusador. Agora os dois SÃO `rounded-full` por decisão do
+ * canvas, e o que carrega a distinção é o preenchimento, que tem acusador.
+ *
+ * O acusador das metades é
  * `tells READING apart from WRITING on the same row` em
  * `__tests__/book.test.tsx`, e ele usa a **mesma pessoa** nos dois papéis —
- * senão a diferença de rótulo poderia vir do nome, e não do verbo. Medido:
- * forma idêntica com rótulos diferentes → **1** acusador; rótulos iguais com
- * formas diferentes → **6**.
+ * senão a diferença de rótulo (ou a inicial) poderia vir do nome, e não do
+ * verbo.
  *
- * ⚠️ **E O GLIFO VEM DO `lucide-react`, nunca de um `<svg>` escrito à mão.** É
- * `CLAUDE.md`, e é também o que mantém o desenho visível para a varredura do
+ * ⚠️ **E NENHUM DOS DOIS É `<svg>` ESCRITO À MÃO.** O `PresenceMark` desenha a
+ * inicial em texto e, sem nome, cai no `User` do `lucide-react` — que é
+ * `CLAUDE.md` e é também o que mantém o desenho visível para a varredura do
  * ADR 0002 (`__tests__/adr-0002-iconography.test.ts`): um ícone importado tem
  * NOME, e um `<path d="…">` não teria palavra nenhuma para a guarda achar.
  *
@@ -119,26 +133,30 @@ export function ReadMarks({ me, names, userIds }: ReadMarksProps) {
         const name = nameOfWriter(userId, me, names);
 
         return (
-          <span
-            aria-label={
-              name === null
-                ? t('pages.book.plan.reader')
-                : t('pages.book.plan.readerNamed', { name })
-            }
-            /*
-              `rounded-sm` contra o `rounded-full` do `PersonAvatar`, e um
-              contorno em vez de preenchimento: ajuda o olho a separar as duas
-              marcas à distância. ⚠️ Mas quem carrega a distinção EM TESTE é o
-              conteúdo (glifo × letra) e o rótulo — a silhueta sozinha não tem
-              acusador, e isso está medido no docblock do módulo. A cor não
-              carrega informação nenhuma aqui.
-            */
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-sm border border-line text-content"
-            data-read-mark=""
-            key={userId}
-            role="img"
-          >
-            <Check aria-hidden="true" className="size-1/2" focusable="false" />
+          /*
+            ⚠️ **O `data-read-mark` FICA, e ele é o corte de teste da decisão
+            C.** As duas marcas da linha são `role="img"` com nome acessível; é
+            este gancho que separa "quem leu" de "quem escreveu" para o
+            `avatarsIn()`/`readMarksIn()` do `book.test.tsx`. Sem ele os dois
+            helpers contariam a mesma coisa e os testes da Tarefa 27 (as
+            iniciais, a frase nomeada) passariam a falar de outro elemento.
+
+            ⚠️ **E O `PresenceMark` É QUEM DESENHA DESDE A TAREFA 44.** O par
+            `<span><Check/></span>` daqui e o `PersonAvatar` do `book.tsx`
+            eram DOIS desenhos diferentes para a mesma coluna; o canvas tem um
+            só, em dois estados. O `state` é o que muda, e ele é `'read'`
+            porque esta lista é a de quem LEU.
+          */
+          <span className="flex" data-read-mark="" key={userId}>
+            <PresenceMark
+              label={
+                name === null
+                  ? t('pages.book.plan.reader')
+                  : t('pages.book.plan.readerNamed', { name })
+              }
+              name={name}
+              state="read"
+            />
           </span>
         );
       })}
@@ -271,7 +289,27 @@ export function TodayReading({
 
   return (
     <div className="flex flex-col items-start gap-3">
-      <Button loading={busy} onClick={() => void toggle()} variant="ghost">
+      {/*
+        ⚠️ **O SELO É O ESTADO MARCADO, E ESTE É O PRIMEIRO CONSUMIDOR DA
+        VARIANTE** (decisão F da Tarefa 44). `Livro.dc.html:55`:
+        `background:var(--gold-soft)`, `border:1px solid var(--gold-line)`,
+        `color:var(--gold-strong)` — e o glifo `Check`, que o `Button` já
+        desenha sozinho quando a variante é `seal`.
+
+        ⚠️ **`seal` É ESTADO, NÃO HIERARQUIA.** O ouro é o filete da edição
+        crítica (o dia de hoje, a abertura de seção), não uma terceira cor de
+        ação: desmarcado, o botão continua `ghost`. É o que impede o dourado de
+        virar "o botão importante" e aparecer em tela nenhuma mais.
+
+        ⚠️ **E O "TENTAR DE NOVO" NÃO O VESTE**, logo abaixo: ele não é o
+        registro de leitura, é a repetição de uma operação que falhou. Um selo
+        dourado ali diria que alguma coisa foi marcada.
+      */}
+      <Button
+        loading={busy}
+        onClick={() => void toggle()}
+        variant={marked ? 'seal' : 'ghost'}
+      >
         {marked ? t('pages.book.read.unmark') : t('pages.book.read.mark')}
       </Button>
       {failed ? (

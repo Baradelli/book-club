@@ -2,7 +2,6 @@ import {
   type BookResponse,
   booksResponseSchema,
   bookWithPlanResponseSchema,
-  isClubMonth,
   localDay,
   localTimeZone,
   type PlanItemResponse,
@@ -18,6 +17,7 @@ import { useActiveClub } from '../club/active-club';
 import { listItemRouterLink } from '../router-link';
 import { ActivityFeed } from './activity-feed';
 import { Notice, Screen, TEXT_LINK_CLASS } from './chrome';
+import { formatClubMonth } from './club-month';
 import { dayNotePath } from './day-note';
 import {
   messageFor,
@@ -166,27 +166,13 @@ function todayCandidates(
     .slice(0, PLAN_REQUEST_BUDGET);
 }
 
-/**
- * `"2026-09"` → "setembro de 2026", no idioma da tela.
- *
- * `isClubMonth` antes de formatar, e não é zelo: o `bookResponseSchema` declara
- * `month: z.string()` (não o `clubMonth` refinado), então um mês malformado
- * chegaria aqui, faria um `Invalid Date`, e o `Intl` LANÇARIA — apagando a home
- * por causa de uma linha do banco. Sem o formato canônico, mostra o valor cru:
- * feio é melhor que branco.
- *
- * `timeZone: 'UTC'` porque o instante é meia-noite UTC do dia 1: em qualquer
- * fuso negativo, formatar no fuso local devolveria o mês ANTERIOR — o mesmo bug
- * de um dia que o `localDay` existe para não cometer.
- */
-function formatClubMonth(month: string, locale: string): string {
-  if (!isClubMonth(month)) return month;
-  return new Intl.DateTimeFormat(locale, {
-    year: 'numeric',
-    month: 'long',
-    timeZone: 'UTC',
-  }).format(new Date(`${month}-01T00:00:00.000Z`));
-}
+/*
+  ⚠️ **`formatClubMonth` SE MUDOU PARA `./club-month` na rodada de correção da
+  Tarefa 44**, e o docblock dele foi junto. Motivo: a tela do livro passou a
+  precisar do mesmo mês por extenso na linha de mono do cabeçalho, e duas
+  cópias divergiriam na primeira correção (§7.1). Esta tela não mudou em mais
+  nada — o import é a única linha da fatia daqui.
+*/
 
 export function HomePage() {
   const { t, i18n } = useTranslation();

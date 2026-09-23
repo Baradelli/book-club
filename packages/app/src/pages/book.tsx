@@ -8,7 +8,15 @@ import {
   type PlanItemResponse,
 } from '@clube/shared';
 import { ApiError } from '@clube/shared/client';
-import { Button, List, ListItem, PersonAvatar } from '@clube/ui';
+import {
+  BookSpine,
+  Button,
+  Eyebrow,
+  List,
+  ListItem,
+  MarginRail,
+  PresenceMark,
+} from '@clube/ui';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -17,6 +25,7 @@ import { useAuth } from '../auth/auth-context';
 import { useActiveClub } from '../club/active-club';
 import { listItemRouterLink } from '../router-link';
 import { Notice, Screen, TEXT_LINK_CLASS } from './chrome';
+import { formatClubMonth } from './club-month';
 import {
   memberNamesOf,
   MEMBERS_UNKNOWN,
@@ -53,10 +62,38 @@ import { ReadMarks, TodayReading } from './reading-marks';
  * "antes" marcado pela 25 e pela 27.
  *
  * ⚠️ **A TAREFA 32b DIVIDIU DE NOVO, E ANTES DE CRESCER.** A marca de leitura,
- * o toque "li hoje" e o recado de falha foram para `reading-marks.tsx`
- * (**105** linhas), e o que ficou aqui foi a FIAÇÃO: qual é o dia de hoje,
- * quem leu cada dia, e a releitura depois de marcar. A tela saiu de **247**
- * para **277**. O teto que a spec fixou era ~350.
+ * o toque "li hoje" e o recado de falha foram para `reading-marks.tsx`, e o que
+ * ficou aqui foi a FIAÇÃO: qual é o dia de hoje, quem leu cada dia, e a
+ * releitura depois de marcar. O teto que a spec daquela fatia escreveu era
+ * "~350" — **aproximado, e a palavra é do próprio texto**.
+ *
+ * ⚠️⚠️ **O TAMANHO DE HOJE, COM A DATA AO LADO — e a linha anterior daqui
+ * estava OBSOLETA.** Ela dizia "a tela saiu de 247 para 277" como se fosse
+ * permanente, e era um número medido num instante: exatamente a classe de erro
+ * que a nota nº 9 da Tarefa 44 diz querer evitar, cometida três linhas depois.
+ * Todos os números abaixo saem do **contador canônico**, que é o comando do
+ * docblock de `acervo.tsx:115-126` — o único do projeto, criado porque a
+ * auditoria da Tarefa 25 achou três contagens diferentes para este mesmo
+ * arquivo no mesmo commit.
+ *
+ * | medição | `book.tsx` | `reading-marks.tsx` |
+ * | --- | --- | --- |
+ * | antes da Tarefa 44 (commit `11c9171`) | 277 | 105 |
+ * | fim da Tarefa 44 (2026-09-22) | **356** | **107** |
+ * | fim da rodada de correção (2026-09-22) | **360** | **107** |
+ *
+ * A Tarefa 44 acrescentou **+99 / −20 = +79** linhas canônicas (`diff -w` sobre
+ * o texto já passado pelo contador); a rodada de correção, **+4** (o import do
+ * `formatClubMonth` e três linhas do `Eyebrow` do cabeçalho).
+ *
+ * ⚠️ **DECISÃO DO DONO, 2026-09-22: a tela FICA nos 360, sem corte e sem teto
+ * novo.** 356 contra um teto que o próprio texto escreve como "~350" é
+ * aproximação, não estouro — e o corte que valeria a pena não é por linha, é
+ * por assunto (a fatia que dividir esta tela divide o cabeçalho da margem, não
+ * "as 10 linhas que sobraram"). ⚠️ **E o `wc -l` NÃO é a unidade aqui:** ele dá
+ * 917 e a maior parte disso é docblock. A nota nº 9 da Tarefa 44 comparou
+ * `wc -l` (886, na época) com um teto do contador canônico e concluiu que a
+ * tela havia estourado 2,5×. As duas medidas existem; misturá-las é que não.
  *
  * ⚠️ **E O "LI HOJE" É SÓ DO DIA DE HOJE — escopo, não simplificação.** A rota
  * aceita qualquer `planItemId`; 30 toggles na lista virariam auditoria
@@ -85,7 +122,7 @@ import { ReadMarks, TodayReading } from './reading-marks';
  * naturalmente: trinta dias em lista, e a maioria deles sem anotação. Então:
  *
  * - **nada de vermelho.** Nenhum `text-danger`/`bg-danger`, nenhuma cor de
- *   valor arbitrário (`[#…`), nenhum `style` com `--clube-danger`;
+ *   valor arbitrário (`[#…`), nenhum `style` com `--danger`;
  * - **nada de contador.** Nem "3 de 30 dias", nem "+2" ao lado dos avatares,
  *   nem número nenhum derivado de dado. As duas sobreposições dizem **quem**
  *   escreveu e **quem** leu, e **nunca quantos** — isso seria placar, e o §1
@@ -180,10 +217,31 @@ function formatPlanDay(date: string, locale: string): string {
   }).format(new Date(`${date}T00:00:00.000Z`));
 }
 
-/** O dia e o trecho, na mesma linha — o mesmo formato da estante da home. */
-function subtitleFor(item: PlanItemResponse, locale: string): string {
-  const day = formatPlanDay(item.date, locale);
-  return item.reference === null ? day : `${day} · ${item.reference}`;
+/**
+ * A META DA DIREITA — o dia e o trecho, em monoespaçada, depois do condutor
+ * (`Livro.dc.html:78`: `8 SET · 9`; `:146`: `Hoje · 161`).
+ *
+ * ⚠️ **ELA SE CHAMAVA `subtitleFor` ATÉ A TAREFA 44, e o nome deixou de ser
+ * verdade junto com o slot.** A nota do `ListItemLook`
+ * (`packages/ui/src/components/list.tsx`) previu a migração por escrito: o
+ * braço `sumario` declara `subtitle?: never`, e o compilador a cobrou —
+ * `TS2322: Type '"sumario"' is not assignable to type '"row"'`, porque o
+ * `subtitle: string` já tinha estreitado a união para o outro braço. Manter o
+ * nome antigo apontando para o slot `end` seria a classe de defeito que o
+ * `dayRange` do `CLAUDE.md` registra: um nome que manda o próximo leitor
+ * procurar a coisa errada.
+ *
+ * ⚠️ **E O DIA DE HOJE TROCA A DATA PELA PALAVRA, não a acrescenta.** É o que
+ * o canvas desenha, e é o que impede a linha de hoje de dizer duas vezes a
+ * mesma coisa. `todayLabel` é `null` em todo dia que não é hoje.
+ */
+function endFor(
+  item: PlanItemResponse,
+  locale: string,
+  todayLabel: string | null,
+): string {
+  const head = todayLabel ?? formatPlanDay(item.date, locale);
+  return item.reference === null ? head : `${head} · ${item.reference}`;
 }
 
 /** O endereço do livro — UM, para a carga e para a releitura (decisão F). */
@@ -404,12 +462,120 @@ export function BookPage() {
       sem autoria já faz.
     */
     const todayItem = planItems.find((item) => item.date === today);
+    /** A palavra que substitui a data na linha de hoje (`Livro.dc.html:146`). */
+    const todayLabel = t('pages.book.plan.today');
 
     return (
       <>
-        {book.author !== null ? (
-          <p className="text-sm text-muted">{book.author}</p>
-        ) : null}
+        {/*
+          ⚠️ **O CABEÇALHO DO LIVRO — LOMBADA, AUTOR E A LINHA DE MONO**
+          (decisão C da Tarefa 44). `Livro.dc.html:43-52` e
+          `LivroDesktop.dc.html:46-62`.
+
+          ⚠️ **DUAS LOMBADAS NO DOM, e é declarado.** O `BookSpine` recebe o
+          tamanho por PROP (`md` = 58×84, `lg` = 88×128), e o corte de 1120px é
+          media query — então as duas ficam montadas e o CSS esconde uma. A
+          alternativa seria uma prop responsiva no componente, que serviria a
+          um chamador só (o "peso" que a decisão B da 41a proíbe).
+
+          As duas são `aria-hidden` por construção (`label` ausente): o título
+          está escrito ao lado, no `h1` do `Screen`, e anunciá-lo três vezes é
+          o defeito que o docblock do `BookSpine` nomeia.
+
+          ⚠️ **E O `h1` FICA ONDE ESTAVA.** O canvas põe a lombada À ESQUERDA do
+          título; o `h1` é do `Screen` (Tarefa 42), e trazê-lo para cá seria
+          mexer no cromo de dez telas por causa de uma. Divergência declarada:
+          a lombada abre o corpo, com o autor e a posição ao lado dela.
+        */}
+        <div className="flex items-center gap-4 min-[1120px]:gap-[26px]">
+          <BookSpine
+            className="min-[1120px]:hidden"
+            size="md"
+            title={book.title}
+          />
+          <BookSpine
+            className="hidden min-[1120px]:flex"
+            size="lg"
+            title={book.title}
+          />
+          <div className="flex min-w-0 flex-col gap-1.5 min-[1120px]:gap-2">
+            {/*
+              ⚠️ O autor em Instrument Serif itálico (`Livro.dc.html:49`:
+              17px; `LivroDesktop.dc.html:52`: 21px). Os dois corpos estão fora
+              da escala de sete degraus da Tarefa 39; sai `text-reading`
+              (17,5px) nas duas larguras, e os 21px do desktop ficam como
+              divergência declarada — meio pixel de um lado, três degraus e
+              meio do outro, e nenhum degrau novo entra sem decisão do dono.
+            */}
+            {book.author !== null ? (
+              <p className="truncate font-quote text-reading italic text-muted">
+                {book.author}
+              </p>
+            ) : null}
+            {/*
+              ⚠️⚠️ **A LINHA DE MONO DO CABEÇALHO: O MÊS, E DEPOIS A POSIÇÃO NO
+              PLANO** — decisão do dono de 2026-09-22, na rodada de correção
+              desta fatia.
+
+              `Livro.dc.html:50` desenha aqui "Setembro de 2026 · 288 p." e
+              `LivroDesktop.dc.html:53` "Setembro de 2026 · 288 páginas · 30
+              dias". A execução desta fatia escreveu que reproduzir isso
+              pediria chaves NOVAS — "o mês por extenso e o 'p.'" — e a
+              metade do mês é **falsa**: o mês sai do `formatClubMonth`
+              (`./club-month`, extraído do `home.tsx`, que já o formatava com
+              `Intl` desde a Tarefa 16), e `book.month` já vem no
+              `bookResponseSchema` que esta tela carrega. **Zero chave nova.**
+
+              O "288 p." continua fora: esse **seria** chave nova de verdade —
+              o `pt.ts` só tem `totalPages = 'Total de páginas'`, que é rótulo
+              de campo de formulário, não legenda de cabeçalho.
+
+              ⚠️ **"Dia 11 de 30" É A ÚNICA FRASE DO APP ISENTA DA VARREDURA
+              DE PLACAR.** Ela diz ONDE a leitura de hoje está no mês; o número
+              não muda com o que ninguém fez, e é por isso que não é placar
+              (decisão do dono, `docs/BACKLOG.md`). A isenção é NOMINAL, por
+              chave, em `COUNTER_EXEMPT_KEYS` — e a varredura de DOM desta tela
+              chama `expectNoGuiltWithPlanPosition()`, que exige que a
+              subtração aconteça de verdade.
+
+              ⚠️ **A POSIÇÃO SÓ ENTRA QUANDO HÁ UM DIA DE HOJE; o MÊS entra
+              sempre.** Um livro do mês passado não tem posição, e inventar uma
+              ("Dia 0 de 30") seria o vazio anunciado que o §1 do plano proíbe.
+              O mês, esse, é do livro — não depende de hoje.
+
+              ⚠️ **A TIPOGRAFIA É O `Eyebrow`, E ISSO NASCEU DE UM MUTANTE
+              SOBREVIVENTE (M15).** Esta linha copiava à mão, byte a byte, a
+              string de classes do componente; trocar a cópia por
+              `text-ui text-muted` passava por **926 testes**. Era o terceiro
+              sítio de tipografia de rótulo neste arquivo — dois pelo
+              componente, um copiado —, e mudar o `tracking` do `Eyebrow` o
+              faria divergir em silêncio. O acusador é `book.test.tsx › writes
+              the header META LINE as an Eyebrow`.
+
+              ⚠️ **O TOM É `muted`, MEDIDO NO ARTBOARD DESTA TELA.**
+              `Inicio.dc.html:41` desenha a posição em `var(--gold)`, mas isso
+              é a HOME. Aqui o slot é o da meta do mês: `Livro.dc.html:50` usa
+              `color:var(--text-muted)` e `LivroDesktop.dc.html:53` usa
+              `#565b52`, que é `--text-muted` no claro (`theme.css:122`).
+
+              ⚠️ **DIVERGÊNCIA DECLARADA:** o canvas usa 9,5px/0,1em no celular
+              e 10px/0,1em no desktop; o `Eyebrow` é 10px/0,12em nas duas. A
+              cópia à mão que saiu daqui já tinha esses valores — a divergência
+              é antiga, não é efeito deste conserto.
+            */}
+            <Eyebrow className="truncate">
+              {todayItem === undefined
+                ? formatClubMonth(book.month, locale)
+                : `${formatClubMonth(book.month, locale)} · ${t(
+                    'pages.book.plan.dayOfPlan',
+                    {
+                      number: planItems.indexOf(todayItem) + 1,
+                      total: planItems.length,
+                    },
+                  )}`}
+            </Eyebrow>
+          </div>
+        </div>
 
         {/*
           ⚠️ **"LI HOJE" — e o estado vem de EU ESTAR entre os leitores de
@@ -491,38 +657,68 @@ export function BookPage() {
             title={t('pages.book.plan.empty.title')}
           />
         ) : (
-          <List aria-label={t('pages.book.plan.label')} className="gap-1">
+          <section className="flex flex-col gap-1">
             {/*
+              ⚠️ **O RÓTULO DE SEÇÃO É O `Eyebrow` (decisão G)**, sobre o filete
+              de 2px em `--accent` que `Livro.dc.html:66` desenha. A Tarefa 43
+              já pôs o componente em uso na tela do dia; duas tipografias de
+              rótulo na mesma tela é a "correção incompleta" que a auditoria da
+              41b nomeou como classe e que a da 42 achou nos `h1`.
+
+              ⚠️ **O `<h2>` FICA, e o `Eyebrow` vai DENTRO dele.** O componente
+              é um `<span>` por decisão escrita — "a tipografia do rótulo, não a
+              semântica dele" —, e isto aqui É uma seção.
+
+              ⚠️ **DIVERGÊNCIA DECLARADA:** o canvas escreve "Plano de leitura"
+              e a tela escreve "Dias do plano de leitura", que é o valor de
+              `pages.book.plan.label` — a chave que já nomeava a lista para quem
+              ouve. Encurtá-la seria chave NOVA, e a regra 9 não permite
+              nenhuma.
+
+              A legenda da direita é `pages.book.marks.hint` ("Cheio =
+              escreveu"), uma das quatro chaves que a Tarefa 40 deixou sem
+              consumidor. Ela é mono 9,5px / 0.08em / `--text-subtle`
+              (`Livro.dc.html:68`) — e **não** é um `Eyebrow`: ela não nomeia
+              seção nenhuma, ela explica a forma do glifo.
+            */}
+            <div className="flex items-baseline justify-between gap-3 border-b-2 border-accent pb-[7px]">
+              <h2>
+                <Eyebrow>{t('pages.book.plan.label')}</Eyebrow>
+              </h2>
+              <span className="shrink-0 font-mono text-micro uppercase tracking-[0.08em] text-subtle">
+                {t('pages.book.marks.hint')}
+              </span>
+            </div>
+            <List aria-label={t('pages.book.plan.label')} className="gap-1">
+              {/*
               REGRA 2: a ordem é a que a API devolveu (o `getBookWithPlan`
               ordena por `order`). A tela NÃO reordena — duas ordens seriam duas
               verdades, e a que a pessoa vê mudaria com a tela.
             */}
-            {planItems.map((item) => {
-              const authors = writers.get(item.id) ?? [];
-              const whoRead = readers.get(item.id) ?? [];
-              // REGRAS 3 e 4: comparação de STRING contra o `localDay`, nunca
-              // `new Date()`. E é a ÚNICA marca da lista: nada distingue passado
-              // de futuro.
-              const isToday = item.date === today;
+              {planItems.map((item) => {
+                const authors = writers.get(item.id) ?? [];
+                const whoRead = readers.get(item.id) ?? [];
+                // REGRAS 3 e 4: comparação de STRING contra o `localDay`, nunca
+                // `new Date()`. E é a ÚNICA marca da lista: nada distingue passado
+                // de futuro.
+                const isToday = item.date === today;
 
-              return (
-                <ListItem
-                  className={
-                    isToday ? 'bg-surface ring-1 ring-accent' : undefined
-                  }
-                  end={
-                    isToday ? (
-                      <span className="font-medium text-accent">
-                        {t('pages.book.plan.today')}
-                      </span>
-                    ) : undefined
-                  }
-                  // REGRA 8: `/books/:bookId/days/:planItemId`, nessa ordem, e o
-                  // livro é o que ESTA tela carregou.
-                  href={dayNotePath(book.id, item.id)}
-                  key={item.id}
-                  renderLink={listItemRouterLink}
-                  /*
+                return (
+                  <ListItem
+                    /*
+                    ⚠️ **A META DA DIREITA, NO SLOT `end` (decisão A da Tarefa
+                    44).** Ela era `subtitle` desde a Tarefa 17; o canvas a
+                    desenha em monoespaçada depois do condutor pontilhado, e o
+                    `ListItem variant="sumario"` (Tarefa 41a) recusa `subtitle`
+                    pelo tipo para que a migração não pudesse ser esquecida.
+                  */
+                    end={endFor(item, locale, isToday ? todayLabel : null)}
+                    // REGRA 8: `/books/:bookId/days/:planItemId`, nessa ordem, e o
+                    // livro é o que ESTA tela carregou.
+                    href={dayNotePath(book.id, item.id)}
+                    key={item.id}
+                    renderLink={listItemRouterLink}
+                    /*
                     REGRAS 6 e 7 — UM AVATAR POR PESSOA, E NADA QUANDO NINGUÉM
                     ESCREVEU.
 
@@ -537,27 +733,41 @@ export function BookPage() {
                     plano e obrigaria o olho a cruzar duas colunas. As duas são
                     distinguíveis sem cor — forma e `aria-label` diferentes —,
                     e o dono desse contrato é o `reading-marks.tsx`.
-                  */
-                  start={
-                    authors.length === 0 && whoRead.length === 0 ? undefined : (
-                      <span className="flex items-center gap-1">
-                        <ReadMarks
-                          me={me}
-                          names={memberNames}
-                          userIds={whoRead}
-                        />
-                        {authors.map((userId) => {
-                          const authorName = nameOfWriter(
-                            userId,
-                            me,
-                            memberNames,
-                          );
 
-                          return (
-                            <PersonAvatar
-                              id={userId}
-                              key={userId}
-                              /*
+                    ⚠️ **E DESDE A TAREFA 44 AS DUAS SÃO O MESMO DESENHO EM DOIS
+                    ESTADOS** (decisão B): o `PersonAvatar` saiu daqui e entrou
+                    o `PresenceMark`, que é o círculo de 18×18 com a inicial
+                    que o canvas desenha — CHEIO para quem escreveu
+                    (`Livro.dc.html:73`), VAZADO para quem leu (`:83`). O
+                    portador deixou de ser glifo × letra e passou a ser
+                    preenchimento × contorno; a regra ("distinguível sem cor")
+                    é a mesma, e o acusador continua sendo o mesmo `it()`.
+
+                    ⚠️ E o `size="sm"` do `PersonAvatar` (32px) morreu com ele:
+                    o `PresenceMark` tem UM tamanho, porque o canvas desenha um
+                    só. O alvo de toque não regride — a marca nunca foi alvo
+                    (decisão I da 32b), o alvo é a linha inteira.
+                  */
+                    start={
+                      authors.length === 0 &&
+                      whoRead.length === 0 ? undefined : (
+                        <span className="flex items-center gap-1">
+                          <ReadMarks
+                            me={me}
+                            names={memberNames}
+                            userIds={whoRead}
+                          />
+                          {authors.map((userId) => {
+                            const authorName = nameOfWriter(
+                              userId,
+                              me,
+                              memberNames,
+                            );
+
+                            return (
+                              <PresenceMark
+                                key={userId}
+                                /*
                                 ⚠️ **REGRA 15 DA TAREFA 28: ISTO CONTINUA
                                 DIZENDO O NOME.**
 
@@ -581,29 +791,123 @@ export function BookPage() {
                                 `GET /members` que falhou, ou o autor que não
                                 está na lista).
                               */
-                              label={
-                                authorName === null
-                                  ? t('pages.book.plan.writer')
-                                  : t('pages.book.plan.writerNamed', {
-                                      name: authorName,
-                                    })
-                              }
-                              name={authorName}
-                              size="sm"
-                            />
-                          );
-                        })}
-                      </span>
-                    )
-                  }
-                  subtitle={subtitleFor(item, locale)}
-                  title={item.title}
-                />
-              );
-            })}
-          </List>
+                                label={
+                                  authorName === null
+                                    ? t('pages.book.plan.writer')
+                                    : t('pages.book.plan.writerNamed', {
+                                        name: authorName,
+                                      })
+                                }
+                                name={authorName}
+                                state="wrote"
+                              />
+                            );
+                          })}
+                        </span>
+                      )
+                    }
+                    title={item.title}
+                    /*
+                    ⚠️ **O TOM É O ÚNICO LUGAR ONDE HOJE E O FUTURO SE
+                    DISTINGUEM** (decisão D). O `today` traz o papel
+                    `--surface-today` e o filete dourado em cima e embaixo
+                    (`Livro.dc.html:139`); o `future` traz `--text-subtle`.
+
+                    ⚠️ **O PASSADO FICA SEM TOM, e isso é o §1 do plano.**
+                    Apagar o dia que já passou é cobrança desenhada, e
+                    destacá-lo é "você não leu isto". Ele é uma linha comum.
+                  */
+                    tone={
+                      isToday
+                        ? 'today'
+                        : item.date > today
+                          ? 'future'
+                          : undefined
+                    }
+                    variant="sumario"
+                  />
+                );
+              })}
+            </List>
+          </section>
         )}
       </>
+    );
+  }
+
+  /**
+   * ⚠️ **A MARGEM DO DESKTOP — A LEGENDA DAS MARCAS** (decisão E da Tarefa 44).
+   *
+   * `LivroDesktop.dc.html:180-192`: 320px com `border-left` e
+   * `padding-left:40px`, e o bloco "As marcas" — uma amostra VAZADA com "Leu
+   * neste dia" e uma CHEIA com "Leu e escreveu". São três das sete chaves que a
+   * Tarefa 40 criou e que ninguém consumia.
+   *
+   * ⚠️ **ABAIXO DE 1120px ELA DESCE PARA O FLUXO**, e isso é do `MarginRail`:
+   * media query e só. O artboard de celular põe a mesma explicação em uma linha
+   * ao lado do rótulo de seção (`Livro.dc.html:68`, "Cheio = escreveu"), que é
+   * onde ela ficou — as duas convivem, e é de propósito: uma é a frase curta ao
+   * lado do sumário, a outra é a legenda com as duas amostras desenhadas.
+   *
+   * ⚠️ **AS AMOSTRAS SÃO DECORATIVAS AQUI**, e por isso vão dentro de um
+   * `aria-hidden`: a informação está escrita ao lado, em texto de verdade. O
+   * `PresenceMark` exige `label`, e é certo que exija — na linha do plano ele é
+   * a ÚNICA coisa que diz quem passou por ali. Na legenda não é, e anunciar
+   * "Leu neste dia, imagem. Leu neste dia" seria a lição nº 16 do MVP 2.
+   *
+   * ⚠️ **A INICIAL DA AMOSTRA É A MINHA**, quando o `/me` já chegou. Um "A"
+   * cravado seria texto de interface fora do catálogo; o glifo neutro do
+   * `PresenceMark` (o caso `name === null`) é a resposta honesta enquanto não
+   * sei quem é você, e é o mesmo que a linha do plano já desenha.
+   *
+   * ⚠️ **SEM `aria-label` NA REGIÃO**, que o `MarginRail` declara opcional:
+   * nomeá-la pediria uma chave NOVA, e a regra 9 desta fatia não permite
+   * nenhuma. O que se perde é o atalho de pular a região, não informação — o
+   * rótulo da seção está em texto dentro dela. É o mesmo registro da Tarefa 43.
+   *
+   * ⚠️ **OS OUTROS DOIS BLOCOS DO ARTBOARD NÃO ENTRARAM, e não foi esquecimento
+   * — foi a regra 9 mordendo:**
+   *
+   * - **"Neste livro"** (`:196-207`) é um par de CONTAGENS ("Anotações do clube
+   *   18 · Grifos 9"), e **a API não devolve contagem nenhuma**:
+   *   `GET /books/:bookId` traz livro + plano + `writers` + `readers`, e os
+   *   únicos lugares onde notas e grifos existem são `GET /clubs/:clubId/notes`
+   *   e `/highlights`, que devolvem ARRAY cortado em `FIND_ROW_LIMIT = 500`.
+   *   Contar o `length` de uma lista truncada é publicar um número errado como
+   *   se fosse fato — e a regra 9 manda parar e reportar, não contar errado;
+   * - **"Último grifo"** (`:211-218`) precisa do rótulo "Último grifo", que
+   *   **não existe no catálogo** (conferido no `pt.ts`), e a regra 9 proíbe
+   *   chave nova.
+   *
+   * As duas ficam registradas com o motivo, e `pages.book.inBook.*` continua
+   * sem consumidor — três chaves em vez das sete do bilhete da Tarefa 40.
+   */
+  function rail(): ReactNode {
+    return (
+      <MarginRail className="gap-[26px] pt-4 min-[1120px]:pt-0">
+        <section className="flex flex-col gap-3">
+          <h2>
+            <Eyebrow>{t('pages.book.marks.heading')}</Eyebrow>
+          </h2>
+          {(
+            [
+              ['read', t('pages.book.marks.read')],
+              ['wrote', t('pages.book.marks.wrote')],
+            ] as const
+          ).map(([state_, phrase]) => (
+            <div className="flex items-center gap-2.5" key={state_}>
+              <span aria-hidden="true" className="flex">
+                <PresenceMark
+                  label={phrase}
+                  name={me?.name ?? null}
+                  state={state_}
+                />
+              </span>
+              <span className="text-ui text-content">{phrase}</span>
+            </div>
+          ))}
+        </section>
+      </MarginRail>
     );
   }
 
@@ -613,8 +917,24 @@ export function BookPage() {
     "carregando", "não foi possível abrir" e "sem plano" serem estados de uma
     tela — não telas brancas (regra 9).
   */
+  /*
+    ⚠️ **SEM FILETE (Tarefa 42, auditoria B2).** O canvas não desenha o par de
+    traços nesta tela — conferido pelo `gap:3px` dos 21 artboards —, e o
+    padrão do `Screen` é `top`. Sem o `rule="none"` a tela ganha um traço
+    que o desenho não tem, e nada acusa: filete a mais não muda texto, nem
+    papel, nem foco. O acusador é
+    `chrome.test.tsx › the screens the canvas draws with NO rule`.
+  */
   return (
     <Screen
+      /*
+        ⚠️ **A MARGEM SÓ EXISTE COM O LIVRO CARREGADO** (a decisão C da Tarefa
+        42): ausente ≠ vazio. Fora do `ready` não nasce `<aside>` nenhum, e
+        portanto nem o filete vertical nem os 320px em branco ao lado de
+        "Carregando…".
+      */
+      rail={state.status === 'ready' ? rail() : undefined}
+      rule="none"
       title={
         state.status === 'ready' ? state.data.book.title : t('pages.book.title')
       }
