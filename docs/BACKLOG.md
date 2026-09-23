@@ -3281,6 +3281,836 @@ nem era buraco.
 
 ---
 
+# MVP 3.5 — Reestruturação da UI
+
+> Nasceu de `docs/new-ui.md` (2026-09-19) e do canvas de design
+> `https://claude.ai/artifact/YDHTxyof7ji1xqKhoocdDt` — 35 artboards: as 15 telas no tema
+> claro, as mesmas 15 no escuro, e 5 em 1280 px mostrando o layout de duas colunas.
+>
+> A direção, em duas frases: **edição crítica** (no desktop a tela se parte em coluna de
+> leitura de 680 px e margem de 320 px com o aparato; no celular a margem desce para o
+> fluxo) e **caderno encadernado** (papel creme, serifa de leitura, filetes hairline em vez
+> de cartão com sombra, rótulo de seção em monoespaçada maiúscula).
+>
+> ⚠️ **FORA DE ESCOPO, e isto vale para a seção inteira:** schema, endpoints, contratos de
+> API, lógica de autosave, fila offline em IndexedDB, push e regras de permissão. Se uma
+> fatia parecer exigir qualquer um deles, ela **para** e pergunta.
+
+## Decisões fechadas do MVP 3.5 (não reabrir sem decisão do dono)
+
+- **Os tokens adotam os nomes do canvas, sem prefixo** — `--bg`, `--surface`, `--accent`,
+  `--pen-a`, `--gold-line`… O prefixo `--clube-*` morre, e com ele some um dos sete lugares
+  onde o nome do projeto virava parte do estilo (`README-IA.md`, "Como renomear o projeto").
+  ⚠️ **O `DANGER_STYLE` da varredura anti-culpa casa `--clube-danger` por regex.** Ele é
+  **TROCADO, nunca apagado**: uma guarda que deixa de casar qualquer coisa continua verde e
+  para de guardar, que é a pior das duas falhas possíveis.
+- ⚠️ **Os cinco hexes do grifo NÃO mudam.** `HIGHLIGHT_COLORS`
+  (`packages/shared/src/highlight-color.ts`) é **dado persistido**: `Highlight.color` é
+  coluna, é filtro de rota (`?color=%23facc15`) e é índice (`@@index([bookId, color])`). O
+  canvas define como a cor é **pintada** (`--pen-a`…`--pen-r` e os `-dot`), nunca o que é
+  **guardado**. A tradução hex→token mora em `highlight-colors.tsx`, ao lado da hex→chave de
+  i18n que já existe ali.
+- **"Dia 11 de 30" entra por isenção nominal.** O `COUNTER_SHAPE` da varredura anti-culpa
+  proíbe `\d+ de \d+`, e a posição no plano não é placar. A isenção é `COUNTER_EXEMPT_KEYS`,
+  no modelo exato do `STREAK_KEYS` do ADR 0010: **pinada por igualdade exata**, com um teste
+  companheiro provando que cada chave isenta existe mesmo no catálogo. Ampliá-la fica
+  vermelho, e quem ampliar diz por escrito que está ampliando.
+- ⚠️ **`pages.home.streak.atRisk` FICA, e isto contraria o §A.5.9 do `docs/new-ui.md`.** O
+  documento manda remover "Você vai perder a sua sequência!"; o **ADR 0010** registra que o
+  dono foi avisado de que a moldura de perda contraria o §1 do plano e **reafirmou o
+  pedido**. A precedência do `README-IA.md` põe ADR acima de spec de tarefa, e o dono
+  reconfirmou em 2026-09-19. A divergência fica escrita nos dois lugares.
+- **A paleta de 6 cores de avatar morre**, e fica o par único `--person-bg`/`--person-border`
+  /`--person-fg` do canvas. Quem carrega identidade é a **inicial**, não a cor — que é o que
+  o `filter-bar.test.tsx` já cobra por escrito ("never lets the COLOUR be the only carrier of
+  information"). O `avatar-contrast.test.ts` passa a medir **um** par, com o mesmo rigor WCAG
+  de hoje, nos dois temas. ⚠️ **Executada na Tarefa 41a, não na 39**: `bg-avatar-1`…`-6` e
+  `text-avatar-fg` são usados por `avatar-color.ts` e `person-avatar.tsx`, e
+  `ui-source-scan.test.ts` exige CSS emitido para toda classe que `packages/ui` usa —
+  matar os seis tokens antes do componente quebraria a guarda. Os seis sobrevivem à 39 com o
+  valor de hoje, e são os únicos cujo valor não vem do canvas.
+- **Um shell só, responsivo.** O corte de desktop é **≥1120 px**: padding lateral 92 px,
+  coluna 680 px, gap 56 px, margem 320 px com `border-left` e `padding-left: 40px`. Abaixo
+  disso, uma coluna com 20 px de padding e a margem descendo para o fluxo com o mesmo rótulo
+  de seção. **Nunca** dois pacotes de front.
+- **A barra de contexto é a única navegação de volta do app**, e nas telas de formulário ela
+  também abriga a ação primária. Não nasce menu, não nasce nav inferior.
+- **Nenhum valor hexadecimal fora do `theme.css`. Nenhuma string de interface fora do
+  `pt.ts`.** Alvo de toque ≥ 44 px, foco sempre visível, contraste 4,5:1 (3:1 acima de
+  24 px) nos dois temas, nenhum percentual/barra de progresso/placar, nenhuma rolagem
+  horizontal em 360 px, `prefers-reduced-motion` desligando transição, e hover/pressionado
+  mudando **cor** — sem `transform`, sem escala.
+
+⚠️ **As specs continuam sendo detalhadas UMA DE CADA VEZ**, como manda o cabeçalho deste
+arquivo. Só a 39 nasce escrita; as outras nove dizem `_a detalhar_` de propósito, porque o
+recorte de cada uma depende do que a anterior entregou — a 46, por exemplo, depende de qual
+API o `FilterBar` da 41 acabou expondo.
+
+### Bloco J — Reestruturação da UI
+
+- [x] **39** — **Tokens e fontes.** `theme.css` reescrito com os 42 tokens do canvas (nomes
+      sem prefixo) mais os derivados que o código precisa (`--ring`, `--ring-halo`,
+      `--accent-soft`, `--scrim`, as duas sombras, os quatro raios); `@theme inline`
+      remapeado; ~~o `<link>` do Google Fonts~~ **as quatro famílias auto-hospedadas em
+      `packages/app/public/fonts/`** (Fraunces · Instrument Serif · Geist · Geist Mono);
+      `meta theme-color` e o `background_color` do manifest acompanhando o `--bg` claro.
+      Todas as telas mudam de cor de uma vez, sem uma linha de JSX tocada.
+      → `tasks/39-tokens-e-fontes.md`
+      _⚠️ **O `<link>` ficou riscado em vez de reescrito** porque a decisão mudou **durante**
+      a fatia: o §A.6 do `new-ui.md` pedia um `<link>` só, e o dono trocou por auto-hospedagem
+      (2026-09-20) depois que a execução mediu que o Service Worker não precacheia rede de
+      terceiro — ou seja, offline o PWA caía na fonte do sistema, que é exatamente o defeito
+      que carregar fonte existe para não ter. ⚠️ E o `globPatterns` do `vite.config.ts` **não
+      tinha `woff2`**: sem essa linha, auto-hospedar pagaria 277 KB para não resolver nada, e
+      nada acusava, porque o `service-worker-config.test.ts` lê o TEXTO do config em vez do
+      `sw.js` emitido. É a quinta aparição dessa classe (29a, 34b, 38, 38d, esta)._
+      _Entregue: `theme.css` com 69 tokens — os **42** do canvas conferidos valor a valor
+      **duas vezes, por executor e revisor independentes**, zero divergências —, `styles.css`
+      com a bijeção token↔utilitário fechando nos dois sentidos, `editor.css` migrado (40
+      `var(--…)`, nenhum órfão), `fonts.css` com 10 `.woff2` (277.576 B) no precache, e o anel
+      de foco do §A.6 (contorno `--accent` + halo de 18%, com `FOCUS_RING` ganhando o primeiro
+      acusador que ele já teve). **Testes: shared 590 · ui 201 · backend 1975 · app 855**
+      (eram 590 · 195 · 1975 · 811). Chunk de entrada **433.876 B** (teto 450.000) · CSS
+      27.239 B · `index.html` 1.638 B (era 4,22 kB) · precache 26 / 1176,07 KiB._
+      _**Os dois números que justificam a fatia inteira.** (1) Apagar o ramo `--clube-danger`
+      da guarda anti-culpa — em vez de trocá-lo pelo nome novo — passava por **816 testes sem
+      um vermelho**: a guarda teria continuado verde e parado de guardar. (2) Inverter os dois
+      lados do `--danger`, pondo o botão destrutivo a **1,20:1**, passava por **3.596**. Os
+      dois têm acusador nomeado agora, e o segundo foi **remedido pelo orquestrador** depois
+      da entrega (1 acusador: `theme-tokens.test.ts › keeps the danger ink ON the danger
+      paper, in both themes`), com `cp -p`, `md5sum -c` e conferência por conteúdo._
+      _⚠️ **A auditoria derrubou três afirmações do executor, e as três diziam "medido"** — a
+      pior delas gravada no `theme.css`: *"o canvas pinta o anel de foco com `--gold`"*. O
+      canvas **não desenha foco em lugar nenhum** (21 artboards, 18 `outline: none`, zero
+      regras de foco); o dourado copiado era a bolinha da caneta selecionada na paleta de
+      grifo. Sem a medição, a Tarefa 41 leria a frase e propagaria o erro. É a lição do
+      `dayRange`, e é a razão de o revisor ser um agente separado._
+- [x] **40** — **Catálogo e guardas.** As **17** chaves novas do §A.9 do `new-ui.md` em
+      `pt.ts`, nos namespaces de cada tela (não na raiz) e com interpolação `{{…}}`. Mais o
+      `COUNTER_EXEMPT_KEYS` com o pino de igualdade exata, o teste de existência, e a
+      subtração **por frase exata** que faz "Dia 11 de 30" passar sem abrir buraco para um
+      contador de verdade. → `tasks/40-catalogo-e-guardas.md`
+      _⚠️ **São 17 e não as 21 que o §A.9 lista**, medido chave a chave no catálogo:
+      `archiveAction` e `excerptAsInBook` **já existem** (`archive.confirm` e
+      `fields.quoteHint`) e são reusadas; `keepAsIs` é **troca de valor** em duas
+      `archive.cancel`, não chave nova; e `searchResultCount` **fica de fora**, porque
+      `busca.test.tsx` tem decisão de produto registrada contra contagem de resultado em
+      qualquer estado — pergunta aberta para o dono, registrada no `new-ui.md`._
+      _Entregue: **20 folhas** no `pt.ts` para as 17 chaves (o `savedAt` e o `archivePreview`
+      vivem em dois namespaces cada, e `days` tem par de plural), os dois `archive.cancel`
+      dizendo "Deixar como está", e a isenção do contador inteira: `COUNTER_EXEMPT_KEYS`
+      pinada por igualdade exata, o teste de existência das chaves, e a subtração por **frase
+      exata interpolada** — o literal casa caractere por caractere e só o buraco aceita
+      dígito. **Testes: shared 598 · app 861** (eram 590 · 855). Chunk de entrada **434.525 B**
+      (era 433.876; **+649 B**, o preço de o catálogo embarcar — teto 450.000, sobram 15.475) ·
+      CSS 27.239 B e `index.html` 1.638 B inalterados · precache 26 / 1176,71 KiB._
+      _**O número que justifica a fatia:** trocar a subtração exata por
+      `replace(/\d+ de \d+/g, '')` — o atalho óbvio — isentaria TODO contador do app, e a
+      guarda seguiria verde no relatório. Medido: **2 acusadores**, os casos (b) e (c) do par
+      positivo novo. Sem eles o atalho passaria em 861 testes. Seis mutantes aplicados, cada um
+      com `md5sum`/`cp -p` próprio e conferência por leitura; todos acusados._
+      _⚠️ **Quatro correções de spec, medidas:** (1) `pages.highlightForm.save.draft` é
+      impossível — `save` já existe e é uma STRING lida pela tela, então a chave entrou como
+      `draftSaved`, plana, que é a forma que aquele formulário já usa; (2) o par de plural é
+      **um**, não "duas delas", e o catálogo **já tinha dois** pares antes desta fatia (a
+      decisão G diz que estes seriam os únicos); (3) a exigência de "≥ 1 subtração" não cabe
+      dentro do `expectNoGuilt()` — pela decisão H nenhuma tela renderiza a frase ainda, e ela
+      deixaria as **247** chamadas de `expectNoGuilt()` vermelhas de uma vez, então virou a
+      variante `expectNoGuiltWithPlanPosition()`; (4) o "editor 452.818 B" da regra 9 está numa
+      unidade diferente das outras três linhas — o arquivo tem 453.606 B pelo `ls` e não mudou.
+      Detalhe em `tasks/40-*.md`, "Notas de reconciliação"._
+      _⚠️ **A auditoria voltou com 1 bloqueador, 5 altos, 5 médios e 4 baixos, e derrubou
+      QUATRO afirmações do executor rotuladas "medido" — uma delas já copiada para esta linha
+      do `BACKLOG.md`.** (a) `855 chamadas` eram **247** (`855` é a contagem de TESTES do app);
+      (b) `quinze asserções` eram **14**; (c) *"a exceção nova cita as chaves que existem"* era
+      falso — ela se apoiava em `editor.placeholder`, uma chave **fantasma** que também estava
+      num arquivo de **produção** (`RichEditor.tsx`, docblock de prop) e que o `EDITOR.md` §10
+      citava desde a Tarefa 14; (d) *"logo a unidade da lista é byte"* era inferência, não
+      medição. **O bloqueador:** os dois docblocks de `guilt-terms.ts` ficaram empilhados, e
+      `STREAK_KEYS` — a isenção do ADR 0010 — ficou **sem justificativa nenhuma ao lado**;
+      consertado invertendo a ordem das declarações, com guarda nova (`keeps each exempt list
+      glued to ITS docblock`), porque nada acusava. **E a auditoria também errou um ponto,
+      medido:** o `(?!\d)` que ela pediu para o `\d+` guloso **não muda casamento nenhum** —
+      as quatro variantes casam `Dia 11 de 303` igual —, então o padrão ficou como estava e o
+      buraco foi fechado por outro lado (caso (b) no mesmo elemento + pino da linha por
+      elemento do `readableText()`). **Testes: shared 601 · ui 201 · backend 1975 · app 865**
+      (eram 598 · 201 · 1975 · 861 na entrega, e 590 · 201 · 1975 · 855 antes da fatia)._
+      _**Os dois números que justificam a rodada de auditoria.** (1) A regex larga dentro de
+      `expectNoGuiltInHtml` **ou** de `expectNoGuiltBesidesFormError` — a varredura de todo
+      estado de campo inválido e a do primeiro frame — passava por **861 testes sem um
+      vermelho**: o par positivo cobria só duas das quatro funções. (2) A guarda "não cresça uma
+      gêmea" deixava passar três folhas novas com valores desta própria fatia, **0 acusadores em
+      1.459 testes**; ela pinava duas strings e a propriedade que invocava já era falsa **28
+      vezes**. Trocada pelo mapa completo dos 28 grupos — e, olhando um a um, `Alguém do clube`
+      (×3) é **defeito**, não convenção: é um conceito com três chaves, e quem o resolve é a
+      Tarefa 42._
+- [x] **41a** — **Os primitivos sobre os tokens.** `Button` (a variante `seal` nasce, a
+      `danger` morre), `Field` (sem caixa), `List`/`ListItem` (variante `sumario`),
+      `FilterBar`/`FilterChip` (`collapsed`/`onRefine`, aditivos), `PersonAvatar` (a decisão
+      F: a paleta de 6 cores morre), `Sheet` (o raio de 10 px do canvas, via `--r-4` novo).
+      Nenhuma tela é tocada. → `tasks/41a-primitivos-sobre-os-tokens.md`
+      _⚠️ **A entrada 41 foi PARTIDA em duas, e a medição que decidiu:** os primitivos desta
+      fatia têm **69 `it()`** em 9 arquivos de teste (button 10 · field 7 · list 9 ·
+      filter-bar 7 · filter-chip 3 · sheet 11 · person-avatar 17 · styles 3 ·
+      avatar-contrast 2), e a entrada mandava criar **outros 11** componentes na mesma fatia
+      (`ReadingColumn` e `MarginRail` são dois). Uma fatia desse tamanho não é auditável — o
+      revisor perde o fio e um "zero acusadores" passa a valer pouco. As duas metades deixam o
+      app funcionando._
+      _⚠️ **E uma correção que ENCOLHE a fatia:** o §A.8 do `new-ui.md` e o plano da Fase A
+      mandavam o `Button` passar a ter `'primary' | 'secondary' | 'seal'`. **Medido:**
+      `variant="ghost"` tem **29 usos em 15 telas** e ele **já é** o secundário do canvas
+      (borda `--border`, sem preenchimento) — renomear tocaria 29 lugares e faria desta fatia
+      o redesign inteiro; e `variant="danger"` tem **zero** consumidores (a única ocorrência é
+      a declaração do tipo, conferida com aspas duplas, simples e ternário). ⚠️ **Não confundir
+      com os utilitários `text-danger`/`border-danger`**, que o erro de formulário de sete
+      telas usa e de que a guarda `DANGER_STYLE` depende — esses ficam. Logo: `ghost` mantém o
+      nome, `danger` morre, `seal` nasce, zero tela tocada._
+      _Entregue: os sete primitivos reescritos sobre os tokens, **zero arquivo de
+      `packages/app/src/pages/` no diff** (provado por `mtime`: os 49 arquivos de
+      `pages/` têm o mesmo `mtime` do início da fatia). `Button` com `seal`
+      (`--gold-soft`/`--gold-line`/`--gold-strong` + glifo `Check` do lucide) e sem
+      `danger`; `Field` com rótulo mono maiúsculo e dica ABAIXO do controle;
+      `ListItem` com `variant="sumario"` (pontinhos `--leader`, data/página em mono,
+      `tone="today"`/`"future"`); `FilterChip` como pílula sobre `--surface-2`;
+      `FilterBar` com `collapsed`/`onRefine`/`refineLabel` numa união discriminada;
+      `PersonAvatar` sobre o par `--person-*` (a paleta de 6 cores morreu:
+      `avatar-color.ts` apagado, 4 exports fora do barril, 7 tokens e 7 utilitários
+      fora); `Sheet` com o raio de 10px via `--r-4` e a alça de 36×4.
+      **Testes: shared 601 · ui 213 · backend 1975 · app 865** (ui era 201; 212 na
+      primeira entrega, e o 213º nasceu na rodada de auditoria, pinando o papel do sheet).
+      Chunk de entrada **436.546 B** (era 434.525; **+2.021 B**, o preço de dois
+      ícones novos do lucide — `Check` e `ListFilter` — mais os ramos novos, menos o
+      hash FNV-1a apagado; teto 450.000, sobram 13.454) · CSS **29.095 B** (era
+      27.239; **+1.856 B**: entram as classes de ouro, de pessoa, do sumário e as
+      três de `tracking-[...]`, e saem as sete de avatar) · `index.html` 1.638 B e
+      editor 453.606 B **inalterados** · precache 26 / **1180,49 KiB** (era 1176,71;
+      +3,78 KiB = exatamente o CSS + o chunk)._
+      _**Os números que justificam a fatia — e o primeiro foi CORRIGIDO na auditoria,
+      porque eu tinha subvendido a minha própria guarda.** (1) A ressurreição do
+      `danger` tem **duas formas, e as duas têm acusador**: devolvê-lo **só ao tipo**
+      não compila (`TS2741: Property 'danger' is missing`) e nenhum teste roda
+      diferente — eu apliquei essa e concluí "só o `tsc` acusa"; o revisor aplicou a
+      **realista** (tipo **e** tabela, que é o que alguém escreveria de verdade) e aí o
+      `tsc` **passa** e o runtime dá **2 acusadores**, um deles o
+      `offers exactly the three variants the canvas draws` desta fatia. **Existe pino
+      em runtime das três variantes; não é buraco.** ⚠️ E a frase "o `typecheck` é
+      gate" também foi medida e abrandada: **não há CI (`.github/` não existe) nem
+      hook (`.husky/` não existe)** neste repositório — o `typecheck` é gate por
+      disciplina de PROCESSO, e um mutante que só o `tsc` pega depende de alguém
+      rodá-lo. (2) `--person-fg` igual a `--person-bg` — a inicial invisível — passa
+      nos **865 testes do app** e só acusa em `@clube/ui`: 2 acusadores, os dois temas
+      de `avatar-contrast.test.ts`. **Sete mutantes** aplicados entre as duas rodadas,
+      cada um com `md5sum`/`cp -p` próprio e confirmação por leitura; todos acusados._
+      _⚠️ **Três números desta própria entrada caíram na medição**, e ficam
+      corrigidos aqui em vez de apagados: (a) são **68** `it()` e não 69 —
+      `field.test.tsx` tem **6**, não 7 (`grep -c "^\s*it("` e a contagem do próprio
+      vitest); os outros oito arquivos batem; (b) `variant="ghost"` tem 29 usos em
+      **12** arquivos, não 15 (`grep -rln`), todos em `pages/` e nenhum de teste;
+      (c) a decisão I falava de "`--radius-sheet` passa a apontar para `--r-4`" sem
+      dizer que isso **órfão o `--r-3`** — a bijeção token↔utilitário é um para um,
+      então `--radius-control` foi para `--r-3` (4px, que é o que o canvas desenha
+      em botão e campo: 32 ocorrências) e o 3px do `--r-2` virou
+      `--radius-callout` (a caixa de erro, `Main.dc.html:41`). Sem isso
+      `theme-tokens.test.ts` fica vermelho._
+      _⚠️ **A AUDITORIA VOLTOU COM 1 BLOQUEADOR, 3 ALTOS, 4 MÉDIOS E 7 BAIXOS, e
+      derrubou OITO afirmações minhas — cinco rotuladas "medido".** A lista inteira,
+      com a classe de erro de cada uma, está na nota nº 11 de `tasks/41a-*.md`. **O
+      bloqueador:** a justificativa técnica que eu registrei para o `Field` ter saído
+      pela metade era **falsa nos dois erros que ela continha** — eu escrevi que a
+      variante `[&_input]:border-b` "ganha por especificidade (0,2,1 contra 0,1,0)" e
+      "atropelaria o `aria-invalid:border-danger`". **O revisor compilou o Tailwind do
+      próprio repositório** (`@tailwindcss/node@4.3.3`) e a saída diz o contrário: o
+      descendente é `.classe input` = **(0,1,1)** e o utilitário é
+      `.classe[aria-invalid="true"]` = **(0,2,0)**, ou seja a borda de erro **ganharia**
+      — e não há briga nenhuma, porque `border-width`/`border-style` e `border-color`
+      são longhands diferentes e **compõem**. Era bloqueador por ser arquivo permanente:
+      a Tarefa 47 leria "não faça isso" e evitaria a saída CERTA por um motivo
+      inexistente (a lição do `dayRange`). A decisão de adiar continua de pé — pela
+      decisão K sozinha, e pelo acoplamento (o `[&_input]` não pega o `<textarea>` de
+      `highlight-fields.tsx:189`)._
+      _**E os três ALTOS, porque os três eram medição errada, não gosto:** (a) eu repintei
+      o `FilterChip` citando `Acervo.dc.html:63,65` — medido, `:63` é um **contêiner** e
+      `:65` é um `<span>` **não interativo** (o chip removível, componente da Tarefa 46).
+      O `FilterChip` de verdade está em `CorrigirGrifo.dc.html:59-63` e
+      `NovoGrifo.dc.html:60-64`, na paleta de canetas que `highlight-fields.tsx:138`
+      renderiza, e lá o repouso é `background:none` + `color:var(--text-muted)` —
+      **exatamente o que eu apaguei**. Revertido, com o teste reescrito na direção certa;
+      (b) "o canvas desenha quatro alvos abaixo dos 44px" é falso nas duas pontas: o
+      canvas tem **dezenas** (38px ×6, 34px ×6, 32px ×3… contra 44px ×91), e o chip da
+      linha 1 da minha tabela tem **44px** no canvas — são **três** alvos desta fatia, e
+      a divergência do chip não existia; (c) a correção do "15 telas" ficou nos
+      documentos e **não chegou ao docblock de produção** do `button.tsx`, que é o texto
+      que o próximo agente lê primeiro._
+      _✅ **E AS DUAS PERGUNTAS EM ABERTO VOLTARAM DECIDIDAS (2026-09-21):** (1) o dia
+      futuro do sumário **fica em `text-subtle`** — os três cinzas não cabem todos acima
+      de 4,5:1, e `--text-faint` fica sem consumidor com a guarda do primeiro uso ativa;
+      (2) o papel do bottom sheet **passa a ser `--surface`**, como o canvas desenha — e
+      ⚠️ **o meu medo era o oposto da verdade, medido pelo dono:** `--text-subtle` dá
+      **4,93:1** sobre `--surface` contra **4,54:1** sobre `--surface-2`, ou seja a troca
+      MELHORA o pior caso da Tarefa 39 em vez de invalidá-lo. `--surface-2` mantém
+      consumidor (`home.tsx:436`)._
+      _⚠️ **Uma divergência canvas × projeto, NÃO resolvida por conta própria:**
+      o canvas desenha a pílula "Refinar" com 36px, o selo do desktop com 40px e a linha
+      do sumário com ~36–38px — **os três abaixo dos 44px da decisão F**, e o piso venceu
+      nos três. Custo declarado: ~6px por linha de sumário, ~180px num plano de 30 dias.
+      Ficam abertos para o dono os **quatro** arredondamentos de corpo de texto (13px do
+      chip e da pílula, 14,5px do título do sumário e 11,5px da dica do campo — nenhum
+      existe na escala de sete degraus da Tarefa 39) e o filete do avatar, que dá 1,36–1,48:1
+      contra as superfícies no claro. Detalhe em `tasks/41a-*.md`, "Notas de
+      reconciliação" (11 notas)._
+- [x] **41b** — **Os nove componentes que nascem.** `Eyebrow`, `RuleDouble`, `ContextBar`,
+      `ReadingColumn` + `MarginRail`, `BookSpine` (3 tamanhos: 42×60, 58×84, 88×128),
+      `PresenceMark`, ~~`SumarioItem`~~, `StreakSeal`, `GrifoText` (`background` +
+      `box-shadow` da mesma caneta, para a marca alargar além da caixa), `SaveIndicator`.
+      Todos recebem texto por prop; nenhum consome catálogo. Nenhuma tela é tocada.
+      → `tasks/41b-os-componentes-que-nascem.md`
+      _⚠️ **O `SumarioItem` saiu da lista, e a medição que o tirou:** ele **já nasceu na 41a**,
+      como `ListItem variant="sumario"` (`packages/ui/src/components/list.tsx:66,192-194`), e
+      já renderiza a linha inteira do plano — a coluna de marcas (`data-sumario-marks`), o
+      condutor pontilhado (`data-sumario-leader`), a meta em mono à direita, e os tons `today`
+      e `future` com o papel e o filete de ouro. Criá-lo agora seria **um segundo nome para a
+      mesma coisa** — o defeito que este repositório já pagou três vezes: o `GUILT_TERMS` em
+      duas cópias até a Tarefa 19, o `dayRange` que o `CLAUDE.md` registra, e o
+      `'Alguém do clube'` em três chaves que a Tarefa 40 achou. São **nove**._
+      _Entregue: os dez nomes nascidos em nove arquivos (`ReadingColumn` e `MarginRail`
+      dividem `reading-column.tsx`, porque o filete que os separa é propriedade da dupla),
+      todos no barril, **zero arquivo de `packages/app/src/pages/` no diff** (provado por
+      `mtime`: os 49 arquivos de `pages/` têm o mesmo `mtime` do início da fatia).
+      `Eyebrow` com as duas tintas; `RuleDouble` com a inversão de ORDEM (não de cor);
+      `ContextBar` nas três formas, com `renderLink` para o PWA não recarregar;
+      `ReadingColumn`+`MarginRail` com o corte ≥1120px por media query e nada mais;
+      `BookSpine` nos três tamanhos e nas duas paletas; `PresenceMark` nos três estados,
+      com o terceiro sendo ausência de verdade; `StreakSeal` com número e nome em texto;
+      `GrifoText` com a caneta por CHAVE e mapa literal; `SaveIndicator` sem região viva.
+      **Testes: shared 601 · ui 284 · backend 1975 · app 866** (ui era 213, app 865).
+      Chunk de
+      entrada **436.557 B** — **idêntico**, porque nada consome os dez ainda e o Rollup os
+      poda; CSS **32.891 B** (era 29.166; **+3.725 B**, que é onde a fatia inteira custou,
+      porque o `@source` do Tailwind varre `ui/src` independentemente do grafo de imports) ·
+      `index.html` 1.638 B e editor 453.606 B inalterados · precache 26 / 1184,42 KiB._
+      _⚠️ **O NÚMERO QUE A TAREFA 42 PRECISA TER NA MÃO, e ele só aparece com um
+      consumidor.** O chunk não subiu porque nada importa os dez e o Rollup os poda —
+      medido plantando uma sonda que consome os dez e ligando-a ao `App.tsx`: a entrada
+      vai de **436.557** para **442.023 B**, ou seja **+5.466 B de uma vez** (o número
+      inclui a sonda, então ele é um TETO), deixando **7.977 B** de folga até os 450.000.
+      A sonda foi desfeita por `cp -p` com `md5sum -c` OK. **As Tarefas 42 a 48 gastam
+      essa folga**, e é a 42 que paga a primeira parcela._
+      _**O número que justifica a fatia:** montar o mapa caneta→classe em runtime
+      (`` `bg-pen-${key}` ``) — o atalho óbvio — apaga as **dez** regras `.bg-pen-*` e
+      `.ring-pen-*` do CSS compilado (medido: CSS cai de 32.891 para 32.486 B, e o grifo
+      fica sem cor nenhuma na tela) e **`ui-source-scan.test.ts` NÃO acusa** — 10/10 verde,
+      medido, porque os dois extratores dele casam aspas simples e duplas e um template
+      literal fica entre crases. O acusador teve de nascer: `grifo-text.test.tsx › writes
+      the pen→class map as LITERALS`, que lê o próprio fonte. Treze mutantes aplicados,
+      cada um com `md5sum`/`cp -p` próprio e conferência por leitura; todos acusados._
+      _⚠️ **Três divergências canvas × entrega, medidas:** (1) o canvas pinta o rótulo de
+      seção dourado com `--gold`, que no claro dá **4,16:1** contra `--bg` (piso 4,5:1 a
+      10px) — entregue com `--gold-strong` (5,79 / 6,00 / 5,53), que é o dourado que o
+      PRÓPRIO canvas usa quando o ouro carrega texto; (2) a barra de contexto sem ação tem
+      **38px** no canvas e o link dentro dela ocupa a faixa toda — o piso de 44px da decisão
+      F venceu, por padrão vertical no LINK, e a faixa fica 44px (custo: 6px); (3) ~~o selo
+      da corrente é desenhado com um MARCADOR DE LIVRO no canvas, e foi entregue com o
+      `Flame` do lucide, que é o que a regra 8 nomeia~~ — **REVERTIDO na auditoria: o selo
+      passou a `Bookmark`, e quem estava errada era a spec** (veja o parágrafo abaixo). A
+      divergência (3) deixou de existir; sobraram duas, e as duas continuam de pé._
+      _⚠️ **A auditoria voltou com 1 alto, 5 médios e 7 baixos, e derrubou SETE afirmações
+      do executor — três rotuladas "medido"/"medidas".** As duas classes que se repetem são
+      as que a 41a já tinha nomeado: **generalização de amostra** ("os cinco artboards
+      concordam" — são **quatro**: `InicioDesktop.dc.html:35` usa `padding:48px`; "os quatro
+      artboards concordam … 9,5px" — são **três**, o desktop usa 10px; "em todas a ação é
+      `--accent`" — `DiaDesktop.dc.html:40` é **contorno dourado**) e **correção incompleta**
+      (o 48px e o 10px já estavam MEDIDOS CERTOS nos arquivos de teste e ERRADOS nos de
+      produção, que é o primeiro que o próximo agente lê)._
+      _**As duas decisões do dono na rodada.** (1) **`--gold` ganhou guarda de primeiro uso
+      para TEXTO** (`theme-tokens.test.ts › refuses the FIRST USE of text-gold`), no molde
+      da do `text-faint`: ela fica vermelha quando a primeira tela pintar texto com
+      `text-gold` e manda usar `text-gold-strong`. ⚠️ Ela **não proíbe o token** — como
+      traço e filete `--gold` passa (piso de 3:1), e a distinção virou ESTRUTURAL: o glifo
+      do `StreakSeal` passou a `stroke-gold`, que só afeta SVG. (2) **O `StreakSeal` trocou
+      `Flame` por `Bookmark`** — o canvas desenha um marcador (`Inicio.dc.html:98`), a regra
+      8 da spec nomeava `Flame` por engano do orquestrador, e o argumento de produto fecha
+      sozinho: a chama é a metáfora de PERDA do Duolingo e o marcador é PRESENÇA, que é o
+      §1 do plano. O ADR 0010 não reabre (ele nomeia o mecanismo, não o glifo);
+      `pages/streak-bar.tsx` troca na Tarefa 45._
+      _**O buraco de guarda que a rodada fechou, e ele é de DIREÇÃO:**
+      `emits every class packages/ui uses` é **unidirecional** — prova que toda classe
+      escrita virou CSS, nunca que uma classe deixou de ser escrita; quando a lista encolhe,
+      ele fica verde. Nasceu
+      `ui-source-scan.test.ts › ships the CSS of every map assembled from a key`, que exige
+      no CSS COMPILADO os seletores dos mapas por chave (`GrifoText`, `BookSpine`,
+      `PresenceMark`, `StreakSeal`). Medido: o mutante que monta o mapa do **`BookSpine`** em
+      runtime passava por **284 testes de `@clube/ui` sem um vermelho** e some com 5 dos 6
+      seletores de paleta do CSS — ele **não tinha acusador nenhum** antes desta guarda._
+- [x] **42** — **O shell.** Cabeçalho 52/56 px, barra de contexto 38/46 px, as duas colunas
+      e o filete duplo de abertura; `pages/chrome.tsx` vira o cromo novo. ⚠️ Inclui
+      **resolver o nome do autor** na tela do dia e na avulsa: elas dizem "Alguém do clube"
+      desde a Tarefa 18, com um comentário de catálogo que afirma não haver rota de membros —
+      `GET /clubs/:clubId/members` existe desde a 26a e **seis** telas já o usam.
+      → `tasks/42-o-shell.md`
+      _⚠️ **ORÇAMENTO: sobram 7.977 B no chunk de entrada, e esta fatia paga a primeira
+      parcela.** Medido na auditoria da 41b: os dez componentes daquela fatia não custam nada
+      hoje (o Rollup os poda por falta de consumidor), e **no instante em que a primeira tela
+      os importa a entrada sobe +5.466 B de uma vez**, de 436.557 para 442.023 B, contra o
+      teto de 450.000 que é decisão do dono. Meça o chunk ANTES de fechar a fatia; se passar,
+      pare e reporte._
+      _⚠️ ~~**E a home compensa o recuo de topo da coluna:** … a home passa
+      `min-[1120px]:pt-12` pelo `className`.~~ **A COMPENSAÇÃO NUNCA EXISTIU, e esta linha a
+      descrevia como se existisse — corrigida na auditoria da 42 (2026-09-21).** Medido:
+      `grep -rn "pt-12" packages/*/src/` devolve **só prosa**, e o `ScreenProps` **não tem
+      `className`** — ela não era possível sem mexer no `Screen`. **Decisão:** fica `pt-10`
+      (40px) em todas as telas, e os 8px de `InicioDesktop.dc.html:35` viram **divergência
+      declarada**: um `className` no `Screen` é escotilha genérica (qualquer tela
+      sobrescrevendo qualquer classe do cromo) e uma prop para UM chamador é o "peso" que a
+      decisão B da 41a proíbe. A home é a tela da **Tarefa 45** — é lá que os 48px entram, se
+      o dono quiser._
+      _Entregue: cabeçalho **52px / 56px** (`h-13` + `min-[1120px]:h-14`, recuo `px-5` /
+      `min-[1120px]:px-10`, papel `--surface`, filete `--border`) com o nome do app em
+      Fraunces e o nome do clube em mono ao lado; `Screen` sobre o `ReadingColumn` (coluna
+      de 680px + margem de 320px acima de 1120px, uma coluna com 20px abaixo) com o `h1` na
+      tipografia do canvas e o **filete duplo** logo abaixo dele, nas **três** formas que o
+      canvas desenha (`top` padrão, `bottom` nas telas de escrita, `none` nas três em que
+      o canvas não tem filete); `rail` como prop **sem nenhuma tela passando** (decisão C),
+      com o caso vazio testado; `ScreenContextBar`, o invólucro que injeta o `Link` do
+      roteador na `ContextBar` (decisão D). **E o nome do autor resolvido nas DUAS telas**
+      que diziam "Alguém do clube" — `day-note.tsx` e `free-note.tsx` —, pelo mesmo
+      `club-names.ts` das outras seis, com o `PersonAvatar` recebendo **o mesmo nome** que
+      o texto mostra.
+      **Testes: shared 601 · ui 284 · backend 1975 · app 898** (app era 868; +30).
+      Chunk de entrada **438.586 B** (era 436.557; **+2.029 B** — teto 450.000, sobram
+      **11.414**) · CSS **33.982 B** (era 33.106; +876) · `index.html` 1.638 B e editor
+      453.606 B **inalterados** · precache 26 / **1187,26 KiB** (era 1184,42)._
+      _⚠️ **O ORÇAMENTO CUSTOU UM TERÇO DO PREVISTO, e a 43 recebe OITO componentes por
+      pagar, não seis.** A primeira entrega desta fatia escreveu "esta consome **quatro**
+      (`ContextBar`, `ReadingColumn`, `MarginRail`, `RuleDouble`)"; **medido por
+      enumeração de marcadores no chunk emitido**, são **DOIS**: `min-[1120px]:w-[680px]`
+      (`ReadingColumn`) e `gap-[3px]` (`RuleDouble`) aparecem, e
+      `min-[1120px]:pl-10` (`MarginRail`) e `rounded-callout px-4` (o botão de ação da
+      `ContextBar`) **não** — o `MarginRail` nem é importado pelo `chrome.tsx`, e o
+      `ScreenContextBar` é **exportado e nunca importado por tela nenhuma**, então o Rollup
+      poda os dois. A sonda da 41b consumia os **dez** de uma vez (+5.466 B) e era um TETO,
+      como ela mesma dizia; dois deles custaram **+2.029 B**. **Sobram oito por pagar** —
+      `ContextBar` (que arrasta o `ChevronLeft` do lucide junto), `MarginRail`,
+      `Eyebrow`, `BookSpine`, `PresenceMark`, `StreakSeal`, `GrifoText` e
+      `SaveIndicator` —, dentro dos **11.414 B** que sobraram._
+      _⚠️ **E o CSS e o JS medem CONJUNTOS DIFERENTES, o que é fácil de confundir ao ler os
+      dois números lado a lado:** o `@source '../../ui/src'` faz o Tailwind varrer
+      `packages/ui` inteiro **independentemente do grafo de imports**, então as classes dos
+      dez componentes já estão no CSS desde a 41b (foi lá que ele subiu +3.725 B). O JS só
+      carrega quem tem consumidor. Um componente "entrar" custa JS, não CSS._
+      _**Os dois números que justificam a fatia.** (1) Trocar o `Link` do roteador pela
+      âncora crua da `ContextBar` — o defeito que recarrega o PWA inteiro a cada volta —
+      passa **invisível em teste de render**: o `<a href>` continua lá, com o endereço
+      certo, e `keeps a real anchor, with the real address` fica **verde**. O acusador teve
+      de ser sobre o ENDEREÇO depois do clique
+      (`chrome.test.tsx › navigates in the APPLICATION, never in the document`, **1
+      acusador**). (2) O `<aside>` da margem nascendo SEMPRE — 320px em branco e um filete
+      vertical solto em todas as telas — tem **2 acusadores** (um em cada pacote), e os dois
+      nasceram do caso VAZIO: sem ele a prop existiria, não pintaria nada, e a Tarefa 43
+      descobriria na tela. **Dezessete mutantes aplicados entre as duas rodadas** (nove na
+      entrega, mais os três sobreviventes que a auditoria achou e cinco novos), cada um com
+      `md5sum`/`cp -p` próprio e conferência por leitura; **todos acusados ao fim**._
+      _⚠️ **A AUDITORIA VOLTOU COM 2 BLOQUEADORES, 5 ALTOS, 6 MÉDIOS E 5 BAIXOS, e derrubou
+      TREZE afirmações minhas — SETE rotuladas "medido". E TRÊS dos mutantes dela
+      SOBREVIVERAM**, dois sobre propriedades que esta linha afirma entregar. Os três, e o
+      que os matou:_
+      _**(S1, bloqueador B1)** trocar o `SCREEN_TITLE_CLASS` pela classe **pré-42**
+      (`text-2xl font-semibold`) — a decisão inteira da tipografia desfeita — passava por
+      **886 testes**. E a classe entregue era o `Dia.dc.html` copiado e aplicado a **oito
+      telas**: medido h1 a h1, dos **10** `<h1>` que são `Screen.title`, o `Dia` era o
+      **único** que ela reproduzia. Pior, a justificativa que eu escrevi era falsa — eu disse
+      que os títulos de `Inicio` e `Livro` eram *"conteúdo de tela, não o degrau da
+      escala"*, e os dois **são** o `Screen.title`. Corrigido para a MAIORIA de cada
+      propriedade (`leading-[1.14]`, 4 contra 3 e 3; `tracking-[-0.02em]`, 6 contra 4), com
+      o arredondamento de tamanho (23–30px → 25px) **declarado**, e com acusador novo:
+      **2 acusadores**._
+      _**(S2, alto A2)** o **corte de tenant** — a regra que o `CLAUDE.md` chama de "a mais
+      fácil de esquecer" — **não era testado**: nos fixtures
+      `CASAL.id === CLUB_ID === book.clubId === 'c-casal'`, então a asserção da URL era
+      verdadeira para as DUAS origens. Pedir os membros do clube **ativo** em vez do clube
+      **do livro** passava por **886 testes**. Fixture hostil agora (o livro é de
+      `c-outro`), nas duas telas: **2 acusadores**._
+      _**(S3, alto A4)** eu dediquei um parágrafo a provar **por byte** que a ORDEM de
+      emissão do Tailwind faz o `min-[1120px]:pt-0` vencer — e **apagar a classe** passava
+      por 886 testes. Não era só a ordem que não tinha pino; a **existência** também não.
+      Acusador novo: **1 acusador**, e sem ele o desktop soma 40+20=60px de recuo._
+      _**E o bloqueador B2, que não era sobrevivente mas era pior: a contagem estava errada
+      e o padrão escolhido era a MINORIA.** Eu escrevi, com ênfase, *"São TRÊS artboards na
+      primeira linha e UM na segunda — contados, não generalizados"*. Medido: o canvas tem
+      **15** filetes duplos, não 4; **abaixo de um `<h1>`** são **7** `top` contra **3**
+      `bottom`; a minha lista de três citava `NovaAnotacao`, que **não tem `<h1>`**, e
+      omitia `DiaEscuro`. O padrão virou `top`, nasceu a forma `none` (o canvas desenha
+      **três** telas sem filete nenhum, e o `Screen` inventava um traço nas três), e o ramo
+      `entry` **ganhou** o filete — eu tinha escrito que a tela de entrada "não tem filete de
+      abertura", e `Main.dc.html:35` e `Convite.dc.html:37` **têm**. Custo: três telas a
+      mais tocadas (`book.tsx` e `highlight-form.tsx` com `rule="none"`, `free-note.tsx`
+      com `rule="bottom"`), autorizado porque é o canvas contra uma generalização._
+      _⚠️ **E a compensação de 48px da home (alto A3) estava escrita como FEITA e não
+      existia:** `grep -rn "pt-12"` devolve só prosa, e o `ScreenProps` não tem
+      `className` — ela não era sequer possível. Os três documentos que a afirmavam foram
+      corrigidos, e os 8px viraram **divergência declarada** para a Tarefa 45._
+      _⚠️ **Mais correções da auditoria:** `accept-invite.tsx` e `not-found.tsx` ficaram
+      com a tipografia de título **pré-42** por uma rodada (as duas exceções do `h1` não são
+      exceção de TIPOGRAFIA — agora importam o mesmo `SCREEN_TITLE_CLASS`, com guarda);
+      o `pb-7` foi generalizado de UM artboard — medido, **15 dos 16** de celular têm
+      bottom 0, e o 28px do `Inicio` é o único que o canvas exercitou, então ele fica como
+      **decisão do app**, não como medida do canvas; a armadilha de substring do
+      `replyByUrl` continuava aberta no SEGUNDO responder do `day-note.test.tsx` (a minha
+      nota declarava a classe fechada com metade dos responders arrumados); o `entry` tem
+      **um** chamador e não dois (o convite não usa `Screen`); o `ScreenContextBar` aceitava
+      e **descartava em silêncio** um `renderLink` (agora `Omit` distributivo — o `Omit`
+      direto colapsa a união discriminada, e o `tsc` acusou); e o `nameOfWriter` era
+      chamado **duas vezes por linha** nas duas telas, onde o `acervo.tsx` usa um `const`._
+      _⚠️ **Quatro correções de spec, medidas:** (1) as linhas do cabeçalho estavam erradas
+      nas duas citações — é `Inicio.dc.html:26` (não `:32`, que é o `<main>`) e
+      `InicioDesktop.dc.html:21` (não `:32`, que é o `</div>` do grupo da direita — ⚠️ **a
+      primeira correção desta fatia dizia `</header>`, e ele está na `:33`**); os números 52/56 estavam
+      certos, e a unanimidade é de **16** artboards de celular e **5** de desktop; (2) a
+      decisão F diz que o fallback *"é `pages.acervo.item.author.other`, que o `nameOfWriter`
+      já devolve"* — **falso**: o `nameOfWriter` devolve `string | null`, e quem troca o
+      `null` pela chave é a TELA (é o que `acervo`, `busca`, `activity-feed` e `streak-bar`
+      já fazem, cada uma na sua linha); (3) o `new-ui.md` §A.5.9 falava de **uma** tela e
+      **quatro** usuários — são **duas** (a avulsa também) e **seis**; (4) a decisão B
+      revoga `max-w-4xl`, e o único chamador era o `book-form.tsx` — **ele é a única tela
+      fora das duas do nome que esta fatia tocou**, com quatro deleções de `width="wide"`
+      obrigadas pelo tipo._
+      _⚠️ **Uma divergência canvas × entrega e uma pergunta em aberto.** (a) O nome do clube
+      **fica visível no celular**, e o canvas não o desenha lá — escondê-lo com
+      `hidden min-[1120px]:block` tiraria do celular o único lugar em que o clube é nomeado
+      **e passaria despercebido**, porque o jsdom não aplica CSS e
+      `home.test.tsx › shows the club name in the header even with a single club` ficaria
+      verde com o nome invisível — ⚠️ **e por isso mesmo ela estava SEM GUARDA até a
+      auditoria**: esconder o nome passava por 886 testes, e agora há acusador
+      (`app.test.tsx › ⚠️ keeps the club name VISIBLE on the phone`); (b) **o canvas não tem artboard de desktop para o cadastro
+      de livro** (os cinco são `Inicio`, `Dia`, `Livro`, `NovaAnotacao`, `NovoGrifo`), então
+      os 680px do `book-form.tsx` são a decisão B aplicada e **não** uma medição: acima de
+      1120px o campo do meio da linha do plano passa de ~490px para ~270px (ela continua em
+      uma linha, `sm:flex-row` desde 640px), e abaixo do corte a tela ficou **mais larga**
+      que antes. Fica para a Tarefa 47, dona dos formulários. Detalhe em
+      `tasks/42-o-shell.md`, "Notas de reconciliação"._
+- [x] **43** — **Anotação do dia e o `RichEditor`.** O editor perde a caixa e a barra fixa:
+      formatação vira menu de bolha na seleção, e fixas na tela ficam só as 5 canetas + `Aa`
+      + `/`, ancoradas acima do teclado no celular (62 px) e no rodapé da coluna no desktop
+      (56 px). Serifa 17,5/1,72 → 19/1,75, medida máxima 620 px. ⚠️ **Autosave (1,5 s) e fila
+      offline não mudam — só o indicador, que vira nota de margem em mono.**
+      → `tasks/43-anotacao-do-dia-e-o-editor.md`
+      _⚠️ **A decisão de arquitetura da fatia, tomada na spec:** a barra de canetas fica FORA
+      da área de texto mas precisa comandar o editor, e o contrato do `RichEditor`
+      (`docs/EDITOR.md` §3) diz por escrito que **nenhuma ref imperativa é exposta**. Passar a
+      instância para a tela quebraria o contrato **e** tiraria os botões novos do grafo que
+      `editor-touch-handlers.test.ts` percorre — que é a guarda da regra §4.4, a que impede o
+      teclado do celular de fechar a cada toque. Saída: o `RichEditor` continua dono da barra
+      e ganha `penBar?: 'fixed' | 'footer' | 'none'`; a tela só diz **onde** ela fica._
+      _⚠️ **Orçamento:** o editor é lazy e tem chunk próprio (**453.606 B**), então a barra e o
+      menu de bolha **não** pesam na entrada. Quem pesa é o `rail` do desktop, que entra pela
+      tela. Entrada hoje **438.586 B**, teto 450.000, **sobram 11.414 B** — e restam **oito**
+      componentes da 41b por consumir._
+      _Entregue: a barra fixa do editor MORTA (com ela saíram o `sticky top-0`, o scroll
+      lateral, o `backdrop-filter` e a exceção dos 36px, que virou o piso de **44px** do
+      canvas); o menu de bolha com o conjunto do canvas (**B · I · `<>` · H1 · H2 ·
+      citação**, glifos em TEXTO — o `RichEditor` deixou de importar `lucide-react` —, com
+      separadores, o papel/borda/raio/sombra e a seta de 12×7); `penBar` nas três formas,
+      com `'fixed'` ancorada acima do teclado no celular e devolvida ao rodapé da coluna
+      acima de 1120px por **media query e só**; o editor **sem caixa** e com a serifa de
+      leitura (17,5/1,72 → 19/1,75, medida máxima 620px); a nota de margem em mono pelo
+      `SaveIndicator` da 41b, com `pages.dayNote.save.savedAt` ganhando o primeiro
+      consumidor que teve; e a **margem do desktop** com as duas seções — é a primeira tela
+      a passar `rail` ao `Screen`, capacidade que nasceu na 42 sem consumidor. **Nenhuma
+      chave de catálogo nova**; `editor.slashHint` e `pages.dayNote.highlights.heading`,
+      as duas órfãs da Tarefa 40, ganharam consumidor.
+      **Testes: shared 601 · ui 299 · backend 1975 · app 912** (ui era 284, app 898).
+      Chunk de entrada **440.949 B** (era 438.586; **+2.363 B** — teto 450.000, sobram
+      **9.051**) · **chunk do editor 449.546 B** (era 453.606; **−4.060 B**, que é a barra
+      morta mais os onze ícones do lucide) · CSS **35.074 B** (era 33.982; +1.092) ·
+      `index.html` 1.638 B inalterado · precache 26 / **1186,67 KiB** (era 1187,26)._
+      _**Os três números que justificam a fatia.** (1) **"A barra fixa morreu" não tinha
+      acusador DELIBERADO**: devolvê-la — um `<div sticky top-0>` com os controles dentro,
+      antes do menu de bolha — deixava a propriedade sem dono. Nasceu
+      `pen-bar.test.tsx › mounts NO control above the text, and exactly SEVEN when the bar
+      is asked for`. ⚠️ **A primeira redação desta linha dizia "passava por 299 testes", e o
+      número descrevia o instante errado:** 299 é a contagem **depois** dos `it()` que esta
+      fatia acrescentou, e a frase alegava descrever o estado **antes** deles. Medido agora:
+      o mutante dá **3 acusadores**, dos quais **2 são COLATERAIS** e existiriam sem o
+      arquivo novo (`reflects the active mark` e `prevents the default of mousedown` acham
+      dois "Negrito" quando a barra volta). O deliberado é **um**, e é o que nasceu aqui. (2) **A identidade da decisão E nasceu
+      AUTO-AJUSTÁVEL (§7.8)** — apagar um controle da lista encolhia os DOIS lados da
+      igualdade e ela ficava verde; o único acusador era a pré-condição de contagem, que não
+      diz qual sumiu. Com o pino escrito à mão, o mutante é nomeado. (3) O corte de tenant
+      dos **grifos** — pedir ao clube ATIVO em vez do clube DO LIVRO — tem **1 acusador**,
+      com fixture hostil (`c-outro` × `c-casal`). **Doze mutantes** aplicados, cada um com
+      `md5sum`/`cp -p` próprio e conferência por leitura; **todos acusados**, e os dois
+      arquivos voltaram com md5 idêntico._
+      _⚠️ **CINCO das seis citações de artboard da spec estavam erradas** (os números não —
+      17,5/1,72 · 19/1,75 · 620 · 62 · 56 · 9,5px conferem todos), e o script que **imprime
+      a linha citada** achou um defeito maior: **`Dia.dc.html:71` é um SÉTIMO botão do menu
+      de bolha** — `aria-label="Mais opções"` —, e o "…" com que a decisão A termina a lista
+      é ele, não reticência de prosa. **Não implementado, divergência declarada**: o
+      artboard é estático e não diz para onde ele leva, e tudo o que um "mais opções" conteria
+      é o menu `/`, que já existe e ganhou botão próprio. Fica para o dono._
+      _⚠️ **E a decisão C da spec está METADE errada, medido:** ela diz que *"17,5 e 19 não
+      estão na escala de sete degraus"* — **17,5px É o `--size-reading`**, nascido na Tarefa
+      39 com esse comentário ao lado. Só o 19px não existe, e ele ficou como literal no
+      `editor.css`. Outras divergências declaradas: os seis botões do menu de bolha usam
+      quatro corpos no canvas (16 · 13 · 14 · 24px) e saíram em três degraus; o raio do papel
+      do popover é 5px no canvas e saiu em `--r-3` (4px); a amostra da caneta continua pintada
+      com o `--swatch` (o `rgba` que ela APLICA) e não com `--pen-a`, porque o contrário
+      apagaria o espelho do ADR 0004; e "Grifos desta leitura" aparece nas duas larguras,
+      embora o artboard de celular não a desenhe — esconder por media query seria invisível
+      para o teste. Detalhe em `tasks/43-*.md`, "Notas de reconciliação" (13 notas)._
+      _⚠️ **A AUDITORIA VOLTOU COM ZERO BLOQUEADORES DE PRODUTO, 6 ALTOS, 5 MÉDIOS E 8
+      BAIXOS — e SEIS mutantes novos SOBREVIVERAM**, cinco com consequência visível para quem
+      usa. O pior: **a barra de canetas não tinha acusador de PINTURA nenhum.** Apagar
+      `.clube-editor-swatch` inteira deixava as cinco bolinhas sem cor — a barra vira **cinco
+      alvos de 44px invisíveis** — e passava por `ui` 299, `app` 912 e `shared` 601: **1.812
+      testes sem ver**. Apagar só o anel de ouro tinha o mesmo efeito na caneta ligada. O
+      `highlight-palette.test.tsx` usava a classe só como SELETOR (prova que a cor chega ao
+      DOM, nunca que alguma regra a pinta), e o `editor-css.test.tsx` — o único arquivo que
+      monta o CSS no jsdom — tinha três `it()` para o corpo de leitura e **zero** para a
+      amostra. Nasceu `editor-css.test.tsx › the pen bar paints`, e os dois mutantes acusam._
+      _**Os outros quatro sobreviventes, e os quatro tinham consequência:** a **ORDEM dos
+      irmãos** (`<PenBar>` antes do `<EditorContent>`) passava por 299/299 e 912/912 — e no
+      desktop, onde `min-[1120px]:static` tira o `fixed`, isso é **literalmente a barra do
+      topo de volta**, a decisão A desfeita sem um vermelho (o `it()` media CONTAGEM e o nome
+      dele prometia POSIÇÃO); a **seta de 12×7** do menu de bolha podia sumir; o **`ml-auto`**
+      do separador podia sumir (é ele que põe `Aa`+`/` na borda direita no celular); e
+      **"Grifos desta leitura" escondido no celular** — a divergência declarada por mim, e
+      **desprotegida**, que é a terceira vez que este repositório paga por isso. **Oito
+      mutantes novos nesta rodada, todos acusados**, cada um com `md5sum`/`cp -p` próprio e
+      conferência por leitura._
+      _⚠️ **E TRÊS AFIRMAÇÕES MINHAS CAÍRAM — as três são NÚMEROS MEDIDOS NUM INSTANTE E
+      ESCRITOS COMO SE FOSSEM PERMANENTES**, que é uma classe nova neste repositório: nenhuma
+      foi chute, todas saíram de um comando que rodou. (a) *"trocar o `--swatch` apagaria DOIS
+      acusadores"* — é **um**: medido, o mutante dá 7 vermelhos, todos em
+      `highlight-palette.test.tsx`, e `shared` fica **601/601 VERDE**, porque o espelho do ADR
+      0004 lê os literais `rgba` do FONTE e nunca tocou o `--swatch` (a decisão está certa; o
+      argumento estava pela metade); (b) *"devolver a barra passava por 299 testes"* — o 299 é
+      a contagem **depois** dos `it()` desta fatia, e a frase alegava descrever o estado
+      **antes**; medido, são 3 acusadores, **2 colaterais** e 1 deliberado; (c) *"a rota de
+      grifos é paginada e a tela pede só a primeira página"* — **as duas metades falsas**: a
+      rota não tem paginação (o `page` do schema é a **página do LIVRO**), e o corte é o
+      `FIND_ROW_LIMIT = 500` com `createdAt desc`. **O veredito muda:** um grifo do dia só
+      some se o livro passar de 500 grifos — num clube de casal é **registro, não defeito**._
+      _**Mais: o `EDITOR.md` §6 documentava `unsetHighlight()`** — única ocorrência do nome em
+      todo o repositório —, enquanto o §4.1 emendado na mesma fatia dizia "NÃO HÁ MAIS
+      BORRACHA"; os **três rótulos de seção** da tela passaram ao `Eyebrow` da 41b (eles usavam
+      `text-sm`, o default do Tailwind, e o canvas os desenha iguais em mono 10px — o
+      componente tinha **zero** consumidores em `packages/app`; corrigidos os três e não os
+      dois nomeados, porque duas tipografias de rótulo na mesma tela é a "correção incompleta"
+      da 41b); a **lista de tokens do §13** estava errada nos dois sentidos e foi remedida (17
+      tokens, `--bg` fora, `--border-soft`/`--r-3`/`--gold`/`--family-reading`/`--size-reading`
+      dentro); o **§3** ganhou `penBar` e `slashHintLabel`; o **§14** perdeu as duas linhas
+      impossíveis; e o `data-editor-bubble`, gancho que ninguém lia, saiu.
+      **Testes ao fim da rodada: shared 601 · ui 303 · backend 1975 · app 914.** Entrada
+      **441.093 B** (teto 450.000, sobram **8.907**) · editor **449.522 B** · CSS 35.074 B ·
+      `index.html` 1.638 B · precache 26 / 1186,79 KiB._
+- [x] **44** — **O livro.** O plano vira sumário com pontinhos de condução e data/página em
+      mono à direita; hoje com fundo próprio e filete dourado, futuros apagados. As marcas
+      viram **um glifo por leitor** (vazado = leu, cheio = leu e escreveu, ausente = não leu),
+      com legenda na margem do desktop. Lombada tipográfica no lugar da capa ausente.
+      ⚠️ **Os estados que mostram a posição no plano ("Dia 11 de 30") chamam
+      `expectNoGuiltWithPlanPosition()`, não `expectNoGuilt()`** — a variante exige ≥ 1
+      subtração efetiva da frase isenta, e é ela que impede a isenção da Tarefa 40 de virar
+      letra morta. Chamar a de sempre por hábito deixa a decisão F morrer sem um vermelho.
+      → `tasks/44-o-livro.md`
+      _⚠️ **É a fatia para a qual a Tarefa 40 escreveu um bilhete.** Sete coisas nasceram sem
+      consumidor e ligam aqui, medido por `grep` em `packages/app/src` fora de teste (zero
+      ocorrências de cada): as chaves `pages.book.plan.dayOfPlan`, `pages.book.marks.*` e
+      `pages.book.inBook.*` (Tarefa 40); a `COUNTER_EXEMPT_KEYS` com a
+      `expectNoGuiltWithPlanPosition()` (Tarefa 40, **nunca exercitada por uma tela**); o
+      `ListItem variant="sumario"` com `tone` e a variante `seal` do `Button` (Tarefa 41a);
+      e o `PresenceMark` com o `BookSpine` (Tarefa 41b)._
+      _⚠️ **E o compilador vai cobrar a migração do subtítulo**, como a nota do `ListItemLook`
+      da 41a previu por escrito: `book.tsx` passa `subtitle={subtitleFor(item, locale)}`, e o
+      braço `sumario` declara `subtitle?: never` — a data e a referência têm de ir para o
+      slot `end`, em mono à direita, que é onde o canvas as desenha._
+      _Entregue: a linha do plano virou `ListItem variant="sumario"` com `tone` — o dia de
+      hoje em `--surface-today` com filete `--gold-line` em cima e embaixo, o futuro em
+      `--text-subtle`, o passado sem tom nenhum —, e a data/referência **migrou de
+      `subtitle` para `end`**, cobrada pelo compilador exatamente como a nota do
+      `ListItemLook` da 41a previu por escrito (`TS2322: Type '"sumario"' is not assignable
+      to type '"row"'`). O par `ReadMarks` + `PersonAvatar` deu lugar ao `PresenceMark`
+      nos dois papéis (vazado = leu, cheio = escreveu), o `BookSpine` abre o corpo nos dois
+      tamanhos, o "li hoje" marcado virou `variant="seal"` — **o primeiro consumidor que a
+      variante teve** —, os rótulos de seção viraram `Eyebrow`, e a margem do desktop ganhou
+      a legenda "As marcas". **Nenhuma chave de catálogo nova:** `pages.book.plan.dayOfPlan`
+      e `pages.book.marks.{heading,read,wrote,hint}` ganharam o primeiro consumidor que
+      tiveram.
+      **Testes: shared 601 · ui 303 · backend 1975 · app 926** (app era 914).
+      Chunk de entrada **443.693 B** (era 441.093; **+2.600 B** — teto 450.000, **sobram
+      6.307** para as Tarefas 45 a 48) · CSS **35.180 B** (era 35.074; +106) ·
+      `index.html` 1.638 B e editor 449.522 B **inalterados** · precache 26 /
+      **1189,43 KiB** (era 1186,79)._
+
+      _⚠️⚠️ **A ISENÇÃO DO CONTADOR FOI EXERCITADA POR UMA TELA PELA PRIMEIRA VEZ, e o
+      mutante da regra 3 ficou VERMELHO** — ~~mas o acusador teve de NASCER, e a razão é
+      estrutural: trocar `expectNoGuiltWithPlanPosition()` por `expectNoGuilt()`
+      **afrouxa** uma asserção, e asserção afrouxada não fica vermelha sozinha. Nasceu
+      `book.test.tsx › scans the plan-position states with the EXEMPTION-EXERCISING
+      variant`, que lê o próprio fonte e exige ≥ **45** chamadas da variante (piso escrito
+      à mão, §7.8)~~._
+
+      _⚠️⚠️ **O TEXTO RISCADO É FALSO, e a auditoria de 2026-09-22 mediu.** O mutante não
+      sobrevivia "por construção": sobrevivia pela **forma ANINHADA** do helper — a variante
+      estrita chamava a de sempre e somava uma exigência, o que a tornava superconjunto. Os
+      três helpers foram reestruturados em torno de um núcleo `scanGuilt(): number`, e as
+      duas variantes ficaram **MUTUAMENTE EXCLUSIVAS**: `expectNoGuilt()` é
+      `expect(scanGuilt()).toBe(0)` e `expectNoGuiltWithPlanPosition()` é
+      `expect(scanGuilt()).toBeGreaterThan(0)`. **O pino de fonte foi APAGADO** (e o
+      `testSource()` com ele), e o mutante fica vermelho no `it()` em que a troca acontece.
+      Medido, sem pino: trocar **uma** chamada → **1** acusador, no lugar certo; trocar
+      **todas** as 46 → **42**; e o defeito INVERSO — a posição vazando num estado sem dia de
+      hoje —
+      passou de **0** para **8**. ⚠️ **A troca é segura enquanto `COUNTER_EXEMPT_KEYS` tiver
+      uma chave só com um consumidor de produção**, e o vermelho aparece na hora se alguém
+      isentar uma frase que apareça em toda tela._
+
+      _⚠️ **E A POSIÇÃO NO PLANO NÃO ESTÁ DESENHADA NESTA TELA NO CANVAS — divergência
+      declarada.** Medido com o script que imprime a linha citada: "Dia 11 de 30" aparece em
+      `Inicio.dc.html:41`, `InicioDesktop.dc.html:42` e `DiaDesktop.dc.html:51`, e
+      **não** em `Livro.dc.html` nem em `LivroDesktop.dc.html`. Ela ocupa a linha de mono
+      do cabeçalho, que é onde os dois artboards do livro põem a meta do mês
+      ("Setembro de 2026 · 288 p.") — ~~e essa meta não pôde ser reproduzida porque o mês por
+      extenso e o "p." seriam chaves NOVAS~~._
+
+      _⚠️⚠️ **A FRASE RISCADA ACIMA É FALSA NA METADE DO MÊS, e a auditoria de 2026-09-22
+      mediu.** O mês por extenso **não é chave nenhuma**: `home.tsx:182 formatClubMonth` já
+      formatava `"2026-09"` → `"setembro de 2026"` com `Intl` desde a Tarefa 16, e
+      `book.month` está em `bookResponseSchema` (`packages/shared/src/book.ts:139`), que esta
+      tela já carrega. **Decisão do dono (D1, 2026-09-22): a linha vira
+      `Setembro de 2026 · Dia 2 de 3`.** O `formatClubMonth` foi **extraído** do `home.tsx`
+      para `packages/app/src/pages/club-month.ts` e as duas telas o importam de lá (§7.1:
+      extrair, não copiar) — a decisão J da spec proibia tocar `home.tsx`, e o dono a emendou
+      **só para este import**. O `"288 p."` continua fora: esse **seria** chave nova de
+      verdade (`pt.ts` só tem `totalPages = 'Total de páginas'`, rótulo de campo). ⚠️ **E
+      extrair GANHOU acusadores:** apagar o `timeZone: 'UTC'` do formatador — o bug de um dia
+      em qualquer fuso negativo — tinha **0** acusadores enquanto ele era privado da home e
+      passou a ter **2**._
+
+      _⚠️⚠️ **DOIS DOS TRÊS BLOCOS DA MARGEM NÃO ENTRARAM, e a regra 9 é quem os barrou —
+      `pages.book.inBook.*` continua SEM CONSUMIDOR.** (a) **"Neste livro"** é um par de
+      CONTAGENS ("Anotações do clube 18 · Grifos 9"), e **a API não devolve contagem
+      nenhuma**: `GET /books/:bookId` traz livro + plano + `writers` + `readers`, e as
+      únicas fontes são `GET /clubs/:clubId/notes` e `/highlights`, que devolvem ARRAY
+      cortado em `FIND_ROW_LIMIT = 500` (`prisma-note-repository.ts:35`,
+      `prisma-highlight-repository.ts:53`). Contar o `length` de uma lista truncada é
+      publicar número errado como fato, e a regra 9 manda **parar e reportar**, não contar
+      errado; (b) **"Último grifo"** precisa do rótulo "Último grifo", que **não existe no
+      `pt.ts`** — chave nova, proibida pela mesma regra. ~~**Pergunta aberta para o dono:**~~
+      **FECHADA pelo dono em 2026-09-22 (decisão D3):** contagem de acervo no livro pede rota
+      (ou envelope com total) e uma chave; as duas coisas estavam fora do escopo do MVP 3.5,
+      e o dono **abriu exceção** e autorizou backend — os dois blocos viraram a **Tarefa
+      44b**, logo abaixo. ⚠️ E a parada da 44 estava **mais** certa do que a nota diz: havia
+      um número quase certo à mão (somar `writers[].userIds`) e ele estaria **errado**, por
+      cegar as avulsas. Leia a nota nº 2 de `tasks/44-o-livro.md`._
+
+      _**Três mutantes SOBREVIVERAM e os três ganharam acusador na mesma fatia** — os três
+      da classe "divergência declarada sem guarda" que a nota nº 20 da Tarefa 43 nomeou:
+      (1) a margem montada SEMPRE (`rail={rail()}`), que põe um `<aside>` de 320px e um
+      filete vertical ao lado de "Carregando…" e do 404 — **925 testes verdes**;
+      (2) apagar o `hidden min-[1120px]:flex` da lombada de desktop, que põe **duas
+      lombadas lado a lado em toda largura** — **926 testes verdes**; (3) apagar o
+      `border-b-2 border-accent` do rótulo de seção, o traço de 2px que separa o cabeçalho
+      do sumário nos dois artboards — **926 testes verdes**. **Onze mutantes aplicados**,
+      cada um com `md5sum`/`cp -p` próprio e conferência por leitura; todos acusados ao
+      fim. ⚠️ **ERAM SEIS, não três** — a auditoria de 2026-09-22 achou outros três da mesma
+      classe (M7, M12, M15), no item (a) do bloco da rodada de correção, logo abaixo._
+
+      _⚠️ **Um `it()` foi REESCRITO e não apagado, e a propriedade mudou de natureza:**
+      `tells READING apart from WRITING on the same row` media **glifo × letra** (um
+      `<Check>` = leu, uma inicial = escreveu) comparando `querySelector('svg')`. No
+      canvas os dois são o MESMO círculo com a inicial, e o que separa é **vazado × cheio**.
+      A regra "distinguível sem depender de cor" sobreviveu com a mesma força, e ficou mais
+      apertada: o vazado não pode ter **nenhum** utilitário `bg-*`, o que mata também o
+      mutante que troca a forma por matiz. Os três mutantes da regra 2 acusaram
+      **4 · 2 · 5**. ⚠️ **Este parágrafo dizia "(2, 1 e 3 acusadores)" e o número estava
+      errado** — a nota nº 5 de `tasks/44-o-livro.md` sempre disse 4 · 2 · 5, e a auditoria
+      de 2026-09-22 adjudicou por medição: o mutante (i), "vazado e cheio com o mesmo
+      preenchimento", dá **4** (`@clube/ui` ×2, `@clube/app` ×2). Corrigido aqui porque é
+      **este** arquivo que a próxima fatia lê._
+
+      _⚠️⚠️ **RODADA DE CORREÇÃO DA 44 (2026-09-22): nove afirmações caíram e MAIS TRÊS
+      mutantes sobreviveram.** As notas de reconciliação **11 a 16** de `tasks/44-o-livro.md`
+      têm a medição de cada um. O resumo do que a próxima fatia precisa saber:_
+
+      _**(a) Mais três mutantes da MESMA classe** ("divergência declarada sem guarda"), os
+      três passando por **926 verdes**: **M7** — tirar o `aria-hidden` do envoltório do
+      `PresenceMark` na legenda da margem, que faz o leitor de tela anunciar "Leu neste dia"
+      **duas vezes** por linha (a lição nº 16 do MVP 2, que o docblock do teste **cita**);
+      **M12** — esconder "Cheio = escreveu" com `hidden`, armadilha que a **nota 8.7 da
+      própria fatia nomeia por escrito** e não guardou; **M15** — trocar a tipografia da
+      linha de mono do cabeçalho, que era a string de classes do `Eyebrow` **copiada à mão**.
+      Os três: **0 → 1 acusador**. ⚠️ A classe não reapareceu "inteira": reapareceu **em
+      dobro**, numa fatia que já sabia o nome dela._
+
+      _**(b) Decisão D2 do dono — o tamanho fica, e a UNIDADE estava errada.** A nota nº 9
+      comparou `wc -l` (886) com o teto de "~350" da Tarefa 32b, que é do **contador
+      canônico** (`acervo.tsx:115-126`, o único do projeto). Medido com o comando certo:
+      `book.tsx` **277 → 356** na fatia (**+99 / −20 = +79**, ~2× o "~40 de JSX" que a nota
+      estimou) e **360** ao fim da correção; `reading-marks.tsx` **105 → 107**. **O dono
+      decidiu: fica nos 360, sem corte e sem teto novo** — 356 contra um teto que o próprio
+      texto escreve como "~350" é aproximação, não estouro. E o docblock do `book.tsx` que
+      ainda dizia "saiu de 247 para 277" foi atualizado **com data**._
+
+      _**(c) "Restam quatro componentes da 41b por consumir" era falso: resta UM.**
+      `ContextBar` está em `chrome.tsx:2` (Tarefa 42); `GrifoText` e `SaveIndicator` em
+      `day-note.tsx` (Tarefa 43). Só o **`StreakSeal`** não tem consumidor, e ele entra na
+      **45** — que é quem lê esta linha para saber a folga._
+
+      _**(d) Números da rodada, 2026-09-22, tudo verde:** shared **601** · ui **303** ·
+      backend **1975** · app **927** (era 926: +2 testes novos, −1 o pino de fonte apagado).
+      Chunk de entrada **443.670 B** (era 443.693; **−23 B** — teto 450.000, **sobram
+      6.330**) · CSS **35.180 B**, `index.html` **1.638 B** e editor **449.522 B**
+      inalterados · precache 26 / **1189,41 KiB**. ⚠️ **A entrada ENCOLHEU** porque o
+      conserto do M15 tirou uma string de classes copiada à mão e usou um componente que a
+      tela já importava._
+
+- [ ] **44b** — **"Neste livro" e "Último grifo" na margem do livro.** ⚠️ **Decisão do dono de
+      2026-09-22: ela existe porque o dono ABRIU EXCEÇÃO ao fora-de-escopo do MVP 3.5 e
+      autorizou backend.** Os dois blocos saíram da Tarefa 44 pela regra 9 dela — a contagem
+      de acervo pede backend e "Último grifo" pede chave nova.
+      ⚠️ **E o desenho NÃO é rota nova nem envelope nas listagens** — medido ao escrever a
+      spec: `usecases/get-book-with-plan.ts:56-67` já registra, por extenso, que *"uma
+      abertura de livro é UM corte de tenant, não três"*, e anota que a `GET
+      /books/:bookId/writers` gêmea **nunca teve cliente**. O `writers` entrou assim na
+      Tarefa 11, o `readers` na Tarefa 32; as contagens são a **terceira** aplicação do
+      mesmo argumento, por métodos estreitos nos ports — o desenho do
+      `planItemWritersByBook`. **Nenhuma migration.** As três chaves `pages.book.inBook.{heading,notes,highlights}` (Tarefa 40)
+      esperam **aqui**, e o `pt.ts` traz o bilhete ao lado delas dizendo isto.
+      ⚠️ **Leia a nota nº 2 de `tasks/44-o-livro.md` ANTES de tocar no backend**: havia um
+      número "quase certo" à mão — somar `writers[].userIds`, que é exato para a nota do
+      plano por causa do `@@unique([planItemId, userId])` — e ele estaria **errado**, porque
+      o mesmo índice não compara `NULL` com `NULL` e as **avulsas** ficariam de fora, sem
+      nada acusando. E o `Highlight` não tem sobreposição nenhuma na resposta do livro.
+      ⚠️ **O custo independente:** buscar as listagens para contar seria uma **terceira
+      requisição** nesta tela, contra a regra 1 da Tarefa 28.
+      → `tasks/44b-neste-livro-e-o-ultimo-grifo.md`
+- [ ] **45** — **Início.** Correntes e feed descem para a margem; "Cadastrar o livro do mês"
+      sai do primeiro lugar da tela e vira link no rodapé — é ação de admin que hoje empurra
+      para baixo o gesto que é a razão de o app existir. ⚠️ **O `atRisk` fica.**
+      ⚠️ **E se o bloco de hoje mostrar a posição no plano, o estado dele chama
+      `expectNoGuiltWithPlanPosition()`, não `expectNoGuilt()`** (mesma razão da 44: a
+      variante é o que prova que a isenção da Tarefa 40 está viva). → _a detalhar_
+- [ ] **46** — **Acervo e Busca.** As seis dimensões de filtro recolhem numa linha de resumo
+      mais um botão "Refinar", que abre bottom sheet no celular e painel na margem no desktop;
+      filtros ativos viram chips removíveis. ⚠️ **O modelo puro de `acervo-entries.ts` não
+      muda** — o que muda é quem desenha os controles. → _a detalhar_
+- [ ] **47** — **Formulários.** O grifo vira o próprio papel grifado: o campo do trecho tem o
+      fundo da caneta escolhida, com aspa serifada pendurada, e repinta ao trocar de cor.
+      Mais a anotação avulsa e o novo/editar livro. → _a detalhar_
+- [ ] **48** — **Preferências, 404, login, convite, e a passagem final.** Varredura de
+      contraste nos dois temas com foco nos pontos de risco (os cinzas de legenda e os fundos
+      de grifo), 360 px sem rolagem horizontal, `prefers-reduced-motion`, e o veredito sobre
+      o teto de bytes do `bundle-guard`. → _a detalhar_
+
+## Definição de "MVP 3.5 pronto"
+
+Abro o app no celular à noite e ele parece um caderno, não um formulário: leio o tema de
+hoje em serifa, escrevo num editor sem caixa e sem barra, grifo selecionando o texto, e vejo
+o que a outra pessoa escreveu logo abaixo. Abro o mesmo endereço no desktop e a tela se parte
+em coluna de leitura e margem, sem que ninguém tenha escrito uma segunda aplicação. Os dois
+temas passam no contraste, nada cobra, e nenhuma guarda foi enfraquecida para isso acontecer.
+
+---
+
 # MVP 4 — Administração
 
 ## Decisões fechadas do MVP 4
@@ -3290,19 +4120,19 @@ nem era buraco.
 - Super-admin **não** edita conteúdo de ninguém — só clube, pessoa e senha.
 - Remover alguém do clube **arquiva o `Membership`**; o que a pessoa escreveu permanece.
 
-### Bloco J — Administração
+### Bloco K — Administração
 
-- [ ] **39** — UseCases de super-admin: `createUser` · `resetPassword` · `archiveClub` +
+- [ ] **49** — UseCases de super-admin: `createUser` · `resetPassword` · `archiveClub` +
       guard `isSuperAdmin`. → _a detalhar_
-- [ ] **40** — UseCases de gerência do clube: `changeMemberRole` · `removeMember` ·
+- [ ] **50** — UseCases de gerência do clube: `changeMemberRole` · `removeMember` ·
       `revokeInvite` · `listMembers` · `listInvites`. → _a detalhar_
-- [ ] **41** — Repos + rotas `/admin/*` e `/clubs/:clubId/members`. → _a detalhar_
-- [ ] **42** — Tela super-admin: clubes e pessoas. → _a detalhar_
-- [ ] **43** — Tela de gerência do clube: membros, papéis, convites ativos. → _a detalhar_
-- [ ] **44** — Editar plano de leitura em lote (colar uma lista `data · tema · referência`).
+- [ ] **51** — Repos + rotas `/admin/*` e `/clubs/:clubId/members`. → _a detalhar_
+- [ ] **52** — Tela super-admin: clubes e pessoas. → _a detalhar_
+- [ ] **53** — Tela de gerência do clube: membros, papéis, convites ativos. → _a detalhar_
+- [ ] **54** — Editar plano de leitura em lote (colar uma lista `data · tema · referência`).
       → _a detalhar_
-- [ ] **45** — Arquivar livro e clube pela interface. → _a detalhar_
-- [ ] **46** — Tela de preferências completa (fuso, locale, horário do lembrete, tema).
+- [ ] **55** — Arquivar livro e clube pela interface. → _a detalhar_
+- [ ] **56** — Tela de preferências completa (fuso, locale, horário do lembrete, tema).
       → _a detalhar_
 
 ## Definição de "MVP 4 pronto"
