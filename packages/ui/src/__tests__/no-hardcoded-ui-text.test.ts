@@ -206,7 +206,19 @@ const files = sourceFiles(sourceRoot).map((path) => ({
 /**
  * ⚠️ **O TETO, EM OCORRÊNCIAS, E ELE SÓ PODE CAIR.**
  *
- * 33 é a medição desta fatia (a tabela do topo). Em ocorrências e não em textos
+ * ⚠️ **BAIXOU DE ~~33~~ PARA 29 NA TAREFA 43**, e o teto baixou junto, como a
+ * própria regra abaixo manda: a barra fixa do editor morreu (decisão A) e levou
+ * com ela os cinco rótulos que só existiam nela (`Lista`, `Lista numerada`,
+ * `Bloco de código`, `Divisória`, `Remover grifo`) mais as duas repetições do
+ * menu de bolha; entraram os dois da barra de canetas (`Formatar o texto`,
+ * `Abrir o menu de blocos`) e o glifo `Aa`. Medido arquivo a arquivo pelo
+ * extrator deste arquivo: RichEditor 18 → **14**, os outros três inalterados.
+ *
+ * ⚠️ **E OS CINCO RÓTULOS DA PALETA VIRARAM "Caneta …"**, que é como o canvas os
+ * nomeia (`Dia.dc.html:105,108,111,114,117`). O lado positivo abaixo cita o
+ * nome novo.
+ *
+ * 33 era a medição da Tarefa 27 (a tabela do topo). Em ocorrências e não em textos
  * distintos porque é a contagem que morde: dois rótulos iguais em dois arquivos
  * são dois lugares para consertar.
  *
@@ -215,7 +227,7 @@ const files = sourceFiles(sourceRoot).map((path) => ({
  * a resposta da pergunta 7 do `docs/ACEITE-MVP.md` chegou e o conserto é o
  * `labels` por prop, nos quatro arquivos de uma vez.
  */
-const HARDCODED_TEXT_BUDGET = 33;
+const HARDCODED_TEXT_BUDGET = 29;
 
 /**
  * Os quatro arquivos onde a dívida mora — o editor e os dois popups dele.
@@ -272,11 +284,15 @@ describe('@clube/ui crava nenhum texto de interface novo (rule 6 of task 27)', (
     const all = files.flatMap(({ texts }) => texts);
 
     expect(all).toContain('Negrito'); // label= no RichEditor
-    expect(all).toContain('Grifo amarelo'); // label: da paleta
+    expect(all).toContain('Caneta amarela'); // label: da paleta
     expect(all).toContain('Imagem'); // title: do menu `/`
     expect(all).toContain('Nenhuma anotação'); // filho de JSX no MentionList
     expect(all).toContain('Nenhum bloco'); // filho de JSX no SlashMenu
-    expect(all.length).toBeGreaterThan(30);
+    // ⚠️ **28 e não 25:** o piso existe para o extrator não poder devolver
+    // quase nada e o teto de 29 passar por acaso. Com 29 ocorrências medidas,
+    // um piso de 25 deixava QUATRO sumirem em silêncio; 28 deixa uma, que é a
+    // folga mínima para uma remoção legítima não precisar de duas edições.
+    expect(all.length).toBeGreaterThan(28);
   });
 
   it('⚠️ pins the count, and it can only FALL', () => {

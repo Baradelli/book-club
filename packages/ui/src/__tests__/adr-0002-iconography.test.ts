@@ -157,6 +157,23 @@ describe('no privacy iconography anywhere in @clube/ui (rule 27, ADR 0002)', () 
       'person-avatar.tsx',
       'button.tsx',
       'field.tsx',
+      // ⚠️ OS NOVE ARQUIVOS DA TAREFA 41b (que carregam DEZ nomes:
+      // `ReadingColumn` e `MarginRail` dividem `reading-column.tsx`), pinados
+      // um a um pela mesma razão que o
+      // `filter-bar.tsx` está aqui: **a varredura só protege o que ela
+      // comprovadamente lê**, e um `> 8` genérico continuaria verde se um
+      // arquivo novo saísse da varredura por um erro de caminho. Três deles
+      // desenham (`book-spine`, `presence-mark`, `streak-seal`) e são
+      // exatamente onde a tentação de um `<svg>` à mão aparece.
+      'book-spine.tsx',
+      'context-bar.tsx',
+      'eyebrow.tsx',
+      'grifo-text.tsx',
+      'presence-mark.tsx',
+      'reading-column.tsx',
+      'rule-double.tsx',
+      'save-indicator.tsx',
+      'streak-seal.tsx',
     ]) {
       expect(scanned.some((path) => path.endsWith(file))).toBe(true);
     }

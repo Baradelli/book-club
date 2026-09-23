@@ -60,6 +60,44 @@ function uiSourceFiles(directory: string): string[] {
   });
 }
 
+/**
+ * A MESMA varredura, do lado do app — e ela existe por causa da auditoria da
+ * Tarefa 41a.
+ *
+ * A lista de sondas de `finds classes in packages/ui to check` prometia em
+ * comentário que aquelas classes existiam SÓ em `packages/ui`, e medido isso já
+ * era falso para duas delas. Promessa em comentário não é garantia (§7.1): ou a
+ * propriedade é afirmada, ou o comentário para de afirmá-la. As duas coisas
+ * foram feitas, e esta função é a metade que afirma.
+ *
+ * `__tests__/` fica fora pela mesma razão de lá: teste não embarca, e o
+ * `styles.css` tem `@source not` para ele.
+ */
+const appSourceRoot = resolve(process.cwd(), 'src');
+
+function appSourceFiles(directory: string): string[] {
+  return readdirSync(directory).flatMap((entry) => {
+    if (entry === '__tests__') return [];
+
+    const path = join(directory, entry);
+    if (statSync(path).isDirectory()) return appSourceFiles(path);
+    return /\.tsx?$/u.test(entry) ? [path] : [];
+  });
+}
+
+/** Os arquivos de `packages/app/src` que escrevem esta classe. */
+function usagesOutsideUi(className: string): string[] {
+  // `(?<![\w-])`/`(?![\w-])`: o mesmo par do `theme-tokens.test.ts`, e pela
+  // mesma razão — sem ele `border-leader` casaria `border-leader-future`, e a
+  // canária acusaria por um uso que não é dela. Variante (`hover:`, `sm:`) é
+  // PREFIXO, então ela casa de propósito: `hover:bg-person` pinta o mesmo.
+  const pattern = new RegExp(`(?<![\\w-])${className}(?![\\w-])`, 'u');
+
+  return appSourceFiles(appSourceRoot).filter((path) =>
+    pattern.test(stripComments(readFileSync(path, 'utf8'))),
+  );
+}
+
 /** Comentário não é código: a prosa de `ui/` cita classes em exemplo (§7.1). */
 function stripComments(source: string): string {
   return source
@@ -376,12 +414,77 @@ describe('the app CSS sees packages/ui (rule 1)', () => {
     const classes = classesUsedByUi();
     expect(classes.length).toBeGreaterThan(60);
 
-    // Classes que só existem em `packages/ui` e em lugar nenhum de
-    // `packages/app`: se o `@source` cair, estas são as primeiras a sumir.
+    /*
+      ⚠️ A LISTA ERA UMA SÓ E AFIRMAVA ALGO FALSO — a auditoria da Tarefa 41a
+      mediu. O comentário dizia "classes que só existem em `packages/ui` e em
+      lugar nenhum de `packages/app`: se o `@source` cair, estas são as
+      primeiras a sumir", e isso já era **falso para duas das cinco**:
+      `rounded-control` tem **14** ocorrências de produção em `packages/app/src`
+      (13 classes + 1 menção em docblock de `chrome.tsx`) e `min-h-11` tem **8**.
+      Se o `@source` caísse, as duas continuariam no CSS pelo lado do app.
+
+      Uma sonda que promete exclusividade sem ter é pior que nenhuma: ela dá
+      confiança de que a regra 1 está guardada por cinco classes quando ela está
+      guardada por três. A lista foi PARTIDA em duas, com nomes honestos.
+    */
+
+    // ---------------------------------------------------------------- canárias
+    /*
+      Estas existem SÓ em `packages/ui` — e isso é AFIRMADO abaixo, não
+      prometido em comentário. Se o `@source '../../ui/src'` do `styles.css`
+      cair, elas somem do CSS e a regra 1 fica vermelha aqui.
+
+      ⚠️ `border-leader` é a mais frágil das três DE PROPÓSITO, e está escrito
+      para a Tarefa 44 não descobrir isso por acidente: ela é a classe do
+      condutor do sumário, e no dia em que a tela do livro renderizar o
+      `variant="sumario"` o app passa a escrevê-la. Quando isso acontecer, a
+      asserção de exclusividade abaixo fica VERMELHA — e a saída é **mover
+      `border-leader` para a lista de presença simples**, não apagar a
+      asserção. Uma canária que vira presença simples continua útil; uma
+      asserção apagada leva a propriedade embora.
+    */
+    const CANARIES = ['bg-person', 'text-person-fg', 'border-leader'];
+
+    /*
+      ⚠️ O LADO POSITIVO PRIMEIRO (§7.3), senão o laço abaixo é asserção vazia:
+      um `appSourceRoot` errado, ou um `stripComments` que devolvesse string
+      vazia, faria `usagesOutsideUi` devolver `[]` para SEMPRE — e as três
+      canárias passariam provando nada, que é exatamente o defeito que esta
+      rodada veio consertar.
+
+      As duas sondas abaixo são as que a auditoria mediu como NÃO exclusivas.
+      Contado por esta própria função: `rounded-control` em **10** arquivos de
+      `packages/app/src` e `min-h-11` em **5**. (Por `grep` cru dão 10 e 6 — o
+      sexto do `min-h-11` é `chrome.tsx`, que só o cita dentro de um comentário
+      de bloco, e comentário não pinta nada. É a diferença que o
+      `stripComments` existe para fazer.)
+    */
+    expect(usagesOutsideUi('rounded-control')).toHaveLength(10);
+    expect(usagesOutsideUi('min-h-11')).toHaveLength(5);
+    // E que o par de fronteira do regex funciona: `border-leader-future` não é
+    // `border-leader`. Sem isto a canária mais frágil acusaria por um vizinho.
+    expect(
+      usagesOutsideUi('border-leader').concat(
+        usagesOutsideUi('border-leader-future'),
+      ),
+    ).toEqual([]);
+
+    for (const canary of CANARIES) {
+      expect(classes).toContain(canary);
+      // A propriedade que o comentário antigo só prometia.
+      expect(usagesOutsideUi(canary)).toEqual([]);
+    }
+
+    // ------------------------------------------------------- presença simples
+    /*
+      Estas três `packages/ui` USA, e é só isso que se afirma. Elas não provam
+      o `@source` (o app também as escreve), mas provam que a extração de
+      classes deste arquivo alcança as TABELAS de `packages/ui`
+      (`SIZE`/`VARIANT_CLASS` do `Button`, `FOCUS_RING`) — e essa é a metade que
+      a rodada de correção da Tarefa 13 pagou para existir.
+    */
     expect(classes).toContain('rounded-control');
     expect(classes).toContain('shadow-sheet');
-    expect(classes).toContain('bg-avatar-1');
-    expect(classes).toContain('text-avatar-fg');
     expect(classes).toContain('min-h-11');
 
     // ⚠️ OS DOIS UTILITÁRIOS DE UMA PALAVRA, um por varredura, e é aqui que a
@@ -493,6 +596,95 @@ describe('the app CSS sees packages/ui (rule 1)', () => {
         '.bg-\\[\\#facc15\\]{background-color:#facc15}',
       ),
     ).toBe(true);
+  });
+
+  it('⚠️ ships the CSS of every map assembled from a key — the other direction', () => {
+    /*
+      ============================================================================
+      O BURACO QUE ESTE TESTE FECHA, E ELE É DE DIREÇÃO
+      ============================================================================
+
+      ⚠️ **`emits every class packages/ui uses` é UNIDIRECIONAL.** Ele prova que
+      toda classe ESCRITA virou CSS. Ele **não** prova — e não pode — que uma
+      classe deixou de ser escrita: quando a lista de classes ENCOLHE, ele fica
+      verde. "Nada a conferir" e "tudo conferido" são o mesmo resultado para
+      ele.
+
+      Medido na Tarefa 41b, com o mutante que troca o mapa literal de canetas
+      do `GrifoText` por `` `bg-pen-${key}` ``: os dez seletores `.bg-pen-*` e
+      `.ring-pen-*` **somem do CSS compilado** (32.891 B → 32.486 B, o grifo
+      fica sem cor nenhuma na tela) e a suíte inteira deste arquivo continua
+      **10/10 verde**. A razão é estrutural: os dois extratores (`classesFromContext`
+      e `classesFromShape`) casam literais entre aspas simples e duplas, e um
+      template literal fica entre CRASES.
+
+      ⚠️ Há uma guarda de FONTE para o caso do grifo
+      (`ui/src/components/__tests__/grifo-text.test.tsx › writes the pen→class
+      map as LITERALS`), e ela é legítima — ali o texto do fonte É a entrada do
+      compilador. Mas ela pega uma GRAFIA (`${`), e há outras: `concat`,
+      `join`, um `Object.fromEntries` com `String.raw`, um mapa vindo de outro
+      módulo. **Esta aqui pega qualquer uma**, porque ela não olha o fonte: ela
+      olha o artefato que o navegador recebe.
+
+      Os mapas pinados são os que pintam por CHAVE — os únicos em que a
+      tentação de montar o nome existe. Se um mapa novo nascer com essa forma,
+      ele entra aqui.
+    */
+    const porChave: Record<string, readonly string[]> = {
+      // `GrifoText` — as cinco canetas, fundo e auréola da MESMA caneta.
+      'grifo-text.tsx': [
+        '.bg-pen-a',
+        '.bg-pen-v',
+        '.bg-pen-l',
+        '.bg-pen-z',
+        '.bg-pen-r',
+        '.ring-pen-a',
+        '.ring-pen-v',
+        '.ring-pen-l',
+        '.ring-pen-z',
+        '.ring-pen-r',
+      ],
+      // `BookSpine` — os três tamanhos (`SIZE_CLASS`) e as duas paletas
+      // (`PALETTE_CLASS`). ⚠️ Até esta rodada eles NÃO tinham acusador nenhum
+      // para o mesmo mutante: o `GrifoText` ganhou a guarda de fonte e estes
+      // ficaram de fora, que é a "correção incompleta" da lista da Tarefa 41a.
+      'book-spine.tsx': [
+        '.h-15',
+        '.w-10\\.5',
+        '.h-21',
+        '.w-14\\.5',
+        '.h-32',
+        '.w-22',
+        '.bg-spine',
+        '.border-spine-edge',
+        '.text-spine-fg',
+        '.bg-spine2',
+        '.border-spine2-edge',
+        '.text-spine2-fg',
+      ],
+      // `PresenceMark` e `StreakSeal` — dois estados cada, pelo mesmo motivo.
+      'presence-mark.tsx': ['.border-line-strong', '.bg-accent'],
+      'streak-seal.tsx': [
+        '.border-gold-line',
+        '.bg-gold-soft',
+        '.border-line-soft',
+        '.bg-surface',
+        '.stroke-gold',
+        '.stroke-subtle',
+      ],
+    };
+
+    const faltando = Object.entries(porChave).flatMap(([arquivo, seletores]) =>
+      seletores
+        .filter((seletor) => !compiledCss.includes(`${seletor}{`))
+        .map((seletor) => `${arquivo}: ${seletor}`),
+    );
+
+    expect(faltando).toEqual([]);
+
+    // O par positivo, e ele é o §7.4: sem esta linha um `compiledCss` vazio (ou
+    // uma sonda com a grafia errada) devolveria `[]` para sempre.
+    expect(compiledCss).not.toContain('.bg-pen-x{');
   });
 
   it('ships no class that only a test mentions', () => {
