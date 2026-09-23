@@ -297,6 +297,40 @@ describe('FilterBar', () => {
       expect(screen.queryByRole('button', { name: 'Minhas' })).toBeNull();
     });
 
+    it('⚠️ keeps the filete on BOTH edges of the collapsed block (decision A)', () => {
+      /*
+        ⚠️ **METADE DO DESENHO SUMIA EM SILÊNCIO.** A decisão A da Tarefa 46
+        cita `Acervo.dc.html:56` com `border-top` E `border-bottom` de
+        `--border-soft` — o bloco é caderno encadernado, e o que o delimita é o
+        filete em cima e embaixo. Medido na rodada de correção da 46: trocar
+        `border-y` por `border-b` (a faixa perde o filete DE CIMA e mantém o de
+        baixo) dava **0 acusadores em 304** aqui e **0 em 961** no app.
+
+        ⚠️ **A asserção é por TOKEN, e os dois negativos são o par.** Só
+        `toContain('border-y')` deixaria passar um `border-y border-b`
+        contraditório, e só o negativo deixaria passar um bloco sem filete
+        nenhum. `border-line-soft` fica de fora de propósito: a COR é assunto
+        do tema, e quem esta guarda protege é a moldura.
+      */
+      render(
+        <FilterBar
+          collapsed
+          groups={twoGroups()}
+          onRefine={vi.fn()}
+          refineLabel="Refinar"
+        />,
+      );
+
+      const summary = screen.getByText('Tudo · Amarelo');
+      const block = summary.parentElement;
+      if (block === null) throw new Error('o bloco recolhido não tem moldura');
+
+      const tokens = block.className.split(/\s+/u);
+      expect(tokens).toContain('border-y');
+      expect(tokens).not.toContain('border-t');
+      expect(tokens).not.toContain('border-b');
+    });
+
     it('skips a dimension whose selection is not in its options', () => {
       // O lado negativo: um `selected` solto (a tela mudou a URL antes de a
       // lista de opções chegar) não pode virar `undefined` no meio da frase.

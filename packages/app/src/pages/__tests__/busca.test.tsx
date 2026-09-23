@@ -982,12 +982,36 @@ describe('what a result says (rules 10 and 12)', () => {
    * O `expectNoGuilt()` acima já varre a forma em todos os estados; este teste
    * é o registro EXPLÍCITO da decisão, para quem for ler a tela procurando o
    * número não concluir que ele foi esquecido.
+   *
+   * ⚠️⚠️ **O NÚMERO ERA `5` — a contagem do fixture, escrita à mão —, E A
+   * GUARDA NÃO MORDIA O NÚMERO QUE O CANVAS DESENHA.** Medido na Tarefa 46:
+   * `3 resultados em todo o clube` (o literal de `Busca.dc.html:60`) plantado
+   * na tela dava **0 acusadores em 961**, e `5 resultados…` dava 1. É a classe
+   * "guarda que deixa de casar qualquer coisa e continua verde", e o `\d+`
+   * conserta.
+   *
+   * ⚠️⚠️ **E O ESPAÇO É HORIZONTAL POR MEDIÇÃO — NÃO "SIMPLIFIQUE" O
+   * `[^\S\r\n]` PARA `\s`.** O `readableText()` (`harness.tsx`) junta as partes
+   * com `'\n'`, e `\s` casa `'\n'`. A parte que vem logo depois do
+   * `textContent` do `<ul>` é o `aria-label` DELE, que é `Resultados da busca`
+   * (`pt.ts`) — então `\d+\s+resultados` faz PONTE por cima da quebra, e
+   * qualquer conteúdo de usuário que termine em dígito na última linha da lista
+   * acusa. Medido com um comentário de grifo inocente (`reler a partir da
+   * pagina 3`) na última linha:
+   *
+   *     MATCH>>> "redonda e verdereler a partir da pagina 3\nResultados da
+   *               busca\nMO dragao e o ouroO Hob"
+   *
+   * Com `\s+` o teste fica VERMELHO sobre um fixture inocente; com
+   * `[^\S\r\n]+` ele passa, e o mutante do `3 resultados` continua com 1
+   * acusador. A âncora à direita (`\b`) não resolve isto: quem faz a ponte é o
+   * espaço, não a fronteira de palavra.
    */
   it('shows NO result count anywhere, in any state (decision G)', async () => {
     await search();
 
-    expect(readableText()).not.toMatch(/\b5\s+resultados?\b/iu);
-    expect(readableText()).not.toMatch(/\b5\s+results?\b/iu);
+    expect(readableText()).not.toMatch(/\b\d+[^\S\r\n]+resultados?\b/iu);
+    expect(readableText()).not.toMatch(/\b\d+[^\S\r\n]+results?\b/iu);
     expectNoGuilt();
   });
 });

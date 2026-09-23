@@ -683,8 +683,111 @@ async function typeRange(from: string, to: string): Promise<void> {
   await typePage(FILTERS.page.to, to);
 }
 
+/**
+ * A FAIXA RECOLHIDA (Tarefa 46) — o resumo, o "Refinar" e os chips ativos.
+ *
+ * ⚠️ Ela é achada por `data-*` e não por papel: o bloco recolhido do `FilterBar`
+ * é um `<div>` sem `role`, de propósito (ele não é `role="group"`: a fronteira
+ * acessível é dos grupos de chip, e recolhida não há chip nenhum). Um
+ * `data-testid` seria a mesma coisa com um nome que promete "só teste"; o
+ * `data-acervo-band` é a âncora que a TELA declara, como o `data-sheet-backdrop`
+ * do `Sheet`.
+ */
+function band(): HTMLElement {
+  const node = document.querySelector('[data-acervo-band]');
+  if (node === null) throw new Error('a faixa recolhida não está na tela');
+  return node as HTMLElement;
+}
+
+/**
+ * A MARGEM DO DESKTOP — o `<aside>` do `MarginRail` que hospeda os controles.
+ *
+ * Ela é achada pelo controle que vive dentro dela, e não por `querySelector`
+ * direto: é o mesmo `.closest('aside')` que o teste do par aberto/fechado já
+ * usa, e amarrar o nó à presença do `<select>` é o que impede a guarda de
+ * passar sobre uma margem vazia.
+ */
+function marginRail(): HTMLElement {
+  const node = readingSelect().closest('aside');
+  if (node === null) throw new Error('a margem do desktop não está na tela');
+  return node;
+}
+
+/**
+ * OS TOKENS DE UM UTILITÁRIO na classe de UM nó.
+ *
+ * ⚠️ **POR TOKEN, NUNCA POR REGEX — a lição medida na rodada de correção da
+ * Tarefa 45**, e por isso ela mora numa função e não copiada em dois `it()`.
+ * `/(^|\s)(min-\[1120px\]:)?hidden(\s|$)/u` acerta **6 de 13** variantes e
+ * deixa passar `max-[1119px]:hidden`, `max-lg:`, `sm:`, `md:`, `print:` e
+ * `[@media…]:`. Toda classe do Tailwind é `variante:variante:utilitário`,
+ * então o utilitário é o último segmento depois de `:` — e `flex-col` não é
+ * `flex`, que é exatamente o que um `includes('flex')` erraria.
+ */
+function tokensOf(node: HTMLElement, utility: string): string[] {
+  return node.className
+    .split(/\s+/u)
+    .filter((name) => name.split(':').at(-1) === utility);
+}
+
+/**
+ * AS CLASSES QUE ESCONDEM um nó — as dele **e as dos ancestrais**.
+ *
+ * ⚠️ O ancestral entra porque esconder o pai esconde o filho, e uma guarda que
+ * lesse só o próprio nó ficaria verde com a tela inteira invisível.
+ */
+function hidingOf(node: HTMLElement): string[] {
+  const hiding: string[] = [];
+  for (
+    let at: HTMLElement | null = node;
+    at !== null && at !== document.body;
+    at = at.parentElement
+  ) {
+    hiding.push(...tokensOf(at, 'hidden'));
+  }
+  return hiding;
+}
+
+/**
+ * A LINHA DE RESUMO — o primeiro `<span>` da faixa.
+ *
+ * ⚠️ É o `summaryOf()` de `packages/ui` que a monta, a partir dos rótulos
+ * SELECIONADOS dos grupos. O `<span>` é o primeiro porque o botão "Refinar" vem
+ * depois dele e carrega um `<svg>`, não um `<span>` — e os chips vivem numa
+ * linha própria, abaixo.
+ */
+function summaryText(): string {
+  const span = band().querySelector('span');
+  if (span === null) throw new Error('a faixa não tem linha de resumo');
+  return span.textContent ?? '';
+}
+
+/** Os chips ATIVOS, na ordem da tela — um por dimensão escolhida. */
+function chipsInBand(): string[] {
+  return Array.from(band().querySelectorAll('[data-acervo-chip]')).map(
+    chipLabel,
+  );
+}
+
+/**
+ * O nome acessível do X de um chip ativo.
+ *
+ * ⚠️ Ele é `Remover <rótulo>` e não `Remover`, e a interpolação é a guarda: até
+ * seis chips convivem na mesma faixa, e seis botões com o mesmo nome acessível
+ * são a mesma palavra para seis gestos diferentes — o `getByRole` lança "found
+ * multiple elements", e quem ouve a tela não sabe qual é qual.
+ */
+function removeLabel(label: string): string {
+  return FILTERS.remove.replace('{{label}}', label);
+}
+
 function acervoSource(): string {
   return readFileSync(resolve(__dirname, '..', 'acervo.tsx'), 'utf8');
+}
+
+/** O vizinho que desenha os SEIS controles — o par do `acervoSource()`. */
+function filtersSource(): string {
+  return readFileSync(resolve(__dirname, '..', 'acervo-filters.tsx'), 'utf8');
 }
 
 afterEach(() => {
@@ -2741,6 +2844,298 @@ describe('⚠️ THE SIXTH DIMENSION OF THE FILTER — PAGE RANGE (task 38h)', (
   });
 });
 
+/**
+ * ⚠️ **AS SEIS DIMENSÕES RECOLHEM NUMA LINHA (Tarefa 46) — E O QUE MUDA É QUEM
+ * DESENHA OS CONTROLES, NÃO O QUE ELES FILTRAM.**
+ *
+ * O modelo puro (`acervo-entries.ts`) não é tocado por esta fatia: as seis
+ * dimensões do `AcervoFilter` são as mesmas, com o mesmo recorte e o mesmo
+ * unitário. O que nasce aqui é a FAIXA do canvas (`Acervo.dc.html:56-73`) — a
+ * linha de resumo, o botão "Refinar" e os chips removíveis — mais as duas casas
+ * do painel: o bottom sheet no celular e a margem no desktop.
+ *
+ * ⚠️ **E ELA CUMPRE O BILHETE QUE A TAREFA 41a DEIXOU ESCRITO** em
+ * `packages/ui/src/components/filter-bar.tsx:126-128`: *"o estado recolhido da
+ * tela do acervo cai no `expectNoGuilt()` como qualquer outro estado dela. É lá
+ * que a frase passa a existir para a varredura de DOM."* A frase de resumo do
+ * `summaryOf()` não passava por guarda anti-culpa nenhuma — a varredura vive em
+ * `packages/shared` e é exercitada pelos testes de TELA do `packages/app`, e
+ * `collapsed` não tinha **um** consumidor de produção (medido por `git grep`).
+ * A partir daqui ela é texto de tela como qualquer outro.
+ */
+describe('⚠️ THE SIX DIMENSIONS COLLAPSE INTO ONE LINE (task 46)', () => {
+  /**
+   * ⚠️ **A COMBINAÇÃO QUE ACENDE AS SEIS DIMENSÕES DE UMA VEZ.**
+   *
+   * A ordem importa e é a única possível: o toque no chip de TIPO descarta as
+   * três escolhas condicionais (cor, leitura e faixa — o `onType` do
+   * `acervo.tsx`), então ele vem ANTES delas. "Grifo" é o tipo que mantém as
+   * três em jogo.
+   */
+  async function chooseEverything(): Promise<void> {
+    await press(chip(personChip('Maria')));
+    await press(chip(KIND.highlight));
+    await press(chip(COLOR_NAMES.yellow));
+    await chooseReading(READING_TWO);
+    await typeText('porta');
+    await typeRange('10', '90');
+  }
+
+  it('⚠️ draws the band the canvas draws: summary, "Refinar", no chip (decision A)', async () => {
+    /*
+      `Acervo.dc.html:58` é a linha de resumo, e o exemplo dela é literalmente
+      `De todo mundo · Tudo · Todas as cores` — os rótulos SELECIONADOS dos
+      grupos, na ordem dos grupos, juntados por ` · `. Quem os junta é o
+      `summaryOf()` de `packages/ui` (decisão da 41a: derivado dos grupos, nunca
+      uma prop de texto), e é por isso que esta asserção é a mesma lista que o
+      teste dos três grupos já usa.
+
+      ⚠️ **E NENHUM CHIP NO ESTADO NEUTRO** (`:64-73` desenha dois, mas com
+      recorte escolhido): um chip "De todo mundo" seria um botão para remover um
+      recorte que não existe.
+    */
+    await renderAcervo();
+    await waitForRows(10);
+
+    expect(summaryText()).toBe([EVERYONE, ALL_TYPES, ALL_COLORS].join(' · '));
+    expect(screen.getByRole('button', { name: FILTERS.refine })).not.toBeNull();
+    expect(chipsInBand()).toEqual([]);
+    expectNoGuilt();
+  });
+
+  it('⚠️ puts the COLLAPSED summary under the anti-guilt sweep (the note of task 41a)', async () => {
+    /*
+      ⚠️ **A INSTRUÇÃO LITERAL DE `filter-bar.tsx:126-128`, cumprida.**
+
+      O par positivo vem primeiro de propósito (§7.4): sem a prova de que a
+      frase ESTÁ na tela, a varredura abaixo passaria por vacuidade — um
+      `summaryOf()` que devolvesse `''` deixaria tudo verde e a guarda teria
+      parado de guardar, que é a pior das duas falhas (a lição do
+      `DANGER_STYLE` na Tarefa 39).
+
+      ⚠️ E os TRÊS estados da faixa entram: recolhida, com o painel aberto, e
+      com chip aceso. O mutante é um `' · 3 de 12'` no fim do `summaryOf()`, e
+      ele é invisível para toda outra guarda do repositório — o `COUNTER_SHAPE`
+      só o vê porque a frase virou DOM de tela aqui.
+    */
+    await renderAcervo();
+    await waitForRows(10);
+
+    expect(summaryText().length).toBeGreaterThan(0);
+    expect(band().textContent).toContain(summaryText());
+    expectNoGuilt();
+
+    await pressLabel(FILTERS.refine);
+    expectNoGuilt();
+
+    await pressLabel(FILTERS.close);
+    await press(chip(personChip('Maria')));
+    expect(chipsInBand()).toEqual([personChip('Maria')]);
+    expectNoGuilt();
+  });
+
+  /**
+   * ⚠️⚠️ **A GUARDA É DE TOKEN, E NÃO DE REGEX — a lição medida na rodada de
+   * correção da Tarefa 45**, e a conta vive no `hidingOf()`/`tokensOf()` lá em
+   * cima, que o teste da MARGEM também usa: a faixa e a margem são as duas
+   * metades do mesmo par, e uma guarda só para uma delas foi o achado A1 da
+   * rodada de correção desta fatia.
+   *
+   * A lista é EXATA nos dois sentidos: a faixa **tem** de sumir acima de 1120px
+   * (lá o painel é a margem, e uma segunda cópia dos controles seria `id`
+   * duplicado) e **não pode** sumir abaixo (lá ela é o único caminho até o
+   * painel).
+   */
+  it('⚠️ keeps the band on the phone and takes it off ONLY above 1120px (rule 6)', async () => {
+    await renderAcervo();
+    await waitForRows(10);
+
+    expect(hidingOf(band())).toEqual(['min-[1120px]:hidden']);
+    expectNoGuilt();
+  });
+
+  it('⚠️ opens the panel in a bottom sheet and closes it again, with ONE copy of the controls (decision B, rule 5)', async () => {
+    /*
+      ⚠️ **O PAR GUARDADO DOS DOIS LADOS, e o bloco já pagou quatro vezes por
+      metade de par.** Um painel que nunca abre e um painel que nasce aberto são
+      defeitos opostos, e cada um tem a sua asserção aqui.
+
+      ⚠️ **E A TERCEIRA ASSERÇÃO É A QUE NINGUÉM ESCREVE: UMA CÓPIA SÓ.** Os
+      controles MUDAM de casa — da margem para o sheet e de volta —, nunca se
+      duplicam. Duas cópias dariam `id` duplicado (`acervo-reading`,
+      `acervo-text`, `acervo-page-from`/`-to` são fixos) e o `getByLabelText`
+      lançaria "found multiple elements": um defeito de acessibilidade de
+      verdade, não um incômodo de teste.
+
+      ⚠️ **O painel do artboard é LACUNA PREENCHIDA, não fidelidade:** `grep -in
+      "refinar"` nos 21 artboards devolve UMA linha, `Acervo.dc.html:61` — o
+      botão. O conteúdo do painel não é desenhado em lugar nenhum, e tampouco
+      existe `AcervoDesktop.dc.html`.
+
+      ⚠️⚠️ **E A QUARTA É A VISIBILIDADE DA MARGEM, SIMÉTRICA À DA FAIXA —
+      achado A1 da rodada de correção, e o pior da fatia.** A faixa tinha
+      guarda de token nos dois sentidos; a margem não tinha em sentido NENHUM, e
+      a guarda da faixa fazia a margem PARECER coberta (§7.9 literal). Medido
+      antes do conserto, com o protocolo inteiro: tirar o `hidden` (a margem
+      aparece NO CELULAR, e aí são duas cópias dos seis controles, com `id`
+      duplicado) dava **0 acusadores em 961**; tirar o `min-[1120px]:flex` (a
+      margem NUNCA aparece no desktop, porque acima do corte a faixa é
+      `min-[1120px]:hidden` e a margem continua `hidden` — o usuário de desktop
+      perde os SEIS controles inteiros) dava **0 em 961** também. É a QUINTA vez
+      que este bloco paga por par guardado pela metade.
+
+      ⚠️ **O `flex` da base entra na asserção de propósito.** O `hidden` vem
+      do `className` da tela e o `flex` vem do `MarginRail` de `packages/ui`: a
+      margem só reaparece porque `.hidden{display:none}` e `.flex{display:flex}`
+      colidem e o `min-[1120px]:` vence por media query. Escrever os DOIS
+      tokens aqui é o que torna a colisão visível para quem mexer em qualquer
+      um dos dois arquivos.
+    */
+    await renderAcervo();
+    await waitForRows(10);
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(readingSelect().closest('aside')).not.toBeNull();
+    expect(hidingOf(marginRail())).toEqual(['hidden']);
+    expect(tokensOf(marginRail(), 'flex')).toEqual([
+      'flex',
+      'min-[1120px]:flex',
+    ]);
+    expect(screen.getAllByRole('group')).toHaveLength(3);
+
+    await pressLabel(FILTERS.refine);
+
+    const panel = screen.getByRole('dialog');
+    expect(panel.getAttribute('aria-modal')).toBe('true');
+    expect(screen.getAllByRole('group')).toHaveLength(3);
+    expect(readingSelect().closest('[role="dialog"]')).toBe(panel);
+    expect(readingSelect().closest('aside')).toBeNull();
+    expect(textField().closest('[role="dialog"]')).toBe(panel);
+    expect(pageBound(FILTERS.page.from).closest('[role="dialog"]')).toBe(panel);
+    expectNoGuilt();
+
+    await pressLabel(FILTERS.close);
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getAllByRole('group')).toHaveLength(3);
+    expect(readingSelect().closest('aside')).not.toBeNull();
+    expectNoGuilt();
+  });
+
+  it('⚠️ turns each chosen dimension into ONE removable chip (decision H)', async () => {
+    /*
+      ⚠️ **UM CHIP POR DIMENSÃO, e remover um mexe SÓ na dimensão dele.** O
+      mutante é "remover um chip limpa todas as dimensões", e ele é o defeito
+      natural de quem escreve um `onRemove` só.
+
+      A ORDEM é a das dimensões: os três grupos de chip (pessoa, tipo, cor), na
+      ordem em que o `filterGroups` os monta, e depois a leitura, a palavra e a
+      faixa — a mesma ordem em que os controles aparecem no painel.
+    */
+    await renderAcervo();
+    await waitForRows(10);
+    await chooseEverything();
+
+    const PAGE_CHIP = `${FILTERS.page.from} 10 · ${FILTERS.page.to} 90`;
+    expect(chipsInBand()).toEqual([
+      personChip('Maria'),
+      KIND.highlight,
+      COLOR_NAMES.yellow,
+      PLAN_TITLES[0],
+      'porta',
+      PAGE_CHIP,
+    ]);
+    expectNoGuilt();
+
+    // A COR sai, e só ela: as outras cinco continuam acesas.
+    await pressLabel(removeLabel(COLOR_NAMES.yellow));
+    expect(chipsInBand()).toEqual([
+      personChip('Maria'),
+      KIND.highlight,
+      PLAN_TITLES[0],
+      'porta',
+      PAGE_CHIP,
+    ]);
+    expect(pressedOf(ALL_COLORS)).toBe('true');
+    expect(pressedOf(personChip('Maria'))).toBe('true');
+    expect(readingSelect().value).toBe(READING_TWO);
+    expect(textField().value).toBe('porta');
+
+    // A LEITURA sai, e o `<select>` volta ao neutro — só ele.
+    await pressLabel(removeLabel(PLAN_TITLES[0]));
+    expect(readingSelect().value).toBe(EVERY_READING_VALUE);
+    expect(textField().value).toBe('porta');
+    expect(pageBound(FILTERS.page.from).value).toBe('10');
+
+    // A PALAVRA sai, e a faixa fica.
+    await pressLabel(removeLabel('porta'));
+    expect(textField().value).toBe('');
+    expect(pageBound(FILTERS.page.from).value).toBe('10');
+    expect(pageBound(FILTERS.page.to).value).toBe('90');
+
+    // A FAIXA sai — as duas pontas de uma vez, porque ela é UMA dimensão.
+    await pressLabel(removeLabel(PAGE_CHIP));
+    expect(pageBound(FILTERS.page.from).value).toBe('');
+    expect(pageBound(FILTERS.page.to).value).toBe('');
+
+    // A PESSOA e o TIPO sobreviveram a tudo.
+    expect(chipsInBand()).toEqual([personChip('Maria'), KIND.highlight]);
+    expectNoGuilt();
+  });
+
+  it('⚠️ keeps the conditional controls conditional, and the SUMMARY follows (decision G)', async () => {
+    /*
+      ⚠️ **RECOLHER NÃO PODE VIRAR "SEMPRE VISÍVEL".** `typeCanCarryReading` e
+      `typeCanIncludeHighlight` decidem se os controles de leitura, de cor e de
+      faixa EXISTEM, e o painel não é um lugar onde isso deixa de valer.
+
+      ⚠️ **E A LINHA DE RESUMO TEM DE ACOMPANHAR**, que é a metade que só nasce
+      nesta fatia: um resumo que citasse "Todas as cores" com o tipo em "Avulsa"
+      estaria falando de uma dimensão fora de jogo. Ele é DERIVADO dos grupos
+      (`summaryOf`), então a propriedade se prova sozinha — e esta asserção é o
+      que impede alguém de "consertá-la" com um texto montado à mão.
+    */
+    await renderAcervo();
+    await waitForRows(10);
+
+    await press(chip(KIND.free));
+    expect(screen.queryByLabelText(FILTERS.reading.label)).toBeNull();
+    expect(screen.queryByLabelText(FILTERS.page.from)).toBeNull();
+    expect(
+      screen.queryByRole('group', { name: FILTERS.color.label }),
+    ).toBeNull();
+    expect(summaryText()).toBe([EVERYONE, KIND.free].join(' · '));
+    expectNoGuilt();
+
+    await press(chip(KIND.highlight));
+    expect(screen.queryByLabelText(FILTERS.reading.label)).not.toBeNull();
+    expect(screen.queryByLabelText(FILTERS.page.from)).not.toBeNull();
+    expect(summaryText()).toBe(
+      [EVERYONE, KIND.highlight, ALL_COLORS].join(' · '),
+    );
+    expectNoGuilt();
+  });
+
+  it('⚠️ has no band at all over an empty collection', async () => {
+    /*
+      A mesma lição do `book.tsx` que o docblock da tela já escreve: filtrar o
+      vazio é oferecer uma escolha que não muda nada. Sem acervo não há faixa,
+      não há "Refinar" e não há margem — e o estado vazio continua sem cobrar
+      ninguém.
+    */
+    await renderAcervo({ notes: NOTHING, list: NOTHING });
+
+    await waitFor(() => {
+      expect(screen.getByText(pt.pages.acervo.empty.title)).not.toBeNull();
+    });
+
+    expect(document.querySelector('[data-acervo-band]')).toBeNull();
+    expect(screen.queryByRole('button', { name: FILTERS.refine })).toBeNull();
+    expect(document.querySelector('aside')).toBeNull();
+    expectNoGuilt();
+  });
+});
+
 describe('the source of the collection screen (rules 6, 18)', () => {
   it('imports no editor, so the FIRST LOAD stays without TipTap (rule 18)', () => {
     /*
@@ -2765,11 +3160,85 @@ describe('the source of the collection screen (rules 6, 18)', () => {
       do componente (decisão C da 27), e escrevê-la nas duas casas é o jeito
       silencioso de a segunda sair de sincronia.
     */
-    const source = stripComments(acervoSource());
+    /*
+      ⚠️ **AS DUAS ASSERÇÕES MUDARAM DE ARQUIVO NA TAREFA 46, E A PROPRIEDADE É
+      A MESMA.** O `<FilterBar>` saiu do `acervo.tsx` porque os seis controles
+      passaram a ter DUAS casas (o sheet do celular e a margem do desktop) e a
+      lista deles virou um componente só, no `acervo-filters.tsx` — que é onde a
+      marcação dos controles já morava desde a Tarefa 28.
 
-    expect(source).toContain('FilterBar');
-    expect(source).not.toContain('FilterChip');
-    expect(source).not.toContain('role="group"');
+      A guarda passou a ler o PAR, e não um arquivo: os dois negativos passaram
+      a valer nos dois arquivos, que é mais forte do que era (antes o
+      `acervo-filters` podia montar um chip à mão sem ninguém ver).
+
+      ⚠️⚠️ **MAS O POSITIVO TINHA ENFRAQUECIDO, e a entrega da 46 disse o
+      contrário — achado M1 da rodada de correção.** Ele saiu de *"o arquivo da
+      TELA usa o componente compartilhado"* para *"o arquivo vizinho MENCIONA
+      `FilterBar` em algum lugar"*, e o vizinho tem DOIS usos. Com um
+      `toContain` solto, reescrever o bloco RECOLHIDO à mão — um `<div>` com o
+      mesmo `border-y`, o `summaryOf` copiado e um `<button>` — deixava o outro
+      uso segurando a asserção sozinho: medido, **0 acusadores em 73** no
+      arquivo desta tela (o único vermelho em 961 foi a sonda de classes
+      canárias do `ui-source-scan.test.ts`, que acusou por CONTAGEM DE CLASSE e
+      não pela propriedade — teria ficado verde com outro nome de classe).
+
+      ⚠️ **Por isso o positivo agora CONTA os consumidores.** Dois, e cada um
+      tem endereço: o `AcervoControls` (a lista expandida dos seis, nas duas
+      casas) e o `RefineBand` (o bloco recolhido da faixa). Um terceiro uso é
+      tão suspeito quanto um primeiro que suma: nos dois casos a conta muda e
+      quem mexer tem de dizer por quê, aqui.
+    */
+    const source = stripComments(acervoSource());
+    const filters = stripComments(filtersSource());
+
+    expect(filters.split('<FilterBar').length - 1).toBe(2);
+    for (const scanned of [source, filters]) {
+      expect(scanned).not.toContain('FilterChip');
+      expect(scanned).not.toContain('role="group"');
+    }
+  });
+
+  it('⚠️ takes every label of the band from the CATALOG, never a loose string', () => {
+    /*
+      ⚠️ **`CLAUDE.md`, literal: "Nenhum texto solto nas telas — tudo via
+      `t('chave')`".** E a faixa é justamente onde essa regra não tinha
+      acusador: medido na rodada de correção da 46, trocar
+      `refineLabel={t('pages.acervo.filters.refine')}` por `refineLabel="Refinar"`
+      dava **0 acusadores em 961**.
+
+      ⚠️ **O MOTIVO É QUE AS GUARDAS DE DOM LEEM O CATÁLOGO.** O
+      `pressLabel(FILTERS.refine)` procura pelo VALOR `'Refinar'`, que é o
+      mesmo que a string solta escreve — então a tela fica verde em pt e muda
+      de idioma em en, que é o defeito exato que o `t()` existe para impedir. A
+      única guarda possível é de FONTE, e ela é barata.
+
+      ⚠️ **AS TRÊS CHAVES, E NÃO SÓ A DO ACHADO.** `close` e `remove` têm a
+      mesma fraqueza pelo mesmo motivo, e guardar só a que foi medida seria
+      deixar as outras duas esperando a próxima auditoria. O `refine` é a que
+      ganhou o PRIMEIRO consumidor nesta fatia (ela existe desde a Tarefa 40).
+
+      ⚠️⚠️ **E O POSITIVO SOZINHO NÃO BASTA — medido, não suposto.** A primeira
+      versão desta guarda só exigia `t('pages.acervo.filters.refine'` no
+      arquivo, e ficou **VERDE sobre o mutante**: a mesma chave tem DOIS
+      consumidores aqui (o `refineLabel` da faixa e o `title` do `Sheet`), e o
+      segundo segurava a asserção sozinho. É o mesmo defeito do M1, uma função
+      abaixo. Quem morde é o NEGATIVO: nenhuma prop que carrega texto para a
+      pessoa pode receber literal de string — e ele é robusto a reformatação,
+      porque não depende de como o prettier quebra a linha.
+    */
+    const filters = stripComments(filtersSource());
+
+    for (const key of [
+      'pages.acervo.filters.refine',
+      'pages.acervo.filters.close',
+      'pages.acervo.filters.remove',
+    ]) {
+      expect(filters).toContain(`t('${key}'`);
+    }
+
+    expect(filters).not.toMatch(
+      /\s(?:refineLabel|closeLabel|title|placeholder|aria-label)="/u,
+    );
   });
 
   it('has exactly ONE red line in the source, and it is the failed archive', () => {

@@ -1,6 +1,16 @@
 import { HIGHLIGHT_PAGE_MAX } from '@clube/shared';
-import { type FilterGroup, type FilterOption, PersonAvatar } from '@clube/ui';
+import {
+  cx,
+  FilterBar,
+  type FilterGroup,
+  type FilterOption,
+  FOCUS_RING,
+  MarginRail,
+  PersonAvatar,
+  Sheet,
+} from '@clube/ui';
 import type { TFunction } from 'i18next';
+import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import type { ActiveClubMe } from '../club/active-club';
@@ -8,6 +18,7 @@ import {
   ALL_SCOPE,
   authorScope,
   EVERY_COLOR,
+  EVERY_PAGE,
   EVERY_READING,
   EVERY_TYPE,
   MINE_SCOPE,
@@ -63,8 +74,50 @@ import {
  * MVP 1 ("divida **antes** de a tela crescer") com o "antes" sendo a fatia
  * seguinte, não um futuro genérico.
  *
- * Este módulo tem **257** linhas canônicas (165 até a Tarefa 38g, 194 até a
- * 38h), e nenhuma delas é estado.
+ * ⚠️⚠️ **E NA TAREFA 46 ESTE MÓDULO VIROU O QUARTO MAIOR ARQUIVO DO APP, 65
+ * ACIMA DO TETO DE 400 QUE O `acervo.tsx:140` NOMEIA — e ninguém perguntou.**
+ * Achado M4 da rodada de correção. Medido pelo contador canônico, sobre os
+ * arquivos de produção de `packages/app/src`:
+ *
+ * ```
+ * free-note.tsx        602
+ * day-note.tsx         478
+ * acervo.tsx           478   ← a TELA, que a regra 12 da 46 protegia
+ * acervo-filters.tsx   465   ← este, +81% numa fatia (257 → 465)
+ * book-form.tsx        456
+ * ```
+ *
+ * A regra 12 proibia a TELA de crescer, e ela encolheu 33. O vizinho absorveu
+ * **+208** e a nota 9 da fatia celebrou o −33 sem uma palavra sobre isto. É a
+ * lição da 44b na sua terceira cara: **extrair de um arquivo não encolhe o
+ * outro, e um teto que vale para um arquivo só é um teto que anda de lado.**
+ *
+ * Este módulo tem **465** linhas canônicas (165 até a Tarefa 38g, 194 até a
+ * 38h, 257 até a 46), e nenhuma delas é estado. A conta por função, medida com
+ * o mesmo comando:
+ *
+ * ```
+ *  65  activeChips()         ← o próximo corte
+ *  56  filterGroups()
+ *  48  RefineBand()          ← o próximo corte
+ *  34  ReadingSelect()
+ *  32  authorOptions()
+ *  31  AcervoControls()
+ *  26  PageRangeFilter()
+ *  23  TextFilter()
+ *  22  PageBound()
+ *  17  FilterSheet()
+ *   7  FilterMargin()
+ * ```
+ *
+ * ⚠️ **O PRÓXIMO CORTE ESTÁ NOMEADO, E DE PROPÓSITO NÃO É AGORA: `activeChips`
+ * + `RefineBand` + os dois tipos deles, ~125 linhas canônicas, para um
+ * `acervo-band.tsx`.** Elas são o assunto mais separável que sobrou — a FAIXA,
+ * que só existe abaixo de 1120px — e dependem de quatro coisas do resto:
+ * `FilterGroup`, o `NEUTRAL_VALUE` lido do `acervo-entries.ts`, o `t` e o
+ * pacote `AcervoControlsProps`. Cortar **agora** seria churn sobre uma fatia
+ * já entregue e medida, então fica como **dívida endereçada à 47/48**, com o
+ * endereço escrito aqui em vez de uma promessa genérica de "quando crescer".
  *
  * ⚠️ **E NÃO FOI PARA O `acervo-entries.ts`, apesar de ser lá que o assunto
  * mora — a razão é MEDIDA e é o próprio motivo daquele módulo existir.** O
@@ -502,6 +555,387 @@ export function ReadingSelect({
           </option>
         ))}
       </select>
+    </div>
+  );
+}
+
+/**
+ * ⚠️ **OS SEIS CONTROLES NUM PACOTE SÓ (Tarefa 46) — e o pacote existe porque
+ * agora eles têm DUAS CASAS.**
+ *
+ * Até aqui os controles moravam soltos no `collection()` do `acervo.tsx`. A
+ * fatia 46 lhes dá dois hospedeiros — o bottom sheet do celular e a margem do
+ * desktop —, e escrever a lista de controles duas vezes seria a forma exata
+ * pela qual a leitura aparece num e não no outro (é a lição do `authorLabel` da
+ * 38g e da decisão G da 27, de novo).
+ *
+ * ⚠️ **AS CONDIÇÕES DE EXISTÊNCIA VIAJARAM JUNTO, e continuam com UM dono.** O
+ * `<select>` de leitura só existe com plano **e** `readingApplies`; a faixa de
+ * página só existe com `highlightApplies`. Quem CALCULA os dois booleanos
+ * continua sendo a tela (`typeCanCarryReading`/`typeCanIncludeHighlight` do
+ * `acervo-entries.ts`) — recolher os controles num painel não pode transformar
+ * "condicional" em "sempre visível", e é isso que o acusador de decisão G mede
+ * nos dois sentidos.
+ */
+export interface AcervoControlsProps {
+  t: TFunction;
+  /** Já montados e já derivados pela tela (regra 12). */
+  groups: readonly FilterGroup[];
+  readings: readonly PlanDay[];
+  selectedReading: string;
+  onReading: (value: string) => void;
+  /** Decisão E: o `<select>` só existe quando o tipo pode carregar leitura. */
+  readingApplies: boolean;
+  /** Decisão C da 38h: a cor e a faixa fazem a MESMA pergunta ao tipo. */
+  highlightApplies: boolean;
+  text: string;
+  onText: (value: string) => void;
+  range: PageRange;
+  onRange: (range: PageRange) => void;
+}
+
+function AcervoControls({
+  groups,
+  highlightApplies,
+  onRange,
+  onReading,
+  onText,
+  range,
+  readingApplies,
+  readings,
+  selectedReading,
+  t,
+  text,
+}: AcervoControlsProps): ReactNode {
+  return (
+    <div className="flex flex-col gap-3">
+      <FilterBar groups={groups} />
+
+      <TextFilter onText={onText} t={t} text={text} />
+
+      {readings.length === 0 || !readingApplies ? null : (
+        <ReadingSelect
+          onSelect={onReading}
+          readings={readings}
+          selected={selectedReading}
+          t={t}
+        />
+      )}
+
+      {highlightApplies ? (
+        <PageRangeFilter onRange={onRange} range={range} t={t} />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * A CASA DO DESKTOP — o painel na margem.
+ *
+ * ⚠️ **NÃO EXISTE `AcervoDesktop.dc.html`** (medido: os 21 artboards não o
+ * têm). O desktop desta tela é DERIVADO do padrão que as fatias 42–45 fixaram —
+ * coluna de 680px e margem de 320px com filete, acima de 1120px —, e é o mesmo
+ * `MarginRail` do Início e da tela do dia.
+ *
+ * ⚠️ **E AQUI A MARGEM SOME NO CELULAR, ao contrário da home — de propósito, e
+ * a assimetria é a fatia inteira.** Na home *"no celular nada desaparece"*: a
+ * corrente e o feed descem para o fluxo, porque não há segunda casa para eles.
+ * Aqui há: abaixo de 1120px os mesmos controles vivem no bottom sheet, e deixar
+ * a margem descer para o fluxo daria DUAS cópias dos seis controles na mesma
+ * tela — com `id` duplicado (`acervo-reading`, `acervo-text`,
+ * `acervo-page-from`/`-to` são fixos), que é defeito de acessibilidade de
+ * verdade e não incômodo de teste. O que guarda a outra metade é a faixa: ela é
+ * o caminho até o painel, e some **só** acima do corte.
+ *
+ * ⚠️⚠️ **E O `hidden` DESTA LINHA COLIDE COM O `flex` QUE O `MarginRail` TRAZ
+ * NA BASE — quem resolve é a ORDEM DE EMISSÃO DO CSS, não o `cx`.** Achado B5
+ * da rodada de correção. O `cx` não é `tailwind-merge` (está escrito em
+ * `packages/ui/src/cx.ts`, e é a mesma razão pela qual esta fatia recusou um
+ * `border-y-0` no bloco recolhido): as três regras têm especificidade `0,1,0`
+ * e `@media` não acrescenta nenhuma, então vence a última emitida. Isso
+ * funciona, e agora está PINADO em vez de suposto — o acusador é
+ * `src/__tests__/ui-source-scan.test.ts › the hidden × flex cascade`, que mede
+ * os offsets no CSS compilado de verdade. Se a ordem invertesse, esta margem
+ * ficaria `display:none` em toda largura e nenhum teste de DOM veria, porque o
+ * `jsdom` não aplica media query.
+ */
+export function FilterMargin(props: AcervoControlsProps): ReactNode {
+  return (
+    <MarginRail className="hidden pt-4 min-[1120px]:flex">
+      <AcervoControls {...props} />
+    </MarginRail>
+  );
+}
+
+export interface FilterSheetProps extends AcervoControlsProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+/**
+ * A CASA DO CELULAR — o bottom sheet da Tarefa 41a.
+ *
+ * ⚠️ **O CONTEÚDO DESTE PAINEL É LACUNA PREENCHIDA, NÃO FIDELIDADE.** Medido:
+ * `grep -in "refinar"` nos 21 artboards devolve **uma** linha — o BOTÃO
+ * (`Acervo.dc.html:61`). O que ele abre não é desenhado em lugar nenhum, e a
+ * escolha de pôr os seis controles inteiros aqui é decisão desta fatia.
+ *
+ * ⚠️ **O `Sheet` FECHADO NÃO ESTÁ NO DOM** (regra 15 da Tarefa 13), e é isso
+ * que faz a invariante de UMA CÓPIA se sustentar sem um segundo booleano: com o
+ * painel aberto a tela deixa de montar a margem, com ele fechado a margem
+ * volta, e em nenhum instante os dois existem.
+ */
+export function FilterSheet({
+  onClose,
+  open,
+  ...controls
+}: FilterSheetProps): ReactNode {
+  const { t } = controls;
+
+  return (
+    <Sheet
+      closeLabel={t('pages.acervo.filters.close')}
+      onClose={onClose}
+      open={open}
+      title={t('pages.acervo.filters.refine')}
+    >
+      <AcervoControls {...controls} />
+    </Sheet>
+  );
+}
+
+/** Uma dimensão ESCOLHIDA, pronta para virar chip removível. */
+export interface ActiveChip {
+  /** A `key` do React, e o nome da dimensão. Não aparece na tela. */
+  id: string;
+  /** JÁ TRADUZIDO — o mesmo rótulo que o controle daquela dimensão mostra. */
+  label: string;
+  onRemove: () => void;
+}
+
+/**
+ * ⚠️ **O NEUTRO DAS TRÊS DIMENSÕES DE CHIP É A MESMA STRING**, e isso é fato
+ * medido do `acervo-entries.ts`: `ALL_SCOPE`, `EVERY_TYPE` e `EVERY_COLOR`
+ * valem todos `'all'`. Ele é lido de UMA delas em vez de escrito aqui, para o
+ * dia em que um deles mudar ficar vermelho em vez de silencioso.
+ */
+const NEUTRAL_VALUE = ALL_SCOPE;
+
+/**
+ * OS CHIPS ATIVOS — **um por dimensão escolhida**, e nenhum no estado neutro
+ * (decisão H da Tarefa 46).
+ *
+ * ⚠️ **REMOVER UM CHIP MEXE SÓ NA DIMENSÃO DELE.** O `onRemove` das três
+ * primeiras é o `onSelect` do próprio grupo com a opção NEUTRA — não um setter
+ * novo —, e é isso que faz o chip de TIPO descartar as três escolhas
+ * condicionais exatamente como o toque no chip "Tudo" já descarta (o `onType`
+ * do `acervo.tsx` continua sendo o dono único daquela regra).
+ *
+ * ⚠️ **A FAIXA DE PÁGINA É **UM** CHIP, e não dois:** "de" e "até" são as duas
+ * metades da mesma pergunta e vivem num estado só (`PageRange`), então dois
+ * chips dariam dois botões para desfazer meia faixa — e meia faixa é uma faixa
+ * válida, que o `boundOf` já sabe ler.
+ *
+ * ⚠️ **E O RÓTULO DELA É MONTADO DOS RÓTULOS QUE JÁ EXISTEM** ("Da página 10 ·
+ * Até a página 90"), em vez de uma chave nova com `{{from}}`/`{{to}}`: as duas
+ * pontas são OPCIONAIS (decisão D da 38h), então uma frase fechada precisaria de
+ * três chaves para os três casos — e três frases para a mesma faixa é como duas
+ * delas saem de sincronia. O canvas escreve `p. 120–160` (`Acervo.dc.html:70`);
+ * a divergência está declarada nas notas da fatia.
+ */
+export function activeChips({
+  groups,
+  onRange,
+  onReading,
+  onText,
+  range,
+  readings,
+  selectedReading,
+  t,
+  text,
+}: AcervoControlsProps): ActiveChip[] {
+  const chips: ActiveChip[] = [];
+
+  for (const group of groups) {
+    const neutral = group.options.find(
+      (option) => option.value === NEUTRAL_VALUE,
+    );
+    const chosen = group.options.find(
+      (option) => option.value === group.selected,
+    );
+    /*
+      Um grupo sem neutro, ou com um `selected` que não está nas opções, não
+      vira chip: a regra 12 já devolve o grupo ao neutro no render seguinte, e
+      um chip com o rótulo `undefined` seria um "· undefined ·" na cara de quem
+      está lendo — o mesmo cuidado que o `summaryOf` de `packages/ui` toma.
+    */
+    if (neutral === undefined || chosen === undefined) continue;
+    if (chosen.value === neutral.value) continue;
+
+    chips.push({
+      id: group.id,
+      label: chosen.label,
+      onRemove: () => {
+        group.onSelect(neutral);
+      },
+    });
+  }
+
+  const day = readings.find((reading) => reading.id === selectedReading);
+  if (day !== undefined) {
+    chips.push({
+      id: 'reading',
+      label: day.title,
+      onRemove: () => {
+        onReading(EVERY_READING);
+      },
+    });
+  }
+
+  if (text !== '') {
+    chips.push({
+      id: 'text',
+      label: text,
+      onRemove: () => {
+        onText('');
+      },
+    });
+  }
+
+  const bounds = [
+    range.from === ''
+      ? null
+      : `${t('pages.acervo.filters.page.from')} ${range.from}`,
+    range.to === '' ? null : `${t('pages.acervo.filters.page.to')} ${range.to}`,
+  ].filter((bound): bound is string => bound !== null);
+
+  if (bounds.length > 0) {
+    chips.push({
+      id: 'page',
+      label: bounds.join(' · '),
+      onRemove: () => {
+        onRange(EVERY_PAGE);
+      },
+    });
+  }
+
+  return chips;
+}
+
+export interface RefineBandProps {
+  t: TFunction;
+  groups: readonly FilterGroup[];
+  chips: readonly ActiveChip[];
+  onRefine: () => void;
+}
+
+/**
+ * A FAIXA DO CELULAR — a linha de resumo, o "Refinar" e os chips removíveis.
+ *
+ * `Acervo.dc.html:56` é a faixa (filete em cima e embaixo, `padding:12px 0`,
+ * `gap:9px`), `:58` a linha de resumo, `:59-62` o botão e `:64-73` a fila de
+ * chips.
+ *
+ * ⚠️ **O FILETE É DO `FilterBar` RECOLHIDO, e por isso os chips ficam ABAIXO
+ * dele e não dentro da moldura.** O bloco recolhido da Tarefa 41a já carrega o
+ * `border-y border-line-soft py-3` do `:56` na própria linha do `:57`; pôr os
+ * chips dentro da mesma moldura exigiria ou uma segunda decisão de borda aqui
+ * (duas verdades sobre o mesmo filete) ou passar `border-y-0` pelo `className`
+ * — e o `cx` **não resolve conflito de utilitário**, por decisão escrita
+ * (`packages/ui/src/cx.ts`): quem venceria seria a ordem do CSS emitido, não a
+ * ordem daqui. A divergência está declarada nas notas da fatia.
+ *
+ * ⚠️ **ELA SOME SÓ ACIMA DE 1120px.** Abaixo do corte ela é o ÚNICO caminho até
+ * os seis controles; acima, eles estão na margem e a faixa seria um segundo
+ * caminho para o mesmo lugar. `min-[1120px]:hidden` escrito por extenso — o
+ * Tailwind só emite o que está literal no fonte (decisão G do MVP 3.5).
+ *
+ * ⚠️ **E ISSO QUER DIZER QUE NO DESKTOP NÃO HÁ LINHA DE RESUMO NEM CHIP
+ * REMOVÍVEL — a Definição de pronto promete os três SEM QUALIFICAR, e a frase
+ * faltava.** Achado B4 da rodada de correção. Acima de 1120px a faixa inteira
+ * some junto com o "Refinar", e o que resta são os seis controles abertos na
+ * margem: lá o resumo seria uma paráfrase do que já está visível logo ao lado,
+ * e o chip removível, um segundo botão para o mesmo gesto que o próprio
+ * controle faz (voltar ao neutro). É escolha, não esquecimento — mas quem ler
+ * só a Definição de pronto vai procurar os chips no desktop e não achar.
+ *
+ * ⚠️ **O `gap-[9px]` É O VALOR DO CANVAS, e não bate com escala nenhuma do
+ * repo — declarado, que é o que faltava (achado B3).** `Acervo.dc.html:56`
+ * desenha `gap:9px`. Os sete `--size-*` de `theme.css` (9.5 · 10 · 11 · 14 ·
+ * 15 · 17.5 · 25) são **tamanho de fonte**, não espaçamento, então não há com
+ * o que comparar — e valor arbitrário de espaçamento já é prática medida aqui
+ * (`gap-[26px]` no `book.tsx` e no `day-note.tsx`, e a altura arbitrária do
+ * `context-bar.tsx`, existem no repo pelo mesmo motivo). O valor fica; o que
+ * estava errado era não dizer de onde ele vem.
+ *
+ * ⚠️ **E ESTE PARÁGRAFO CUSTOU 24 BYTES DE CSS ATÉ SER REESCRITO, o que é uma
+ * medição sobre o Tailwind que vale mais que o parágrafo:** o scanner do
+ * Tailwind v4 lê o **texto bruto do arquivo**, comentário incluído. Citar a
+ * altura do `context-bar.tsx` na forma NUA fez o build emitir a classe — que
+ * no código existe só com a variante de 1120px. Quem escrever prosa sobre
+ * classes neste repo cita a forma com variante, ou mede o CSS depois.
+ */
+export function RefineBand({
+  chips,
+  groups,
+  onRefine,
+  t,
+}: RefineBandProps): ReactNode {
+  return (
+    <div
+      className="flex flex-col gap-[9px] min-[1120px]:hidden"
+      data-acervo-band=""
+    >
+      <FilterBar
+        collapsed
+        groups={groups}
+        onRefine={onRefine}
+        refineLabel={t('pages.acervo.filters.refine')}
+      />
+
+      {chips.length === 0 ? null : (
+        <div className="flex flex-wrap gap-1.5 pb-3">
+          {chips.map((chip) => (
+            <span
+              className="inline-flex h-[30px] items-center gap-2 rounded-pill border border-line bg-surface-raised px-2.5 text-xs text-content"
+              data-acervo-chip=""
+              key={chip.id}
+            >
+              {chip.label}
+              <button
+                /*
+                  ⚠️ **O NOME ACESSÍVEL CARREGA O RÓTULO.** Seis chips na mesma
+                  faixa com o nome "Remover" seriam a mesma palavra para seis
+                  gestos, e quem ouve a tela não saberia qual é qual.
+                */
+                aria-label={t('pages.acervo.filters.remove', {
+                  label: chip.label,
+                })}
+                className={cx(
+                  'relative flex size-4 shrink-0 items-center justify-center rounded-full text-muted hover:text-content',
+                  /*
+                    ⚠️ **O ALVO DE TOQUE É 44px, e o desenho é 30px** — a faixa
+                    do canvas tem `height:30px` (`Acervo.dc.html:65`) e a
+                    decisão fechada do MVP 3.5 fixa o alvo em ≥44px. O
+                    pseudoelemento resolve os dois sem mentir sobre nenhum: 16px
+                    de botão mais 14px de cada lado dão 44px de área clicável,
+                    e nada disso pinta um pixel.
+                  */
+                  "after:absolute after:-inset-3.5 after:content-['']",
+                  FOCUS_RING,
+                )}
+                onClick={chip.onRemove}
+                type="button"
+              >
+                {/* `lucide-react` (`CLAUDE.md`): `<svg>` inline em
+                    `packages/app/src` é proibido por teste, porque a varredura
+                    do ADR 0002 pega PALAVRA e desenho não tem palavra. */}
+                <X aria-hidden="true" className="size-3.5" focusable="false" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

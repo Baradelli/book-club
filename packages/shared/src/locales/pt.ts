@@ -570,6 +570,34 @@ export const pt = {
           "refinar" fala de olhar melhor, nunca de esconder de alguém.
         */
         refine: 'Refinar',
+        /*
+          ⚠️ **FECHAR O PAINEL (Tarefa 46) — E ELA NÃO REUSA A DE ARQUIVAR.**
+
+          `pages.acervo.archive.close` já diz "Fechar", e a tentação de reusá-la
+          é exatamente a lição nº 16 do MVP 2 ao contrário: duas coisas que
+          falam a MESMA frase hoje podem precisar falar frases diferentes
+          amanhã, e uma chave só faz a primeira correção de texto mexer nas
+          duas. O diálogo de arquivar fala de uma ação destrutiva; este fala de
+          um painel de navegação.
+        */
+        close: 'Fechar',
+        /*
+          ⚠️ **O X DE CADA CHIP ATIVO (Tarefa 46), e o `{{label}}` é
+          OBRIGATÓRIO.**
+
+          São até seis chips na mesma faixa, um por dimensão. Seis botões com o
+          nome acessível "Remover" seriam a mesma palavra para seis gestos
+          diferentes — o defeito que `⚠️ gives every dimension a DISTINCT
+          neutral label` já guarda do lado dos chips de filtro, e que aqui
+          apareceria como `getByRole('button', { name })` lançando "found
+          multiple elements".
+
+          ⚠️ **E O NOME É "TIRAR DA VISTA", NÃO "APAGAR"** (ADR 0002 + regra 4
+          da Tarefa 28): o chip some do recorte, nada some do clube. O
+          vocabulário de arquivar mora em `pages.acervo.item.archive`, e é
+          outro assunto.
+        */
+        remove: 'Remover {{label}}',
       },
       item: {
         /* Só aparece quando o grifo TEM página — a ausência é silenciosa. */

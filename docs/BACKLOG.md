@@ -4611,10 +4611,133 @@ API o `FilterBar` da 41 acabou expondo.
       `Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' })` devolve `"17/09/2026"`, que
       casa **sozinho** pelo ramo `\/`. **Quem entrar com a data precisa deste risco**, e não
       do que estava escrito._
-- [ ] **46** — **Acervo e Busca.** As seis dimensões de filtro recolhem numa linha de resumo
+- [x] **46** — **Acervo e Busca.** As seis dimensões de filtro recolhem numa linha de resumo
       mais um botão "Refinar", que abre bottom sheet no celular e painel na margem no desktop;
       filtros ativos viram chips removíveis. ⚠️ **O modelo puro de `acervo-entries.ts` não
-      muda** — o que muda é quem desenha os controles. → _a detalhar_
+      muda** — o que muda é quem desenha os controles.
+      → `tasks/46-acervo-e-busca.md`
+      _Entregue: a faixa do canvas (`Acervo.dc.html:56-73`) — resumo derivado do `summaryOf()`,
+      pílula "Refinar" e um chip removível por dimensão escolhida —, os seis controles num
+      componente só com **duas casas** (o `Sheet` da 41a abaixo de 1120px, o `MarginRail` acima)
+      e a invariante de **uma cópia**: os controles mudam de casa, nunca se duplicam (os quatro
+      `id` fixos do `acervo-filters.tsx` seriam `id` duplicado). **Testes: shared 607 · ui 304 ·
+      backend 1994 · app 961** (eram 607 · 304 · 1994 · 954). Chunk de entrada **439.608 B**
+      (+2.618; folga **10.392 B** para as 47 e 48) · CSS 35.919 B (+474) · `book-form`,
+      **editor**, `index.html` e precache **inalterados**. `schema.prisma` inalterado._
+      _**A rodada: 13 mutantes, 12 acusados, 1 sobrevivente — e o sobrevivente é o achado.**_
+      _⚠️ **O BILHETE DA TAREFA 41a FOI CUMPRIDO, e o mutante mede os dois lados.** O
+      `filter-bar.tsx:126-128` registrava que a linha de resumo do `summaryOf()` **não passava
+      por guarda anti-culpa nenhuma**, porque a varredura vive em `packages/shared` e é
+      exercitada pelos testes de TELA do `packages/app` — e `collapsed` não tinha **um**
+      consumidor de produção. Medido com `' · 3 de 12'` plantado no fim daquela função: **3
+      acusadores em `packages/ui`** (os três `collapsed` do `filter-bar.test.tsx`, por
+      igualdade de texto, exatamente como o bilhete previa) e **46 em 73** no `acervo.test.tsx`
+      agora. Antes desta fatia o número do app seria zero._
+      _⚠️⚠️ **A DECISÃO D FOI MANTIDA (o dono, 2026-09-23) E O ACUSADOR DELA É FRÁGIL —
+      medido.** `Busca.dc.html:60` desenha `3 resultados em todo o clube`; `busca.tsx` e
+      `busca.test.tsx` continuam **intocados**. Mas `busca.test.tsx:986` pina
+      `/\b5\s+resultados?\b/iu`, e o **5** é a contagem do fixture: plantar o literal do canvas
+      (`3 resultados em todo o clube`) na tela dá **0 acusadores em 961**, enquanto `5
+      resultados…` dá **1**. O `COUNTER_SHAPE` não vê a frase (ela não tem `\d+ de \d+`). É a
+      classe "guarda que deixa de casar qualquer coisa e continua verde". **Correção proposta e
+      medida, NÃO aplicada** (o dono escreveu "não se toca"): trocar o `5` por `\d+` nas duas
+      linhas — a suíte segue **44 passando** e o mutante do `3` passa a ter 1 acusador._
+      _⚠️ **QUATRO citações da spec estavam erradas, e as quatro estão declaradas** (nota 2 da
+      tarefa): `acervo.test.tsx` tem **2.847** linhas e não 2.845; a decisão G citava
+      `acervo.tsx:876` e `:926` como onde os booleanos decidem, e as duas são linhas de
+      **comentário** (o código é `:793`, `:794`, `:859`, `:939` e `:958`); a fila de chips é
+      `Acervo.dc.html:64-73` e não `:64-66` (são **dois** chips); e o `ReadingSelect` é
+      `acervo-filters.tsx:474-507`, não `:445-499`. As outras **dez** citações foram conferidas
+      linha a linha e estão certas._
+      _⚠️ **E DOIS números do REPOSITÓRIO estavam errados, no arquivo que DEFINE o contador
+      canônico:** o docblock do `acervo.tsx` dizia `acervo-entries.ts` **167** (tem **169**) e
+      `free-note.tsx` **565** (tem **602**). Corrigidos lá._
+      _**Tamanho, pelo contador canônico:** `acervo.tsx` **511 → 478** (−33), `acervo-filters.tsx`
+      257 → **465**, `acervo-rows.tsx` **88** (novo), `acervo-entries.ts` **169** (intocado,
+      provado por `git diff`). A fatia por si custou **+20** à tela; o que a devolveu abaixo de
+      511 foi o corte que o próprio docblock nomeava desde a 38h — o card de grifo, com as
+      quatro dependências viradas em props. ⚠️ **A soma dos quatro subiu 263 linhas: extrair de
+      um arquivo NÃO encolhe o outro (lição da 44b).**_
+      _**`acervo.test.tsx` não foi reescrito:** `git diff -U0` mostra **três** linhas removidas,
+      as três asserções do mesmo `it()` de varredura de fonte, porque o `<FilterBar>` mudou de
+      arquivo. A guarda passou a ler o **par** `acervo.tsx` + `acervo-filters.tsx`, e os dois
+      negativos (`FilterChip`, `role="group"`) passaram a valer nos dois — mais forte do que
+      era. As outras 45 asserções novas são do `describe` novo, de sete testes._
+      _**Oito divergências declaradas** (nota 6): o painel que o artboard **não** desenha (`grep
+      -in "refinar"` nos 21 artboards devolve UMA linha, o botão — o conteúdo é lacuna
+      preenchida); a ausência de `AcervoDesktop.dc.html`/`BuscaDesktop.dc.html` (o desktop é
+      derivado das 42–45); a contagem de resultados que o dono decidiu não trazer; os chips
+      ABAIXO do filete e não dentro da moldura do `:56` (o bloco recolhido da 41a já carrega o
+      `border-y`, e o `cx` **não** resolve conflito de utilitário — está escrito nele); o chip de
+      faixa dizendo `Da página 10 · Até a página 90` em vez de `p. 120–160` (as duas pontas são
+      opcionais: uma frase fechada pediria três chaves); os 30px do canvas com 44px de alvo por
+      pseudoelemento; a margem que **some** no celular aqui, ao contrário da home (aqui há
+      segunda casa, e duas cópias dariam `id` duplicado); e **duas chaves novas** —
+      `pages.acervo.filters.close` e `.remove`. O `refine` já existia desde a Tarefa 40 e ganhou
+      o primeiro consumidor. O grupo `'Fechar'` do pino de frases repetidas foi de 2 para 3
+      caminhos, com a justificativa escrita ao lado._
+      _⚠️⚠️ **RODADA DE CORREÇÃO (notas 13–20 da tarefa): sete afirmações derrubadas e CINCO
+      mutantes sobreviventes novos, todos com acusador agora.** Os números acima que ficaram
+      velhos: **testes shared 607 · ui 305 · backend 1994 · app 964** (a rodada acrescentou +1
+      em `ui` e +3 em `app`); a fatia por si custou **+16** à tela e o corte devolveu **49**,
+      não +20 e 52 (a conta antiga não fechava: `511 + 20 − 52 = 479`, e o arquivo tem 478);
+      e a correção da decisão D **foi aplicada**, mas não é a que estava proposta._
+      _⚠️ **O PIOR: a visibilidade da margem não tinha guarda em DIREÇÃO NENHUMA.** A FAIXA
+      tinha guarda de token nos dois sentidos e ela fazia a margem PARECER coberta. Medido:
+      tirar o `hidden` do `FilterMargin` (a margem aparece **no celular**, e são duas cópias
+      dos seis controles) dava **0 em 961**; tirar o `min-[1120px]:flex` (a margem **nunca**
+      aparece no desktop — acima do corte a faixa é `min-[1120px]:hidden` e a margem continua
+      `hidden`, e o usuário de desktop perde os SEIS controles) dava **0 em 961** também.
+      **Quinta vez que este bloco paga por par guardado pela metade.** Agora o `it()` do painel
+      varre o `<aside>` por token, simétrico à faixa._
+      _⚠️⚠️ **E A CORREÇÃO DA DECISÃO D QUE ESTAVA APROVADA ESTAVA ERRADA: o `\d+\s+` cria
+      FALSO POSITIVO.** O `readableText()` junta as partes com `'\n'` e `\s` casa `'\n'`; a
+      parte logo depois do `textContent` do `<ul>` é o `aria-label` dele, `Resultados da busca`.
+      Reproduzido: um comentário de grifo inocente terminando em dígito deixa a guarda vermelha
+      (`MATCH>>> "…reler a partir da pagina 3\nResultados da busca\nMO dragao "`). **Aplicada a
+      versão ancorada a espaço horizontal** — `/\b\d+[^\S\r\n]+resultados?\b/iu` e a gêmea em
+      `results?` —, medida nos dois sentidos: verde sobre o fixture inocente, **1 acusador**
+      sobre o `3 resultados em todo o clube` do canvas (era 0 em 961)._
+      _**Os quatro outros sobreviventes, todos com acusador novo e vermelho colado:** `border-y`
+      → `border-b` no `filter-bar.tsx` (a faixa perde o filete de cima e mantém o de baixo,
+      **0/304 e 0/961**) → guarda de token no `filter-bar.test.tsx` de `packages/ui`;
+      `refineLabel={t(…)}` → `refineLabel="Refinar"` (**0/961**, contra o `CLAUDE.md` literal
+      "nenhum texto solto nas telas") → guarda de fonte, e o **negativo** é quem morde, porque
+      a mesma chave tem dois consumidores no arquivo; o `RefineBand` redesenhando o bloco
+      recolhido **à mão** sem `FilterBar` (**0/73**) → o positivo agora **conta** os dois
+      consumidores em vez de só mencionar o nome._
+      _⚠️ **Dois parágrafos do docblock do `acervo.tsx` viraram FALSOS nesta mesma fatia**, e
+      os dois estão riscados-e-explicados: o card de grifo *"que nenhuma fatia planejada mexe"*
+      foi cortado **neste commit** (e o `acervo-rows.tsx` cita o parágrafo como cumprido), e o
+      parágrafo que celebra ter consertado a promessa do `<TextFilter/>` voltou a mentir — o
+      símbolo **saiu do arquivo** e o docblock saiu de dentro do `collection()`._
+      _⚠️ **465 linhas, e ninguém perguntou (M4).** O `acervo-filters.tsx` é hoje o **4º maior
+      arquivo do app** (atrás de `free-note.tsx` 602, `day-note.tsx` 478 e `acervo.tsx` 478),
+      cresceu **+81% numa fatia** e está **65 acima do teto de 400** que o próprio `acervo.tsx`
+      nomeia. A regra 12 protegia a TELA; o vizinho absorveu tudo. **Não cortado agora** (a
+      fatia está entregue; cortar de novo é churn): registrado no docblock com a conta por
+      função e o próximo corte **nomeado** — `activeChips` + `RefineBand` + os tipos deles,
+      ~125 linhas canônicas, para um `acervo-band.tsx`, dívida endereçada à 47/48._
+      _**Bytes: a rodada custou ZERO** — entrada **439.608 B**, CSS **35.919 B**, `book-form`
+      10.059, editor 449.522, `index.html` 1.638, precache 27, todos idênticos à entrega.
+      ⚠️ **E o caminho até esse zero é uma medição sobre o Tailwind v4 que vale guardar:** uma
+      versão intermediária deste docblock citava uma classe de altura arbitrária na forma NUA, e
+      o build **emitiu a classe** — o scanner lê o texto bruto do arquivo, comentário incluído,
+      e a prosa custou 24 B de CSS até ser reescrita._
+      _**A invariante `hidden` × `flex` das margens responsivas ficou PINADA (B5).** Ela se
+      apoiava em ordem de emissão do CSS — o `MarginRail` traz `flex` na base, a tela passa
+      `hidden`, e o `cx` **não** resolve conflito de utilitário — sem teste nenhum. Medido no
+      CSS compilado: `.flex{display:flex}` em 7099, `.hidden{display:none}` em 7118, e o bloco
+      `@media (min-width:1120px)` em 21305. Vale guarda porque a falha é silenciosa: invertida a
+      ordem, a margem some do desktop inteiro e **nenhum teste de DOM vê**, porque o `jsdom` não
+      aplica media query. Acusador novo em `ui-source-scan.test.ts`._
+      _**Também corrigidos:** o título da nota 7 dizia *"13 mutantes, 13 acusados, zero
+      sobreviventes"* e a própria tabela mostra o nº 2 com **0** (B1 — é a linha que alguém lê
+      primeiro; a tabela também tem 14 linhas para "13 mutantes"); e ficaram declarados o
+      `gap-[9px]` sem escala comparável (B3 — os sete `--size-*` são **tamanho de fonte**, não
+      espaçamento) e o fato de que **no desktop não há linha de resumo nem chip removível**
+      (B4), porque o `RefineBand` inteiro é `min-[1120px]:hidden` — escolha defensável que a
+      Definição de pronto prometia sem qualificar._
 - [ ] **47** — **Formulários.** O grifo vira o próprio papel grifado: o campo do trecho tem o
       fundo da caneta escolhida, com aspa serifada pendurada, e repinta ao trocar de cor.
       Mais a anotação avulsa e o novo/editar livro. → _a detalhar_

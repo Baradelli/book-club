@@ -779,3 +779,66 @@ describe('the 44px floor, measured against the compiled CSS (rule 9)', () => {
     expect(10 * SPACING_STEP_PX).toBeLessThan(MIN_TOUCH_TARGET_PX);
   });
 });
+
+/**
+ * ⚠️⚠️ **`hidden` × `flex` — A INVARIANTE QUE SE APOIAVA EM ORDEM DE EMISSÃO E
+ * NÃO ESTAVA PINADA EM LUGAR NENHUM.** Achado B5 da rodada de correção da
+ * Tarefa 46.
+ *
+ * Toda margem responsiva do projeto é a MESMA colisão de utilitário: o
+ * `MarginRail` traz `flex` na base e a tela passa `hidden`
+ * (`acervo-filters.tsx`) ou o contrário. O `cx` **não é** `tailwind-merge` — é
+ * decisão escrita em `packages/ui/src/cx.ts`, e a Tarefa 46 recusou um
+ * `border-y-0` por causa dela. Então quem resolve a colisão não é a ordem do
+ * código: é a ordem em que o Tailwind EMITE as regras, porque as três têm a
+ * mesma especificidade (`0,1,0`) e `@media` não acrescenta nenhuma.
+ *
+ * Medido no CSS compilado desta build: `.flex{display:flex}` em **7099**,
+ * `.hidden{display:none}` em **7118**, e o bloco
+ * `@media (min-width:1120px)` com `.min-\[1120px\]\:flex` e
+ * `.min-\[1120px\]\:hidden` em **21305**. A cascata funciona — mas funcionava
+ * por um fato do Tailwind que nenhum teste afirmava, e quem lesse o código não
+ * tinha como saber se o desenho era intencional ou sorte.
+ *
+ * ⚠️ **E ELE VALE A GUARDA porque o custo é zero e a falha é silenciosa:** se
+ * a ordem invertesse, a margem do acervo ficaria `display:none` em TODA
+ * largura — os seis controles sumiriam do desktop inteiro — e nenhum teste de
+ * DOM veria, porque o `jsdom` não aplica media query. É exatamente o par que o
+ * achado A1 desta mesma rodada mediu como **0 acusadores em 961**.
+ */
+describe('the hidden × flex cascade the responsive margins rely on (task 46, B5)', () => {
+  /** Onde o CSS compilado emite uma regra, em bytes desde o começo. */
+  function emittedAt(rule: string): number {
+    const at = compiledCss.indexOf(rule);
+    if (at < 0) throw new Error(`o CSS compilado não emite \`${rule}\``);
+    return at;
+  }
+
+  it('emits .hidden AFTER .flex, so a base `hidden` beats a base `flex`', () => {
+    // É o que faz `<MarginRail className="hidden …">` nascer escondido, apesar
+    // de o `MarginRail` trazer `flex` na base e o `cx` não resolver conflito.
+    expect(emittedAt('.hidden{display:none}')).toBeGreaterThan(
+      emittedAt('.flex{display:flex}'),
+    );
+  });
+
+  it('emits the 1120px variants AFTER the base ones, in both directions', () => {
+    /*
+      O par inteiro, e os dois sentidos importam:
+
+      - `min-[1120px]:flex` depois de `.hidden` → a margem VOLTA acima do corte
+        (sem isto o desktop perde os seis controles, em silêncio);
+      - `min-[1120px]:hidden` depois de `.flex` → a FAIXA some acima do corte
+        (sem isto haveria duas cópias dos controles, com `id` duplicado).
+    */
+    const base = emittedAt('.hidden{display:none}');
+    const flex = emittedAt('.flex{display:flex}');
+
+    expect(emittedAt('.min-\\[1120px\\]\\:flex{display:flex}')).toBeGreaterThan(
+      base,
+    );
+    expect(
+      emittedAt('.min-\\[1120px\\]\\:hidden{display:none}'),
+    ).toBeGreaterThan(flex);
+  });
+});

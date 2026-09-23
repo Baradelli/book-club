@@ -453,9 +453,26 @@ describe('catálogos de i18n', () => {
       ],
       ['E-mail', ['pages.acceptInvite.email', 'pages.login.email']],
       ['Entrar', ['pages.login.submit', 'pages.login.title']],
+      /*
+        ⚠️ **O GRUPO CRESCEU NA TAREFA 46, E ESTA LINHA É O PREÇO ESCRITO.** O
+        painel de refino do acervo ganhou o próprio "Fechar"
+        (`pages.acervo.filters.close`), e a guarda exige que quem cria uma gêmea
+        escreva o grupo — que é justamente o ponto dela.
+
+        Por que não reusar `pages.acervo.archive.close`, já que as duas frases
+        são iguais HOJE: elas falam de coisas diferentes. Uma fecha a
+        confirmação de uma ação destrutiva, a outra fecha um painel de
+        NAVEGAÇÃO (ADR 0002) — e a primeira correção de texto que distinguir as
+        duas teria de desfazer a fusão antes de poder acontecer. É a convenção
+        por-tela que o arquivo aplica desde a Tarefa 15, aplicada por-diálogo.
+      */
       [
         'Fechar',
-        ['pages.acervo.archive.close', 'pages.freeNote.archive.close'],
+        [
+          'pages.acervo.archive.close',
+          'pages.acervo.filters.close',
+          'pages.freeNote.archive.close',
+        ],
       ],
       ['Nova anotação', ['pages.acervo.newNote', 'pages.freeNote.newTitle']],
       [
