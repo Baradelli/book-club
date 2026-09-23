@@ -264,6 +264,13 @@ describe('the mount trap of §11 (rule 4)', () => {
       e por isso nem aparece nesta lista. Quem cobre essa é
       `rich-editor.test.tsx > survives flipping editable in both directions`, e
       ela cobre da única forma honesta: o React estoura.
+
+      ⚠️ **A TAREFA 43 ACRESCENTOU A BARRA DE CANETAS À CONTA (decisão J), e é
+      por isso que o `rerender` deste teste passou a percorrer as TRÊS formas de
+      `penBar`.** Ela é o irmão novo do container — e é o mais tentador de
+      montar condicionalmente, porque `penBar='none'` PARECE "não renderizar
+      nada". Renderizar `null` ali devolveria o `NotFoundError` da §11 ao app,
+      agora na tela que justifica o projeto.
     */
     const uploader = heldUpload('https://cdn.clube/print.png');
 
@@ -288,6 +295,15 @@ describe('the mount trap of §11 (rule 4)', () => {
     const baseline = siblings();
     expect(baseline).toContain(status);
     expect(baseline.length).toBeGreaterThan(2);
+    /*
+      ⚠️ E a barra de canetas está na linha de base **com o `penBar` no padrão
+      `'none'`** — que é o render acima. Sem esta asserção, um `PenBar` que
+      devolvesse `null` quando não há barra deixaria o resto do teste comparando
+      duas listas iguais **sem ela**, e verde. É o §7.4 aplicado ao irmão novo.
+    */
+    expect(
+      baseline.some((node) => node.hasAttribute('data-editor-pen-bar')),
+    ).toBe(true);
 
     fireEvent.paste(proseMirror(), {
       clipboardData: anImageClipboard([anImage()]),
@@ -313,5 +329,21 @@ describe('the mount trap of §11 (rule 4)', () => {
       />,
     );
     expect(siblings()).toEqual(baseline);
+
+    // E nas TRÊS formas da barra de canetas, nas duas direções de `editable`.
+    for (const penBar of ['fixed', 'footer', 'none'] as const) {
+      for (const editable of [true, false]) {
+        rerender(
+          <RichEditor
+            doc={aDoc()}
+            editable={editable}
+            onChange={() => undefined}
+            onUploadImage={uploader.upload}
+            penBar={penBar}
+          />,
+        );
+        expect(siblings()).toEqual(baseline);
+      }
+    }
   });
 });

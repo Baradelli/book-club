@@ -28,7 +28,13 @@ const EXPECTED_PALETTE = [
  * O arquivo do editor, lido do disco — e é isso que faz deste teste um
  * espelho de verdade em vez de duas listas escritas à mão que ninguém compara.
  *
- * `HIGHLIGHT_COLORS` do `RichEditor` **não é exportada** (é constante de
+ * ~~`HIGHLIGHT_COLORS` do `RichEditor` **não é exportada**~~ **ELA PASSOU A SER
+ * EXPORTADA NA TAREFA 43** — a barra de canetas e o teste de identidade dela
+ * têm de ler a MESMA lista. ⚠️ **E isto NÃO afrouxa o espelho abaixo:** ele
+ * continua lendo o ARQUIVO do disco, e tem de continuar, porque
+ * `packages/shared` é o pacote **sem dependências internas** — importar
+ * `@clube/ui` daqui inverteria a direção do grafo. O parágrafo fica riscado em
+ * vez de reescrito porque o argumento original (é constante de
  * módulo, `docs/EDITOR.md` §6), e `packages/shared` não depende de
  * `packages/ui` — nem pode, é o pacote sem deps internas. Então a leitura é
  * pelo caminho do monorepo, que é fixo. Se o arquivo mudar de lugar, este teste
@@ -110,12 +116,26 @@ describe('HIGHLIGHT_COLORS', () => {
     expect(HIGHLIGHT_COLORS).toEqual(fromEditor);
   });
 
-  // A pré-condição do espelho: o arquivo lido é MESMO o do editor. Um caminho
-  // errado que devolvesse outro arquivo qualquer sem `rgba` cairia no
-  // `toHaveLength(5)` acima, mas um arquivo com `rgba` por acaso não cairia.
+  /*
+    A pré-condição do espelho: o arquivo lido é MESMO o do editor. Um caminho
+    errado que devolvesse outro arquivo qualquer sem `rgba` cairia no
+    `toHaveLength(5)` acima, mas um arquivo com `rgba` por acaso não cairia.
+
+    ⚠️ **O RÓTULO PINADO MUDOU DE ~~`Grifo amarelo`~~ PARA `Caneta amarela` NA
+    TAREFA 43**, e é troca de NOME, não de cor: as cinco amostras saíram da
+    barra fixa do editor — que morreu — para a barra de CANETAS do rodapé, e o
+    canvas as nomeia assim (`Dia.dc.html:105`:
+    `aria-label="Caneta amarela"`). É o vocabulário que o MVP 3.5 já tinha
+    adotado nos tokens `--pen-*`.
+
+    ⚠️ **O que esta suíte guarda — os cinco `rgba` — NÃO mudou**, e não podia:
+    eles são o que entra no `doc` da anotação, e o `HIGHLIGHT_COLORS` do
+    `@clube/shared` é a coluna do banco. O canvas manda em como o grifo é
+    PINTADO (os tokens `--pen-*`), jamais no que é guardado.
+  */
   it('reads the palette from the editor component itself', () => {
     expect(RICH_EDITOR_SOURCE).toContain('HIGHLIGHT_COLORS');
-    expect(RICH_EDITOR_SOURCE).toContain('Grifo amarelo');
+    expect(RICH_EDITOR_SOURCE).toContain('Caneta amarela');
   });
 });
 
@@ -163,7 +183,7 @@ describe('isHighlightColor', () => {
     ['only spaces', '   '],
     ['a palette colour with a leading space', ' #facc15'],
     ['a palette colour with a trailing space', '#facc15 '],
-    ['a CSS variable', 'var(--clube-highlight-yellow)'],
+    ['a CSS variable', 'var(--pen-a)'],
   ])('refuses %s (%s)', (_label, value) => {
     expect(isHighlightColor(value)).toBe(false);
   });

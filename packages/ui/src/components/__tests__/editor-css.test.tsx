@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { render } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { RichEditor } from '../RichEditor';
@@ -103,6 +103,20 @@ function mountEditor(): Element {
   return dom;
 }
 
+/**
+ * O editor COM a barra de canetas — é o único estado em que as amostras
+ * existem, e por isso ele é um segundo montador em vez de um parâmetro: o
+ * `mountEditor` devolve o `.ProseMirror`, e aqui o que interessa é a bolinha.
+ */
+function mountPenBar(): Element {
+  render(<RichEditor doc={aDoc()} onChange={() => undefined} penBar="fixed" />);
+
+  const swatch = document.querySelector('[data-editor-pen]');
+  if (swatch === null)
+    throw new Error('a barra não renderizou amostra nenhuma');
+  return swatch;
+}
+
 /** O segundo elemento que casa o seletor — o irmão que precisa de respiro. */
 function second(editor: Element, selector: string): Element {
   const found = editor.querySelectorAll(selector)[1];
@@ -155,7 +169,7 @@ describe('the CSS reaches the DOM the editor produces', () => {
       ⚠️ `.ProseMirror .selectedCell::after` é `position: absolute; inset: 0`.
       Sem um ancestral posicionado DENTRO do editor, o bloco de contenção passa
       a ser o container do `RichEditor` (que é `relative`, por causa da pílula
-      de upload) — e o véu de `--clube-accent-soft` cobre a anotação inteira.
+      de upload) — e o véu de `--accent-soft` cobre a anotação inteira.
 
       O jsdom não tem layout para provar onde o véu cai; o que ele prova é o
       que basta para o defeito não voltar: a célula declara o contexto.
@@ -191,5 +205,217 @@ describe('the CSS reaches the DOM the editor produces', () => {
 
     expect(getComputedStyle(block as Element).paddingTop).not.toBe('0px');
     expect(getComputedStyle(summary as Element).fontWeight).toBe('600');
+  });
+});
+
+/**
+ * ============================================================================
+ * ⚠️ O EDITOR PERDE A CAIXA E GANHA A SERIFA (decisões B e C da Tarefa 43)
+ * ============================================================================
+ *
+ * As duas decisões são uma só quando vistas do canvas: o texto **senta no papel
+ * da página**. `Dia.dc.html:59` desenha o corpo da anotação sem `background`,
+ * sem `border` e sem `border-radius`, em Fraunces **17,5px/1,72**; e
+ * `DiaDesktop.dc.html:63` o mesmo bloco em **19px/1,75** com
+ * `max-width:620px`.
+ *
+ * ⚠️ **ESTE ARQUIVO LÊ O `getComputedStyle`, e é essa a diferença que ele
+ * existe para medir** (veja o docblock do topo): "o seletor está escrito"
+ * contra "o seletor casa". Uma regra de corpo escrita contra `.ProseMirror p`
+ * em vez de `.ProseMirror`, por exemplo, deixaria o parágrafo certo e o título,
+ * a citação e a lista com a fonte da interface — e um teste que lesse o arquivo
+ * não veria diferença.
+ *
+ * ⚠️ **O LIMITE HONESTO, e ele é o mesmo do topo:** o jsdom resolve cascata,
+ * não layout. Então a media query dos 19px **não** é medida aqui (o jsdom não
+ * tem viewport que a case); ela é lida do arquivo, na última asserção, que é a
+ * forma fraca — e está declarada como tal em vez de parecer forte.
+ */
+describe('the reading body, and the box that died (task 43)', () => {
+  it('⚠️ sets the reading serif ON THE .ProseMirror, not on the paragraph', () => {
+    const editor = mountEditor();
+    const style = getComputedStyle(editor);
+
+    /*
+      ⚠️ O VALOR VOLTA COMO `var(--…)` E NÃO RESOLVIDO: este arquivo injeta só o
+      `editor.css`, e o `:root` do `theme.css` não está aqui. É o que basta —
+      o que se guarda é que a declaração CHEGA ao `.ProseMirror` e aponta para
+      os tokens certos. Quem confere o VALOR de cada token é o
+      `theme-tokens.test.ts`, do lado do app, sobre o CSS compilado.
+    */
+    expect(style.fontFamily).toBe('var(--family-reading)');
+    expect(style.fontSize).toBe('var(--size-reading)');
+    expect(style.lineHeight).toBe('1.72');
+    // A medida máxima (`DiaDesktop.dc.html:63`), que vale nas duas larguras.
+    expect(style.maxWidth).toBe('620px');
+  });
+
+  it('⚠️ paints NO box — no paper, no border, no radius, no side gutter', () => {
+    /*
+      A caixa vinha da TELA (`day-note.tsx` passava
+      `rounded-control border border-line bg-surface` por `className`), e o
+      recuo lateral vinha daqui (`padding: 1.5rem 1.5rem 7rem`). As duas somem:
+      a moldura porque o canvas não a desenha, o recuo porque a coluna de
+      leitura já dá os 20px e dois recuos estreitariam a medida.
+
+      ⚠️ **AS 7rem DE BAIXO FICAM, e agora elas pagam DUAS coisas:** o teclado
+      do celular e a barra de canetas de 62px ancorada acima dele. Sem elas a
+      última linha digitada nasce embaixo das duas.
+    */
+    const editor = mountEditor();
+    const style = getComputedStyle(editor);
+
+    expect(style.paddingLeft).toBe('0px');
+    expect(style.paddingRight).toBe('0px');
+    expect(style.paddingTop).toBe('0px');
+    expect(style.paddingBottom).toBe('7rem');
+    // O papel e a moldura nunca foram declarados AQUI; o que se guarda é que
+    // eles não voltem por este arquivo.
+    expect(style.borderRadius).toBe('');
+    expect(style.borderTopWidth).toBe('');
+    // `rgba(0, 0, 0, 0)` é o inicial do jsdom para `background-color`: nada foi
+    // declarado, que é a propriedade.
+    expect(style.backgroundColor).toBe('rgba(0, 0, 0, 0)');
+  });
+
+  it('grows the body above 1120px, at the SAME cut as the rest of the app', () => {
+    /*
+      ⚠️ **ASSERÇÃO FRACA, E DECLARADA COMO TAL:** ela lê o ARQUIVO, porque o
+      jsdom não aplica media query nenhuma. O que ela guarda é o que quebraria
+      em silêncio: o corte escrito com outro número (1119, 1200, o `xl` do
+      Tailwind, que é 1280) — aí o corpo do texto cresceria numa largura e a
+      coluna noutra, e nenhuma suíte veria.
+    */
+    const css = readFileSync(
+      resolve(process.cwd(), 'src', 'editor.css'),
+      'utf8',
+    );
+
+    expect(css).toContain('@media (min-width: 1120px)');
+    expect(css).toContain('font-size: 19px;');
+    expect(css).toContain('line-height: 1.75;');
+  });
+});
+
+/**
+ * ============================================================================
+ * ⚠️⚠️ A BARRA DE CANETAS PINTA — e até a auditoria da Tarefa 43 NADA media isso
+ * ============================================================================
+ *
+ * **O buraco, medido pelo revisor:** apagar a regra `.clube-editor-swatch`
+ * INTEIRA deixava `@clube/ui`, `@clube/app` e `@clube/shared` **verdes** — as
+ * cinco bolinhas parariam de pintar e a barra viraria **cinco alvos invisíveis**
+ * de 44px, com **1.812 testes** sem ver. Apagar só o anel de ouro tinha o mesmo
+ * efeito em escala menor: a caneta ligada perde qualquer sinal.
+ *
+ * **Por que nada pegava**, e é a lição da direção errada: o
+ * `highlight-palette.test.tsx` usa `.clube-editor-swatch` apenas como
+ * **seletor**, para achar o elemento e ler o `style` inline — ele prova que a
+ * COR CERTA chega ao DOM, nunca que alguma regra a pinta. E este arquivo, que é
+ * o único do pacote que sabe montar o CSS no jsdom e medir `getComputedStyle`,
+ * tinha três `it()` para o corpo de leitura e **zero** para a amostra.
+ *
+ * ⚠️ **O LIMITE HONESTO, o mesmo do resto do arquivo:** o jsdom resolve cascata,
+ * não `var()` — ele devolve a declaração literal. O que se guarda aqui é que a
+ * regra EXISTE e CASA o elemento que o componente monta; o valor de cada token
+ * é do `theme-tokens.test.ts`, do lado do app, sobre o CSS compilado.
+ */
+describe('the pen bar paints (task 43, audit A2)', () => {
+  it('⚠️ paints the swatch — without this rule the bar is five invisible targets', () => {
+    const swatch = mountPenBar();
+    const style = getComputedStyle(swatch);
+
+    // O fundo é a cor que a caneta APLICA, injetada por `--swatch` (a única
+    // exceção autorizada ao "sem CSS inline", §13).
+    expect(style.backgroundColor).toBe('var(--swatch)');
+    // E o filete de 1,5px do canvas (`Dia.dc.html:106`), em longhands: o
+    // atalho `border: 1.5px solid` reporia `border-color` para `currentColor`
+    // e apagaria o `--border-strong` da linha seguinte.
+    expect(style.borderWidth).toBe('1.5px');
+    expect(style.borderStyle).toBe('solid');
+    expect(style.borderColor).toBe('var(--border-strong)');
+  });
+
+  it('⚠️ rings the pen that is ON with the gold of the canvas', () => {
+    /*
+      `Dia.dc.html:106`: `box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px
+      var(--gold)`. Os dois anéis são um truque só — o primeiro abre um vão da
+      cor do papel entre a bolinha e o dourado.
+
+      ⚠️ **É O ÚNICO SINAL DE "esta é a cor de agora".** A caneta não acende o
+      fundo do botão (o `plain` do `ToolButton`), então sem esta regra quem
+      grifou de amarelo e quer trocar para verde não tem como saber o que está
+      ligado — e apertar a mesma caneta de novo, que é como se TIRA o grifo
+      desde que a borracha saiu, parece não fazer nada.
+    */
+    const swatch = mountPenBar();
+
+    // Desligada: nenhum anel.
+    expect(getComputedStyle(swatch).boxShadow).toBe('');
+
+    fireEvent.mouseDown(screen.getByLabelText('Caneta amarela'));
+
+    const ringed = getComputedStyle(
+      document.querySelector('[aria-pressed="true"] > [data-editor-pen]') ??
+        document.createElement('span'),
+    ).boxShadow;
+    expect(ringed).toContain('var(--gold)');
+    expect(ringed).toContain('var(--surface)');
+  });
+});
+
+/**
+ * ============================================================================
+ * ⚠️ A SETA DE 12×7 DO MENU DE BOLHA — outro sobrevivente da auditoria
+ * ============================================================================
+ *
+ * `Dia.dc.html:73`: um quadrado girado 45° com duas bordas, subido 4px para
+ * encostar no papel. Apagar `.clube-editor-arrow` do `editor.css` passava por
+ * toda a suíte — o menu de bolha ficaria flutuando sem apontar para a palavra
+ * selecionada.
+ *
+ * ⚠️ **ELE NÃO PODE SER MEDIDO NO DOM QUE O EDITOR PRODUZ, e o motivo é o
+ * mesmo já medido para a lista de controles:** o `BubbleMenuView` do TipTap
+ * chama `element.remove()` no construtor, e o tippy só reanexa o elemento ao
+ * `body` quando MOSTRA — o que depende de layout, e o jsdom não tem. A seta
+ * vive dentro desse elemento destacado, então `document.querySelector` não a
+ * alcança.
+ *
+ * Daí as DUAS metades, e nenhuma delas sozinha fecha o buraco:
+ *
+ * 1. a REGRA pinta — medida num elemento-sonda com a classe, que é o que este
+ *    arquivo sabe fazer (montar o CSS e ler `getComputedStyle`);
+ * 2. o COMPONENTE usa a classe — lida do fonte, porque o DOM não a entrega.
+ *
+ * Só a primeira deixaria apagar o `<span>` do JSX; só a segunda deixaria
+ * apagar a regra.
+ */
+describe('the arrow of the bubble menu (task 43, audit survivor)', () => {
+  it('⚠️ paints the 12×7 square the canvas rotates', () => {
+    const probe = document.createElement('span');
+    probe.className = 'clube-editor-arrow';
+    document.body.append(probe);
+
+    const style = getComputedStyle(probe);
+    expect(style.width).toBe('12px');
+    expect(style.height).toBe('7px');
+    expect(style.transform).toBe('rotate(45deg)');
+    // O -4px é o que faz a costura entre a seta e o papel sumir.
+    expect(style.marginTop).toBe('-4px');
+
+    probe.remove();
+  });
+
+  it('⚠️ is rendered by the editor — the rule needs a consumer', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src', 'components', 'RichEditor.tsx'),
+      'utf8',
+    )
+      .replace(/\/\*[\s\S]*?\*\//gu, ' ')
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('//'))
+      .join('\n');
+
+    expect(source).toContain('className="clube-editor-arrow"');
   });
 });

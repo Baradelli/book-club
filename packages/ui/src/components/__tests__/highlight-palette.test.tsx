@@ -32,6 +32,19 @@ import { RichEditor } from '../RichEditor';
  * espelho de `shared` faz. Aqui a lista é **pinada**, e o docblock aponta para
  * o espelho: os dois juntos fecham as duas direções.
  *
+ * ⚠️ **NA TAREFA 43 AS CINCO AMOSTRAS MUDARAM DE LUGAR E DE NOME, e o pino
+ * acompanhou.** Elas saíram da barra fixa do topo — que morreu (decisão A) —
+ * para a BARRA DE CANETAS do rodapé, e por isso todo render aqui passa a pedir
+ * `penBar="fixed"`: sem a barra não há amostra nenhuma, e o teste falharia por
+ * ausência em vez de por cor. Os rótulos viraram `Caneta …`, que é como o
+ * canvas os nomeia (`Dia.dc.html:105,108,111,114,117`).
+ *
+ * ⚠️ **O QUE NÃO MUDOU É O QUE ESTE ARQUIVO GUARDA: os cinco `rgba`.** Eles são
+ * o que entra no `doc`, e o canvas NÃO manda neles — ele manda em como o grifo
+ * é PINTADO (os tokens `--pen-*`, que o `GrifoText` usa para a entidade
+ * `Highlight`). Pintar a amostra com `--pen-a` teria apagado este acusador e
+ * feito a bolinha mostrar uma cor que a caneta não aplica.
+ *
  * ⚠️ **E A LEITURA É DO DOM, NÃO DO ARQUIVO-FONTE.** `HIGHLIGHT_COLORS` do
  * `RichEditor` é constante de módulo e **não é exportada** (`docs/EDITOR.md`
  * §6) — mas ela chega ao DOM: cada amostra é um `<span>` com a cor numa
@@ -59,11 +72,11 @@ function aDoc(text = 'o trecho grifado'): Record<string, unknown> {
  * asserção auto-ajustável do §7.8 — os dois lados mudariam juntos.
  */
 const EXPECTED_PALETTE = [
-  ['Grifo amarelo', 'rgba(250, 204, 21, 0.40)'],
-  ['Grifo verde', 'rgba(34, 197, 94, 0.35)'],
-  ['Grifo laranja', 'rgba(249, 115, 22, 0.40)'],
-  ['Grifo azul', 'rgba(59, 130, 246, 0.35)'],
-  ['Grifo rosa', 'rgba(236, 72, 153, 0.35)'],
+  ['Caneta amarela', 'rgba(250, 204, 21, 0.40)'],
+  ['Caneta verde', 'rgba(34, 197, 94, 0.35)'],
+  ['Caneta laranja', 'rgba(249, 115, 22, 0.40)'],
+  ['Caneta azul', 'rgba(59, 130, 246, 0.35)'],
+  ['Caneta rosa', 'rgba(236, 72, 153, 0.35)'],
 ] as const;
 
 /** A cor que a amostra daquele botão realmente pinta. */
@@ -78,7 +91,9 @@ function swatchColorOf(label: string): string {
 
 describe('⚠️ the highlight palette of the editor (ADR 0004, task 25 decision G)', () => {
   it.each(EXPECTED_PALETTE)('paints %s with %s', (label, color) => {
-    render(<RichEditor doc={aDoc()} onChange={() => undefined} />);
+    render(
+      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="fixed" />,
+    );
 
     expect(swatchColorOf(label)).toBe(color);
   });
@@ -92,7 +107,9 @@ describe('⚠️ the highlight palette of the editor (ADR 0004, task 25 decision
       sexta cor não acusaria nada, e a tela de grifos (que enumera a paleta de
       `shared`) ficaria com uma cor a menos que a barra do editor.
     */
-    render(<RichEditor doc={aDoc()} onChange={() => undefined} />);
+    render(
+      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="fixed" />,
+    );
 
     const swatches = Array.from(
       document.querySelectorAll<HTMLElement>('.clube-editor-swatch'),
@@ -119,7 +136,9 @@ describe('⚠️ the highlight palette of the editor (ADR 0004, task 25 decision
       auditoria a nomeou. Agora ela renderiza, lê as cinco amostras e aplica o
       regex sobre o que o componente de fato pinta.
     */
-    render(<RichEditor doc={aDoc()} onChange={() => undefined} />);
+    render(
+      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="fixed" />,
+    );
 
     const painted = Array.from(
       document.querySelectorAll<HTMLElement>('.clube-editor-swatch'),

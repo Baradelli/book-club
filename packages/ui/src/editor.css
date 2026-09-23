@@ -25,7 +25,7 @@
 
   1. NENHUM VALOR DE COR POR TEMA. A Tarefa 13 não tem classe `dark`: os tokens
      usam `light-dark()` resolvido pelo `color-scheme`, então aqui só se escreve
-     `var(--clube-*)` e o token já sabe o tema sozinho. Um bloco de cor escura
+     `var(--token)` e o token já sabe o tema sozinho. Um bloco de cor escura
      escrito à mão aqui seria uma segunda paleta a sair de sincronia.
 
   2. `color-scheme` NÃO SE DECLARA AQUI. Ele resolve o `light-dark()` no ponto
@@ -45,21 +45,72 @@
     aberto o editor fica mais alto que a área visível. O resto do app já usa
     `dvh` pelo mesmo motivo.
 
-    E as `7rem` de padding embaixo são o espaço do TECLADO: sem elas a última
-    linha digitada nasce debaixo dele, e quem escreve não vê o que escreveu.
+    E as `7rem` de padding embaixo são o espaço do TECLADO **e da barra de
+    canetas** (62px): sem elas a última linha digitada nasce debaixo dos dois, e
+    quem escreve não vê o que escreveu.
+
+    ⚠️ **O RECUO LATERAL MORREU NA TAREFA 43 (decisão B).** Ele era
+    `1.5rem 1.5rem 7rem` e existia porque o editor tinha CAIXA — borda, fundo e
+    raio que a tela passava por `className`. O canvas põe o texto direto no
+    papel da página (`Dia.dc.html:59`: nenhum `background`, nenhuma `border`,
+    nenhum `border-radius` no bloco do corpo), e a coluna de leitura já dá os
+    20px de recuo. Mantê-lo somaria dois recuos e estreitaria a medida.
   */
   min-height: 60dvh;
-  padding: 1.5rem 1.5rem 7rem;
-  color: var(--clube-fg);
-  /* Leitura longa: 1.7 é o entrelinha que uma anotação de meia hora pede. */
-  line-height: 1.7;
+  padding: 0 0 7rem;
+  color: var(--text);
+  /*
+    ============================================================================
+    A SERIFA DE LEITURA (decisão C da Tarefa 43)
+    ============================================================================
+
+    `Dia.dc.html:59` — Fraunces, **17,5px/1,72** no celular; e
+    `DiaDesktop.dc.html:63` — **19px/1,75**, com `max-width:620px`.
+
+    ⚠️ **O `1.7` QUE ESTAVA AQUI NÃO ERA MEDIDO** (Tarefa 14: *"1.7 é o
+    entrelinha que uma anotação de meia hora pede"*). Agora os dois números
+    saem do canvas.
+
+    ⚠️ **DIVERGÊNCIA DE ESCALA, DECLARADA — e ela é MEIA, não inteira.** A spec
+    da Tarefa 43 diz que *"17,5 e 19 não estão na escala de sete degraus"*.
+    Medido no `theme.css`: **17,5px É o degrau `--size-reading`**, nascido na
+    Tarefa 39 com este comentário ao lado — *"Fraunces: a coluna de leitura
+    (§A.6 diz 17,5px/1,72 no celular)"*. Quem não existe é o **19px**, e ele
+    fica escrito aqui como literal em vez de virar o oitavo degrau: cada degrau
+    novo entra também na lista fechada de isenções ao `light-dark()`
+    (`theme-css.test.ts`), e um tamanho que só o corpo do editor usa não paga
+    esse preço. É a mesma decisão, e o mesmo registro, dos arredondamentos que
+    a Tarefa 41a deixou abertos.
+  */
+  font-family: var(--family-reading);
+  font-size: var(--size-reading);
+  line-height: 1.72;
+  /*
+    A MEDIDA MÁXIMA (`DiaDesktop.dc.html:63`: `max-width:620px`). Ela vale nas
+    duas larguras: num celular de 360px a coluna já é mais estreita que isso, e
+    num tablet de 800px sem o corte de 1120px ela é o que impede a linha de
+    virar um parágrafo de jornal.
+  */
+  max-width: 620px;
   overflow-wrap: break-word;
+}
+
+/*
+  Acima de 1120px o corpo cresce (`DiaDesktop.dc.html:63`). É a MESMA media
+  query do `ReadingColumn` e da barra de canetas — o corte do MVP 3.5 mora num
+  número só.
+*/
+@media (min-width: 1120px) {
+  .ProseMirror {
+    font-size: 19px;
+    line-height: 1.75;
+  }
 }
 
 /* O placeholder que a extensão `Placeholder` pendura no primeiro parágrafo. */
 .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
-  color: var(--clube-fg-subtle);
+  color: var(--text-subtle);
   float: left;
   height: 0;
   pointer-events: none;
@@ -134,15 +185,15 @@
 }
 
 .ProseMirror blockquote {
-  border-left: 3px solid var(--clube-border-strong);
+  border-left: 3px solid var(--border-strong);
   padding-left: 1rem;
-  color: var(--clube-fg-muted);
+  color: var(--text-muted);
   font-style: italic;
 }
 
 .ProseMirror code {
-  background-color: var(--clube-surface-raised);
-  border: 1px solid var(--clube-border);
+  background-color: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 0.3rem;
   padding: 0.1em 0.3em;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -150,9 +201,9 @@
 }
 
 .ProseMirror pre {
-  background-color: var(--clube-surface-raised);
-  border: 1px solid var(--clube-border);
-  border-radius: var(--clube-radius);
+  background-color: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
   padding: 0.9rem 1rem;
   overflow-x: auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -170,12 +221,12 @@
 
 .ProseMirror hr {
   border: none;
-  border-top: 1px solid var(--clube-border);
+  border-top: 1px solid var(--border);
   margin: 1.5rem 0;
 }
 
 .ProseMirror a {
-  color: var(--clube-accent);
+  color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -200,12 +251,12 @@
 .ProseMirror img {
   max-width: 100%;
   height: auto;
-  border-radius: var(--clube-radius);
+  border-radius: var(--r-2);
   display: block;
 }
 
 .ProseMirror img.ProseMirror-selectednode {
-  outline: 2px solid var(--clube-accent);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -249,7 +300,7 @@
 
 .ProseMirror th,
 .ProseMirror td {
-  border: 1px solid var(--clube-border);
+  border: 1px solid var(--border);
   padding: 0.5rem 0.65rem;
   vertical-align: top;
   text-align: left;
@@ -262,7 +313,7 @@
     `.ProseMirror` é posicionado — então o ancestral posicionado mais próximo
     acabava sendo o container do editor (que é `relative`, por causa da pílula
     de upload). Selecionar uma célula pintava a anotação toda de
-    `--clube-accent-soft`.
+    `--accent-soft`.
 
     É o que o `tables.css` do `prosemirror-tables` faz e o `editor.css`
     esqueceu.
@@ -271,7 +322,7 @@
 }
 
 .ProseMirror th {
-  background-color: var(--clube-surface-raised);
+  background-color: var(--surface-2);
   font-weight: 600;
 }
 
@@ -279,7 +330,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background-color: var(--clube-accent-soft);
+  background-color: var(--accent-soft);
   pointer-events: none;
 }
 
@@ -305,10 +356,10 @@
   do `div` intermediário que o node view cria.
 */
 .ProseMirror div[data-type='details'] {
-  border: 1px solid var(--clube-border);
-  border-radius: var(--clube-radius);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
   padding: 0.65rem 0.9rem;
-  background-color: var(--clube-surface);
+  background-color: var(--surface);
 }
 
 .ProseMirror div[data-type='details'] summary {
@@ -325,21 +376,21 @@
 .ProseMirror div[data-type='details'] > button {
   background: none;
   border: none;
-  color: var(--clube-fg-muted);
+  color: var(--text-muted);
   cursor: pointer;
   padding: 0 0.35rem 0 0;
 }
 
 /*
   O nó "Aviso" (`callout.ts`) — um bloco de destaque, não um bloco de erro: a
-  cor é a de ação, nunca `--clube-danger`. O princípio anti-culpa do
+  cor é a de ação, nunca `--danger`. O princípio anti-culpa do
   `docs/plano-clube-do-livro.md` §1 vale aqui: vermelho é erro de formulário e
   ação destrutiva, e nada mais.
 */
 .ProseMirror div[data-type='callout'] {
-  border-left: 3px solid var(--clube-accent);
-  background-color: var(--clube-accent-soft);
-  border-radius: var(--clube-radius);
+  border-left: 3px solid var(--accent);
+  background-color: var(--accent-soft);
+  border-radius: var(--r-2);
   padding: 0.75rem 1rem;
 }
 
@@ -349,8 +400,8 @@
 
 /* A menção `@` e o wikilink `[[`: os dois marcam o HTML com esta classe. */
 .note-link {
-  color: var(--clube-accent);
-  background-color: var(--clube-accent-soft);
+  color: var(--accent);
+  background-color: var(--accent-soft);
   border-radius: 0.3rem;
   padding: 0.05em 0.25em;
   cursor: pointer;
@@ -362,43 +413,72 @@
    ========================================================================== */
 
 /*
-  A barra fixa (§4.1). O `sticky top-0` e o `z` vêm de utilitário do Tailwind no
-  componente; aqui ficam as três coisas que utilitário não expressa: o fundo
-  translúcido, o desfoque e a borda de baixo.
+  ⚠️ **A BARRA FIXA DO TOPO MORREU NA TAREFA 43 (decisão A).** As regras que
+  estavam aqui — ~~`.clube-editor-bar`~~ (fundo `color-mix` sobre `--bg`,
+  `border-bottom`, `backdrop-filter: blur(12px)`) e ~~`.no-scrollbar`~~ (a barra
+  que rolava de lado quando não cabia) — saíram junto com ela.
 
-  O fundo é `color-mix()` sobre `--clube-bg` porque a barra flutua sobre o
-  texto: opaca ela pareceria outro elemento, e transparente as letras passariam
-  por baixo dos ícones.
+  Elas ficam RISCADAS em prosa em vez de apagadas sem registro porque o desfoque
+  era uma peça pensada: a barra flutuava sobre o texto, e opaca ela pareceria
+  outro elemento. Nada disso tem sucessor — o que flutua agora é o menu de bolha
+  (que tem papel próprio) e o que fica fixo é a barra de CANETAS, que é uma
+  faixa opaca no rodapé e não cobre linha nenhuma.
 */
-.clube-editor-bar {
-  background-color: color-mix(in srgb, var(--clube-bg) 80%, transparent);
-  border-bottom: 1px solid var(--clube-border);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-/* A barra rola de lado quando não cabe, e a barra de rolagem não aparece. */
-.no-scrollbar {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
 
 /*
   O que FLUTUA: o bubble menu da seleção, o menu `/` e a lista de menções.
 
-  A sombra é a `--clube-shadow-popover`, que desce. A do sheet sobe (`-10px`,
+  A sombra é a `--shadow-popover`, que desce. A do sheet sobe (`-14px`,
   porque o sheet entra por baixo da tela) e num popup sobre a palavra
   selecionada ela pareceria colada no texto de cima.
+
+  ⚠️ **O PAPEL E O RAIO VIERAM DO CANVAS NA TAREFA 43** (`Dia.dc.html:64`:
+  `background:var(--surface); border:1px solid var(--border); border-radius:5px`).
+  Eram ~~`--surface-2`~~ e ~~`--r-2` (3px)~~, escolhidos antes de haver canvas.
+  Os 5px não existem na escala fechada de cinco raios e o mais próximo é
+  `--r-3` (4px) — **divergência de 1px, declarada**, a mesma que o `GrifoText`
+  registra para o `rounded-mark`.
+
+  ⚠️ E isto vale para os TRÊS popups, não só para o menu de bolha: o canvas não
+  desenha o menu `/` nem a lista de menções em artboard nenhum, e dar a eles um
+  segundo papel seria inventar duas superfícies em vez de uma.
 */
 .clube-editor-popover {
-  background-color: var(--clube-surface-raised);
-  border: 1px solid var(--clube-border);
-  border-radius: var(--clube-radius);
-  box-shadow: var(--clube-shadow-popover);
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-3);
+  box-shadow: var(--shadow-popover);
+}
+
+/*
+  A FILEIRA DE 44×44 COM SEPARADORES (`Dia.dc.html:65-70`): cada botão tem
+  `border-right: 1px solid var(--border-soft)`, menos o último — e no canvas
+  quem não tem é a `:71`, o botão "Mais opções" que esta fatia NÃO implementou
+  (divergência declarada em `RichEditor.tsx`).
+
+  O seletor é `:not(:last-child)` e não `+ button` porque é o que sobrevive a
+  um botão a mais ou a menos na lista — e a lista é compartilhada entre o menu
+  de bolha e o `Aa` (decisão E).
+*/
+.clube-editor-row > button:not(:last-child) {
+  border-right: 1px solid var(--border-soft);
+}
+
+/*
+  A SETA DE 12×7 que aponta para a palavra selecionada (`Dia.dc.html:73`).
+
+  É um quadrado girado 45° com duas bordas — o truque clássico —, subido 4px
+  para encostar no papel e esconder a costura. O `overflow:hidden` da fileira é
+  o que corta a metade de cima do quadrado.
+*/
+.clube-editor-arrow {
+  width: 12px;
+  height: 7px;
+  margin-top: -4px;
+  background-color: var(--surface);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  transform: rotate(45deg);
 }
 
 /*
@@ -409,19 +489,42 @@
   código-fonte). O escape é a variável CSS: o componente escreve
   `style={{ '--swatch': cor }}` e esta regra a consome. É o padrão do projeto
   para valor que só o runtime conhece.
+
+  ⚠️ **A BORDA CAIU DE 2px PARA 1,5px NA TAREFA 43** (`Dia.dc.html:106`:
+  `border:1.5px solid var(--pen-a-dot)`). A COR do filete continua
+  `--border-strong` e não o `--pen-*-dot` do canvas, pelo mesmo motivo que o
+  fundo continua `--swatch`: dentro do editor o grifo carrega o `rgba` no
+  próprio documento, e uma bolinha pintada com o token de caneta mostraria uma
+  cor que a caneta não aplica. Divergência declarada, em `RichEditor.tsx`.
 */
 .clube-editor-swatch {
   background-color: var(--swatch);
-  border: 2px solid var(--clube-border-strong);
+  border-width: 1.5px;
+  border-style: solid;
+  border-color: var(--border-strong);
 }
 
 /*
-  A amostra ATIVA ganha contorno de texto. O seletor é o do PAI porque quem
-  carrega o estado é o botão (`aria-pressed`), e a bolinha é um `<span>`
-  decorativo dentro dele: o alvo de toque tem de ter 36px, e a amostra, 20px.
+  A CANETA LIGADA GANHA O ANEL DE OURO DO CANVAS (`Dia.dc.html:106`:
+  `box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--gold)`) — eram
+  ~~`border-color: var(--text)`~~ até a Tarefa 43.
+
+  Os dois anéis são um só truque: o primeiro abre um vão da cor do papel entre
+  a bolinha e o dourado, senão o filete de ouro encosta na cor e as duas se
+  misturam.
+
+  ⚠️ `--gold` aqui é TRAÇO, não texto — a guarda de primeiro uso da Tarefa 41b
+  (`refuses the FIRST USE of text-gold`) proíbe o dourado como TINTA DE LETRA,
+  onde ele dá 4,16:1. Como filete o piso é 3:1, e ele passa.
+
+  O seletor é o do PAI porque quem carrega o estado é o botão (`aria-pressed`),
+  e a bolinha é um `<span>` decorativo dentro dele: o alvo de toque tem 44px, e
+  a amostra 22px (20px acima de 1120px).
 */
 [aria-pressed='true'] > .clube-editor-swatch {
-  border-color: var(--clube-fg);
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 3.5px var(--gold);
 }
 
 /*
@@ -430,14 +533,14 @@
   montagem, não de estilo.
 */
 .clube-editor-pill {
-  background-color: var(--clube-surface-raised);
-  border: 1px solid var(--clube-border);
+  background-color: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  box-shadow: var(--clube-shadow-popover);
-  color: var(--clube-fg-muted);
+  box-shadow: var(--shadow-popover);
+  color: var(--text-muted);
 }
 
 .clube-editor-pill[data-state='error'] {
-  color: var(--clube-danger);
-  border-color: var(--clube-danger);
+  color: var(--danger);
+  border-color: var(--danger);
 }

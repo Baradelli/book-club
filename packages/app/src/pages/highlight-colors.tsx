@@ -1,5 +1,5 @@
 import { HIGHLIGHT_COLORS, type HighlightColor } from '@clube/shared';
-import { cx } from '@clube/ui';
+import { cx, type PenKey } from '@clube/ui';
 import type { CSSProperties } from 'react';
 
 import type { MessageKey } from './form-errors';
@@ -118,3 +118,60 @@ export function ColorSwatch({ className, color }: ColorSwatchProps) {
     />
   );
 }
+
+/**
+ * ============================================================================
+ * hex → CANETA do canvas (Tarefa 43, e a decisão fechada do MVP 3.5)
+ * ============================================================================
+ *
+ * ⚠️ **ELE MORA AQUI POR DECISÃO ESCRITA**, e não por conveniência: o
+ * `docs/BACKLOG.md` diz, nas decisões fechadas do MVP 3.5, que *"a tradução
+ * hex→token mora em `highlight-colors.tsx`, ao lado da hex→chave de i18n que já
+ * existe ali"*. São as duas traduções do MESMO dado, e separá-las seria dar
+ * dois donos a uma coisa só.
+ *
+ * ⚠️ **OS CINCO HEXES NÃO MUDAM, E É POR ISSO QUE ESTE MAPA EXISTE.**
+ * `Highlight.color` é coluna do banco, filtro de rota (`?color=%23facc15`) e
+ * índice (`@@index([bookId, color])`). O canvas define como o grifo é
+ * **pintado** — os tokens `--pen-a`…`--pen-r`, que o `GrifoText` consome —,
+ * jamais o que é **guardado**.
+ *
+ * ⚠️ **E O `Record<HighlightColor, PenKey>` AMARRA AS DUAS PONTAS NO
+ * COMPILADOR**, exatamente como o `COLOR_LABEL_KEYS` acima: uma cor nova na
+ * paleta de `shared` deixa o mapa incompleto e reprova no `tsc`, em vez de
+ * aparecer na tela como um trecho sem marca nenhuma — que é o defeito que
+ * ninguém vê olhando.
+ *
+ * A ordem é a de `HIGHLIGHT_COLORS` (amarelo, verde, laranja, azul, rosa), a
+ * mesma de `PEN_KEYS` em `@clube/ui`.
+ */
+export const COLOR_PEN_KEYS: Readonly<Record<HighlightColor, PenKey>> = {
+  '#facc15': 'a',
+  '#22c55e': 'v',
+  '#f97316': 'l',
+  '#3b82f6': 'z',
+  '#ec4899': 'r',
+};
+
+/**
+ * caneta → CLASSE DA BOLINHA, e o mapa é **literal** (decisão C da Tarefa 41b).
+ *
+ * ⚠️ Montá-lo em runtime (`\`bg-pen-${key}-dot\``) compila em TypeScript, roda,
+ * e põe a classe certa no DOM — todo teste de render fica verde. O que ele
+ * **não** faz é gerar CSS: o Tailwind emite o CSS das classes que encontra
+ * **escritas** no código-fonte. O sintoma é uma bolinha sem cor nenhuma, na
+ * tela, em produção — medido na Tarefa 41b, onde o mesmo atalho apagou dez
+ * seletores do CSS compilado sem um vermelho.
+ *
+ * ⚠️ **É O `-dot` E NÃO O `--pen-x`**: o par de cada caneta é o papel grifado
+ * (`--pen-a`, que o `GrifoText` usa de fundo) e a bolinha/filete
+ * (`--pen-a-dot`). O canvas usa o segundo aqui (`DiaDesktop.dc.html:117`:
+ * `background:#c89a44`, que é o `--pen-a-dot` no claro).
+ */
+export const PEN_DOT_CLASS: Readonly<Record<PenKey, string>> = {
+  a: 'bg-pen-a-dot',
+  v: 'bg-pen-v-dot',
+  l: 'bg-pen-l-dot',
+  z: 'bg-pen-z-dot',
+  r: 'bg-pen-r-dot',
+};

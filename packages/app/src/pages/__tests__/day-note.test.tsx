@@ -1,4 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import type {
+  HighlightResponse,
   NoteDocBody,
   NoteResponse,
   PlanItemResponse,
@@ -16,7 +20,7 @@ import {
   type PendingNoteStore,
 } from '../../offline/store';
 import { dayNotePath } from '../day-note';
-import { expectNoGuilt } from './anti-guilt-dom';
+import { expectNoGuilt, stripComments } from './anti-guilt-dom';
 import {
   aPlanItem,
   memoryStorage,
@@ -126,22 +130,37 @@ vi.mock('@clube/ui/editor', async () => {
   let typed = '';
 
   function FakeRichEditor({
+    className,
     doc,
     editable = true,
     onChange,
+    penBar = 'none',
     placeholder,
+    slashHintLabel,
   }: {
     doc?: Record<string, unknown>;
     editable?: boolean;
     onChange: (doc: Record<string, unknown>) => void;
+    penBar?: string;
     placeholder?: string;
+    slashHintLabel?: string;
     className?: string;
     uploadingLabel?: string;
     uploadFailedLabel?: string;
   }) {
+    /*
+      ⚠️ **O DUBLÊ EXPÕE O QUE A TELA DECIDE, e a Tarefa 43 acrescentou três
+      coisas a essa lista.** O `penBar` e o `slashHintLabel` são o contrato novo
+      (decisões D e F), e o `className` é o que a decisão B MATOU — a caixa do
+      editor. Sem o atributo, "a tela deixou de passar a moldura" não é
+      observável em teste nenhum: o dublê renderiza igual com ela e sem ela.
+    */
     return (
       <div
+        data-class={className ?? ''}
         data-editable={String(editable)}
+        data-pen-bar={penBar}
+        data-slash-hint={slashHintLabel ?? ''}
         data-testid={editable ? 'editor' : 'reader'}
       >
         <p data-testid={editable ? 'editor-text' : 'reader-text'}>
@@ -203,6 +222,15 @@ const SESSION: Record<string, string> = {
 const BOOK_ID = 'b-hobbit';
 const CLUB_ID = 'c-casal';
 const DAY_ID = 'p-hoje';
+/**
+ * ⚠️ **O CLUBE QUE NÃO É O ATIVO — o fixture hostil do corte de tenant.**
+ *
+ * O clube ativo do cabeçalho é o `CASAL` (`c-casal`). Um livro de OUTRO
+ * clube é o caso que o `CLAUDE.md` nomeia ("o dono do livro é quem manda") e
+ * o único em que "clube do livro" e "clube ativo" dão respostas diferentes —
+ * sem ele, a asserção da URL é verdadeira para as duas origens.
+ */
+const OTHER_CLUB_ID = 'c-outro';
 const OTHER_DAY_ID = 'p-ontem';
 /** O tema que o admin cadastrou — é ele que vira o título da tela (regra 1). */
 const THEME = 'Cap. 3 — A promessa';
@@ -216,6 +244,36 @@ function aDoc(text: string): NoteDocBody {
   return {
     type: 'doc',
     content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+  };
+}
+
+/**
+ * O GRIFO DAQUELA LEITURA (Tarefa 43, decisão I).
+ *
+ * ⚠️ `planItemId` é o campo que a Tarefa 38i acrescentou, e é ele que torna
+ * *"Grifos desta leitura"* possível: sem ele a margem mostraria o acervo
+ * inteiro do livro ao lado do trecho de hoje.
+ */
+function aHighlight(
+  overrides: Partial<HighlightResponse> = {},
+): HighlightResponse {
+  return {
+    id: 'h-maria',
+    clubId: CLUB_ID,
+    bookId: BOOK_ID,
+    userId: MARIA,
+    planItemId: DAY_ID,
+    quote: 'encaixar-se é o oposto de pertencer',
+    color: '#facc15',
+    page: 167,
+    reference: null,
+    commentDoc: null,
+    commentText: '',
+    status: 'ACTIVE',
+    archivedAt: null,
+    createdAt: '2026-09-04T10:00:00.000Z',
+    updatedAt: '2026-09-04T10:00:00.000Z',
+    ...overrides,
   };
 }
 
@@ -263,13 +321,16 @@ function plan(): PlanItemResponse[] {
   ];
 }
 
-function bookReply(planItems: readonly PlanItemResponse[] = plan()): Reply {
+function bookReply(
+  planItems: readonly PlanItemResponse[] = plan(),
+  clubId: string = CLUB_ID,
+): Reply {
   return {
     status: 200,
     body: {
       book: {
         id: BOOK_ID,
-        clubId: CLUB_ID,
+        clubId,
         title: 'O Hobbit',
         author: 'J. R. R. Tolkien',
         month: '2026-09',
@@ -294,6 +355,25 @@ interface DaySetup {
   /** A resposta do `PUT /plan-items/:planItemId/note`, ou uma por chamada. */
   put?: Reply | Responder;
   me?: Reply;
+  /**
+   * `GET /clubs/:clubId/members` (Tarefa 26a) — quem é o clube, pelo nome.
+   *
+   * ⚠️ **O PADRÃO É FALHAR (500), e é o fiel** (§7.1): até a Tarefa 42 esta
+   * tela não pedia os membros, então o estado em que os 60 testes anteriores
+   * foram escritos é "a tela não conhece as pessoas" — o genérico. Um padrão
+   * que já viesse com nomes mudaria o assunto de todos eles de uma vez.
+   */
+  members?: Reply;
+  /**
+   * `GET /clubs/:clubId/highlights?bookId=…` (Tarefa 43, decisão I).
+   *
+   * ⚠️ **O PADRÃO É FALHAR (500), e é o fiel** (§7.1), pelo mesmo argumento
+   * do `members`: até esta fatia a tela não pedia os grifos, então o estado em
+   * que as dezenas de testes anteriores foram escritos é "a margem não tem
+   * grifo nenhum". Um padrão que já viesse cheio mudaria o assunto de todos
+   * eles de uma vez — e a falha degrada em silêncio, como a dos nomes.
+   */
+  highlights?: Reply;
   /** A store da fila offline (Tarefa 21). Sem ela, o app age como na 18. */
   store?: PendingNoteStore;
 }
@@ -304,17 +384,38 @@ interface DaySetup {
  * ⚠️ A ORDEM importa: `/notes` vem antes de `/books/` porque a listagem mora em
  * `/clubs/:clubId/notes`, e `/plan-items/` vem antes de tudo o mais para o
  * `PUT` nunca cair noutro ramo.
+ *
+ * ⚠️ **E `/members` VEM ANTES DE `/me`, ou ele nunca é servido** — medido, e é
+ * uma armadilha de substring de verdade: `replyByUrl` casa por `includes`, e
+ * `'/clubs/c-casal/members'.includes('/me')` é **`true`** (o `/me` de
+ * `/members`). Com a ordem invertida, o pedido de membros recebe o corpo do
+ * `/me`, que não passa no `clubMembersResponseSchema` — ou seja, o teste do
+ * caminho FELIZ estaria medindo o caminho da FALHA, e verde.
  */
 function dayResponder(setup: DaySetup): Responder {
   return replyByUrl(
     [
       ['/auth/refresh', { status: 200, body: { token: 'token-renovado' } }],
+      [
+        '/members',
+        setup.members ?? {
+          status: 500,
+          body: { error: 'Internal Server Error' },
+        },
+      ],
       ['/me', setup.me ?? meReply({ clubs: [CASAL] })],
       [
         '/plan-items/',
         setup.put ?? {
           status: 200,
           body: aNote({ id: 'n-marcos', userId: MARCOS }),
+        },
+      ],
+      [
+        '/highlights',
+        setup.highlights ?? {
+          status: 500,
+          body: { error: 'Internal Server Error' },
         },
       ],
       ['/notes', setup.notes ?? { status: 200, body: [] }],
@@ -531,6 +632,17 @@ describe('the day note when the address points at nothing (rules 4, 5)', () => {
       replyByUrl(
         [
           ['/auth/refresh', { status: 200, body: { token: 't' } }],
+          /*
+            ⚠️ **`/members` ANTES de `/me`, também aqui** — este responder é o
+            SEGUNDO deste arquivo, e a auditoria da Tarefa 42 o pegou sem a
+            linha. Benigno neste teste (ele não fala de nomes), mas a armadilha
+            é de substring e é silenciosa: `replyByUrl` casa por `includes`, e
+            `'/clubs/c-casal/members'.includes('/me')` é **`true`**. Uma nota de
+            reconciliação que declara a classe fechada com metade dos
+            responders arrumados é exatamente a "correção incompleta" que este
+            bloco já pagou quatro vezes.
+          */
+          ['/members', { status: 200, body: [] }],
           ['/me', meReply({ clubs: [CASAL] })],
           ['/notes', { status: 200, body: [] }],
           [
@@ -720,8 +832,25 @@ describe('the autosave waits 1500 ms of silence, and RESTARTS (rules 8, 9, 11)',
     expect(saveStatusText()).toBe(pt.pages.dayNote.save.saved);
 
     await advance(1);
-    // `saved` é um recado, não um estado permanente.
-    expect(saveStatusText()).toBe('');
+    /*
+      `saved` continua sendo um RECADO e não um estado permanente — e é essa a
+      propriedade, que não mudou: passados os 2000 ms ele dá lugar a outra
+      coisa.
+
+      ⚠️ **O QUE MUDOU NA TAREFA 43 É O QUE VEM DEPOIS DELE** (decisão H).
+      Esta linha era `toBe('')`: a nota de margem voltava ao vazio. O canvas
+      desenha "Salvo 21:04" ali enquanto a pessoa escreve (`Dia.dc.html:56`), e
+      a chave `pages.dayNote.save.savedAt` existia desde a Tarefa 40 sem
+      consumidor, com o catálogo dizendo por escrito que ela é *"o irmão do
+      `saved`: o estado que FICA"*.
+
+      ⚠️ **Os 2000 ms, o `SaveStatus` e o debounce NÃO mudaram** — o acusador
+      disso é o bloco *task 43 changes how the save LOOKS, never how it works*.
+      A asserção aqui continua medindo a TRANSIÇÃO, e por isso ela segue sendo
+      "deixou de dizer `saved`".
+    */
+    expect(saveStatusText()).not.toBe(pt.pages.dayNote.save.saved);
+    expect(saveStatusText()).toContain('Salvo ');
     expectNoGuilt();
   });
 });
@@ -1004,6 +1133,164 @@ describe('what the club wrote about the same day (rules 15, 16, 17, 18, 20)', ()
     expect(screen.queryAllByTestId('reader')).toHaveLength(0);
     expect(readableText()).not.toContain('ningu');
     expectNoGuilt();
+  });
+});
+
+/**
+ * ⚠️⚠️ **O NOME DE QUEM ESCREVEU — a decisão E da Tarefa 42, e ela é a metade
+ * do §A.5.9 do `docs/new-ui.md` que continuava de pé.**
+ *
+ * Esta tela dizia "Alguém do clube" desde a Tarefa 18, com um comentário no
+ * catálogo afirmando que *"nenhuma rota lista os membros do clube"*.
+ * **`GET /clubs/:clubId/members` existe desde a Tarefa 26a**, e **seis** telas
+ * já o usam pelo mesmo `club-names.ts` (`acervo`, `activity-feed`, `book`,
+ * `busca`, `reading-marks`, `streak-bar`). A mesma pessoa aparecia como
+ * "Maria" no acervo e como "Alguém do clube" aqui.
+ *
+ * ⚠️ **E É COMPORTAMENTO, NÃO FIAÇÃO:** "a tela chama `nameOfWriter`" não é a
+ * propriedade. As três que são:
+ *
+ * 1. com os membros carregados, a nota da outra pessoa mostra **o nome dela**;
+ * 2. com o `GET /members` **falhando**, a tela mostra o genérico e **não
+ *    quebra** — o nome é uma inicial de avatar, ninguém perde a anotação por
+ *    causa dela;
+ * 3. o `PersonAvatar` recebe **o mesmo nome** que o texto ao lado mostra. Até
+ *    esta fatia ele recebia `name={null}` (`day-note.tsx:645`), e uma inicial
+ *    que discorda do nome ao lado é pior que nenhuma inicial.
+ *
+ * Fixture hostil (§7.2): `Maria Rita` dá **"MR"**, e o `userId` (`u-maria`)
+ * daria **"U"** — então "passou o id como nome" acusa. E o meu nome é
+ * `Marcos` → "M", diferente dos dois, então "usou o meu nome para todo mundo"
+ * também acusa.
+ */
+describe('⚠️ the name of whoever wrote it (decision E of Task 42)', () => {
+  const MARIA_NAME = 'Maria Rita';
+
+  /** O que `GET /clubs/:clubId/members` devolve (Tarefa 26a). */
+  function membersReply(): Reply {
+    return {
+      status: 200,
+      body: [
+        {
+          userId: MARIA,
+          name: MARIA_NAME,
+          role: 'MEMBER',
+          status: 'ACTIVE',
+        },
+        {
+          userId: MARCOS,
+          name: 'Marcos',
+          role: 'OWNER',
+          status: 'ACTIVE',
+        },
+      ],
+    };
+  }
+
+  /**
+   * O avatar da nota alheia. Ele é `aria-hidden` (o nome está escrito ao
+   * lado), então não há `role` para procurar — a marca é o par `--person-*`
+   * do canvas, que só o `PersonAvatar` pinta.
+   */
+  function avatars(): HTMLElement[] {
+    return Array.from(document.querySelectorAll('[class*="bg-person"]'));
+  }
+
+  it('shows the NAME of the other person when the club is known', async () => {
+    await renderDayNote({
+      members: membersReply(),
+      notes: { status: 200, body: [aNote({ id: 'n-maria', userId: MARIA })] },
+    });
+
+    expect(readableText()).toContain(MARIA_NAME);
+    // E o genérico saiu da tela: ele é o FALLBACK, não o texto de sempre.
+    expect(readableText()).not.toContain(pt.pages.acervo.item.author.other);
+    expectNoGuilt();
+  });
+
+  it('⚠️ gives the avatar the SAME name the text shows', async () => {
+    await renderDayNote({
+      members: membersReply(),
+      notes: { status: 200, body: [aNote({ id: 'n-maria', userId: MARIA })] },
+    });
+
+    const marks = avatars();
+    expect(marks).toHaveLength(1);
+    // "MR" de `Maria Rita` — nunca "U" de `u-maria`, nunca "M" de `Marcos`.
+    expect(marks[0]?.textContent).toBe('MR');
+  });
+
+  it('falls back to the neutral label when the members call FAILS — and shows the note anyway', async () => {
+    /*
+      A metade que impede a de cima de virar "a tela sempre sabe o nome". O
+      `GET /members` é o único pedido que falha; a anotação já está na tela, e
+      ela **continua** na tela. Uma inicial de avatar não derruba uma tela de
+      leitura.
+    */
+    await renderDayNote({
+      members: { status: 500, body: { error: 'Internal Server Error' } },
+      notes: { status: 200, body: [aNote({ id: 'n-maria', userId: MARIA })] },
+    });
+
+    expect(readableText()).toContain(pt.pages.acervo.item.author.other);
+    expect(readableText()).not.toContain(MARIA_NAME);
+    // A nota continua inteira — o texto dela é o conteúdo, o nome é a legenda.
+    expect(screen.getByTestId('reader-text').textContent).toBe(
+      'o dragao me assustou',
+    );
+    // E o avatar cai no glifo NEUTRO, nunca na primeira letra do UUID.
+    expect(avatars()[0]?.textContent).toBe('');
+    expectNoGuilt();
+  });
+
+  /**
+   * ⚠️⚠️ **O CORTE DE TENANT — e a primeira versão deste `it()` NÃO O TESTAVA.**
+   *
+   * Ela usava o fixture comum, em que
+   * `CASAL.id === CLUB_ID === book.clubId === 'c-casal'`: a asserção era
+   * verdadeira para **as duas** origens possíveis do `clubId`. Medido na
+   * auditoria: trocar `state.clubId` por `activeClub?.id` — pedir os membros do
+   * clube **ATIVO** em vez do clube **DO LIVRO**, que é literalmente o defeito
+   * que o docblock do efeito diz existir para impedir — passava por **886
+   * testes**.
+   *
+   * É a regra mais fácil de esquecer do `CLAUDE.md`, escrita lá com essas
+   * palavras. O fixture agora é **hostil** (§7.2): o livro é de `c-outro` e o
+   * clube ativo do cabeçalho é `c-casal`, então as duas origens dão respostas
+   * DIFERENTES e só uma passa.
+   */
+  it('⚠️ asks the club OF THE BOOK, not the ACTIVE one — and asks once', async () => {
+    const calls = await renderDayNote({
+      // O clube ativo continua sendo o `c-casal` do `meReply({ clubs: [CASAL] })`.
+      book: bookReply(plan(), OTHER_CLUB_ID),
+      members: membersReply(),
+      notes: { status: 200, body: [aNote({ id: 'n-maria', userId: MARIA })] },
+    });
+
+    const asked = requestsTo(calls, '/members');
+    expect(asked).toHaveLength(1);
+    expect(requestAt(asked, 0).url).toBe(
+      `https://api.teste/clubs/${OTHER_CLUB_ID}/members`,
+    );
+    // E a asserção que fecha a porta: o clube do CABEÇALHO não foi consultado.
+    expect(requestAt(asked, 0).url).not.toContain(CLUB_ID);
+  });
+
+  it('asks the club of the book for the NOTES too — the same owner decides both', async () => {
+    /*
+      O par que impede o de cima de virar um caso especial dos membros: o
+      `clubId` do livro já decidia de onde vêm as notas desde a Tarefa 18, e as
+      duas leituras têm de concordar. Se um dia divergirem, a tela mostra as
+      notas de um clube e os nomes de outro.
+    */
+    const calls = await renderDayNote({
+      book: bookReply(plan(), OTHER_CLUB_ID),
+      members: membersReply(),
+    });
+
+    expect(requestAt(requestsTo(calls, '/notes'), 0).url).toContain(
+      `/clubs/${OTHER_CLUB_ID}/notes`,
+    );
   });
 });
 
@@ -1678,6 +1965,452 @@ describe('⚠️ TYPE → RELOAD → THE TEXT IS THERE (rules 1, 2, end to end)'
     await renderDayNote({ store, put: { status: 0, offline: true } });
 
     expect(editorText()).toBe(newer);
+    expectNoGuilt();
+  });
+});
+
+/**
+ * ============================================================================
+ * ⚠️⚠️ A REGRA DE OURO DA TAREFA 43, E ELA TEM ACUSADOR ESTRUTURAL
+ * ============================================================================
+ *
+ * A Tarefa 43 muda **como o estado de salvamento aparece**, nunca como ele é
+ * calculado (`docs/new-ui.md` §A.5 item 1: *"Autosave e fila offline não mudam
+ * — só o indicador"*). O risco não é alguém decidir mudar o autosave: é ele
+ * derivar **de carona** numa fatia que reescreve o indicador logo ao lado.
+ *
+ * ⚠️ **Os 23 acusadores de COMPORTAMENTO já existem** — medido antes de uma
+ * linha desta fatia ser escrita: trocar `AUTOSAVE_DELAY_MS` por 3000 deixa
+ * **23** `it()` vermelhos neste arquivo. Este bloco não os substitui; ele
+ * acrescenta o que eles não dizem, e que é o que a fatia ameaça:
+ *
+ * - os dois NÚMEROS pinados por igualdade, num lugar em que a diferença se lê
+ *   sem desenrolar um `advanceTimersByTime`;
+ * - os SEIS estados de `SaveStatus`, que a nota de margem em mono passa a
+ *   pintar — encolher a máquina para caber no visual novo (juntar `queued` com
+ *   `saved`, por exemplo) é a forma mais provável de o dano entrar, e ela não
+ *   deixa vermelho em teste de tempo nenhum;
+ * - o FLUSH NO DESMONTE, que some sem barulho se alguém trocar o efeito de
+ *   saída ao mexer na tela;
+ * - e `packages/app/src/offline/` inteiro, que esta fatia **não pode tocar**.
+ *
+ * Ele lê o FONTE, e isso é deliberado: a propriedade aqui é "estes valores não
+ * mudaram", não "a tela se comporta assim" — e essa segunda já está provada 23
+ * vezes logo acima. É o mesmo molde do `grifo-text.test.tsx › writes the
+ * pen→class map as LITERALS`.
+ */
+describe('⚠️ task 43 changes how the save LOOKS, never how it works', () => {
+  /*
+    ⚠️ SEM COMENTÁRIO: a prosa desta tela CITA `indexedDB` e `navigator.onLine`
+    nominalmente, para dizer que eles não entram (o docblock do topo). Sem o
+    strip, o comentário que documenta a regra a deixaria vermelha — a mesma
+    isenção do `ui-source-scan.test.ts` e do `editor-touch-handlers.test.ts`.
+  */
+  const source = stripComments(
+    readFileSync(
+      resolve(process.cwd(), 'src', 'pages', 'day-note.tsx'),
+      'utf8',
+    ),
+  );
+
+  it('⚠️ keeps the two autosave numbers EXACTLY as task 18 left them', () => {
+    expect(source).toContain('const AUTOSAVE_DELAY_MS = 1500;');
+    expect(source).toContain('const SAVED_RESET_MS = 2000;');
+  });
+
+  it('⚠️ keeps ALL SIX states of the SaveStatus machine', () => {
+    /*
+      A união inteira, membro a membro: a nota de margem mostra um texto por
+      estado, e o atalho tentador ao reescrevê-la é fundir os que "parecem
+      iguais na tela". `queued` e `unconfirmed` NÃO são o mesmo recado — o
+      docblock da tela explica a diferença, e ela é a Tarefa 21 inteira.
+    */
+    for (const state of [
+      "'idle'",
+      "'saving'",
+      "'saved'",
+      "'queued'",
+      "'unconfirmed'",
+      "'error'",
+    ]) {
+      expect(source).toContain(state);
+    }
+
+    // E a tradução do resultado da fila continua com UM dono só (regra 15).
+    expect(source).toContain('function saveStateOf(result: WriteResult)');
+  });
+
+  it('⚠️ keeps the flush on unmount — the last 1500 ms of typing', () => {
+    // O `clearTimeout` do debounce cancela o timer ao sair; sem esta linha o
+    // que a pessoa digitou nos últimos 1500 ms vai para o lixo ao tocar
+    // "voltar" (regra 14 da Tarefa 18).
+    expect(source).toContain('mounted.current = false;');
+    expect(source).toContain('void flushRef.current();');
+  });
+
+  it('⚠️ leaves the offline queue untouched — it is read, never reimplemented', () => {
+    /*
+      A fatia offline entra por UMA porta (`useOfflineNotes`), e o que a tela
+      não pode ter é conhecimento de IndexedDB nem decisão própria sobre o que
+      é falha de rede — as duas moram em `offline/`. Uma tela que reimplemente
+      metade disso para pintar o indicador novo passaria em todo teste de
+      tempo.
+    */
+    expect(source).toContain('useOfflineNotes()');
+    expect(source).not.toContain('indexedDB');
+    expect(source).not.toContain('navigator.onLine');
+  });
+});
+
+/**
+ * ============================================================================
+ * A TELA QUE JUSTIFICA O PROJETO — o que a Tarefa 43 mudou nela
+ * ============================================================================
+ *
+ * Tudo aqui é sobre **como as coisas aparecem**. Nada neste bloco toca o
+ * autosave nem a fila: o acusador disso é o bloco
+ * *task 43 changes how the save LOOKS, never how it works*, no fim do arquivo.
+ */
+describe('⚠️ the editor loses the box and gains the pen bar (decisions B and D)', () => {
+  it('stops passing the frame the canvas does not draw', async () => {
+    /*
+      ⚠️ **A DECISÃO B, e ela é da TELA — não do editor.** Até aqui esta tela
+      passava `rounded-control border border-line bg-surface` por `className`, e
+      o editor virava um cartão dentro da página. O canvas põe o texto direto no
+      papel (`Dia.dc.html:59`: nenhum `background`, nenhuma `border`, nenhum
+      `border-radius` no bloco do corpo).
+
+      ⚠️ E a asserção é sobre o que a tela PASSA, porque é isso que ela decide.
+      Que o `.ProseMirror` também não desenhe caixa nenhuma é do editor, e tem
+      acusador próprio (`editor-css.test.tsx › paints NO box`).
+    */
+    await renderDayNote();
+
+    expect(screen.getByTestId('editor').getAttribute('data-class')).toBe('');
+    expectNoGuilt();
+  });
+
+  it('asks for the FIXED pen bar, and hands over the hint of the /', async () => {
+    /*
+      A decisão D: `penBar='fixed'` é a forma do canvas do dia — ancorada acima
+      do teclado no celular (`Dia.dc.html:103`, 62px) e devolvida ao rodapé da
+      coluna acima de 1120px (`DiaDesktop.dc.html:72`, 56px). **UMA prop, não
+      duas telas.**
+
+      E a dica do `/` (`DiaDesktop.dc.html:92`) entra por prop, já traduzida:
+      `packages/ui` não chama `t()` (`no-i18n.test.ts`), então toda folha de
+      `editor.*` é lida pela TELA. É o terceiro consumidor daquele namespace, e
+      `editor.slashHint` nasceu na Tarefa 40 sem nenhum.
+    */
+    await renderDayNote();
+
+    const editor = screen.getByTestId('editor');
+    expect(editor.getAttribute('data-pen-bar')).toBe('fixed');
+    expect(editor.getAttribute('data-slash-hint')).toBe(pt.editor.slashHint);
+    expectNoGuilt();
+  });
+
+  it('gives the note of the other person NO pen bar — it is not being written', async () => {
+    // A forma `'none'` é o padrão, e é a certa aqui: uma barra de canetas numa
+    // anotação que não se pode editar é uma faixa de 62px que não faz nada.
+    await renderDayNote({
+      notes: { status: 200, body: [aNote({ id: 'n-maria', userId: MARIA })] },
+    });
+
+    expect(screen.getByTestId('reader').getAttribute('data-pen-bar')).toBe(
+      'none',
+    );
+    expectNoGuilt();
+  });
+});
+
+describe('⚠️ the save notice is a margin note in mono (decisions G and H)', () => {
+  it('writes the state with the SaveIndicator of task 41b — not a second one', async () => {
+    /*
+      `Dia.dc.html:56`: mono 9,5px, `uppercase`, `letter-spacing:.1em`,
+      `--text-subtle`. O componente que já entrega exatamente isso nasceu na
+      Tarefa 41b e **nunca teve consumidor** — escrever um segundo aqui seria o
+      defeito que este repositório já pagou três vezes.
+    */
+    const calls = await renderDayNote();
+
+    await press('type');
+    await advance(1500);
+    expect(writes(calls)).toHaveLength(1);
+
+    /*
+      ⚠️ O `PUT` padrão do responder resolve na mesma volta, então o estado
+      observável depois do debounce é `saved` e não `saving` — medido. Quem
+      prova a passagem por `saving` é o `it()` da regra 11, que segura a
+      resposta de propósito. O que se mede aqui é a ROUPA da nota de margem, e
+      ela é a mesma nos cinco estados que a usam.
+    */
+    const notice = document.querySelector('[data-testid="save-status"] span');
+    expect(notice?.textContent).toBe(pt.pages.dayNote.save.saved);
+    expect(notice?.className).toContain('font-mono');
+    expect(notice?.className).toContain('text-micro');
+    expect(notice?.className).toContain('uppercase');
+    expect(notice?.className).toContain('text-subtle');
+    expectNoGuilt();
+  });
+
+  it('⚠️ says WHEN it was saved once the "Salvo" moment passes (decision H)', async () => {
+    /*
+      ⚠️ **`pages.dayNote.save.savedAt` GANHA CONSUMIDOR AQUI.** Ela nasceu na
+      Tarefa 40 e nunca teve um. O catálogo já dizia o que ela é: *"o irmão do
+      `saved`: o estado que FICA"* — `saved` é o instante em que a gravação
+      voltou e some em 2000 ms; este é o que a nota de margem mostra depois,
+      enquanto a pessoa continua escrevendo.
+
+      ⚠️ **E OS 2000 ms CONTINUAM SENDO OS 2000 ms.** O que muda é o que
+      aparece DEPOIS deles: era o vazio, passa a ser a hora. A máquina de
+      estados não ganhou membro nenhum — o acusador disso é o bloco do fim do
+      arquivo.
+
+      A hora sai do relógio local, pelo mesmo `Intl.DateTimeFormat` que o
+      `book.tsx` e a `home.tsx` já usam. **Nenhuma chave nova.**
+    */
+    vi.setSystemTime(new Date('2026-09-18T21:04:00'));
+    const calls = await renderDayNote();
+
+    await press('type');
+    await advance(1500);
+    expect(writes(calls)).toHaveLength(1);
+    expect(saveStatusText()).toBe(pt.pages.dayNote.save.saved);
+
+    await advance(2000);
+
+    // O vazio de antes:
+    expect(saveStatusText()).not.toBe('');
+    expect(saveStatusText()).toBe(
+      pt.pages.dayNote.save.savedAt.replace('{{time}}', '21:04'),
+    );
+    expectNoGuilt();
+  });
+
+  it('says nothing at all before the first save of the session', async () => {
+    // Ausente ≠ vazio: abrir a anotação e não escrever não pode inventar uma
+    // hora. O `savedAt` fala do que ESTA sessão gravou.
+    await renderDayNote();
+
+    expect(saveStatusText()).toBe('');
+    expectNoGuilt();
+  });
+});
+
+describe('⚠️ the desktop margin gets its content (decision I)', () => {
+  it('moves what the club wrote into the rail, and the highlights with it', async () => {
+    /*
+      `DiaDesktop.dc.html:96-135`: a margem de 320px com `border-left` e
+      `padding-left:40px` tem **duas** seções — *O que o clube escreveu*
+      (`:99`) e *Grifos desta leitura* (`:113`).
+
+      ⚠️ **É A PRIMEIRA TELA A PASSAR `rail` AO `Screen`.** A capacidade
+      nasceu na Tarefa 42 (decisão C) sem nenhum consumidor, e com o caso vazio
+      já testado — que é o que impedia um `<aside>` de 320px em branco em todas
+      as telas.
+
+      ⚠️ **E NENHUMA CHAVE NOVA:** `pages.dayNote.others.heading` existe desde
+      a Tarefa 18 e `pages.dayNote.highlights.heading` desde a 40, esta também
+      sem consumidor até aqui.
+    */
+    await renderDayNote({
+      notes: { status: 200, body: [aNote({ id: 'n-maria', userId: MARIA })] },
+      highlights: {
+        status: 200,
+        body: [
+          aHighlight({
+            id: 'h-1',
+            userId: MARIA,
+            planItemId: DAY_ID,
+            quote: 'encaixar-se é o oposto de pertencer',
+            page: 167,
+          }),
+        ],
+      },
+    });
+
+    const rail = document.querySelector('aside');
+    expect(rail).not.toBeNull();
+    expect(rail?.textContent).toContain(pt.pages.dayNote.others.heading);
+    expect(rail?.textContent).toContain(pt.pages.dayNote.highlights.heading);
+    expect(rail?.textContent).toContain('encaixar-se é o oposto de pertencer');
+    expectNoGuilt();
+  });
+
+  it('⚠️ shows ONLY the highlights of THIS reading, never the whole book', async () => {
+    /*
+      ⚠️ O grifo carrega o dia do plano desde a Tarefa 38i, e é isso que torna
+      a seção possível. Sem o corte, a margem mostraria o acervo inteiro do
+      livro ao lado do trecho de hoje — e nada acusaria, porque a seção
+      apareceria cheia.
+
+      ⚠️ **O `planItemId: null` é o caso do ADR 0004** (grifo guardado num dia
+      sem plano) e ele também fica de fora: `null` não é "todos".
+    */
+    await renderDayNote({
+      highlights: {
+        status: 200,
+        body: [
+          aHighlight({
+            id: 'h-hoje',
+            userId: MARIA,
+            planItemId: DAY_ID,
+            quote: 'o trecho de hoje',
+            page: 167,
+          }),
+          aHighlight({
+            id: 'h-outro-dia',
+            userId: MARIA,
+            planItemId: 'plan-outro',
+            quote: 'o trecho de outro dia',
+            page: 12,
+          }),
+          aHighlight({
+            id: 'h-sem-dia',
+            userId: MARIA,
+            planItemId: null,
+            quote: 'o trecho sem dia',
+            page: 3,
+          }),
+        ],
+      },
+    });
+
+    const rail = document.querySelector('aside');
+    expect(rail?.textContent).toContain('o trecho de hoje');
+    expect(rail?.textContent).not.toContain('o trecho de outro dia');
+    expect(rail?.textContent).not.toContain('o trecho sem dia');
+    expectNoGuilt();
+  });
+
+  it('⚠️ asks the club OF THE BOOK for the highlights, not the ACTIVE one', async () => {
+    /*
+      ⚠️ **O CORTE DE TENANT, e é a regra que o `CLAUDE.md` chama de "a mais
+      fácil de esquecer".** O fixture é HOSTIL de propósito (§7.2): o livro é de
+      `c-outro` e o clube ativo do cabeçalho é `c-casal`. Com os dois iguais —
+      que era o fixture comum até a auditoria da Tarefa 42 — a asserção seria
+      verdadeira para as DUAS origens, e pedir os grifos do clube ATIVO passaria
+      verde.
+    */
+    const calls = await renderDayNote({
+      book: bookReply(plan(), 'c-outro'),
+      highlights: { status: 200, body: [] },
+    });
+
+    const asked = requestsTo(calls, '/highlights');
+    expect(asked).toHaveLength(1);
+    expect(asked[0]?.url).toContain('/clubs/c-outro/highlights');
+    expect(asked[0]?.url).not.toContain('c-casal');
+    // E o livro entra na consulta: a margem é dos grifos DESTE livro.
+    expect(asked[0]?.url).toContain(`bookId=${BOOK_ID}`);
+    expectNoGuilt();
+  });
+
+  it('draws NO rail at all when there is nothing to put in it', async () => {
+    /*
+      Ausente ≠ vazio, e aqui isso é a decisão C da Tarefa 42 sendo cobrada por
+      quem a consome: um `<aside>` que nascesse sempre desenharia 320px em
+      branco e um filete vertical solto ao lado do texto, **com o teste de
+      render verde**.
+    */
+    await renderDayNote();
+
+    expect(document.querySelector('aside')).toBeNull();
+    expectNoGuilt();
+  });
+});
+
+/**
+ * ============================================================================
+ * ⚠️ OS RÓTULOS DE SEÇÃO (auditoria da Tarefa 43, A6)
+ * ============================================================================
+ *
+ * Os TRÊS rótulos desta tela são o mesmo elemento no canvas, valor a valor:
+ * `Dia.dc.html:55` ("Sua anotação"), `DiaDesktop.dc.html:99` ("O que o clube
+ * escreveu") e `:113` ("Grifos desta leitura") — `'Geist Mono'`, **10px**,
+ * `letter-spacing:0.12em`, `uppercase`, `--text-muted`.
+ *
+ * ⚠️ **A PRIMEIRA ENTREGA DESTA FATIA ESCREVEU `text-sm font-semibold` NOS
+ * TRÊS**, e `text-sm` é o **default do Tailwind** — não é um dos sete degraus
+ * da escala fechada da Tarefa 39. E existe um componente feito exatamente para
+ * isto: o `Eyebrow` da 41b, que nasceu com **zero** consumidores em
+ * `packages/app`. "Grifos desta leitura" é elemento **novo** desta fatia, então
+ * ali não havia nem herança para alegar.
+ *
+ * ⚠️ **CORRIGIDOS OS TRÊS, e não só os dois que a auditoria nomeou.** Deixar
+ * "Sua anotação" em `text-sm` daria à MESMA tela duas tipografias de rótulo de
+ * seção — que é a "correção incompleta" que a auditoria da 41b nomeou como
+ * classe de erro, e o mesmo defeito que a da 42 achou nos `h1` de
+ * `accept-invite` e `not-found`.
+ *
+ * ⚠️ **E o `<h2>` FICA.** O `Eyebrow` é um `<span>` de propósito — o docblock
+ * dele diz, com todas as letras, que ele é *"a tipografia do rótulo, não a
+ * semântica dele"*, e que *"quando uma tela precisar de um título de verdade,
+ * ela escreve um `<h2>` de verdade"*. Aqui as três seções SÃO seções, e quem
+ * navega por títulos precisa delas na árvore. Então o `<h2>` embrulha o
+ * `Eyebrow`: semântica da tela, tipografia do design system.
+ */
+describe('⚠️ the section labels use the Eyebrow of task 41b (audit A6)', () => {
+  it('gives the THREE labels the mono type of the canvas, still as headings', async () => {
+    await renderDayNote({
+      notes: { status: 200, body: [aNote({ id: 'n-maria', userId: MARIA })] },
+      highlights: { status: 200, body: [aHighlight({ id: 'h-1' })] },
+    });
+
+    const labels = [
+      pt.pages.dayNote.mine.heading,
+      pt.pages.dayNote.others.heading,
+      pt.pages.dayNote.highlights.heading,
+    ];
+
+    for (const label of labels) {
+      const eyebrow = screen.getByText(label);
+      // A tipografia do canvas, pelo componente — nunca reescrita à mão.
+      expect(eyebrow.className).toContain('font-mono');
+      expect(eyebrow.className).toContain('text-eyebrow');
+      expect(eyebrow.className).toContain('uppercase');
+      expect(eyebrow.className).toContain('tracking-[0.12em]');
+      // E `text-sm`, que era o default do Tailwind, saiu de vez.
+      expect(eyebrow.className).not.toContain('text-sm');
+      // A semântica continua sendo da TELA: o rótulo vive dentro de um h2.
+      expect(eyebrow.closest('h2')).not.toBeNull();
+    }
+
+    expectNoGuilt();
+  });
+
+  it('⚠️ never hides "Grifos desta leitura" on the phone — the declared divergence, guarded', async () => {
+    /*
+      ⚠️ **DIVERGÊNCIA DECLARADA SEM GUARDA É A PRÓXIMA FATIA A DESFAZÊ-LA SEM
+      QUERER**, e esta é a terceira vez que este repositório paga por isso: o
+      nome do clube no cabeçalho (auditoria da Tarefa 42) e a compensação de
+      48px da home (a mesma) são as outras duas.
+
+      O artboard de celular NÃO desenha esta seção — só o de desktop a tem. Ela
+      foi entregue nas duas larguras de propósito: escondê-la com
+      `hidden min-[1120px]:block` seria **invisível para o teste**, porque o
+      jsdom não aplica CSS e todo `it()` acima continuaria verde com a seção
+      apagada na tela.
+
+      Por isso a asserção é sobre a CLASSE, que é a propriedade decidível aqui —
+      exatamente o molde de
+      `app.test.tsx › ⚠️ keeps the club name VISIBLE on the phone`.
+    */
+    await renderDayNote({
+      highlights: { status: 200, body: [aHighlight({ id: 'h-1' })] },
+    });
+
+    const section = screen
+      .getByText(pt.pages.dayNote.highlights.heading)
+      .closest('section');
+    expect(section).not.toBeNull();
+    expect(section?.className ?? '').not.toContain('hidden');
+    // E a margem inteira também não some no celular.
+    expect(document.querySelector('aside')?.className ?? '').not.toContain(
+      'hidden',
+    );
+
     expectNoGuilt();
   });
 });

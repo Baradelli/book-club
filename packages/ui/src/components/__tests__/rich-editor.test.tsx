@@ -252,12 +252,51 @@ describe('what onChange emits (rule 7)', () => {
   });
 });
 
-describe('the toolbar (rules 8 and 9)', () => {
+/**
+ * ============================================================================
+ * ⚠️ ESTE BLOCO CHAMAVA-SE `the toolbar (rules 8 and 9)` ATÉ A TAREFA 43
+ * ============================================================================
+ *
+ * **A barra fixa do topo MORREU** (decisão A): o que formata é o menu de bolha
+ * na seleção mais o menu `/`, e o que fica fixo na tela são as cinco canetas +
+ * `Aa` + `/`. Os quatro `it()` deste bloco foram EDITADOS, não apagados — a
+ * propriedade de cada um continua existindo, só mudou de âncora:
+ *
+ * | antes | agora | por quê |
+ * | --- | --- | --- |
+ * | `reflects the active mark in aria-pressed` | idem, pelo `Aa` | o botão de negrito está no conjunto compartilhado, que o `Aa` ancora — e é o ÚNICO alcançável no jsdom (o do menu de bolha é destacado pelo TipTap) |
+ * | `prevents the default of mousedown…` | idem | o botão mudou de lugar, a regra §4.4 não |
+ * | `reflects the active highlight color…` | idem, e sem borracha | a borracha saiu (o canvas não a desenha); tirar o grifo é apertar de novo a caneta que está com o anel, e é ISSO que o teste passa a provar |
+ * | `is not rendered when the editor is read-only` | idem | "Negrito" continua cobrindo as duas superfícies condicionais |
+ * | `survives flipping editable in both directions` | idem, pelo `Aa` | a direção que quebrava é a mesma; o que se procura no DOM é que mudou |
+ *
+ * ⚠️ **O QUE NENHUM DELES PODE VIRAR É UM TESTE DA BARRA NOVA** — esse é o
+ * `pen-bar.test.tsx`, e ele tem os seus. Aqui o assunto continua sendo o
+ * CONTRATO do editor com a tela.
+ */
+describe('the format controls (rules 8 and 9)', () => {
+  /**
+   * O conjunto compartilhado, aberto pelo `Aa`.
+   *
+   * ⚠️ É a única âncora alcançável por `document.querySelector` no jsdom: o
+   * `BubbleMenuView` do TipTap chama `element.remove()` no construtor e o
+   * tippy só reanexa o elemento ao `body` quando MOSTRA, o que não acontece sem
+   * layout (medido: zero `[data-tippy-root]` depois de selecionar e disparar
+   * `mouseup`). Que as duas âncoras rendam a MESMA lista é o assunto de
+   * `pen-bar.test.tsx`.
+   */
+  function openFormatControls(): void {
+    fireEvent.mouseDown(screen.getByLabelText('Formatar o texto'));
+  }
+
   it('reflects the active mark in aria-pressed', () => {
     // Um `aria-pressed` congelado não aparece na tela (a cor do botão vem da
     // mesma variável), mas quem usa leitor de tela ouve "não pressionado" com
     // o negrito ligado — e não tem como saber o estado de outro jeito.
-    render(<RichEditor doc={aDoc('')} onChange={() => undefined} />);
+    render(
+      <RichEditor doc={aDoc('')} onChange={() => undefined} penBar="fixed" />,
+    );
+    openFormatControls();
 
     const bold = screen.getByLabelText('Negrito');
     expect(bold.getAttribute('aria-pressed')).toBe('false');
@@ -275,31 +314,45 @@ describe('the toolbar (rules 8 and 9)', () => {
 
       `fireEvent` devolve `false` quando o handler chamou `preventDefault`.
     */
-    render(<RichEditor doc={aDoc('')} onChange={() => undefined} />);
+    render(
+      <RichEditor doc={aDoc('')} onChange={() => undefined} penBar="fixed" />,
+    );
+    openFormatControls();
 
     expect(fireEvent.mouseDown(screen.getByLabelText('Negrito'))).toBe(false);
     expect(fireEvent.touchEnd(screen.getByLabelText('Negrito'))).toBe(false);
-    expect(fireEvent.mouseDown(screen.getByLabelText('Grifo amarelo'))).toBe(
+    expect(fireEvent.mouseDown(screen.getByLabelText('Caneta amarela'))).toBe(
       false,
     );
   });
 
-  it('reflects the active highlight color in aria-pressed', () => {
+  it('reflects the active highlight color in aria-pressed, and the same pen UNDOES it', () => {
     /*
-      ⚠️ A REGRA 9 APLICADA ÀS CINCO AMOSTRAS, e não só ao negrito — medido: com
-      `active={editor.isActive('highlight', { color })}` trocado por `false` nas
-      cinco, a suíte ficava VERDE.
+      ⚠️ A REGRA 9 APLICADA ÀS CINCO CANETAS, e não só ao negrito — medido na
+      Tarefa 14: com `active={editor.isActive('highlight', { color })}` trocado
+      por `false` nas cinco, a suíte ficava VERDE.
 
-      O que se perde é a única informação que a amostra dá: o contorno da cor
-      LIGADA (`[aria-pressed='true'] > .clube-editor-swatch`, no `editor.css`).
-      Sem ele, quem grifou de amarelo e quer trocar para verde não tem como
-      saber o que está ligado — e o `unsetHighlight` da borracha parece não ter
-      feito nada.
+      O que se perde é a única informação que a caneta dá: o ANEL de ouro da
+      cor LIGADA (`[aria-pressed='true'] > .clube-editor-swatch`, no
+      `editor.css`). Sem ele, quem grifou de amarelo e quer trocar para verde
+      não tem como saber o que está ligado.
+
+      ⚠️ **E A SEGUNDA METADE É NOVA NA TAREFA 43, porque a BORRACHA SAIU.** O
+      canvas não desenha borracha em barra nenhuma; tirar o grifo é apertar de
+      novo a caneta que está com o anel, e o `toggleHighlight({ color })` do
+      TipTap faz exatamente isso. Sem esta asserção, "não há mais como tirar um
+      grifo" passaria verde — e seria capacidade perdida em silêncio.
     */
-    render(<RichEditor doc={aDoc('trecho')} onChange={() => undefined} />);
+    render(
+      <RichEditor
+        doc={aDoc('trecho')}
+        onChange={() => undefined}
+        penBar="fixed"
+      />,
+    );
 
-    const yellow = screen.getByLabelText('Grifo amarelo');
-    const green = screen.getByLabelText('Grifo verde');
+    const yellow = screen.getByLabelText('Caneta amarela');
+    const green = screen.getByLabelText('Caneta verde');
     expect(yellow.getAttribute('aria-pressed')).toBe('false');
 
     fireEvent.mouseDown(yellow);
@@ -309,67 +362,86 @@ describe('the toolbar (rules 8 and 9)', () => {
     // igualmente inútil.
     expect(green.getAttribute('aria-pressed')).toBe('false');
 
-    fireEvent.mouseDown(screen.getByLabelText('Remover grifo'));
+    fireEvent.mouseDown(yellow);
 
     expect(yellow.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('is not rendered when the editor is read-only', () => {
-    // Uma anotação de outra pessoa (§4: as três superfícies só existem quando
-    // `editable`). Barra visível sem poder escrever é um botão que não faz
-    // nada. E "Negrito" cobre as DUAS superfícies condicionais: a barra e o
-    // bubble menu têm o mesmo botão.
+    // Uma anotação de outra pessoa (§4: as superfícies só existem quando
+    // `editable`). Controle visível sem poder escrever é um botão que não faz
+    // nada. E "Formatar o texto" cobre a barra de canetas; o menu de bolha não
+    // precisa de lógica nenhuma (o `shouldShow` default devolve `false` em
+    // leitura).
     render(
-      <RichEditor doc={aDoc('')} editable={false} onChange={() => undefined} />,
+      <RichEditor
+        doc={aDoc('')}
+        editable={false}
+        onChange={() => undefined}
+        penBar="fixed"
+      />,
     );
 
-    expect(screen.queryByLabelText('Negrito')).toBeNull();
-    expect(screen.queryByLabelText('Grifo amarelo')).toBeNull();
+    expect(screen.queryByLabelText('Formatar o texto')).toBeNull();
+    expect(screen.queryByLabelText('Caneta amarela')).toBeNull();
   });
 
   it('survives flipping editable in both directions', () => {
     /*
-      ⚠️ O ACUSADOR DO CRASH AO VIVO que a auditoria achou no código entregue —
-      não era mutante, era a tela morrendo ao virar somente-leitura:
+      ⚠️ O ACUSADOR DO CRASH AO VIVO que a auditoria da Tarefa 14 achou no
+      código entregue — não era mutante, era a tela morrendo ao virar
+      somente-leitura:
 
           NotFoundError: The node to be removed is not a child of this node.
 
-      A causa é a §11 esquecida nas duas superfícies que são elas mesmas
+      A causa é a §11 esquecida nas superfícies que são elas mesmas
       condicionais. O `BubbleMenuView` do TipTap DESTACA o próprio elemento no
       construtor (`element.remove()`), então:
 
       - `{editable ? <BubbleMenu/> : null}` virando `false` fazia o React
         chamar `removeChild` num nó que já não era filho — morria aqui;
-      - e a BARRA, que é condicional e vem ANTES, faria `insertBefore(barra,
-        nóDestacado)` ao voltar para `true`. Por isso as DUAS ficam montadas: a
-        primeira direção sem a segunda só troca o erro de lugar.
+      - e um IRMÃO condicional que viesse ANTES faria `insertBefore(irmão,
+        nóDestacado)` ao voltar para `true`. Por isso o bubble menu, a barra de
+        canetas e o wrapper da pílula ficam SEMPRE montados: a primeira direção
+        sem a segunda só troca o erro de lugar.
 
-      Nenhum dos 152 testes anteriores cobria esta direção: o teste de leitura
-      montava já com `editable={false}`, e o da §11 nunca desmontava o bubble
-      menu. O `rerender` nas duas direções é o que fecha o buraco.
+      ⚠️ **NA TAREFA 43 O IRMÃO CONDICIONAL DEIXOU DE SER A BARRA DO TOPO E
+      PASSOU A SER A BARRA DE CANETAS** — e ela nasce com a invariante em vez de
+      descobri-la depois.
     */
     const { rerender } = render(
-      <RichEditor doc={aDoc('trecho')} onChange={() => undefined} />,
+      <RichEditor
+        doc={aDoc('trecho')}
+        onChange={() => undefined}
+        penBar="fixed"
+      />,
     );
 
-    expect(screen.getByLabelText('Negrito')).toBeDefined();
+    expect(screen.getByLabelText('Formatar o texto')).toBeDefined();
 
     rerender(
       <RichEditor
         doc={aDoc('trecho')}
         editable={false}
         onChange={() => undefined}
+        penBar="fixed"
       />,
     );
 
-    expect(screen.queryByLabelText('Negrito')).toBeNull();
+    expect(screen.queryByLabelText('Formatar o texto')).toBeNull();
     // O editor continua VIVO (sem isto, uma tela que estourou e ficou em
     // branco passaria no `queryBy...toBeNull` acima — §7.4).
     expect(screen.getByText('trecho')).toBeDefined();
 
-    rerender(<RichEditor doc={aDoc('trecho')} onChange={() => undefined} />);
+    rerender(
+      <RichEditor
+        doc={aDoc('trecho')}
+        onChange={() => undefined}
+        penBar="fixed"
+      />,
+    );
 
-    expect(screen.getByLabelText('Negrito')).toBeDefined();
+    expect(screen.getByLabelText('Formatar o texto')).toBeDefined();
     expect(screen.getByText('trecho')).toBeDefined();
   });
 });

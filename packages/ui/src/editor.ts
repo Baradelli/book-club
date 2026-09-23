@@ -36,6 +36,10 @@
 export {
   type NoteSearch,
   type NoteSuggestion,
+  // ⚠️ SÓ O TIPO: a tela precisa dizer ONDE a barra de canetas fica (Tarefa 43,
+  // decisão D), e é a única coisa que ela sabe sobre a barra. Nada imperativo
+  // sai daqui — o §3 do `docs/EDITOR.md` continua valendo.
+  type PenBarPlacement,
   RichEditor,
   type RichEditorProps,
 } from './components/RichEditor';

@@ -152,6 +152,24 @@ describe('no editor button uses onClick (rule 8, §4.4)', () => {
     for (const { code } of files) {
       expect(code).toContain('<button');
     }
+
+    /*
+      ⚠️ **A BARRA DE CANETAS DA TAREFA 43 CAI NESTA VARREDURA — e esta linha é
+      o que prova isso em vez de supor.**
+
+      Ela cai por CONSTRUÇÃO: a decisão de arquitetura da fatia (a spec da
+      Tarefa 43, "como uma barra FORA do editor comanda o editor") recusou as
+      duas saídas que punham os botões novos em `packages/app` — `onReady(editor)`
+      e a render-prop — justamente porque o botão nasceria fora deste grafo, e
+      aí a regra §4.4 deixaria de ser varrida sem um vermelho.
+
+      Se um dia a barra sair para um módulo próprio, esta asserção fica
+      vermelha, e o certo é fazer a VARREDURA crescer (importar o módulo pelo
+      `RichEditor`, que é o que a põe no grafo) — nunca a barra escapar.
+    */
+    expect(graph.some(({ code }) => code.includes('data-editor-pen-bar'))).toBe(
+      true,
+    );
   });
 
   // A proibição vale para o GRAFO INTEIRO, e não só para quem tem `<button`:
