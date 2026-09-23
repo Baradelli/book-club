@@ -13,6 +13,7 @@ export class NoteRepositoryFake implements NoteRepository {
   private findFiltersSeen: NoteFilter[] = [];
   private planItemWritersByBookCallCount = 0;
   private planItemIdsWithAnyNoteCallCount = 0;
+  private activeCountByBookCallCount = 0;
 
   async save(note: Note): Promise<Note> {
     // Conta a CHAMADA, não o sucesso: uma escrita recusada pelo índice também
@@ -188,6 +189,28 @@ export class NoteRepositoryFake implements NoteRepository {
     return [...found];
   }
 
+  /**
+   * Quantas anotações ACTIVE o livro tem — a avulsa INCLUÍDA.
+   *
+   * ⚠️ **Sem teto de linhas aqui, e é fidelidade, não descuido** (§7.1): o
+   * teto de 500 do `PrismaNoteRepository.find` é uma válvula do `find`, não
+   * um limite da tabela, e o `count()` do Postgres não a conhece. Um fake que
+   * cortasse em 500 afirmaria o defeito que esta fatia existe para impedir.
+   *
+   * ⚠️ **A consequência, escrita porque ela é o ponto cego desta suíte**
+   * (§7.10): como o fake não trunca, nenhum teste unitário pode acusar um
+   * `count()` trocado por `find(...).length` no repositório Prisma — os dois
+   * dão o mesmo número aqui. Quem acusa é o teste de contrato
+   * `counts every ACTIVE note of the book, past the 500-row valve of find()`.
+   */
+  async activeCountByBook(bookId: string): Promise<number> {
+    this.activeCountByBookCallCount += 1;
+
+    return [...this.store.values()].filter(
+      (note) => note.bookId === bookId && note.status === 'ACTIVE',
+    ).length;
+  }
+
   get saved(): Note[] {
     return [...this.store.values()].map((note) => this.clone(note));
   }
@@ -258,6 +281,18 @@ export class NoteRepositoryFake implements NoteRepository {
    */
   get planItemIdsWithAnyNoteCalls(): number {
     return this.planItemIdsWithAnyNoteCallCount;
+  }
+
+  /**
+   * Quantas vezes `activeCountByBook` foi chamado — como o `findCalls`.
+   *
+   * Existe para o `getBookWithPlan` poder afirmar que o corte de tenant vem
+   * ANTES da contagem: quem não é membro não descobre **nem o tamanho** do
+   * acervo do clube. Sem contador, "recusou antes de contar" e "contou e
+   * depois recusou" dão o mesmo erro para o cliente. → §7.3.
+   */
+  get activeCountByBookCalls(): number {
+    return this.activeCountByBookCallCount;
   }
 
   /**

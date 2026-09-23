@@ -226,8 +226,43 @@ export const highlightResponseSchema = z.object({
 /** O acervo, na ordem que o `listHighlights` decidiu (mais recente antes). */
 export const highlightsResponseSchema = z.array(highlightResponseSchema);
 
+/**
+ * ⚠️ **O ÚLTIMO GRIFO DO LIVRO, NA MARGEM — e é um schema ESTREITO de
+ * propósito** (Tarefa 44b, decisão D).
+ *
+ * O bloco "Último grifo" desenha quatro coisas (`LivroDesktop.dc.html:211-218`):
+ * a bolinha da CANETA daquele grifo, a PÁGINA, o NOME de quem grifou e o
+ * TRECHO. Este schema declara exatamente isso, mais o `id` — e nada mais.
+ *
+ * ⚠️ **Não é `highlightResponseSchema.pick(...)`, e a razão é o `commentDoc`.**
+ * Reusar o schema cheio faria a abertura de todo livro carregar a árvore
+ * ProseMirror do comentário do último grifo, que a margem nunca desenha — o
+ * mesmo defeito de tráfego que os métodos estreitos do repositório existem
+ * para não cometer, só que uma camada acima. Um `.pick()` resolveria isso, mas
+ * um schema PRÓPRIO diz o que a margem precisa; um `pick` diz o que ela
+ * descartou, e cresceria sozinho no dia em que o grifo ganhar campo novo.
+ *
+ * ⚠️ **NENHUM CONTADOR AQUI TAMBÉM.** Este é o grifo mais recente, não "o
+ * 9º de 9": é um registro, não uma posição.
+ *
+ * O `userId` cru, e não o nome: quem resolve `userId` → nome é o
+ * `GET /clubs/:clubId/members`, que a tela do livro já carrega (o mesmo
+ * caminho das bolinhas de autoria). Uma segunda regra de autoria nesta
+ * resposta seria uma segunda verdade sobre o mesmo nome.
+ */
+export const lastHighlightResponseSchema = z.object({
+  id: z.string(),
+  /** O AUTOR. Visível para todo o clube, por decisão: → ADR 0002. */
+  userId: z.string(),
+  quote: z.string(),
+  color: highlightColor,
+  /** `null` é caso legítimo: dá para grifar sem anotar a página. */
+  page: z.number().nullable(),
+});
+
 export type CreateHighlightBody = z.infer<typeof createHighlightSchema>;
 export type EditHighlightBody = z.infer<typeof editHighlightSchema>;
 export type ListHighlightsQuery = z.infer<typeof listHighlightsQuerySchema>;
 export type HighlightResponse = z.infer<typeof highlightResponseSchema>;
 export type HighlightsResponse = z.infer<typeof highlightsResponseSchema>;
+export type LastHighlightResponse = z.infer<typeof lastHighlightResponseSchema>;

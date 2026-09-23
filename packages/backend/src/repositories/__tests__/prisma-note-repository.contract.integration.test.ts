@@ -17,6 +17,20 @@ const OTHER_BOOK_ID = prefixedId('t11', 'note-otherbook');
 const FOREIGN_BOOK_ID = prefixedId('t11', 'note-foreignbook');
 /** Livro só do bloco do ADR 0007: o plano dele é reescrito dentro do teste. */
 const PLAN_BOOK_ID = prefixedId('t11', 'note-planbook');
+/**
+ * Livro só do teste da contagem acima da válvula (Tarefa 44b): ele grava 501
+ * linhas, e um livro próprio deixa o `beforeEach` as apagar por `bookId`.
+ */
+const COUNT_BOOK_ID = prefixedId('t44b', 'note-countbook');
+
+/**
+ * O teto do `find` do repositório (`FIND_ROW_LIMIT`), pinado aqui de propósito.
+ *
+ * ⚠️ É o pino INDEPENDENTE do número que o código usa: um `import` da
+ * constante faria os dois lados da asserção virem do código sob teste — a
+ * identidade do §7.8. É a mesma escolha do contrato do grifo.
+ */
+const EXPECTED_ROW_LIMIT = 500;
 
 const DAY_ONE = prefixedId('t11', 'note-day-one');
 const DAY_TWO = prefixedId('t11', 'note-day-two');
@@ -29,6 +43,7 @@ const EVERY_BOOK_ID = [
   OTHER_BOOK_ID,
   FOREIGN_BOOK_ID,
   PLAN_BOOK_ID,
+  COUNT_BOOK_ID,
 ] as const;
 
 const CREATED_AT = new Date('2026-01-01T00:00:00.000Z');
@@ -207,6 +222,7 @@ describe('PrismaNoteRepository (contract)', () => {
       [BOOK_ID, CLUB_ID],
       [OTHER_BOOK_ID, CLUB_ID],
       [PLAN_BOOK_ID, CLUB_ID],
+      [COUNT_BOOK_ID, CLUB_ID],
       [FOREIGN_BOOK_ID, OTHER_CLUB_ID],
     ] as const) {
       await prisma.book.create({
@@ -1068,6 +1084,107 @@ describe('PrismaNoteRepository (contract)', () => {
       expect(select).toContain('"userId"');
       expect(select).not.toContain('"doc"');
       expect(select).not.toContain('"plainText"');
+    });
+  });
+
+  /**
+   * ⚠️ **A CONTAGEM DO INVENTÁRIO (Tarefa 44b) — e este arquivo é o ÚNICO
+   * lugar onde a propriedade que importa é DECIDÍVEL** (§7.10).
+   *
+   * O `NoteRepositoryFake` não tem teto de linhas, então nenhum mutante da
+   * suíte unitária acusa `count()` trocado por `(await find(...)).length`: os
+   * dois dão o mesmo número contra o fake. Contra o Postgres eles divergem
+   * exatamente a partir da 501ª linha, que é onde a válvula `take` do `find`
+   * morde — e é a razão de a fatia existir.
+   */
+  describe('activeCountByBook (task 44b)', () => {
+    /**
+     * ⚠️ **A AVULSA CONTA, e é o ponto inteiro da fatia.** O atalho que parecia
+     * existir — somar os `writers[].userIds` do `planItemWritersByBook` acima —
+     * daria a contagem exata da nota do DIA e cegaria a avulsa, porque aquele
+     * método filtra `planItemId IS NOT NULL`. Aqui as duas entram.
+     */
+    it('counts the ACTIVE notes of the book, the free ones included', async () => {
+      await repo.save(aDayNote('count-dia'));
+      await repo.save(aFreeNote('count-avulsa'));
+      await repo.save(aFreeNote('count-avulsa-2'));
+      await repo.save(
+        aDayNote('count-arquivada', {
+          planItemId: DAY_TWO,
+          status: 'ARCHIVED',
+          archivedAt: new Date('2026-11-01T00:00:00.000Z'),
+        }),
+      );
+      // Do MESMO clube, livro diferente: o corte é o livro, não o clube.
+      await repo.save(
+        aFreeNote('count-outro-livro', { bookId: OTHER_BOOK_ID }),
+      );
+      // E de outro clube inteiro.
+      await repo.save(
+        aFreeNote('count-de-fora', {
+          clubId: OTHER_CLUB_ID,
+          bookId: FOREIGN_BOOK_ID,
+        }),
+      );
+
+      await expect(repo.activeCountByBook(BOOK_ID)).resolves.toBe(3);
+      await expect(repo.activeCountByBook(OTHER_BOOK_ID)).resolves.toBe(1);
+    });
+
+    it('counts zero for a book with no note at all', async () => {
+      await expect(repo.activeCountByBook(COUNT_BOOK_ID)).resolves.toBe(0);
+    });
+
+    /**
+     * ⚠️⚠️ **O TESTE QUE JUSTIFICA A FATIA INTEIRA.**
+     *
+     * `EXPECTED_ROW_LIMIT + 1` notas `ACTIVE` no mesmo livro: a contagem tem de
+     * ser **501**, não 500. O mutante obrigatório da regra 2 — trocar o
+     * `count()` do `PrismaNoteRepository` por
+     * `(await this.find({ clubId, bookId })).length` — fica vermelho **aqui e
+     * só aqui**.
+     *
+     * A pré-condição é medida ao lado: o `find` do mesmo livro devolve
+     * `EXPECTED_ROW_LIMIT`. Sem ela o teste diria "a contagem é 501" sem provar
+     * que havia um truncamento a evitar.
+     *
+     * ⚠️ **As 501 são AVULSAS de propósito, e não é preferência de fixture:**
+     * o `@@unique([planItemId, userId])` recusaria a segunda nota do mesmo dia
+     * e do mesmo autor, e o índice **não compara `NULL` com `NULL`** — é a
+     * mesma fidelidade do §7.1 que torna a anotação avulsa ilimitada. Um
+     * fixture de 501 notas de DIA precisaria de 501 itens de plano.
+     *
+     * Um `createMany` só (uma ida ao banco), num livro próprio.
+     */
+    it('counts every ACTIVE note of the book, past the 500-row valve of find()', async () => {
+      const total = EXPECTED_ROW_LIMIT + 1;
+      const base = Date.UTC(2026, 4, 1);
+      const rows = Array.from({ length: total }, (_unused, index) => ({
+        id: trackedNoteId(`count-${String(index).padStart(4, '0')}`),
+        clubId: CLUB_ID,
+        bookId: COUNT_BOOK_ID,
+        userId: AUTHOR_ID,
+        kind: 'FREE' as const,
+        planItemId: null,
+        title: `linha ${index}`,
+        reference: null,
+        doc: { type: 'doc', content: [] },
+        plainText: '',
+        status: 'ACTIVE' as const,
+        archivedAt: null,
+        createdAt: new Date(base + index * 60_000),
+        updatedAt: new Date(base + index * 60_000),
+      }));
+      await prisma.note.createMany({ data: rows });
+
+      // A PRÉ-CONDIÇÃO: o `find` trunca, e é contra isto que a contagem vale.
+      const truncated = await repo.find({
+        clubId: CLUB_ID,
+        bookId: COUNT_BOOK_ID,
+      });
+      expect(truncated).toHaveLength(EXPECTED_ROW_LIMIT);
+
+      await expect(repo.activeCountByBook(COUNT_BOOK_ID)).resolves.toBe(total);
     });
   });
 

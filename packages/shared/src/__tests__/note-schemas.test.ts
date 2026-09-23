@@ -290,6 +290,11 @@ describe('bookWithPlanResponseSchema', () => {
    * campo que só os testes dele mandavam, porque o schema o aceitava ausente;
    * agora é obrigatório como o `writers`, e uma fábrica que o omitisse faria
    * TODO teste deste bloco falhar por um motivo que não é o assunto dele.
+   *
+   * ⚠️ **E O `inventory` E O `lastHighlight` ENTRARAM NA FÁBRICA NA TAREFA
+   * 44b, pelo MESMO motivo:** os dois nascem obrigatórios (sem fase 1 — não há
+   * 164 fixtures de tela pendurados neles), então uma fábrica que os omitisse
+   * faria todo teste deste bloco falhar por um assunto que não é o dele.
    */
   function aBookWithPlan(
     writers: unknown,
@@ -312,6 +317,8 @@ describe('bookWithPlanResponseSchema', () => {
       planItems: [],
       writers,
       readers,
+      inventory: { notes: 0, highlights: 0 },
+      lastHighlight: null,
     };
   }
 
@@ -399,6 +406,13 @@ describe('bookWithPlanResponseSchema', () => {
 
   // Nenhum contador de progresso atravessa: progresso é presença, e é o
   // contrato que torna o número irrenderizável.
+  //
+  // ⚠️ **ESTE TESTE NÃO AFROUXOU NA TAREFA 44b, e é ele que separa as duas
+  // coisas.** A resposta ganhou o `inventory` (o TAMANHO do acervo do livro),
+  // e um `readDays`/`progress` continua sendo apagado aqui: o que o schema
+  // recusa é contador de PROGRESSO — por dia, por pessoa, com um total ao lado
+  // —, não o tamanho do que o clube escreveu. A diferença está por extenso no
+  // docblock do `bookInventoryResponseSchema`.
   it('drops a progress count somebody adds to the book response', () => {
     const parsed = bookWithPlanResponseSchema.parse({
       ...aBookWithPlan([]),
@@ -409,5 +423,105 @@ describe('bookWithPlanResponseSchema', () => {
 
     expect(parsed).not.toHaveProperty('readDays');
     expect(parsed).not.toHaveProperty('progress');
+  });
+
+  /**
+   * ⚠️ **O INVENTÁRIO CHEGA — Tarefa 44b, e é a MESMA armadilha do `writers`
+   * na 11 e do `readers` na 32** (§6.1): o `serializerCompiler` do Zod descarta
+   * campo não declarado, então um `inventory` que o UseCase devolvesse sem
+   * estar declarado no schema sairia **apagado**, com 200 e sem erro nenhum — e
+   * a margem mostraria a ausência como se fosse o dado.
+   */
+  it('carries the inventory of the acervo out', () => {
+    const parsed = bookWithPlanResponseSchema.parse({
+      ...aBookWithPlan([]),
+      inventory: { notes: 18, highlights: 9 },
+    });
+
+    expect(parsed.inventory).toEqual({ notes: 18, highlights: 9 });
+  });
+
+  /**
+   * Obrigatório, não opcional — o mesmo argumento dos dois irmãos acima. `0` é
+   * a resposta de "ninguém escreveu ainda", e um `undefined` só significaria
+   * "o servidor esqueceu": a margem não pode ter de distinguir as duas coisas.
+   */
+  it('refuses a response without the inventory', () => {
+    const withoutInventory = aBookWithPlan([]);
+    delete withoutInventory['inventory'];
+
+    expect(bookWithPlanResponseSchema.safeParse(withoutInventory).success).toBe(
+      false,
+    );
+  });
+
+  /** O último grifo chega, e chega ESTREITO. */
+  it('carries the last highlight out', () => {
+    const parsed = bookWithPlanResponseSchema.parse({
+      ...aBookWithPlan([]),
+      lastHighlight: {
+        id: 'highlight-1',
+        userId: 'user-b',
+        quote: 'encaixar-se é o oposto de pertencer',
+        color: '#facc15',
+        page: 138,
+      },
+    });
+
+    expect(parsed.lastHighlight).toEqual({
+      id: 'highlight-1',
+      userId: 'user-b',
+      quote: 'encaixar-se é o oposto de pertencer',
+      color: '#facc15',
+      page: 138,
+    });
+  });
+
+  /**
+   * ⚠️ **O `commentDoc` NÃO ATRAVESSA, e é o ponto do schema estreito.** A
+   * margem desenha cor, página, nome e trecho; carregar a árvore ProseMirror do
+   * comentário em toda abertura de livro seria tráfego que ninguém desenha.
+   * Este teste é o acusador de um `highlightResponseSchema` cheio posto no
+   * lugar do estreito — uma troca que compilaria e ficaria verde em todo o
+   * resto.
+   */
+  it('drops the comment tree of the last highlight', () => {
+    const parsed = bookWithPlanResponseSchema.parse({
+      ...aBookWithPlan([]),
+      lastHighlight: {
+        id: 'highlight-1',
+        userId: 'user-b',
+        quote: 'um trecho',
+        color: '#facc15',
+        page: null,
+        commentDoc: { type: 'doc', content: [] },
+        commentText: 'o que eu achei',
+      },
+    });
+
+    expect(parsed.lastHighlight).not.toHaveProperty('commentDoc');
+    expect(parsed.lastHighlight).not.toHaveProperty('commentText');
+  });
+
+  /**
+   * `null` é o valor NORMAL — livro recém-cadastrado não tem grifo nenhum —, e
+   * é `.nullable()` e não `.optional()` de propósito: com `optional` o
+   * serializer aceitaria uma resposta SEM o campo, e a tela leria `undefined`
+   * onde espera `null`. O acusador do `.optional()` reintroduzido é o teste
+   * abaixo.
+   */
+  it('accepts a book with no highlight at all', () => {
+    expect(
+      bookWithPlanResponseSchema.parse(aBookWithPlan([])).lastHighlight,
+    ).toBeNull();
+  });
+
+  it('refuses a response without the lastHighlight key', () => {
+    const withoutLast = aBookWithPlan([]);
+    delete withoutLast['lastHighlight'];
+
+    expect(bookWithPlanResponseSchema.safeParse(withoutLast).success).toBe(
+      false,
+    );
   });
 });

@@ -8,6 +8,7 @@ import {
   createBookSchema,
   editBookSchema,
   errorSchema,
+  type LastHighlightResponse,
   listBooksQuerySchema,
   type PlanItemResponse,
   replacePlanResponseSchema,
@@ -17,6 +18,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 
 import type { Book, ReadingPlanItem } from '../domain/book';
+import type { Highlight } from '../domain/highlight';
 import { handleDomainError } from '../http/handle-domain-error';
 import { buildRepositories } from '../http/repositories';
 import { ArchiveBook } from '../usecases/archive-book';
@@ -57,6 +59,32 @@ function toPlanItemResponse(item: ReadingPlanItem): PlanItemResponse {
   };
 }
 
+/**
+ * O último grifo da margem → a resposta ESTREITA (Tarefa 44b).
+ *
+ * Quatro campos mais o `id`, e nada além: é o que
+ * `LivroDesktop.dc.html:211-218` desenha. O `commentDoc` — a árvore
+ * ProseMirror do comentário — fica no servidor de propósito: a margem nunca o
+ * mostra, e carregá-lo em toda abertura de livro seria o mesmo defeito de
+ * tráfego que os métodos estreitos do repositório existem para não cometer.
+ *
+ * `null` entra e `null` sai: livro sem grifo nenhum é o caso comum de um livro
+ * recém-cadastrado, e a margem simplesmente não desenha o bloco.
+ */
+function toLastHighlightResponse(
+  highlight: Highlight | null,
+): LastHighlightResponse | null {
+  if (highlight === null) return null;
+
+  return {
+    id: highlight.id,
+    userId: highlight.userId,
+    quote: highlight.quote,
+    color: highlight.color,
+    page: highlight.page,
+  };
+}
+
 export const bookRoutes: FastifyPluginAsyncZod<{
   prisma: PrismaClient;
 }> = async (app, options) => {
@@ -82,6 +110,12 @@ export const bookRoutes: FastifyPluginAsyncZod<{
     // gêmea `GET /books/:bookId/readers` não existe, e não vai existir — a
     // `/writers` equivalente está sem cliente desde a Tarefa 11.
     repos.readingLogs,
+    // E o grifo, pela TERCEIRA aplicação do mesmo argumento (Tarefa 44b): o
+    // inventário do acervo e o último grifo saem daqui, e não de uma rota de
+    // contagem nem de um envelope com total nas listagens. Buscar
+    // `GET /clubs/:clubId/notes` e `/highlights` só para somar seria uma
+    // terceira requisição nesta tela, contra a regra 1 da Tarefa 28.
+    repos.highlights,
   );
   const editBook = new EditBook(assertMembership, repos.books);
   const archiveBook = new ArchiveBook(assertMembership, repos.books);
@@ -149,6 +183,15 @@ export const bookRoutes: FastifyPluginAsyncZod<{
           // `bookWithPlanResponseSchema`), e omitir aqui deixaria esta rota
           // quebrada no dia em que ele sair.
           readers: [],
+          // ⚠️ E o inventário de um livro criado NESTE instante é zero e zero —
+          // a verdade, não um placeholder: ninguém teve tempo de escrever nem
+          // de grifar. O campo é obrigatório no schema pelo mesmo argumento do
+          // `writers`: com `.optional()` o front ganharia um caso `undefined`
+          // que só significa "o servidor esqueceu".
+          inventory: { notes: 0, highlights: 0 },
+          // E não há último grifo, pela mesma razão. `null` é o valor normal
+          // deste campo, não a ausência dele.
+          lastHighlight: null,
         });
       } catch (error) {
         return handleDomainError(error, reply);
@@ -210,7 +253,7 @@ export const bookRoutes: FastifyPluginAsyncZod<{
     },
     async (req, reply) => {
       try {
-        const { book, planItems, writers, readers } =
+        const { book, planItems, writers, readers, inventory, lastHighlight } =
           await getBookWithPlan.execute({
             bookId: req.params.bookId,
             actorUserId: req.user.sub,
@@ -224,9 +267,21 @@ export const bookRoutes: FastifyPluginAsyncZod<{
           // sem erro. → CONVENCOES-CODIGO §6.1, regra 35.
           writers,
           // E o `readers`, pela mesma razão e com a mesma armadilha (regra 14
-          // da Tarefa 32). Nenhum contador viaja junto: progresso é presença,
-          // e o schema o apagaria de qualquer forma.
+          // da Tarefa 32). Nenhum contador de PROGRESSO viaja junto: progresso
+          // é presença, e o schema o apagaria de qualquer forma.
           readers,
+          // ⚠️ O INVENTÁRIO DO ACERVO (Tarefa 44b), com a MESMA armadilha das
+          // duas linhas acima: o serializer do Zod descarta campo não
+          // declarado, então um `inventory` esquecido no
+          // `bookWithPlanResponseSchema` sairia APAGADO, com 200 e sem erro.
+          // Hoje quem o cobra antes disso é o COMPILADOR — os dois campos são
+          // obrigatórios no schema, como o `readers` passou a ser na 32b.
+          inventory,
+          // O último grifo, PROJETADO aqui: o UseCase devolve a entidade
+          // inteira (é uma linha só), e a margem desenha quatro coisas. O
+          // `commentDoc` não viaja — o schema estreito é que decide isso, e
+          // este `toLastHighlightResponse` é quem o obedece.
+          lastHighlight: toLastHighlightResponse(lastHighlight),
         });
       } catch (error) {
         return handleDomainError(error, reply);

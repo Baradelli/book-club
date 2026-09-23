@@ -4063,7 +4063,7 @@ API o `FilterBar` da 41 acabou expondo.
       conserto do M15 tirou uma string de classes copiada à mão e usou um componente que a
       tela já importava._
 
-- [ ] **44b** — **"Neste livro" e "Último grifo" na margem do livro.** ⚠️ **Decisão do dono de
+- [x] **44b** — **"Neste livro" e "Último grifo" na margem do livro.** ⚠️ **Decisão do dono de
       2026-09-22: ela existe porque o dono ABRIU EXCEÇÃO ao fora-de-escopo do MVP 3.5 e
       autorizou backend.** Os dois blocos saíram da Tarefa 44 pela regra 9 dela — a contagem
       de acervo pede backend e "Último grifo" pede chave nova.
@@ -4083,6 +4083,237 @@ API o `FilterBar` da 41 acabou expondo.
       ⚠️ **O custo independente:** buscar as listagens para contar seria uma **terceira
       requisição** nesta tela, contra a regra 1 da Tarefa 28.
       → `tasks/44b-neste-livro-e-o-ultimo-grifo.md`
+
+      _**ENTREGUE em 2026-09-23.** As contagens entraram no `getBookWithPlan` como previsto
+      — **a terceira aplicação** do argumento de `get-book-with-plan.ts`, sem rota de
+      contagem e sem envelope nas listagens. Três métodos estreitos nasceram:
+      `NoteRepository.activeCountByBook`, `HighlightRepository.activeCountByBook` e
+      `HighlightRepository.lastActiveByBook` (o último **é ordenado por contrato** —
+      `createdAt desc`, depois `id asc` —, porque "o primeiro item de um `find` que não
+      promete ordem" não é o último grifo). ⚠️ ~~**a ÚNICA leitura de coleção do projeto que
+      promete ordem**~~ — **esta frase era FALSA e foi corrigida na rodada de correção**
+      (bloco abaixo): o `find` do `ActivityEventRepository` já promete a mesma ordem desde
+      a Tarefa 33, o `findByBook` do plano promete `order` crescente, e este método nem
+      devolve coleção. O schema do
+      `shared` ganhou `bookInventoryResponseSchema` e `lastHighlightResponseSchema`.
+      **Nenhuma migration**: `md5sum` do `schema.prisma` igual antes e depois._
+
+      _⚠️⚠️ **O MUTANTE QUE JUSTIFICA A FATIA É INVISÍVEL PARA A SUÍTE UNITÁRIA, e a
+      medição é o argumento.** Trocar o `count()` por um `findMany` com o mesmo `where`,
+      o mesmo `orderBy` e o mesmo `take: FIND_ROW_LIMIT` — ou seja, a implementação errada
+      que alguém escreveria copiando o `find` de cima — passa por **1987 testes unitários
+      sem um vermelho**, porque os fakes não têm teto de linhas. Quem o acusa são **2**
+      testes de contrato (`…past the 500-row valve of find()`, nota e grifo), que gravam
+      501 linhas e exigem **501**. É o §7.10 do `CONVENCOES-CODIGO` com o endereço escrito
+      nos dois fakes e nas duas implementações Prisma._
+
+      _⚠️ **DUAS AFIRMAÇÕES DESTE ARQUIVO E DA SPEC CAÍRAM, e a spec foi corrigida nos dois
+      lugares:** (a) a decisão G dizia que "Ver o acervo do livro" era **chave nova** —
+      ela **já existia** desde a Tarefa 28 (`pages.book.acervoLink`, `pt.ts:270`, com o
+      valor exato do artboard), então **uma** chave nasceu, não duas; (b) a regra 7 dizia
+      que a margem "só existe acima de 1120px" — o `MarginRail` é montado **sempre** e
+      desce para o fluxo abaixo disso (`reading-column.tsx:186-207`). A (a) teve
+      consequência de produto: como o corpo da tela já tinha o mesmo link em todas as
+      larguras, o terceiro link da margem exigiu um **par de media queries mutuamente
+      exclusivas** (o corpo com `min-[1120px]:hidden`, a margem com
+      `hidden min-[1120px]:inline-flex`), que é o mesmo desenho das duas lombadas do
+      cabeçalho. O teste `has ONE link to the collection` foi **trocado** por um que mede a
+      exclusão mútua — mais apertado que o anterior, que só sabia contar elementos._
+
+      _**O desenho do grifo na margem foi EXTRAÍDO** para
+      `packages/app/src/pages/margin-highlight.tsx` (§7.1, "extrair, não cobrir duas
+      vezes"): é o MESMO bloco que a Tarefa 43 já desenha na tela do dia, e a segunda cópia
+      seria byte a byte. Efeito colateral medido: a bolinha da caneta **não tinha acusador
+      nenhum** para o `aria-hidden` desde a 43, e passou a ter **1**. ⚠️ **Resta UM
+      componente da 41b por consumir — o `StreakSeal`, que entra na 45** (a contagem da
+      linha (c) da Tarefa 44 continua valendo)._
+
+      _**Onze mutantes aplicados, onze acusados** — cada um com `md5sum`/`cp -p` próprio,
+      aplicado por script ancorado, conferido por `grep` e restaurado com `md5sum -c` mais
+      `diff` por conteúdo. Os obrigatórios da spec: a caneta fixa em `a` (a armadilha do
+      amarelo do canvas) **1**; o `aria-hidden` da bolinha **1**; o bloco escondido em toda
+      largura **1 cada**; o placar "{count} de 27" na margem **54**; o `status` fora do
+      `where` **1** (fakes) e **4** (Prisma); o corte por `bookId` fora **3**. A tabela
+      completa está na nota nº 5 de `tasks/44b-neste-livro-e-o-ultimo-grifo.md`._
+
+      _**Números de 2026-09-23, tudo verde:** shared **607** (+6) · ui **303** · backend
+      **1987** (+12) · app **931** (+4) · integração **642** (+13). Chunk de entrada
+      **444.876 B** (era 443.670; **+1.206 B** — teto 450.000, **sobram 5.124**) · CSS
+      **35.229 B** (+49) · `index.html` **1.638 B** e editor **449.522 B** inalterados ·
+      precache 26 / **1190,63 KiB**. Tamanho pelo contador canônico: `book.tsx`
+      **360 → 408**, `day-note.tsx` **506 → 478**, `margin-highlight.tsx` **45** (novo).
+      ⚠️ **A regra 10 da spec dizia 356 para o `book.tsx`** — era o número do fim da
+      Tarefa 44, antes da rodada de correção; o item (b) acima já registrava **360**, e é
+      ele que está certo. ⚠️ **A regra 11 dizia 443.693 B de entrada e 6.307 de folga** —
+      também o número de antes da correção; o item (d) acima já registrava 443.670 e 6.330.
+      As duas corrigidas na spec._
+
+      _**O banco de desenvolvimento do dono não mudou**, provado POR CONTEÚDO (retrato das
+      13 tabelas com id, chaves e texto, nunca contagem): `md5` idêntico antes e depois das
+      cinco execuções de integração, três delas com mutante aplicado. ⚠️ **E o `afterAll`
+      de `book-routes.integration.test.ts` ganhou a limpeza do GRIFO, que faltava** — sem
+      ela a fatia estouraria em `Highlight_bookId_fkey` **com os testes verdes**, que é a
+      armadilha que o `ActivityEvent` (34), o `PushSubscription` (36) e o `planItemId` do
+      grifo (38i) já pregaram três vezes._
+
+      _**RODADA DE CORREÇÃO DA 44b, 2026-09-23.** A auditoria por mutação achou **cinco
+      mutantes sobreviventes** e **seis afirmações falsas**. Os cinco ganharam acusador, e
+      cada acusador foi provado pelo mutante que o justifica._
+
+      _⚠️⚠️ **DUAS DECISÕES DO DONO (2026-09-23).**_
+
+      _**(D1) O teto de linhas do `book.tsx` sobe para 420 linhas canônicas, com a data ao
+      lado.** A tela estava em **408** pelo contador canônico (`acervo.tsx:115-126`, *"o
+      único do projeto"*) contra o ~350 que a Tarefa 32b escreveu, e a rodada a levou a
+      **414** (os dois filetes do canvas, abaixo). **O ~350 da 32b passa a valer como
+      HISTÓRICO, riscado-e-explicado, não apagado** — ele está citado por outras fatias, e a
+      numeração da **lição nº 8 do MVP 1** tem de continuar significando o que significava
+      para quem já a citou; leia-o como data, não como proibição em vigor. Registrado em
+      três lugares: aqui, no docblock do `book.tsx` e em
+      `tasks/32b-marca-de-leitura-na-tela.md:126`. **Por que subiu:** entre a 32b e hoje a
+      tela ganhou a **lombada**, o **sumário**, a **margem de desktop** (Tarefa 44) e o
+      **inventário** (44b) — quatro coisas do canvas, nenhuma de conveniência. Série
+      medida: 247 → 277 → 356 → 360 → 408 → **414** (folga de **6**)._
+
+      _⚠️⚠️ **E A IRONIA, MEDIDA E REGISTRADA — é registro, não acusação; serve para a
+      próxima fatia não repetir.** A 44b **extraiu 45 linhas** (`margin-highlight.tsx`) e se
+      anotou como fatia que dividiu; o corte, porém, saiu do **`day-note.tsx`** (506 → 478,
+      **−28**). **A tela que estourou não perdeu uma linha.** A extração estava certa pelo
+      §7.1 e o número dela é real — o que faltou foi notar que o alívio foi para o arquivo
+      errado. **Extrair de A não é encolher B.**_
+
+      _**(D2) Uma fatia nova, a 44c, vai tirar as telas de ADMINISTRAÇÃO do primeiro
+      carregamento** (code-splitting por rota). **A spec é do dono** e não foi escrita nesta
+      rodada; a rodada **não** inventou code-splitting e **não** mexeu no teto do
+      `bundle-guard`. O motivo é o chunk de entrada: **444.876 B** contra o teto de 450.000,
+      **5.124 de folga (1,1%)**, com as Tarefas 45, 46 e 47 ainda por vir e a 48 como
+      veredito. → `tasks/44c-admin-fora-do-primeiro-carregamento.md`, escrita pelo dono em
+      2026-09-23._
+
+      _**Os cinco mutantes sobreviventes, cada um com o acusador que nasceu para ele.**
+      Protocolo por mutante: `md5sum` + `cp -p` antes, script `.mjs` **ancorado** que conta a
+      âncora e estoura se ≠ 1, confirmação por `grep` depois de aplicado, execução da suíte
+      inteira, restauração por `cp -p` com `md5sum -c` **e** `diff` por conteúdo._
+
+      _**(1) O link do corpo escondido em TODA largura** (`flex min-[1120px]:hidden` →
+      `hidden min-[1120px]:hidden`): era **0 de 931**. Abaixo de 1120px a tela do livro
+      ficava **sem nenhum caminho para o acervo**, com a suíte verde. É a **terceira**
+      aparição deste padrão no arquivo (as duas lombadas do cabeçalho, a legenda "As marcas"
+      da 44, este par) e a primeira em que só metade havia sido fechada. Agora **1
+      acusador**, por `not.toMatch(/(^|\s)hidden(\s|$)/u)` — com fronteira de palavra, porque
+      um `toContain('hidden')` casaria `min-[1120px]:hidden` e daria o falso verde de novo._
+
+      _**(2) O ramo `page === null` do `MarginHighlight`** renderizando `'PLACAR 18 de 27'`:
+      era **0 de 931**, e **a varredura anti-culpa inteira passava ao largo** — não por
+      fraqueza dela, mas porque **nenhum teste do projeto renderizava um grifo sem página**
+      (`grep "page: null"` = 0 em `book.test.tsx` e em `day-note.test.tsx`). Guarda que nunca
+      renderiza o estado não guarda o estado (§7.9). Agora **1 acusador**, e ele chama a
+      varredura anti-culpa nesse estado._
+
+      _**(3) O desempate do `lastActiveByBook` no fake**, invertido: era **0 de 1987**. →
+      bloco próprio, abaixo._
+
+      _**(4) O `border-b border-line-soft` das linhas de inventário**
+      (`LivroDesktop.dc.html:198-205`): era **0 de 931** — toda asserção da margem era sobre
+      TEXTO, e texto não vê traço. Agora **1 acusador**._
+
+      _**(5) Trocar de lugar "Neste livro" e "Último grifo"** na margem: era **0 de 931**.
+      Agora **1 acusador**, e é a mesma asserção que fecha os dois filetes que faltavam._
+
+      _⚠️⚠️ **OS DOIS FILETES DA MARGEM NÃO EXISTIAM, e a Definição de pronto os marcava
+      como feitos.** O canvas desenha dois (`LivroDesktop.dc.html:194` e `:209`,
+      `height: 1px; background: #e3ddc9`, que é `--border-soft`) e o `rail()` não tinha
+      nenhum — os três `<section>` eram separados só pelo `gap-[26px]`. Desenhados agora,
+      com o segundo DENTRO do `null` do bloco do grifo: um separador escrito "depois de toda
+      seção" deixaria um traço solto no livro recém-cadastrado, que é o estado mais comum de
+      todos. A guarda é **uma asserção só** — a lista de rótulos na ordem do DOM —, e ela
+      fecha a ordem, a presença e a contagem dos separadores de uma vez. Mutantes: filete de
+      cima apagado → **2 acusadores**; segundo filete escrito fora do `null` → **1**._
+
+      _⚠️⚠️ **AFIRMAÇÃO FALSA CORRIGIDA: o `lastActiveByBook` NÃO é "a única leitura de
+      coleção do projeto que promete ordem".** Medido, caem três coisas: (a)
+      `usecases/ports/activity-event-repository.ts:101-102` já diz, por escrito e desde a
+      decisão C da Tarefa 33, que **ele** é o único que promete — e promete a **mesma** ordem
+      (`createdAt` desc, `id` asc), com a mesma justificativa do empate no milissegundo; (b)
+      `usecases/ports/reading-plan-item-repository.ts:98` promete `order` crescente; (c) o
+      `lastActiveByBook` **não é leitura de coleção** — devolve um registro ou `null`. Havia
+      **duas afirmações de unicidade que se contradiziam**, sobre a mesma propriedade, em
+      dois arquivos: é a lição nº 3 do MVP 1 (regra que mora em N lugares) aplicada a uma
+      AFIRMAÇÃO em vez de a um código. As duas foram corrigidas juntas, e o precedente está
+      citado no docblock dos **dois** ports._
+
+      _⚠️⚠️ **O FAKE NÃO REPRODUZIA A ORDEM DO PROJETO, e o docblock afirmava que sim.** O
+      `lastActiveByBook` do `HighlightRepositoryFake` desempatava com `localeCompare`; os
+      outros quatro lugares do backend comparam por **code point** (`list-highlights.ts`,
+      `list-notes.ts`, `list-books.ts` e o `compareForTheFeed` do
+      `ActivityEventRepositoryFake`). ⚠️ **Sendo justo: o defeito era LATENTE** — varridos
+      por força bruta os 1.206.681 pares do alfabeto real dos ids (`randomUUID()` =
+      `[0-9a-f-]`), **zero divergências**; os dois só discordam com maiúscula
+      (`'A'.localeCompare('a')` = 1, `'A' < 'a'` = true), e id de FIXTURE é escrito à mão.
+      Mas o desempate **não tinha acusador nenhum**, e o §7.1 fecha com a frase exata:
+      *"fidelidade afirmada em comentário e não em teste é fidelidade que o próximo refactor
+      apaga"*._
+
+      _**A saída foi EXTRAIR, e a escolha está MEDIDA nas duas opções.** (a) trocar só o fake
+      pelo code point, mais um `it()` unitário: o mutante "inverter o desempate" dá **1
+      acusador**. (b) extrair o comparador para um dono só — `domain/newest-first.ts`, com o
+      tipo estrutural `NewestFirst` no molde do `PlanItemMark` da Tarefa 31: o mesmo mutante
+      no dono dá **8 acusadores em 6 arquivos**, porque as quatro cópias que já tinham guarda
+      passaram a ser guardadas pelo mesmo dono. **Escolhida a (b)** — é o §7.1 na frase que
+      ele mesmo prescreve (*"extrair, não cobrir duas vezes"*), o mesmo argumento que a 44b
+      invocou para o `MarginHighlight` e não aplicou aqui, e o padrão do `sql-equality.ts`
+      (23) e do `club-names.ts` (28). A conta estava escrita **cinco** vezes, não duas._
+
+      _**Outras quatro correções, todas com mutante.** (A4) A varredura de fonte da cor de
+      perigo (`book.test.tsx`) tinha **lista literal** de dois arquivos, e a tela passou a ter
+      **três** na 44b: ficou de fora `margin-highlight.tsx`, justamente o que **pinta** (a
+      caneta, a bolinha, o papel do `GrifoText`). ⚠️ **O docblock imediatamente acima dela é
+      o próprio aviso, escrito na Tarefa 32b** — *"uma varredura de fonte que ficasse só no
+      `book.tsx` teria perdido exatamente o arquivo novo"* —, e a mesma lição foi repetida no
+      mesmo arquivo pela fatia que fez o `split`. Provado: com a lista de dois e a cor
+      plantada no arquivo novo, o `it()` **passava**; com a de três, **falha**. O par
+      positivo do terceiro arquivo é a linha que pinta a caneta. A varredura irmã de
+      `adr-0002-iconography.test.ts:57-64` **é recursiva** e absorveu o arquivo sozinha
+      (medido); só esta era por lista. (M1) A nota 6 afirmava que a extração do
+      `MarginHighlight` era *"preservadora de comportamento por construção"* porque
+      927 = 927 — **contagem igual não é prova**, e o mutante (2) acima é a demonstração;
+      frase corrigida. (M4) A extração **moveu um acusador de suíte sem declarar**: trocar
+      `Página N · Nome` por `Nome · Página N` dava **1 acusador, e ele estava em
+      `book.test.tsx`** — o formato da linha **da tela do dia** passou a ser guardado pela
+      suíte da tela do **livro**. Não é regressão (medido em `dcac49a`: antes da extração a
+      suíte do dia também não assertava o formato), mas agora são **2**, um em cada suíte.
+      (B2) O teste de navegação clicava **só** o link da margem; o do corpo — o único que a
+      pessoa vê no celular — não era clicado por teste nenhum. Agora é: o mutante "âncora
+      crua no lugar do `Link`" dá **1 acusador**, e ele é o `it()` novo. (B3) O docblock do
+      `activeCountByBook` do fake do grifo **delegava** o endereço do §7.10 (*"está escrito
+      no irmão deste método"*) enquanto os outros três nomeavam o próprio acusador; nomeado._
+
+      _⚠️ **E A ABERTURA DE LIVRO DEIXOU DE SER SEIS IDAS AO BANCO EM FILA (B4).** A 44b
+      acrescentou três `await` sequenciais sobre os quatro que já existiam, e os seis são
+      independentes. **Medido contra o Postgres de desenvolvimento** (200 amostras, 20 de
+      aquecimento, no livro real do banco do dono, só leitura): sequencial **mediana
+      3,68 ms**, `Promise.all` **1,03 ms** — **−2,64 ms, 71,9% do tempo de banco da
+      requisição principal desta tela**; só as três da 44b custavam **0,97 ms**. Em localhost
+      a ida de rede é quase zero, e com RTT de verdade a conta piora linearmente: pagam-se
+      **seis** viagens em vez de uma. ⚠️ **O `bookForActor` fica FORA do lote** — quem não é
+      membro não descobre nem o TAMANHO do acervo do clube, e o acusador disso é o `it()`
+      que já existia. ⚠️ **E o paralelismo tem acusador SEM cronômetro** (§7.3): a primeira
+      leitura fica presa numa promessa que o teste controla, e as outras cinco já têm de
+      estar CONTADAS enquanto ela não respondeu — um `expect` de duração seria a asserção que
+      se autoajusta do §7.8 com roupa de performance._
+
+      _**Números depois da rodada (2026-09-23):** shared **607** · ui **303** · backend
+      **1994** (+7: 5 do `newest-first`, 1 do desempate do último grifo, 1 do paralelismo) ·
+      app **937** (+6) · integração **642**. `typecheck`, `lint` e `prettier --check` verdes.
+      Chunk de entrada **445.040 B** (era 444.876; **+164 B** — teto 450.000, **sobram
+      4.960**, 1,1%) · CSS **35.279 B** (+50, as duas classes do filete) · `index.html`
+      **1.638 B** e editor **449.522 B** inalterados · precache 26 / **1190,84 KiB**.
+      Tamanho pelo contador canônico: `book.tsx` **408 → 414** (teto novo **420**, folga
+      **6**); `day-note.tsx` **478** e `margin-highlight.tsx` **45**, inalterados.
+      **Nenhuma migration; `schema.prisma` intocado**
+      (`968c9986f7a2dfb4ccbd738b13d44715`), e o banco do dono provado idêntico POR CONTEÚDO
+      (`md5` `44e6ea660a6f7f12b3b1ed83c8021a9e`: as mesmas 3 · 3 · 4 · 5 · 24 · 11 · 8 · 19 ·
+      37 · 2 · 3 · 2 · 0 linhas)._
 - [ ] **45** — **Início.** Correntes e feed descem para a margem; "Cadastrar o livro do mês"
       sai do primeiro lugar da tela e vira link no rodapé — é ação de admin que hoje empurra
       para baixo o gesto que é a razão de o app existir. ⚠️ **O `atRisk` fica.**

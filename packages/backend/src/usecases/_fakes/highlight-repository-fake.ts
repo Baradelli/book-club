@@ -1,4 +1,5 @@
 import type { Highlight } from '../../domain/highlight';
+import { compareNewestFirst } from '../../domain/newest-first';
 import type {
   HighlightFilter,
   HighlightPatch,
@@ -12,6 +13,8 @@ export class HighlightRepositoryFake implements HighlightRepository {
   private updateCallCount = 0;
   private findFiltersSeen: HighlightFilter[] = [];
   private planItemIdsWithAnyHighlightCallCount = 0;
+  private activeCountByBookCallCount = 0;
+  private lastActiveByBookCallCount = 0;
 
   /**
    * ⚠️ **NENHUM ÍNDICE ÚNICO É EMULADO AQUI, e é decisão medida** — a direção
@@ -160,6 +163,76 @@ export class HighlightRepositoryFake implements HighlightRepository {
   }
 
   /**
+   * Quantos grifos ACTIVE o livro tem — o avulso INCLUÍDO.
+   *
+   * ⚠️ **Sem teto de linhas aqui, e é fidelidade** (§7.1): o `take: 500` do
+   * `PrismaHighlightRepository.find` é válvula do `find`, não limite da
+   * tabela, e o `count()` do Postgres não a conhece.
+   *
+   * ⚠️ **A consequência, e o acusador ESCRITO AQUI — não delegado ao irmão**
+   * (§7.10). Como o fake não trunca, nenhum teste unitário pode acusar um
+   * `count()` trocado por `find(...).length` no repositório Prisma: contra
+   * este fake os dois dão o mesmo número. Quem acusa é o teste de contrato
+   * `counts every ACTIVE highlight of the book, past the 500-row valve of find()`.
+   *
+   * ⚠️ **O endereço estava DELEGADO até a rodada de correção da Tarefa 44b**
+   * ("está escrito no irmão deste método"), e os outros três docblocks desta
+   * família nomeavam o próprio. Um endereço que manda procurar noutro arquivo
+   * é a mesma classe de defeito que o `dayRange` do `CLAUDE.md` registra: o
+   * próximo leitor procura, não acha o nome, e escreve um terceiro.
+   */
+  async activeCountByBook(bookId: string): Promise<number> {
+    this.activeCountByBookCallCount += 1;
+
+    return [...this.store.values()].filter(
+      (highlight) =>
+        highlight.bookId === bookId && highlight.status === 'ACTIVE',
+    ).length;
+  }
+
+  /**
+   * O grifo ACTIVE mais recente do livro — e este método **ordena**, ao
+   * contrário de todo o resto deste fake.
+   *
+   * ⚠️ **A ARMADILHA DO `inReverseInsertionOrder` NÃO VALE AQUI, e é por
+   * contrato**: o port promete `createdAt desc`, depois `id asc`, porque o
+   * `createdAt` sozinho não é ordem total e o empate no mesmo milissegundo é o
+   * caso normal. Um fake que devolvesse "o último inserido" deixaria passar um
+   * Prisma sem `orderBy` — e a margem mostraria um grifo diferente a cada
+   * recarga.
+   *
+   * O desempate é `id` CRESCENTE, o mesmo do `find` e do `listHighlights`: a
+   * margem e o acervo concordam sobre quem é o mais recente.
+   *
+   * ⚠️⚠️ **A COMPARAÇÃO É O `compareNewestFirst` DO DOMÍNIO, e a entrega
+   * original deste método ERRAVA aqui** — ela escreveu
+   * `a.id.localeCompare(b.id)` enquanto os outros quatro lugares do backend
+   * comparavam por **code point**. Nada acusou: medido na rodada de correção
+   * da Tarefa 44b, **inverter este desempate passava por 1987 testes
+   * unitários sem um vermelho**. É o §7.1 na frase exata dele — *"fidelidade
+   * afirmada em comentário e não em teste é fidelidade que o próximo refactor
+   * apaga"* — e a saída foi a que o próprio §7.1 prescreve: **extrair**
+   * (`domain/newest-first.ts`), não escrever a sexta cópia.
+   *
+   * O acusador unitário deste desempate é
+   * `breaks a createdAt tie by the SMALLER id, never by insertion order`, em
+   * `usecases/__tests__/get-book-with-plan.test.ts`; o do banco real é
+   * `breaks a createdAt tie by id, the same total order the listing uses`, no
+   * contrato do `PrismaHighlightRepository`.
+   */
+  async lastActiveByBook(bookId: string): Promise<Highlight | null> {
+    this.lastActiveByBookCallCount += 1;
+
+    const ofBook = [...this.store.values()].filter(
+      (highlight) =>
+        highlight.bookId === bookId && highlight.status === 'ACTIVE',
+    );
+    const [newest] = ofBook.sort(compareNewestFirst);
+
+    return newest === undefined ? null : this.clone(newest);
+  }
+
+  /**
    * O acervo, para os testes olharem.
    *
    * ⚠️ **ARMADILHA DELIBERADA — não "conserte" esta ordem.** Enumera na ordem
@@ -254,6 +327,22 @@ export class HighlightRepositoryFake implements HighlightRepository {
    */
   get planItemIdsWithAnyHighlightCalls(): number {
     return this.planItemIdsWithAnyHighlightCallCount;
+  }
+
+  /**
+   * Quantas vezes `activeCountByBook` foi chamado — como o `findCalls`.
+   *
+   * Existe para o `getBookWithPlan` poder afirmar que o corte de tenant vem
+   * ANTES da contagem: quem não é membro não descobre **nem o tamanho** do
+   * acervo do clube (§7.3).
+   */
+  get activeCountByBookCalls(): number {
+    return this.activeCountByBookCallCount;
+  }
+
+  /** Quantas vezes `lastActiveByBook` foi chamado — pelo mesmo motivo. */
+  get lastActiveByBookCalls(): number {
+    return this.lastActiveByBookCallCount;
   }
 
   private inReverseInsertionOrder(): Highlight[] {

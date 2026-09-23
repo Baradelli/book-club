@@ -1,4 +1,5 @@
 import type { Book } from '../domain/book';
+import { compareNewestFirst } from '../domain/newest-first';
 import type { AssertMembership } from './assert-membership';
 import type { BookRepository } from './ports/book-repository';
 
@@ -63,8 +64,5 @@ export class ListBooks {
 function compareByMonthDesc(a: Book, b: Book): number {
   if (a.month !== b.month) return a.month < b.month ? 1 : -1;
 
-  const byCreatedAt = b.createdAt.getTime() - a.createdAt.getTime();
-  if (byCreatedAt !== 0) return byCreatedAt;
-
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  return compareNewestFirst(a, b);
 }

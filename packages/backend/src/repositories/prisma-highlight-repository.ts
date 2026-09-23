@@ -300,6 +300,46 @@ export class PrismaHighlightRepository implements HighlightRepository {
   }
 
   /**
+   * Quantos grifos ACTIVE o livro tem — o avulso INCLUÍDO.
+   *
+   * ⚠️ **`count()`, e NUNCA `(await this.find(...)).length`**: o `find` acima
+   * tem `take: FIND_ROW_LIMIT` (500), válvula de segurança e não paginação —
+   * para um livro com 501 grifos o `length` daria **500**. É o irmão exato do
+   * `PrismaNoteRepository.activeCountByBook`, e o docblock de lá é o dono do
+   * argumento.
+   *
+   * O acusador é o teste de contrato
+   * `counts every ACTIVE highlight of the book, past the 500-row valve of find()`
+   * — a suíte unitária não o vê, porque o fake não trunca.
+   */
+  async activeCountByBook(bookId: string): Promise<number> {
+    return this.prisma.highlight.count({ where: { bookId, status: 'ACTIVE' } });
+  }
+
+  /**
+   * O grifo ACTIVE mais recente do livro, ou `null`.
+   *
+   * ⚠️ **`findFirst` COM `orderBy`, e nunca `find(...)[0]`.** Duas razões, e as
+   * duas bastam: puxar até 500 linhas para desenhar uma é trafegar o acervo, e
+   * o `find` **não promete ordem** — quem ordena lá é o `listHighlights`. Aqui
+   * a ordem é contrato do port.
+   *
+   * ⚠️ **`createdAt desc` MAIS `id asc`, e o desempate não é decoração.**
+   * `createdAt` sozinho não é ordem total, e empate no mesmo milissegundo é o
+   * caso normal (duas pessoas do clube salvando ao mesmo tempo). Sem o
+   * desempate, "o último grifo" mudaria a cada recarga, escolhido pelo plano
+   * de execução. É a MESMA ordem do `find` e do `listHighlights`: a margem e o
+   * acervo concordam sobre quem é o mais recente.
+   */
+  async lastActiveByBook(bookId: string): Promise<Highlight | null> {
+    const record = await this.prisma.highlight.findFirst({
+      where: { bookId, status: 'ACTIVE' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+    });
+    return record === null ? null : toDomain(record);
+  }
+
+  /**
    * Dos ids dados, quais têm algum grifo — **inclusive arquivado**.
    *
    * Byte por byte o irmão do `PrismaNoteRepository.planItemIdsWithAnyNote`, e

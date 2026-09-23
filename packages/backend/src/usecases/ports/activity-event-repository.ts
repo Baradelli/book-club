@@ -98,10 +98,29 @@ export interface ActivityEventRepository {
    * "O que aconteceu neste clube" — a leitura do `listActivity` (Tarefa 34) e,
    * através dele, do feed da home (Tarefa 35).
    *
-   * ⚠️ **ELE PROMETE ORDEM, e é o único `find` do projeto que promete** (decisão
-   * C): `createdAt` **DESC**, com desempate por `id` **ASC**. Todos os outros
-   * declaram não prometer ordem, e o fake enumera invertido justamente para
-   * ninguém depender dela (§7.2). Aqui a ordem **é o produto** — feed é
+   * ⚠️ **ELE PROMETE ORDEM, e é o único `find(filter)` do projeto que
+   * promete** (decisão C): `createdAt` **DESC**, com desempate por `id`
+   * **ASC**. Todos os outros `find` declaram não prometer ordem, e o fake
+   * enumera invertido justamente para ninguém depender dela (§7.2).
+   *
+   * ⚠️ **A FRASE DIZIA "o único `find` do projeto" E ISSO ERA CURTO DEMAIS —
+   * corrigido na rodada de correção da Tarefa 44b.** Ela vale para a família
+   * `find(filter)`, e **só** para ela; há outras duas leituras ordenadas nos
+   * ports, e as duas são métodos ESTREITOS, não `find`:
+   *
+   * - `ReadingPlanItemRepository.findByBook` — `order` crescente;
+   * - `HighlightRepository.lastActiveByBook` — a MESMA ordem daqui
+   *   (`createdAt` desc, `id` asc), e nem sequer devolve coleção: é um
+   *   registro ou `null`.
+   *
+   * O registro importa porque a entrega da 44b escreveu, no `BACKLOG.md`, que
+   * o `lastActiveByBook` era *"a ÚNICA leitura de coleção do projeto que
+   * promete ordem"* — duas afirmações de unicidade que se contradiziam, sobre
+   * a mesma propriedade, em dois arquivos. É a lição nº 3 do MVP 1 (regra que
+   * mora em N lugares) aplicada a uma AFIRMAÇÃO em vez de a um código. As duas
+   * foram corrigidas juntas.
+   *
+   * Aqui a ordem **é o produto** — feed é
    * cronologia invertida por definição —, então ela é contrato, tem teste
    * contra o banco e tem fixture hostil.
    *

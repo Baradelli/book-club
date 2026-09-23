@@ -396,24 +396,36 @@ export const pt = {
         que o clube escreveu, não a medida do que ninguém escreveu — não tem
         total contra o qual comparar, que é o que faz um placar.
 
-        ⚠️⚠️ **O CONSUMIDOR DESTAS TRÊS CHAVES É A TAREFA 44b, e isso é decisão
-        do dono de 2026-09-22.** Elas nasceram na Tarefa 40 e a Tarefa 44 — que
-        deveria consumi-las — **parou** na regra 9: `GET /books/:bookId` não
-        devolve contagem nenhuma, e as duas listagens que teriam os dados
+        ⚠️⚠️ **AS TRÊS GANHARAM CONSUMIDOR NA TAREFA 44b (2026-09-23), e a
+        espera durou quatro fatias.** Elas nasceram na Tarefa 40 e a Tarefa 44 —
+        que deveria consumi-las — **parou** na regra 9: `GET /books/:bookId` não
+        devolvia contagem nenhuma, e as duas listagens que teriam os dados
         devolvem array cortado em `FIND_ROW_LIMIT = 500`. O dono abriu exceção
         ao fora-de-escopo do MVP 3.5 e autorizou backend para isto, numa fatia
-        própria: `docs/tasks/44b-neste-livro-e-o-ultimo-grifo.md`.
+        própria (`docs/tasks/44b-neste-livro-e-o-ultimo-grifo.md`): hoje a
+        resposta do livro traz `inventory: { notes, highlights }`, contado com
+        `count()` no banco, e quem o desenha é a margem de `book.tsx`.
 
-        ⚠️ **Até lá elas continuam SEM CONSUMIDOR de propósito** — não são
-        resto esquecido, são encomenda com endereço. Quem passar por aqui antes
-        da 44b não deve nem apagá-las nem ligá-las a uma contagem improvisada:
-        a nota nº 2 de `docs/tasks/44-o-livro.md` registra, com a medição, por
-        que o número "quase certo" que estava à mão estaria **errado**.
+        ⚠️ **O NÚMERO É EXATO, e a espera foi por isso.** O atalho que estava à
+        mão — somar os `writers[].userIds` que a rota já devolvia — é exato para
+        a anotação do DIA (o índice único cuida disso) e **cegaria a avulsa**,
+        porque índice único não compara nulo com nulo. Um número plausível e
+        errado faz a pessoa seguir; um `undefined` a faz parar. A medição está na
+        nota nº 2 de `docs/tasks/44-o-livro.md`.
+
+        ⚠️ **"Último grifo" NASCEU AQUI, na 44b** — a regra 9 da Tarefa 44
+        proibia chave nova, e ela valia **lá**. O trecho, a página e o nome
+        vêm de dado; só o rótulo é catálogo. As outras duas frases do bloco já
+        existiam: o endereço do acervo é `pages.book.acervoLink`, logo acima,
+        e a página do grifo é `pages.acervo.item.page` — nenhuma das duas
+        precisou de irmã nova (medido na 44b; a spec previa duas chaves novas e
+        só uma era).
       */
       inBook: {
         heading: 'Neste livro',
         notes: 'Anotações do clube',
         highlights: 'Grifos',
+        lastHighlight: 'Último grifo',
       },
     },
     /*

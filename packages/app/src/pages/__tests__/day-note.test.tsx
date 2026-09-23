@@ -344,6 +344,8 @@ function bookReply(
       planItems,
       writers: [],
       readers: [],
+      inventory: { notes: 0, highlights: 0 },
+      lastHighlight: null,
     },
   };
 }
@@ -1205,6 +1207,48 @@ describe('⚠️ the name of whoever wrote it (decision E of Task 42)', () => {
     expect(readableText()).toContain(MARIA_NAME);
     // E o genérico saiu da tela: ele é o FALLBACK, não o texto de sempre.
     expect(readableText()).not.toContain(pt.pages.acervo.item.author.other);
+    expectNoGuilt();
+  });
+
+  /**
+   * ⚠️⚠️ **O FORMATO DA LINHA DE MONO DESTA TELA, GUARDADO NESTA SUÍTE — e
+   * ele passou a viver na suíte da OUTRA tela na Tarefa 44b.**
+   *
+   * Medida da rodada de correção daquela fatia: trocar
+   * `Página {{number}} · Nome` por `Nome · Página {{number}}` dava **1
+   * acusador, e ele estava em `book.test.tsx`**. Nenhum aqui. O desenho é o
+   * mesmo — o `MarginHighlight` foi extraído para um módulo neutro, de
+   * propósito e com razão —, mas o efeito colateral é que o formato da linha
+   * **da tela do dia** passou a ser guardado por um teste que roda na suíte da
+   * tela do **livro**.
+   *
+   * ⚠️ **Não é regressão** (medido no commit `dcac49a`: antes da extração esta
+   * suíte também não assertava o formato, só a presença do trecho). Mas é o
+   * §7.9 outra vez: a guarda existe e mora onde é fácil de escrever, não onde
+   * a propriedade é da tela. Quem apagasse o `it()` do livro apagaria em
+   * silêncio a única prova do desenho desta margem aqui.
+   *
+   * O fixture é hostil de propósito: `Maria Rita` não é quem está lendo
+   * (`Marcos`), e a página (167) não coincide com nenhum id — então "escreveu
+   * 'Você'", "passou o `userId` como nome" e "trocou a ordem dos dois" ficam
+   * todos vermelhos.
+   */
+  it('⚠️ writes the mono line as "Página N · Nome", in THIS order', async () => {
+    await renderDayNote({
+      members: membersReply(),
+      highlights: { status: 200, body: [aHighlight({ id: 'h-maria' })] },
+    });
+
+    const section = screen
+      .getByText(pt.pages.dayNote.highlights.heading)
+      .closest('section');
+    // A linha é a que fica ao LADO da bolinha da caneta — nunca o primeiro
+    // `.font-mono` da seção, que é o `Eyebrow` do rótulo.
+    const dot = section?.querySelector('span[aria-hidden="true"]');
+    expect(dot?.nextElementSibling?.textContent).toBe(
+      `Página 167 · ${MARIA_NAME}`,
+    );
+
     expectNoGuilt();
   });
 

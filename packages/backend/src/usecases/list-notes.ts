@@ -1,3 +1,4 @@
+import { compareNewestFirst } from '../domain/newest-first';
 import type { Note, NoteKind } from '../domain/note';
 import { optionalText } from '../domain/optional-text';
 import type { AssertMembership } from './assert-membership';
@@ -69,25 +70,20 @@ export class ListNotes {
       status: 'ACTIVE' as const,
     });
 
-    // Copia antes de ordenar: o array é do repositório, e mutá-lo é smell de
-    // fronteira — vira hábito e um dia o repositório o guarda em cache.
-    return [...found].sort(compareByCreatedAtDesc);
+    /*
+      A anotação mais recente primeiro — `createdAt` desc, empate por `id`
+      asc. `createdAt` e não `updatedAt`: a nota do dia é reescrita a cada
+      autosave, e por `updatedAt` a lista pularia embaixo do dedo de quem
+      está digitando.
+
+      ⚠️ **A CONTA TEM UM DONO SÓ desde a rodada de correção da Tarefa 44b**
+      (`domain/newest-first.ts`, §7.1 "extrair, não cobrir duas vezes"): ela
+      estava escrita cinco vezes, e a quinta cópia já havia divergido
+      (`localeCompare` em vez de code point) sem nada acusar.
+
+      Copia antes de ordenar: o array é do repositório, e mutá-lo é smell de
+      fronteira — vira hábito e um dia o repositório o guarda em cache.
+    */
+    return [...found].sort(compareNewestFirst);
   }
-}
-
-/**
- * A anotação mais recente primeiro.
- *
- * `createdAt` e não `updatedAt`: a nota do dia é reescrita a cada autosave, e
- * por `updatedAt` a lista pularia embaixo do dedo de quem está digitando.
- *
- * O desempate por `id` existe para a ordem ser DETERMINÍSTICA: duas pessoas
- * salvando no mesmo instante é o caso normal de um clube, e sem ele a ordem
- * sairia como o repositório enumerou — que é diferente entre o fake e o Prisma.
- */
-function compareByCreatedAtDesc(a: Note, b: Note): number {
-  const byCreatedAt = b.createdAt.getTime() - a.createdAt.getTime();
-  if (byCreatedAt !== 0) return byCreatedAt;
-
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }

@@ -118,6 +118,39 @@ export interface NoteRepository {
    */
   planItemWritersByBook(bookId: string): Promise<PlanItemWriter[]>;
   /**
+   * **Quantas** anotações `ACTIVE` o livro tem — o inventário da margem
+   * ("Anotações do clube 18"), Tarefa 44b.
+   *
+   * ⚠️ **MÉTODO PRÓPRIO, E NÃO `(await find({ clubId, bookId })).length`, e
+   * esta é a razão de a fatia existir.** O `find` do `PrismaNoteRepository` tem
+   * `take: FIND_ROW_LIMIT = 500` — válvula de segurança, não paginação —,
+   * então o `length` de um livro com mais de 500 anotações seria **500**: um
+   * número plausível, estável e **errado**, publicado como fato. *Lista
+   * truncada é registro; contagem truncada é mentira.* No Prisma isto é
+   * `count()`, que o banco resolve sem trazer linha nenhuma; o `doc` é a maior
+   * coluna da tabela, e trazer o acervo inteiro para somar 1 seria o mesmo
+   * defeito que o `planItemWritersByBook` acima existe para não cometer.
+   *
+   * ⚠️ **Só `ACTIVE`, e está no NOME de propósito.** Soft delete é `status` +
+   * `archivedAt` (`CLAUDE.md`), e um arquivado somado ao inventário é a mesma
+   * mentira, só menor. O nome carrega a cláusula para ela não poder ser
+   * esquecida na segunda implementação.
+   *
+   * ⚠️ **A AVULSA ENTRA** (`planItemId` nulo). O acervo é por LIVRO e tem
+   * filtro `FREE` (`packages/app/src/pages/acervo-filters.tsx`), então a nota
+   * sem dia de plano é acervo do livro tanto quanto a do dia. É exatamente
+   * aqui que este método se separa do `planItemWritersByBook`, que filtra
+   * `planItemId IS NOT NULL`: somar os `writers` daria a contagem **exata** da
+   * nota do plano (o `@@unique([planItemId, userId])` garante isso) e
+   * **cegaria** a avulsa, sem nada acusando. → a nota nº 2 de
+   * `docs/tasks/44-o-livro.md`.
+   *
+   * Não recebe `clubId`: o corte de tenant é o livro, resolvido pelo
+   * `bookForActor` antes da chamada — o mesmo desenho do
+   * `planItemWritersByBook`.
+   */
+  activeCountByBook(bookId: string): Promise<number>;
+  /**
    * Dos `planItemIds` dados, quais têm **alguma** nota — inclusive arquivada.
    *
    * **Cego a `status` de propósito.** Quem barra a remoção de um dia do plano é

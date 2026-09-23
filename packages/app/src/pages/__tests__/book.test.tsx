@@ -2,8 +2,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import type {
+  BookInventoryResponse,
   BookResponse,
   ClubMemberResponse,
+  LastHighlightResponse,
   PlanItemResponse,
 } from '@clube/shared';
 import { localDay, localTimeZone } from '@clube/shared';
@@ -120,14 +122,24 @@ type Overlay = ReadonlyArray<{
  * O `bookWithPlanReply` do harness fixa `writers: []` e `readers: []` — ele
  * nasceu para o atalho da home, que não olha sobreposição nenhuma. Aqui as duas
  * são o assunto, então o fixture as recebe.
+ *
+ * ⚠️ **O `inventory` E O `lastHighlight` ENTRARAM NA TAREFA 44b**, e entraram
+ * como parâmetros com padrão pelo mesmo motivo das sobreposições: a maioria
+ * dos testes desta tela não fala da margem, e um acervo vazio sem grifo nenhum
+ * é a verdade deles. Quem testa "Neste livro" e "Último grifo" os passa.
  */
 function bookReply(
   book: BookResponse,
   planItems: readonly PlanItemResponse[],
   writers: Overlay = [],
   readers: Overlay = [],
+  inventory: BookInventoryResponse = { notes: 0, highlights: 0 },
+  lastHighlight: LastHighlightResponse | null = null,
 ): Reply {
-  return { status: 200, body: { book, planItems, writers, readers } };
+  return {
+    status: 200,
+    body: { book, planItems, writers, readers, inventory, lastHighlight },
+  };
 }
 
 /**
@@ -2105,6 +2117,385 @@ describe('⚠️ THE BOOK GETS A SPINE, A SEAL AND A MARGIN (task 44, decisions 
     expectNoGuiltWithPlanPosition();
   });
 
+  /**
+   * ⚠️ **"NESTE LIVRO" E "ÚLTIMO GRIFO" — Tarefa 44b**
+   * (`LivroDesktop.dc.html:196-207` e `:211-218`).
+   *
+   * Os dois blocos que a Tarefa 44 **parou** e reportou: o inventário exigia
+   * uma contagem que a API não devolvia, e a contagem das listagens seria
+   * truncada em 500 — *lista truncada é registro; contagem truncada é
+   * mentira*. O dono abriu exceção ao fora-de-escopo do MVP 3.5, o backend
+   * ganhou `inventory` e `lastHighlight`, e as três chaves
+   * `pages.book.inBook.*` da Tarefa 40 finalmente têm consumidor.
+   *
+   * ⚠️ **O FIXTURE É ESCOLHIDO PARA A IMPLEMENTAÇÃO ERRADA FALHAR** (§7.2), e
+   * são quatro propriedades:
+   *
+   * 1. **18 ≠ 9**: trocar os dois números de lugar acusa. Com dois números
+   *    iguais, a troca passaria;
+   * 2. **a cor do grifo é AZUL, não o amarelo da maquete.** É a armadilha mais
+   *    fácil desta fatia: o canvas desenha o bloco em `#c89a44`/`#f0e2b4`, que
+   *    são `--pen-a-dot` e `--pen-a`, e quem fixasse a caneta em `a` teria a
+   *    tela IDÊNTICA ao artboard e ERRADA para todo grifo que não é amarelo;
+   * 3. **a página existe e o autor NÃO sou eu** (a Zeca): a linha de mono tem
+   *    de dizer os dois, e "Você" no lugar do nome acusa;
+   * 4. **o padrão da suíte é `lastHighlight: null`**, então o bloco só aparece
+   *    onde este `describe` o monta — um bloco desenhado sempre acusa no teste
+   *    do livro sem grifo, logo abaixo.
+   */
+  describe('"Neste livro" and "Último grifo" (task 44b)', () => {
+    const BLUE = '#3b82f6';
+
+    /**
+     * O grifo do fixture, com a página e a cor que a tela tem de RESPEITAR.
+     * `page` é parâmetro porque `null` é caso legítimo e documentado — e
+     * porque, medido na rodada de correção desta fatia, **nenhum teste do
+     * projeto renderizava um grifo sem página**: o ramo `page === null` do
+     * `MarginHighlight` tinha ZERO acusadores, e um `'PLACAR 18 de 27'`
+     * plantado nele passava pelos 931 testes do app com a varredura
+     * anti-culpa inteira passando ao largo, porque ela nunca chegava a
+     * renderizar aquele ramo.
+     */
+    function lastHighlight(page: number | null = 138): LastHighlightResponse {
+      return {
+        id: 'h-1',
+        userId: ZECA,
+        quote: 'encaixar-se é o oposto de pertencer',
+        color: BLUE,
+        page,
+      };
+    }
+
+    async function renderWithMargin(
+      grifo: LastHighlightResponse | null = lastHighlight(),
+    ): Promise<void> {
+      await renderBook({
+        book: [
+          bookReply(
+            aBook({ id: BOOK_ID }),
+            plan(),
+            WRITERS,
+            READERS,
+            { notes: 18, highlights: 9 },
+            grifo,
+          ),
+        ],
+      });
+
+      await waitFor(() => {
+        expect(planRows()).toHaveLength(3);
+      });
+    }
+
+    /**
+     * ⚠️ **A FORMA DA MARGEM, NA ORDEM EM QUE ELA APARECE — e é uma asserção
+     * só porque as duas propriedades que ela guarda nasceram do MESMO
+     * mutante sobrevivente.**
+     *
+     * O canvas desenha a coluna de 320px nesta ordem, com um filete de 1px
+     * entre cada par de blocos: "As marcas" · filete (`LivroDesktop.dc.html:194`)
+     * · "Neste livro" (`:196`) · filete (`:209`) · "Último grifo" (`:211`).
+     *
+     * Medido na rodada de correção desta fatia, os dois lados estavam soltos:
+     * **trocar "Neste livro" e "Último grifo" de lugar passava pelos 931
+     * testes do app**, e os dois filetes **não existiam** embora a Definição
+     * de pronto os marcasse como feitos. Uma lista de rótulos na ordem do DOM
+     * fecha os dois — e fecha também o terceiro caso, o de uma seção
+     * desaparecer sem ninguém notar.
+     */
+    function railShape(): string[] {
+      const aside = document.querySelector('aside');
+      return Array.from(aside?.children ?? []).map((child) =>
+        child.tagName === 'SECTION'
+          ? (child.querySelector('h2')?.textContent ?? '(seção sem rótulo)')
+          : 'filete',
+      );
+    }
+
+    /** A seção da margem que contém aquele rótulo. */
+    function railSectionWith(heading: string): HTMLElement {
+      const aside = document.querySelector('aside');
+      const section = Array.from(
+        aside?.querySelectorAll<HTMLElement>('section') ?? [],
+      ).find((element) => element.textContent?.includes(heading));
+      if (section === undefined) {
+        throw new Error(`nenhuma seção da margem com "${heading}"`);
+      }
+      return section;
+    }
+
+    /** A linha de inventário daquele rótulo, dentro de "Neste livro". */
+    function inventoryRow(label: string): HTMLElement {
+      const row = Array.from(
+        railSectionWith(
+          pt.pages.book.inBook.heading,
+        ).querySelectorAll<HTMLElement>('a'),
+      ).find((element) => element.textContent?.startsWith(label));
+      if (row === undefined) throw new Error(`nenhuma linha "${label}"`);
+      return row;
+    }
+
+    it('⚠️ draws the three blocks in the CANVAS ORDER, with a hairline between them', async () => {
+      await renderWithMargin();
+
+      /*
+        ⚠️ **DOIS MUTANTES SOBREVIVENTES NUMA ASSERÇÃO SÓ.** Trocar as duas
+        seções de lugar dava **0 de 931**, e os dois filetes de
+        `LivroDesktop.dc.html:194` e `:209` simplesmente **não existiam** — a
+        Definição de pronto desta fatia os declarava desenhados. Uma lista de
+        rótulos na ordem do DOM prova a ordem, a presença e a contagem dos
+        separadores de uma vez.
+      */
+      expect(railShape()).toEqual([
+        pt.pages.book.marks.heading,
+        'filete',
+        pt.pages.book.inBook.heading,
+        'filete',
+        pt.pages.book.inBook.lastHighlight,
+      ]);
+
+      /*
+        E o filete é o que o canvas desenha: 1px de altura na cor do traço
+        suave (`#e3ddc9` é `--border-soft`, medido em `theme.css`), e MUDO —
+        um `<div>` vazio que o leitor de tela anunciasse seria a lição nº 16
+        do MVP 2 pela porta dos fundos.
+      */
+      const filetes = Array.from(
+        document.querySelector('aside')?.children ?? [],
+      ).filter((child) => child.tagName !== 'SECTION');
+      expect(filetes).toHaveLength(2);
+      for (const filete of filetes) {
+        expect(filete.className).toContain('h-px');
+        expect(filete.className).toContain('bg-line-soft');
+        expect(filete.getAttribute('aria-hidden')).toBe('true');
+      }
+
+      expectNoGuiltWithPlanPosition();
+    });
+
+    /**
+     * ⚠️ **SEM GRIFO, SEM O SEGUNDO FILETE.** Um separador com nada depois
+     * dele é um traço solto no fim da coluna — e é o erro que um filete
+     * escrito como "depois de toda seção" cometeria no livro recém-cadastrado,
+     * que é o estado mais comum de todos.
+     */
+    it('⚠️ drops the second hairline together with the last-highlight block', async () => {
+      await renderWithMargin(null);
+
+      expect(railShape()).toEqual([
+        pt.pages.book.marks.heading,
+        'filete',
+        pt.pages.book.inBook.heading,
+      ]);
+
+      expectNoGuiltWithPlanPosition();
+    });
+
+    /**
+     * ⚠️ **A LINHA DE INVENTÁRIO TEM O FILETE EMBAIXO** — `border-bottom: 1px
+     * solid #e3ddc9` em `LivroDesktop.dc.html:198-205`, que é o que separa
+     * "Anotações do clube" de "Grifos" sem precisar de cor nem de peso.
+     *
+     * Medido na rodada de correção desta fatia: tirar o
+     * `border-b border-line-soft` das duas linhas dava **0 de 931**. Toda
+     * asserção da margem era sobre TEXTO, e texto não vê traço.
+     */
+    it('⚠️ underlines each inventory row with the canvas hairline', async () => {
+      await renderWithMargin();
+
+      for (const label of [
+        pt.pages.book.inBook.notes,
+        pt.pages.book.inBook.highlights,
+      ]) {
+        const row = inventoryRow(label);
+        expect(row.className).toContain('border-b');
+        expect(row.className).toContain('border-line-soft');
+      }
+
+      expectNoGuiltWithPlanPosition();
+    });
+
+    /**
+     * ⚠️⚠️ **O GRIFO SEM PÁGINA — o ramo que NENHUM teste do projeto
+     * renderizava.**
+     *
+     * `page` é anulável por decisão de produto: dá para grifar sem anotar a
+     * página, e o `MarginHighlight` tem um ramo próprio para isso desde a
+     * Tarefa 43. Medido na rodada de correção desta fatia, o ramo tinha
+     * **zero acusadores**: um `'PLACAR 18 de 27'` plantado nele passava pelos
+     * 931 testes do app, **e a varredura anti-culpa inteira passava ao
+     * largo** — não porque ela seja fraca, mas porque `grep "page: null"`
+     * dava **0** em `book.test.tsx` e em `day-note.test.tsx`. Guarda que nunca
+     * renderiza o estado não guarda o estado (§7.9).
+     *
+     * A linha diz só o NOME: sem página, "Página null · Zeca" e "· Zeca"
+     * seriam os dois jeitos de errar, e os dois ficam vermelhos aqui.
+     */
+    it('⚠️ says only the NAME when the highlight has no page', async () => {
+      await renderWithMargin(lastHighlight(null));
+
+      const section = railSectionWith(pt.pages.book.inBook.lastHighlight);
+      // A linha do grifo é a que fica ao LADO da bolinha — e não o primeiro
+      // `.font-mono` da seção, que é o `Eyebrow` do rótulo.
+      const dot = section.querySelector('span[aria-hidden="true"]');
+      expect(dot?.nextElementSibling?.textContent).toBe('Zeca');
+      // E nada de "Página", nem do separador órfão.
+      expect(section.textContent).not.toContain('Página');
+      expect(section.textContent).not.toContain('·');
+      expect(section.textContent).not.toContain('null');
+
+      // O resto do bloco continua inteiro: o trecho e a caneta daquele grifo.
+      expect(section.textContent).toContain(
+        'encaixar-se é o oposto de pertencer',
+      );
+      expect(
+        section.querySelector('span[aria-hidden="true"]')?.className ?? '',
+      ).toContain('bg-pen-z-dot');
+
+      /*
+        ⚠️ **E A VARREDURA ANTI-CULPA RODA AQUI**, que é a metade que faltava:
+        este é um estado da tela, e o §7.9 manda a varredura rodar em TODOS
+        eles — o estado "feliz" incluído.
+      */
+      expectNoGuiltWithPlanPosition();
+    });
+
+    it('⚠️ puts the ACERVO INVENTORY in the margin, each number next to its OWN label', async () => {
+      await renderWithMargin();
+
+      const section = railSectionWith(pt.pages.book.inBook.heading);
+      /*
+        ⚠️ **Cada número é lido DENTRO da sua linha**, e não no texto da seção
+        inteira: um `textContent` da seção conteria "18" e "9" mesmo com os
+        dois trocados de lugar, e o teste que dizia guardar o inventário
+        guardaria só a presença dos dígitos.
+      */
+      expect(inventoryRow(pt.pages.book.inBook.notes).textContent).toBe(
+        `${pt.pages.book.inBook.notes}18`,
+      );
+      expect(inventoryRow(pt.pages.book.inBook.highlights).textContent).toBe(
+        `${pt.pages.book.inBook.highlights}9`,
+      );
+
+      // Os três links da seção levam ao acervo do LIVRO, sem filtro (decisão
+      // E): a pré-aplicação do tipo é território da Tarefa 46.
+      const links = Array.from(section.querySelectorAll('a'));
+      expect(links).toHaveLength(3);
+      for (const link of links) {
+        expect(link.getAttribute('href')).toBe(`/books/${BOOK_ID}/acervo`);
+      }
+
+      /*
+        ⚠️ **GUARDA DE VISIBILIDADE, não só de presença no DOM.** A rodada de
+        correção da Tarefa 44 fechou dois mutantes exatamente assim: um
+        `hidden` esconde da tela e **não** some do DOM, então toda asserção de
+        texto continua verde. A margem inteira desce para o fluxo abaixo de
+        1120px (é o `MarginRail`), e esta seção aparece nas duas larguras.
+      */
+      expect(section.className).not.toContain('hidden');
+      expect(document.querySelector('aside')?.className ?? '').not.toContain(
+        'hidden',
+      );
+
+      expectNoGuiltWithPlanPosition();
+    });
+
+    it('⚠️ paints the LAST HIGHLIGHT with the pen of THAT highlight, never a fixed colour', async () => {
+      await renderWithMargin();
+
+      const section = railSectionWith(pt.pages.book.inBook.lastHighlight);
+      // A linha de mono diz a página E quem grifou — o nome de verdade, pelo
+      // mesmo `nameOfWriter` das outras sete telas.
+      expect(section.textContent).toContain('Página 138 · Zeca');
+      expect(section.textContent).toContain(
+        'encaixar-se é o oposto de pertencer',
+      );
+
+      /*
+        ⚠️⚠️ **A CANETA É A DAQUELE GRIFO.** O grifo do fixture é AZUL, então a
+        bolinha é `bg-pen-z-dot` e o papel é `bg-pen-z`. Fixar a caneta em `a`
+        — que é o que a maquete desenha — deixa a tela idêntica ao artboard e
+        errada para quatro das cinco cores.
+      */
+      const dot = section.querySelector('span[aria-hidden="true"]');
+      expect(dot?.className ?? '').toContain('bg-pen-z-dot');
+      expect(dot?.className ?? '').not.toContain('bg-pen-a-dot');
+
+      const mark = section.querySelector('p > span');
+      expect(mark?.className ?? '').toContain('bg-pen-z');
+      expect(mark?.className ?? '').toContain('ring-pen-z');
+      expect(mark?.className ?? '').not.toContain('bg-pen-a');
+
+      /*
+        ⚠️ **A BOLINHA NÃO FALA** (regra 8, lição nº 16 do MVP 2): ela é
+        decoração ao lado de um texto que já diz a página e o nome. Tirar o
+        `aria-hidden` faz o leitor de tela anunciar um elemento vazio no meio
+        da frase — e foi exatamente este mutante (M7) que sobreviveu a 926
+        testes na rodada de correção da Tarefa 44.
+      */
+      expect(dot?.getAttribute('aria-hidden')).toBe('true');
+
+      // E a seção não se esconde por media query.
+      expect(section.className).not.toContain('hidden');
+
+      expectNoGuiltWithPlanPosition();
+    });
+
+    /**
+     * ⚠️ **AUSENTE ≠ VAZIO.** Livro sem grifo nenhum não ganha o bloco com o
+     * rótulo e um espaço em branco embaixo — isso seria o vazio anunciado que
+     * o §1 do plano proíbe, a mesma razão pela qual o dia sem autoria não
+     * ganha "ninguém escreveu". O inventário, esse, aparece com zero: ele diz
+     * o tamanho do acervo, e zero é um tamanho.
+     */
+    it('⚠️ draws NO last-highlight block when the book has no highlight yet', async () => {
+      await renderBook();
+
+      await waitFor(() => {
+        expect(planRows()).toHaveLength(3);
+      });
+
+      const aside = document.querySelector('aside');
+      expect(aside?.textContent).not.toContain(
+        pt.pages.book.inBook.lastHighlight,
+      );
+      // O par positivo: o inventário continua ali, zerado.
+      expect(aside?.textContent).toContain(pt.pages.book.inBook.heading);
+      expect(inventoryRow(pt.pages.book.inBook.notes).textContent).toBe(
+        `${pt.pages.book.inBook.notes}0`,
+      );
+
+      expectNoGuiltWithPlanPosition();
+    });
+
+    /**
+     * ⚠️ **AS CONTAGENS SÃO INVENTÁRIO, NÃO PLACAR — e esta é a guarda que a
+     * decisão F pede por escrito.**
+     *
+     * "Anotações do clube 18" não casa o `COUNTER_SHAPE` porque não tem total
+     * ao lado, e é isso que a varredura dos dois testes acima já mede. Este
+     * `it()` mede o OUTRO lado: que a varredura ainda MORDE nesta tela. Um
+     * "18 de 27 anotações" plantado na margem tem de ficar vermelho — senão
+     * as três chamadas de `expectNoGuiltWithPlanPosition()` deste bloco
+     * estariam dizendo "não há placar" sobre uma guarda que parou de guardar.
+     */
+    it('⚠️ would catch a scoreboard planted in the margin', async () => {
+      await renderWithMargin();
+
+      const section = railSectionWith(pt.pages.book.inBook.heading);
+      const planted = document.createElement('p');
+      planted.textContent = '18 de 27 anotações';
+      section.append(planted);
+
+      expect(() => {
+        expectNoGuiltWithPlanPosition();
+      }).toThrow();
+
+      planted.remove();
+      expectNoGuiltWithPlanPosition();
+    });
+  });
+
   it('⚠️ draws NO margin at all while there is no book yet, nor when it failed', async () => {
     /*
       ⚠️ **ESTE `it()` NASCEU DE UM MUTANTE SOBREVIVENTE, e a medição é o
@@ -2221,21 +2612,72 @@ describe('⚠️ ONE LINK TO THE COLLECTION, IN PLACE OF THE TWO TABS (rule 14 o
     dois tem de ser UM lugar. Com o acervo do outro lado, o que sobra aqui é uma
     SAÍDA, e saída é link.
   */
-  it('has ONE link to the collection, and no tab left', async () => {
+  it('has ONE VISIBLE link to the collection per width, and no tab left', async () => {
     await renderBook();
 
     await waitFor(() => {
       expect(planRows()).toHaveLength(3);
     });
 
-    const link = screen.getByRole('link', {
+    /*
+      ⚠️⚠️ **O TESTE MUDOU NA TAREFA 44b, e a propriedade que ele guarda NÃO
+      afrouxou — ela ficou mais apertada.**
+
+      Ele dizia "UM link" e contava os do DOM. Na 44b o canvas passou a pedir a
+      mesma frase em dois LUGARES diferentes conforme a largura: no corpo no
+      celular (`Livro.dc.html:60`) e **só** na margem no desktop
+      (`LivroDesktop.dc.html:206`). Os dois ficam montados e o CSS mostra um —
+      o MESMO desenho das duas lombadas do cabeçalho, que este arquivo já
+      testa assim.
+
+      Então a asserção passou a ser sobre a EXCLUSÃO MÚTUA, que é o que a
+      pessoa de fato vê: dois no DOM, e exatamente um visível em cada largura.
+      Um terceiro link, ou os dois visíveis ao mesmo tempo, ficam vermelhos
+      aqui — o que a versão anterior **não** pegava, porque ela só sabia
+      contar.
+    */
+    const links = screen.getAllByRole('link', {
       name: pt.pages.book.acervoLink,
     });
-    // A âncora tem endereço de verdade: é o que faz Ctrl+clique e "abrir em
-    // nova aba" funcionarem.
-    expect(link.getAttribute('href')).toBe(`/books/${BOOK_ID}/acervo`);
-    expect(link.hasAttribute('disabled')).toBe(false);
-    expect(link.getAttribute('aria-disabled')).toBeNull();
+    expect(links).toHaveLength(2);
+    const [inBody, inRail] = links;
+    // O do CORPO some acima de 1120px; o da MARGEM só aparece lá.
+    expect(inBody?.parentElement?.className ?? '').toContain(
+      'min-[1120px]:hidden',
+    );
+    /*
+      ⚠️⚠️ **O PAR NEGATIVO DO LADO DO CORPO — e ele FALTAVA.**
+
+      A asserção de cima prova que o link do corpo some ACIMA de 1120px. Ela
+      não prova nada sobre abaixo: medido na rodada de correção desta fatia,
+      trocar `flex min-[1120px]:hidden` por `hidden min-[1120px]:hidden` — ou
+      seja, escondê-lo em TODA largura — passava pelos 931 testes do app. E o
+      efeito é o pior possível: no celular, que é onde o `MarginRail` desce
+      para o fluxo mas este link é o único visível, a tela do livro ficaria
+      **sem nenhum caminho para o acervo**, com a suíte verde.
+
+      ⚠️ **É a TERCEIRA aparição deste padrão neste arquivo** (as duas
+      lombadas do cabeçalho, a legenda "As marcas" da Tarefa 44, e este par) e
+      a primeira em que só metade havia sido fechada. O `hidden` cru se procura
+      com fronteira de palavra: um `toContain('hidden')` casaria
+      `min-[1120px]:hidden` e daria o falso verde de novo.
+    */
+    expect(inBody?.parentElement?.className ?? '').not.toMatch(
+      /(^|\s)hidden(\s|$)/u,
+    );
+    expect(inRail?.className ?? '').toContain('hidden');
+    expect(inRail?.className ?? '').toContain('min-[1120px]:inline-flex');
+    // E o da margem está DENTRO do `<aside>`, não solto no corpo.
+    expect(inRail?.closest('aside')).not.toBeNull();
+    expect(inBody?.closest('aside')).toBeNull();
+
+    for (const link of links) {
+      // A âncora tem endereço de verdade: é o que faz Ctrl+clique e "abrir em
+      // nova aba" funcionarem.
+      expect(link.getAttribute('href')).toBe(`/books/${BOOK_ID}/acervo`);
+      expect(link.hasAttribute('disabled')).toBe(false);
+      expect(link.getAttribute('aria-disabled')).toBeNull();
+    }
 
     /*
       ⚠️ **O QUE NÃO ESTÁ AQUI É METADE DO TESTE.** Nenhum chip, nenhum
@@ -2270,9 +2712,6 @@ describe('⚠️ ONE LINK TO THE COLLECTION, IN PLACE OF THE TWO TABS (rule 14 o
       ),
     ).toEqual([]);
 
-    expect(
-      screen.getAllByRole('link', { name: pt.pages.book.acervoLink }),
-    ).toHaveLength(1);
     expectNoGuiltWithPlanPosition();
   });
 
@@ -2294,10 +2733,60 @@ describe('⚠️ ONE LINK TO THE COLLECTION, IN PLACE OF THE TWO TABS (rule 14 o
       expect(planRows()).toHaveLength(3);
     });
 
-    await press(screen.getByRole('link', { name: pt.pages.book.acervoLink }));
+    /*
+      ⚠️ **O DA MARGEM, e não o do corpo** (Tarefa 44b): os dois levam ao mesmo
+      endereço, e é o da margem que nasceu nesta fatia — o do corpo já estava
+      testado desde a 28. Um `Link` trocado por âncora crua ali ficaria
+      vermelho **aqui**, que é o único lugar onde a diferença aparece.
+    */
+    const inRail = screen
+      .getAllByRole('link', { name: pt.pages.book.acervoLink })
+      .find((link) => link.closest('aside') !== null);
+    if (inRail === undefined) {
+      throw new Error('o link do acervo na margem não existe');
+    }
+    await press(inRail);
 
     expect(locationText()).toBe(`/books/${BOOK_ID}/acervo`);
     // E chegou na tela do acervo de verdade, não numa página não encontrada.
+    expect(
+      screen.queryByRole('heading', {
+        level: 1,
+        name: pt.pages.acervo.title,
+      }),
+    ).not.toBeNull();
+    expectNoGuilt();
+  });
+  /**
+   * ⚠️ **O LINK DO CORPO TAMBÉM NAVEGA — e ele é o ÚNICO que a pessoa vê no
+   * CELULAR.**
+   *
+   * O `it()` acima clica o da MARGEM, que é o que nasceu na Tarefa 44b. Medido
+   * na rodada de correção dela: depois daquela troca, o link do corpo **não
+   * era clicado por teste nenhum** — o que sobrava dele era uma substring de
+   * classe (`min-[1120px]:hidden`). Somado ao mutante que o escondia em toda
+   * largura, o caminho do celular para o acervo ficava guardado por nada.
+   *
+   * Os dois levam ao mesmo endereço e os dois são `Link` do roteador. Clicar
+   * os dois é barato, e é o que faz "um visível por largura" significar "e o
+   * que está visível funciona".
+   */
+  it('⚠️ navigates from the link in the BODY too — the only one on a phone', async () => {
+    await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    const inBody = screen
+      .getAllByRole('link', { name: pt.pages.book.acervoLink })
+      .find((link) => link.closest('aside') === null);
+    if (inBody === undefined) {
+      throw new Error('o link do acervo no corpo não existe');
+    }
+    await press(inBody);
+
+    expect(locationText()).toBe(`/books/${BOOK_ID}/acervo`);
     expect(
       screen.queryByRole('heading', {
         level: 1,
@@ -2561,8 +3050,28 @@ describe('the source of the book screen (rules 5, 15, 16)', () => {
       alguém pintar de vermelho. Uma varredura de fonte que ficasse só no
       `book.tsx` teria perdido exatamente o arquivo novo: é a forma de
       "guarda no lugar errado" do §7.9, nascendo de um `split`.
+
+      ⚠️⚠️ **E FOI EXATAMENTE ISSO QUE ACONTECEU DE NOVO NA TAREFA 44b — o
+      aviso acima, no mesmo arquivo, no mesmo teste.** A fatia extraiu
+      `margin-highlight.tsx` e a lista literal continuou com dois nomes: a
+      tela do livro passou a ter TRÊS arquivos e a varredura lia dois. O
+      arquivo de fora é o que desenha COR (a caneta do grifo, a bolinha, o
+      papel do `GrifoText`), ou seja, o mais exposto dos três à cor de perigo.
+
+      ⚠️ **A lição, escrita para a próxima:** uma lista literal de arquivos é a
+      mesma classe de defeito que a lista literal de classes de cor que o §7.9
+      já proíbe — as duas conhecem o que existia no dia em que foram escritas.
+      A varredura irmã de `adr-0002-iconography.test.ts` é **recursiva** sobre
+      `src/pages/`, e por isso absorveu o arquivo novo sozinha (medido). Esta
+      continua por lista porque as três telas deste arquivo são um conjunto
+      nomeado — e o preço de ser por lista é ESTE `it()` ter de crescer junto
+      com o `split`.
     */
-    for (const file of ['book.tsx', 'reading-marks.tsx']) {
+    for (const file of [
+      'book.tsx',
+      'reading-marks.tsx',
+      'margin-highlight.tsx',
+    ]) {
       expect(stripComments(pageSource(file))).not.toMatch(DANGER_STYLE);
     }
 
@@ -2572,6 +3081,12 @@ describe('the source of the book screen (rules 5, 15, 16)', () => {
     expect(stripComments(bookSource())).toContain('pages.book.plan.today');
     expect(stripComments(pageSource('reading-marks.tsx'))).toContain(
       'pages.book.plan.readerNamed',
+    );
+    // O par positivo do terceiro arquivo, e ele é escolhido para valer: é a
+    // linha que PINTA — a caneta daquele grifo, que é a razão de o arquivo
+    // estar na varredura.
+    expect(stripComments(pageSource('margin-highlight.tsx'))).toContain(
+      'PEN_DOT_CLASS[COLOR_PEN_KEYS[color]]',
     );
   });
 

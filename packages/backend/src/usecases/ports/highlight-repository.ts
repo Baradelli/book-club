@@ -265,4 +265,75 @@ export interface HighlightRepository {
   planItemIdsWithAnyHighlight(
     planItemIds: readonly string[],
   ): Promise<string[]>;
+  /**
+   * **Quantos** grifos `ACTIVE` o livro tem — o inventário da margem ("Grifos
+   * 9"), Tarefa 44b. Irmão exato do `NoteRepository.activeCountByBook`, e o
+   * docblock de lá é o dono do argumento: o `find` daqui também tem
+   * `take: FIND_ROW_LIMIT = 500`, então um `length` seria **500** para todo
+   * livro com mais grifos que isso.
+   *
+   * ⚠️ **Só `ACTIVE`, e está no NOME de propósito** — a cláusula não pode ser
+   * esquecida na segunda implementação, que é onde esta assimetria costuma
+   * passar.
+   *
+   * ⚠️ **O grifo AVULSO entra** (`planItemId` nulo): ele é a maioria dos
+   * grifos de hoje e é o caso que o ADR 0004 protege. O corte é o LIVRO, nunca
+   * o dia.
+   *
+   * Não recebe `clubId`: o corte de tenant é o livro, resolvido pelo
+   * `bookForActor` antes da chamada.
+   */
+  activeCountByBook(bookId: string): Promise<number>;
+  /**
+   * O grifo `ACTIVE` mais recente do livro, ou `null` — o bloco "Último grifo"
+   * da margem (Tarefa 44b, decisão D).
+   *
+   * ⚠️ **MÉTODO PRÓPRIO, e não o primeiro item de um `find`.** Duas razões
+   * independentes, e as duas bastam:
+   *
+   * 1. **custo** — puxar até 500 grifos para desenhar **um** é trafegar o
+   *    acervo do clube, o mesmo argumento do `activeCountByBook` acima;
+   * 2. ⚠️ **ordem** — o `find` deste port **não promete ordem** (está escrito
+   *    no docblock dele, e o fake enumera INVERTIDO de propósito, §7.2), então
+   *    "o primeiro do `find`" não é o último grifo: é o que o repositório
+   *    resolveu enumerar primeiro. Este método é a exceção da família, e **É
+   *    ordenado por contrato**.
+   *
+   * ⚠️ **A ORDEM É TOTAL: `createdAt desc`, depois `id asc`.** O `createdAt`
+   * sozinho não é ordem total — empate no mesmo milissegundo é o caso normal
+   * (duas pessoas do clube salvando ao mesmo tempo, dois dispositivos da
+   * mesma) —, e sem o desempate "o último grifo" mudaria a cada recarga,
+   * escolhido pelo plano de execução do Postgres. É a MESMA ordem do `find` e
+   * do `listHighlights`, de propósito: a margem e o acervo concordam sobre
+   * quem é o mais recente.
+   *
+   * `createdAt` e não `updatedAt`, pelo mesmo motivo do `listHighlights`:
+   * corrigir o comentário de um grifo antigo não o torna o último grifo do
+   * livro.
+   *
+   * ⚠️⚠️ **ELE NÃO É "A ÚNICA LEITURA ORDENADA DO PROJETO" — e o precedente é
+   * de duas fatias atrás.** A entrega da Tarefa 44b afirmou isso no
+   * `BACKLOG.md`, e caem três coisas na medição:
+   *
+   * 1. `ActivityEventRepository.find` **já** promete a MESMA ordem
+   *    (`createdAt` desc, `id` asc) e **já** diz, por escrito, que é o único
+   *    que promete — desde a decisão C da Tarefa 33;
+   * 2. `ReadingPlanItemRepository.findByBook` promete `order` crescente;
+   * 3. este método não devolve **coleção** nenhuma: é um registro ou `null`.
+   *
+   * O que **é** verdade, e é a frase estreita que sobrevive: ele é a exceção
+   * ordenada da família do `HighlightRepository`, cujo `find` não promete
+   * ordem. Duas afirmações de unicidade sobre a mesma propriedade, em dois
+   * arquivos, são a lição nº 3 do MVP 1 escrita em prosa — corrigidas juntas
+   * na rodada de correção da 44b.
+   *
+   * ⚠️ **E a comparação é o `compareNewestFirst` do domínio**
+   * (`domain/newest-first.ts`): a MESMA conta que o feed, o `listNotes`, o
+   * `listHighlights` e o `listBooks` usam. A primeira entrega deste método
+   * escreveu a sexta cópia dela com `localeCompare` no lugar do code point, e
+   * **nada acusou** — o §7.1, "extrair, não cobrir duas vezes".
+   *
+   * Não recebe `clubId`: o corte de tenant é o livro.
+   */
+  lastActiveByBook(bookId: string): Promise<Highlight | null>;
 }

@@ -11,7 +11,9 @@ import { ApiError } from '@clube/shared/client';
 import {
   BookSpine,
   Button,
+  cx,
   Eyebrow,
+  FOCUS_RING,
   List,
   ListItem,
   MarginRail,
@@ -38,6 +40,7 @@ import {
   resolveApiError,
   type StatusMessages,
 } from './form-errors';
+import { MarginHighlight } from './margin-highlight';
 import { acervoPath, bookEditPath, isClubAdmin } from './paths';
 import { ReadMarks, TodayReading } from './reading-marks';
 
@@ -65,7 +68,37 @@ import { ReadMarks, TodayReading } from './reading-marks';
  * o toque "li hoje" e o recado de falha foram para `reading-marks.tsx`, e o que
  * ficou aqui foi a FIAÇÃO: qual é o dia de hoje, quem leu cada dia, e a
  * releitura depois de marcar. O teto que a spec daquela fatia escreveu era
- * "~350" — **aproximado, e a palavra é do próprio texto**.
+ * ~~"~350"~~ — **aproximado, e a palavra é do próprio texto**.
+ *
+ * ⚠️⚠️ **O TETO É 420 LINHAS CANÔNICAS DESDE 2026-09-23 — decisão do dono, com
+ * a data ao lado.**
+ *
+ * ⚠️ **O ~350 da Tarefa 32b fica RISCADO, não apagado, e isso é regra.** Ele é
+ * histórico: `docs/tasks/32b-marca-de-leitura-na-tela.md:126` continua sendo o
+ * endereço da cláusula, e a **lição nº 8 do MVP 1** ("dividir antes de a tela
+ * crescer") foi citada por outras fatias com aquele número na mão. Apagar o
+ * número faria a próxima pessoa achar que a cláusula nunca existiu — a mesma
+ * razão pela qual a seção "o que NÃO fazer agora" do `CLAUDE.md` risca em vez
+ * de apagar. Leia o ~350 como **data**, não como proibição em vigor.
+ *
+ * **Por que o teto subiu:** a tela ganhou quatro coisas que não existiam em
+ * 32b, e as quatro são do canvas, não da conveniência de quem escreveu —
+ * a **lombada** (`BookSpine`, Tarefa 44), o **sumário** (a lista virou
+ * `ListItemLook="sumario"`, Tarefa 44), a **margem de desktop**
+ * (`MarginRail` com "As marcas", Tarefa 44) e agora o **inventário**
+ * ("Neste livro" e "Último grifo", Tarefa 44b). Uma tela de plano de 2026-09
+ * não é a mesma coisa que a de 2026-08.
+ *
+ * ⚠️⚠️ **E A IRONIA MEDIDA, POR ESCRITO, porque ela é o registro que serve à
+ * próxima fatia.** A Tarefa 44b **extraiu 45 linhas** para
+ * `margin-highlight.tsx` e se anotou como fatia que dividiu — mas o corte saiu
+ * do **`day-note.tsx`** (506 → 478, **−28**). A tela que estourou o teto
+ * **não perdeu uma linha**: ela foi de 360 a 408, e a rodada de correção a
+ * levou a 414. Extrair de A não é encolher B. **Isto é registro, não
+ * acusação** — a extração estava certa pelo §7.1 e o número dela é real; o que
+ * faltou foi notar que o alívio foi para o arquivo errado. A próxima fatia que
+ * tocar esta margem corta **aqui**, e o corte continua sendo por ASSUNTO (o
+ * cabeçalho × a margem, que já tem três seções).
  *
  * ⚠️⚠️ **O TAMANHO DE HOJE, COM A DATA AO LADO — e a linha anterior daqui
  * estava OBSOLETA.** Ela dizia "a tela saiu de 247 para 277" como se fosse
@@ -80,20 +113,22 @@ import { ReadMarks, TodayReading } from './reading-marks';
  * | --- | --- | --- |
  * | antes da Tarefa 44 (commit `11c9171`) | 277 | 105 |
  * | fim da Tarefa 44 (2026-09-22) | **356** | **107** |
- * | fim da rodada de correção (2026-09-22) | **360** | **107** |
+ * | fim da rodada de correção da 44 (2026-09-22) | **360** | **107** |
+ * | fim da Tarefa 44b (2026-09-23) | **408** | **107** |
+ * | fim da rodada de correção da 44b (2026-09-23) | **414** | **107** |
  *
  * A Tarefa 44 acrescentou **+99 / −20 = +79** linhas canônicas (`diff -w` sobre
- * o texto já passado pelo contador); a rodada de correção, **+4** (o import do
- * `formatClubMonth` e três linhas do `Eyebrow` do cabeçalho).
+ * o texto já passado pelo contador); a rodada de correção dela, **+4** (o
+ * import do `formatClubMonth` e três linhas do `Eyebrow` do cabeçalho); a 44b,
+ * **+48**; e a rodada de correção da 44b, **+6** — os dois filetes de 1px do
+ * canvas (`LivroDesktop.dc.html:194` e `:209`) e o fragmento que embrulha o
+ * segundo com o bloco do grifo. **Sobram 6 linhas de folga contra o teto de
+ * 420.**
  *
- * ⚠️ **DECISÃO DO DONO, 2026-09-22: a tela FICA nos 360, sem corte e sem teto
- * novo.** 356 contra um teto que o próprio texto escreve como "~350" é
- * aproximação, não estouro — e o corte que valeria a pena não é por linha, é
- * por assunto (a fatia que dividir esta tela divide o cabeçalho da margem, não
- * "as 10 linhas que sobraram"). ⚠️ **E o `wc -l` NÃO é a unidade aqui:** ele dá
- * 917 e a maior parte disso é docblock. A nota nº 9 da Tarefa 44 comparou
- * `wc -l` (886, na época) com um teto do contador canônico e concluiu que a
- * tela havia estourado 2,5×. As duas medidas existem; misturá-las é que não.
+ * ⚠️ **E o `wc -l` NÃO é a unidade aqui:** ele dá mais de 900 e a maior parte
+ * disso é docblock. A nota nº 9 da Tarefa 44 comparou `wc -l` (886, na época)
+ * com um teto do contador canônico e concluiu que a tela havia estourado 2,5×.
+ * As duas medidas existem; misturá-las é que não.
  *
  * ⚠️ **E O "LI HOJE" É SÓ DO DIA DE HOJE — escopo, não simplificação.** A rota
  * aceita qualquer `planItemId`; 30 toggles na lista virariam auditoria
@@ -640,7 +675,15 @@ export function BookPage() {
           com ele a lacuna de `renderLink` em `packages/ui` deixou de ter
           chamador nesta tela.
         */}
-        <div className="flex">
+        {/*
+          ⚠️ **ESTE LINK SOME NO DESKTOP DESDE A TAREFA 44b, e é o canvas que
+          manda.** `Livro.dc.html:60` põe "Ver o acervo do livro" no CORPO;
+          `LivroDesktop.dc.html:206` o põe **só** na margem, dentro de "Neste
+          livro". Sem o `min-[1120px]:hidden` a mesma frase apareceria duas
+          vezes na mesma tela acima de 1120px — e o par de classes é o MESMO
+          desenho das duas lombadas do cabeçalho, alguns dedos acima.
+        */}
+        <div className="flex min-[1120px]:hidden">
           <Link className={TEXT_LINK_CLASS} to={acervoPath(book.id)}>
             {t('pages.book.acervoLink')}
           </Link>
@@ -865,24 +908,58 @@ export function BookPage() {
    * nenhuma. O que se perde é o atalho de pular a região, não informação — o
    * rótulo da seção está em texto dentro dela. É o mesmo registro da Tarefa 43.
    *
-   * ⚠️ **OS OUTROS DOIS BLOCOS DO ARTBOARD NÃO ENTRARAM, e não foi esquecimento
-   * — foi a regra 9 mordendo:**
+   * ⚠️⚠️ **OS OUTROS DOIS BLOCOS ENTRARAM NA TAREFA 44b — e o que os barrava
+   * era um LIMITE DA API, não uma decisão de tela.**
    *
-   * - **"Neste livro"** (`:196-207`) é um par de CONTAGENS ("Anotações do clube
-   *   18 · Grifos 9"), e **a API não devolve contagem nenhuma**:
-   *   `GET /books/:bookId` traz livro + plano + `writers` + `readers`, e os
-   *   únicos lugares onde notas e grifos existem são `GET /clubs/:clubId/notes`
-   *   e `/highlights`, que devolvem ARRAY cortado em `FIND_ROW_LIMIT = 500`.
-   *   Contar o `length` de uma lista truncada é publicar um número errado como
-   *   se fosse fato — e a regra 9 manda parar e reportar, não contar errado;
-   * - **"Último grifo"** (`:211-218`) precisa do rótulo "Último grifo", que
-   *   **não existe no catálogo** (conferido no `pt.ts`), e a regra 9 proíbe
-   *   chave nova.
+   * A Tarefa 44 parou nos dois pela regra 9 dela, e a parada estava certa:
+   * `GET /books/:bookId` não devolvia contagem nenhuma, e as duas listagens
+   * que teriam os dados cortam em `FIND_ROW_LIMIT = 500` — *lista truncada é
+   * registro; contagem truncada é mentira*. O dono abriu exceção ao
+   * fora-de-escopo do MVP 3.5 e autorizou backend numa fatia própria; hoje a
+   * resposta traz `inventory` (contado com `count()` no banco) e
+   * `lastHighlight` (um `findFirst` ordenado), e as três chaves
+   * `pages.book.inBook.*` que a Tarefa 40 criou finalmente têm consumidor.
    *
-   * As duas ficam registradas com o motivo, e `pages.book.inBook.*` continua
-   * sem consumidor — três chaves em vez das sete do bilhete da Tarefa 40.
+   * - **"Neste livro"** (`LivroDesktop.dc.html:196-207`): dois números e três
+   *   links, todos para `acervoPath(book.id)`. ⚠️ **Chegar ao acervo com o
+   *   tipo PRÉ-FILTRADO é território da Tarefa 46** (decisão E da 44b): o
+   *   estado do filtro teria de ir para a URL, e o `acervo.tsx` não usa
+   *   `useSearchParams` hoje. Registrado, não feito aqui;
+   * - **"Último grifo"** (`:211-218`): a bolinha da caneta, a página, o nome e
+   *   o trecho. O desenho é o `MarginHighlight`, dividido com a tela do dia
+   *   (§7.1, "extrair, não cobrir duas vezes").
+   *
+   * ⚠️⚠️ **OS NÚMEROS SÃO INVENTÁRIO, NÃO PLACAR — e está escrito aqui porque
+   * a próxima auditoria vai encontrá-los nesta tela**, que é justamente a que
+   * o docblock do topo declara sem contador nenhum. Três propriedades, e as
+   * três valem ao mesmo tempo: não há **total** contra o qual comparar ("18"
+   * não é "18 de 30", e é por isso que a frase não casa o `COUNTER_SHAPE`); o
+   * número **não muda quando alguém deixa de escrever**, então ele não pode
+   * virar dívida; e ele **não é por pessoa**, então não há com quem se
+   * comparar. O que o §1 do plano proíbe é comparação e cobrança — o tamanho
+   * do que o clube fez junto não é nenhuma das duas. → o docblock do
+   * `bookInventoryResponseSchema`, em `packages/shared/src/book.ts`.
+   *
+   * ⚠️ **O BLOCO DO GRIFO SÓ EXISTE QUANDO HÁ GRIFO.** `lastHighlight` é
+   * `null` em todo livro recém-cadastrado, e um bloco vazio com o rótulo ali
+   * seria o vazio anunciado que o §1 proíbe — a mesma razão pela qual o dia
+   * sem autoria não ganha "ninguém escreveu".
    */
-  function rail(): ReactNode {
+  function rail(data: BookWithPlanResponse): ReactNode {
+    const { book, inventory, lastHighlight } = data;
+
+    /*
+      As duas linhas de inventário, montadas aqui para as CHAVES ficarem
+      LITERAIS. Uma chave montada por interpolação compila, roda e desaparece
+      de toda varredura que procura a chave escrita no fonte — é a mesma classe
+      do mapa `bg-pen-*` montado em runtime, que o `GrifoText` documenta: o
+      código funciona e a ferramenta que deveria guardá-lo para de ver.
+    */
+    const inBook = [
+      { count: inventory.notes, label: t('pages.book.inBook.notes') },
+      { count: inventory.highlights, label: t('pages.book.inBook.highlights') },
+    ];
+
     return (
       <MarginRail className="gap-[26px] pt-4 min-[1120px]:pt-0">
         <section className="flex flex-col gap-3">
@@ -907,6 +984,108 @@ export function BookPage() {
             </div>
           ))}
         </section>
+
+        {/*
+          ⚠️ **O FILETE DE 1px ENTRE BLOCOS** (`LivroDesktop.dc.html:194` e
+          `:209`: `height: 1px; background: #e3ddc9`, que é `--border-soft`).
+          Ele é o que separa três assuntos numa coluna de 320px sem precisar
+          de peso nem de cor — o mesmo papel que o `border-b` faz dentro das
+          linhas de inventário.
+
+          ⚠️ **`aria-hidden`, e não é zelo:** um `<div>` vazio anunciado no
+          meio da margem é a lição nº 16 do MVP 2 pela porta dos fundos. A
+          separação já está dita pelo `<h2>` de cada seção.
+
+          ⚠️ **E ELE NÃO EXISTIA até a rodada de correção da Tarefa 44b**,
+          embora a Definição de pronto daquela fatia o declarasse desenhado:
+          os três `<section>` eram separados só pelo `gap-[26px]`. O acusador
+          é `draws the three blocks in the CANVAS ORDER, with a hairline
+          between them`.
+        */}
+        <div aria-hidden="true" className="h-px bg-line-soft" />
+
+        <section className="flex flex-col gap-3">
+          <h2>
+            <Eyebrow>{t('pages.book.inBook.heading')}</Eyebrow>
+          </h2>
+          {inBook.map(({ count, label }) => (
+            /*
+              `justify-between` com o filete embaixo (`:198-205`), e o número em
+              MONOESPAÇADA: é o mesmo tratamento que o canvas dá a todo número
+              de aparato, e é o que o separa do rótulo sem precisar de cor.
+
+              A linha inteira é o alvo, e ela leva ao acervo do livro — o
+              `Link` do roteador, nunca âncora crua: num PWA `<a href>` é
+              navegação de DOCUMENTO e recarrega o shell inteiro (a lição
+              medida da Tarefa 16).
+            */
+            <Link
+              className={cx(
+                'flex items-baseline justify-between gap-3 border-b border-line-soft py-[7px] text-ui',
+                FOCUS_RING,
+              )}
+              key={label}
+              to={acervoPath(book.id)}
+            >
+              <span>{label}</span>
+              <span className="font-mono text-ui text-muted">{count}</span>
+            </Link>
+          ))}
+          {/*
+            ⚠️ **O TERCEIRO LINK É O MESMO `pages.book.acervoLink` DO CORPO, e
+            os dois nunca aparecem juntos.** A spec desta fatia previa uma chave
+            NOVA aqui; medido, ela já existia (`pt.ts`, e o valor é
+            exatamente "Ver o acervo do livro" do artboard). O que não pode
+            existir é a frase DUAS vezes na mesma tela: o canvas de celular põe
+            o link no corpo (`Livro.dc.html:60`) e o de desktop **só** na
+            margem (`LivroDesktop.dc.html:206`).
+
+            Daí o par de media queries, que é o MESMO desenho das duas lombadas
+            do cabeçalho: os dois ficam montados e o CSS mostra um. A
+            alternativa seria condicionar por largura em JavaScript, que é
+            estado novo para resolver o que uma classe resolve.
+          */}
+          <Link
+            className={cx('hidden py-2 min-[1120px]:inline-flex', FOCUS_RING)}
+            to={acervoPath(book.id)}
+          >
+            {/*
+              ⚠️ **DIVERGÊNCIA DECLARADA:** o canvas escreve este link com
+              `letter-spacing: 0.1em` e o `Eyebrow` é 0,12em. Um
+              `tracking-[0.1em]` ao lado **não** é o conserto — as duas classes
+              são valores arbitrários do Tailwind, então quem vence é a ordem no
+              CSS emitido, não a ordem de escrita, e o resultado seria um
+              espaçamento decidido por sorte. É a mesma divergência que o
+              `Eyebrow` do cabeçalho desta tela já declara.
+            */}
+            <Eyebrow>{t('pages.book.acervoLink')}</Eyebrow>
+          </Link>
+        </section>
+
+        {/*
+          ⚠️ **O SEGUNDO FILETE VIVE DENTRO DO MESMO `null` DO BLOCO DO
+          GRIFO** (`LivroDesktop.dc.html:209`). Um separador escrito "depois
+          de toda seção" deixaria um traço solto no fim da coluna em todo
+          livro recém-cadastrado — que é o estado mais comum de todos, e é o
+          que o acusador `drops the second hairline together with the
+          last-highlight block` guarda.
+        */}
+        {lastHighlight === null ? null : (
+          <>
+            <div aria-hidden="true" className="h-px bg-line-soft" />
+            <section className="flex flex-col gap-2.5">
+              <h2>
+                <Eyebrow>{t('pages.book.inBook.lastHighlight')}</Eyebrow>
+              </h2>
+              <MarginHighlight
+                authorName={nameOfWriter(lastHighlight.userId, me, memberNames)}
+                color={lastHighlight.color}
+                page={lastHighlight.page}
+                quote={lastHighlight.quote}
+              />
+            </section>
+          </>
+        )}
       </MarginRail>
     );
   }
@@ -933,7 +1112,7 @@ export function BookPage() {
         portanto nem o filete vertical nem os 320px em branco ao lado de
         "Carregando…".
       */
-      rail={state.status === 'ready' ? rail() : undefined}
+      rail={state.status === 'ready' ? rail(state.data) : undefined}
       rule="none"
       title={
         state.status === 'ready' ? state.data.book.title : t('pages.book.title')

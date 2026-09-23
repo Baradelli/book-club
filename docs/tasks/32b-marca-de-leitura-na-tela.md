@@ -123,7 +123,24 @@ hoje" em primeira pessoa, e o caminho de `204` no cliente HTTP.
 18. ⚠️ **`packages/backend` e `packages/ui` INTOCADOS** — `git status` vazio, colado. A
     varredura de strings cravadas em `ui` continua em **33**.
 19. ⚠️ **`book.tsx` tem 247 linhas** pelo contador canônico. Lição nº 8: **divida antes de
-    crescer**. Se passar de ~350, corte — e diga por medição o que saiu e para onde.
+    crescer**. ~~Se passar de ~350, corte~~ — e diga por medição o que saiu e para onde.
+
+    ⚠️ **O TETO DESTA CLÁUSULA FOI SUBSTITUÍDO POR 420, com data: 2026-09-23, decisão do
+    dono** (→ `docs/BACKLOG.md`, bloco da rodada de correção da Tarefa 44b, e o docblock do
+    próprio `book.tsx`). **O ~350 fica riscado e não apagado**, de propósito: esta regra é
+    citada por outras fatias com aquele número na mão, e a numeração da **lição nº 8 do
+    MVP 1** tem de continuar significando o que significava para quem já a citou. Leia-o
+    como **data**, não como teto em vigor.
+
+    Por que subiu: entre 32b e hoje a tela ganhou a **lombada**, o **sumário**, a **margem
+    de desktop** (Tarefa 44) e o **inventário** "Neste livro"/"Último grifo" (Tarefa 44b) —
+    quatro coisas do canvas, nenhuma de conveniência. Medido pelo contador canônico:
+    247 → 277 → 356 → 360 → 408 → **414**.
+
+    ⚠️ E a ironia, medida e registrada para a próxima fatia não repetir: a 44b **extraiu 45
+    linhas** (`margin-highlight.tsx`) e se anotou como fatia que dividiu, mas o corte saiu
+    do `day-note.tsx` (506 → 478, **−28**). A tela que estourou **não perdeu uma linha**.
+    Extrair de A não é encolher B.
 20. O teste de 204 do cliente (decisão H) mora em **`packages/shared`**, não na tela: é lá que
     a propriedade é decidível.
 

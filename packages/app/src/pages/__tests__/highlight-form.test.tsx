@@ -212,6 +212,8 @@ function bookReply(): Reply {
       planItems: [],
       writers: [],
       readers: [],
+      inventory: { notes: 0, highlights: 0 },
+      lastHighlight: null,
     },
   };
 }

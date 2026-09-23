@@ -1,6 +1,7 @@
 import type { HighlightColor } from '@clube/shared';
 
 import type { Highlight } from '../domain/highlight';
+import { compareNewestFirst } from '../domain/newest-first';
 import { optionalText } from '../domain/optional-text';
 import type { AssertMembership } from './assert-membership';
 import type { HighlightRepository } from './ports/highlight-repository';
@@ -107,33 +108,27 @@ export class ListHighlights {
       status: 'ACTIVE' as const,
     });
 
-    // Copia antes de ordenar: o array é do repositório, e mutá-lo é smell de
-    // fronteira — vira hábito e um dia o repositório o guarda em cache.
-    return [...found].sort(compareByCreatedAtDesc);
+    /*
+      O grifo mais recente primeiro — `createdAt` desc, empate por `id` asc.
+      `createdAt` e não `updatedAt`: o comentário do grifo é reescrito a cada
+      autosave, e por `updatedAt` a lista pularia embaixo do dedo de quem
+      está digitando. É a mesma decisão do `listNotes`.
+
+      **E não por `page` crescente** (decisão A), que seria a ordem de leitura
+      do livro e talvez seja o que a tela queira: `page` é **anulável**, e os
+      grifos sem página precisariam de uma posição arbitrária no meio da
+      lista; e toda outra listagem do app é "mais recente primeiro". A tela da
+      Tarefa 25 pode reordenar o que recebeu **sem** mexer aqui — o contrário
+      muda o contrato para todo chamador futuro.
+
+      ⚠️ **A CONTA TEM UM DONO SÓ desde a rodada de correção da Tarefa 44b**
+      (`domain/newest-first.ts`, §7.1): é a MESMA ordem que o
+      `lastActiveByBook` promete, e era justamente ali que a quinta cópia
+      havia divergido sem acusador.
+
+      Copia antes de ordenar: o array é do repositório, e mutá-lo é smell de
+      fronteira — vira hábito e um dia o repositório o guarda em cache.
+    */
+    return [...found].sort(compareNewestFirst);
   }
-}
-
-/**
- * O grifo mais recente primeiro.
- *
- * `createdAt` e não `updatedAt`: o comentário do grifo é reescrito a cada
- * autosave, e por `updatedAt` a lista pularia embaixo do dedo de quem está
- * digitando. É a mesma decisão do `listNotes`.
- *
- * **E não por `page` crescente** (decisão A), que seria a ordem de leitura do
- * livro e talvez seja o que a tela queira: `page` é **anulável**, e os grifos
- * sem página precisariam de uma posição arbitrária no meio da lista; e toda
- * outra listagem do app é "mais recente primeiro". A tela da Tarefa 25 pode
- * reordenar o que recebeu **sem** mexer aqui — o contrário muda o contrato para
- * todo chamador futuro.
- *
- * O desempate por `id` existe para a ordem ser DETERMINÍSTICA: duas pessoas
- * grifando no mesmo instante é o caso normal de um clube, e sem ele a ordem
- * sairia como o repositório enumerou — que é diferente entre o fake e o Prisma.
- */
-function compareByCreatedAtDesc(a: Highlight, b: Highlight): number {
-  const byCreatedAt = b.createdAt.getTime() - a.createdAt.getTime();
-  if (byCreatedAt !== 0) return byCreatedAt;
-
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }

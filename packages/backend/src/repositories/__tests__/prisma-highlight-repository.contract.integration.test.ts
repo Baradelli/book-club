@@ -1507,4 +1507,174 @@ describe('PrismaHighlightRepository (contract)', () => {
       ).resolves.toBe(1);
     });
   });
+
+  /**
+   * ⚠️ **O INVENTÁRIO E O ÚLTIMO GRIFO (Tarefa 44b) — e este arquivo é o ÚNICO
+   * lugar onde a propriedade que importa é DECIDÍVEL** (§7.10).
+   *
+   * O `HighlightRepositoryFake` não tem teto de linhas, então nenhum mutante da
+   * suíte unitária acusa `count()` trocado por `(await find(...)).length`: os
+   * dois dão o mesmo número contra o fake. Contra o Postgres eles divergem
+   * exatamente a partir da 501ª linha, que é onde a válvula `take` do `find`
+   * morde — e é a razão de a fatia existir.
+   */
+  describe('activeCountByBook and lastActiveByBook (task 44b)', () => {
+    it('counts only the ACTIVE highlights of the book asked for', async () => {
+      await repo.save(aHighlightRow('count-a'));
+      await repo.save(aHighlightRow('count-b'));
+      await repo.save(
+        aHighlightRow('count-arquivado', {
+          status: 'ARCHIVED',
+          archivedAt: new Date('2026-11-01T00:00:00.000Z'),
+        }),
+      );
+      // Do MESMO clube, livro diferente: o corte é o livro, não o clube.
+      await repo.save(aHighlightRow('count-outro', { bookId: OTHER_BOOK_ID }));
+      // E de outro clube inteiro.
+      await repo.save(
+        aHighlightRow('count-de-fora', {
+          clubId: OTHER_CLUB_ID,
+          bookId: FOREIGN_BOOK_ID,
+        }),
+      );
+
+      await expect(repo.activeCountByBook(BOOK_ID)).resolves.toBe(2);
+      await expect(repo.activeCountByBook(OTHER_BOOK_ID)).resolves.toBe(1);
+    });
+
+    it('counts zero for a book with no highlight at all', async () => {
+      await expect(repo.activeCountByBook(TAKE_BOOK_ID)).resolves.toBe(0);
+    });
+
+    /**
+     * ⚠️⚠️ **O TESTE QUE JUSTIFICA A FATIA INTEIRA.**
+     *
+     * `EXPECTED_ROW_LIMIT + 1` linhas `ACTIVE` no mesmo livro: a contagem tem
+     * de ser **501**, não 500. O mutante obrigatório da regra 2 — trocar o
+     * `count()` do `PrismaHighlightRepository` por
+     * `(await this.find({ clubId, bookId })).length` — fica vermelho **aqui e
+     * só aqui**.
+     *
+     * A pré-condição é medida ao lado: o `find` do mesmo livro devolve
+     * `EXPECTED_ROW_LIMIT`. Sem ela o teste diria "a contagem é 501" sem provar
+     * que havia um truncamento a evitar.
+     */
+    it('counts every ACTIVE highlight of the book, past the 500-row valve of find()', async () => {
+      const total = EXPECTED_ROW_LIMIT + 1;
+      const base = Date.UTC(2026, 2, 1);
+      const rows = Array.from({ length: total }, (_unused, index) => ({
+        id: trackedHighlightId(`count-${String(index).padStart(4, '0')}`),
+        clubId: CLUB_ID,
+        bookId: TAKE_BOOK_ID,
+        userId: AUTHOR_ID,
+        quote: `linha ${index}`,
+        color: '#facc15',
+        page: null,
+        reference: null,
+        // `Prisma.DbNull` e não `null`: coluna `Json?`. A mesma armadilha do
+        // fixture da válvula, algumas dezenas de linhas acima.
+        commentDoc: Prisma.DbNull,
+        commentText: '',
+        status: 'ACTIVE' as const,
+        archivedAt: null,
+        createdAt: new Date(base + index * 60_000),
+        updatedAt: new Date(base + index * 60_000),
+      }));
+      await prisma.highlight.createMany({ data: rows });
+
+      // A PRÉ-CONDIÇÃO: o `find` trunca, e é contra isto que a contagem vale.
+      const truncated = await repo.find({
+        clubId: CLUB_ID,
+        bookId: TAKE_BOOK_ID,
+      });
+      expect(truncated).toHaveLength(EXPECTED_ROW_LIMIT);
+
+      await expect(repo.activeCountByBook(TAKE_BOOK_ID)).resolves.toBe(total);
+    });
+
+    it('returns the most recent ACTIVE highlight of the book', async () => {
+      await repo.save(
+        aHighlightRow('last-velho', {
+          quote: 'o mais antigo',
+          createdAt: new Date('2026-04-01T00:00:00.000Z'),
+        }),
+      );
+      const newest = aHighlightRow('last-novo', {
+        quote: 'o mais recente',
+        createdAt: new Date('2026-04-09T00:00:00.000Z'),
+      });
+      await repo.save(newest);
+
+      const found = await repo.lastActiveByBook(BOOK_ID);
+
+      expect(required(found).id).toBe(newest.id);
+      expect(required(found).quote).toBe('o mais recente');
+    });
+
+    it('ignores an archived highlight, even when it is the most recent', async () => {
+      const alive = aHighlightRow('last-vivo', {
+        createdAt: new Date('2026-04-01T00:00:00.000Z'),
+      });
+      await repo.save(alive);
+      await repo.save(
+        aHighlightRow('last-arquivado', {
+          createdAt: new Date('2026-04-09T00:00:00.000Z'),
+          status: 'ARCHIVED',
+          archivedAt: new Date('2026-04-10T00:00:00.000Z'),
+        }),
+      );
+
+      expect(required(await repo.lastActiveByBook(BOOK_ID)).id).toBe(alive.id);
+    });
+
+    it('returns null for a book with no highlight at all', async () => {
+      await expect(repo.lastActiveByBook(TAKE_BOOK_ID)).resolves.toBeNull();
+    });
+
+    it('never crosses into another book, not even for a more recent highlight', async () => {
+      const mine = aHighlightRow('last-daqui', {
+        createdAt: new Date('2026-04-01T00:00:00.000Z'),
+      });
+      await repo.save(mine);
+      await repo.save(
+        aHighlightRow('last-de-fora', {
+          clubId: OTHER_CLUB_ID,
+          bookId: FOREIGN_BOOK_ID,
+          createdAt: new Date('2026-04-09T00:00:00.000Z'),
+        }),
+      );
+
+      expect(required(await repo.lastActiveByBook(BOOK_ID)).id).toBe(mine.id);
+    });
+
+    /**
+     * ⚠️ **O DESEMPATE POR `id`, contra o banco — e ele NÃO é decoração.**
+     *
+     * `createdAt` sozinho não é ordem total, e empate no mesmo milissegundo é o
+     * caso normal (duas pessoas do clube salvando ao mesmo tempo). Sem
+     * `{ id: 'asc' }` ao lado, "o último grifo" seria escolhido pelo plano de
+     * execução do Postgres e mudaria a cada recarga — o mesmo argumento que o
+     * `find` já faz para o corte do `take`.
+     *
+     * ⚠️ **O FIXTURE É ESCOLHIDO PARA A IMPLEMENTAÇÃO ERRADA FALHAR** (§7.2): o
+     * id vencedor é o do grifo gravado **PRIMEIRO**, então "devolve o último
+     * que entrou" — e também "devolve o primeiro que o repositório enumerou",
+     * que é a armadilha invertida do fake — dá a resposta errada aqui.
+     */
+    it('breaks a createdAt tie by id, the same total order the listing uses', async () => {
+      const tie = new Date('2026-05-05T05:05:05.005Z');
+      const smallerId = aHighlightRow('last-tie-a', { createdAt: tie });
+      await repo.save(smallerId);
+      const biggerId = aHighlightRow('last-tie-z', { createdAt: tie });
+      await repo.save(biggerId);
+      // A PRÉ-CONDIÇÃO: os dois nomes de fixture põem o vencedor no id menor, e
+      // esse é o que entrou primeiro. Sem este pino, renomear um prefixo
+      // inverteria o teste sem uma linha vermelha.
+      expect([smallerId.id, biggerId.id].sort()[0]).toBe(smallerId.id);
+
+      expect(required(await repo.lastActiveByBook(BOOK_ID)).id).toBe(
+        smallerId.id,
+      );
+    });
+  });
 });

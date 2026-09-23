@@ -153,12 +153,24 @@ describe('book routes', () => {
       where: { bookId: { in: books.map((book) => book.id) } },
       select: { id: true },
     });
+    // ⚠️ E OS GRIFOS, desde a Tarefa 44b, pelo MESMO motivo das duas consultas
+    // acima: o teste do inventário grava grifo de verdade, e
+    // `Highlight.bookId` é `onDelete: Restrict`. Sem esta linha a limpeza
+    // estoura em `Highlight_bookId_fkey` com os testes VERDES e fixture vazando
+    // no banco de desenvolvimento do dono — a armadilha que o `ActivityEvent`
+    // da 34, o `PushSubscription` da 36 e o `planItemId` do grifo na 38i já
+    // pregaram três vezes. Consultados pelo `bookId` (§6.6).
+    const highlights = await prisma.highlight.findMany({
+      where: { bookId: { in: books.map((book) => book.id) } },
+      select: { id: true },
+    });
     const memberships = await prisma.membership.findMany({
       where: { clubId: { in: [CLUB_ID, OTHER_CLUB_ID] } },
       select: { id: true },
     });
 
     await removeFixtures({
+      highlightIds: highlights.map((row) => row.id),
       readingLogIds: readingLogs.map((log) => log.id),
       noteIds: notes.map((note) => note.id),
       planItemIds: planItems.map((item) => item.id),
@@ -521,6 +533,123 @@ describe('book routes', () => {
       });
 
       expect(response.statusCode).toBe(401);
+    });
+
+    /**
+     * ⚠️ **"NESTE LIVRO" E "ÚLTIMO GRIFO" ATRAVESSAM A BORDA (Tarefa 44b) — e é
+     * a MESMA armadilha do `writers` na 11 e do `readers` na 32** (§6.1): o
+     * `serializerCompiler` do Zod descarta campo não declarado, então um
+     * `inventory` esquecido no `bookWithPlanResponseSchema` sairia APAGADO, com
+     * 200 e sem erro nenhum.
+     *
+     * A fixture é montada direto no banco (o mesmo caminho do
+     * `OTHER_CLUB_BOOK_ID`): a anotação AVULSA e o grifo AVULSO são o caso que
+     * o atalho recusado cegaria, e uma linha arquivada de cada lado prova que o
+     * soft delete não entra no inventário.
+     */
+    it('carries the acervo inventory and the last highlight', async () => {
+      const { book } = await createBook({ title: 'Com Acervo' });
+      await prisma.note.createMany({
+        data: [
+          {
+            id: prefixedId('t44b', 'note-viva'),
+            clubId: CLUB_ID,
+            bookId: book.id,
+            userId: MEMBER_ID,
+            kind: 'FREE',
+            planItemId: null,
+            title: 'Uma ideia avulsa',
+            doc: { type: 'doc', content: [] },
+            plainText: '',
+            status: 'ACTIVE',
+            updatedAt: new Date('2026-10-01T00:00:00.000Z'),
+          },
+          {
+            id: prefixedId('t44b', 'note-arquivada'),
+            clubId: CLUB_ID,
+            bookId: book.id,
+            userId: MEMBER_ID,
+            kind: 'FREE',
+            planItemId: null,
+            title: 'Arquivada',
+            doc: { type: 'doc', content: [] },
+            plainText: '',
+            status: 'ARCHIVED',
+            archivedAt: new Date('2026-10-02T00:00:00.000Z'),
+            updatedAt: new Date('2026-10-02T00:00:00.000Z'),
+          },
+        ],
+      });
+      await prisma.highlight.createMany({
+        data: [
+          {
+            id: prefixedId('t44b', 'hl-velho'),
+            clubId: CLUB_ID,
+            bookId: book.id,
+            userId: MEMBER_ID,
+            planItemId: null,
+            quote: 'o mais antigo',
+            color: '#facc15',
+            page: 45,
+            commentText: '',
+            status: 'ACTIVE',
+            createdAt: new Date('2026-10-01T00:00:00.000Z'),
+            updatedAt: new Date('2026-10-01T00:00:00.000Z'),
+          },
+          {
+            id: prefixedId('t44b', 'hl-novo'),
+            clubId: CLUB_ID,
+            bookId: book.id,
+            userId: MEMBER_ID,
+            planItemId: null,
+            quote: 'encaixar-se é o oposto de pertencer',
+            color: '#22c55e',
+            page: 138,
+            commentText: '',
+            status: 'ACTIVE',
+            createdAt: new Date('2026-10-09T00:00:00.000Z'),
+            updatedAt: new Date('2026-10-09T00:00:00.000Z'),
+          },
+        ],
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/books/${book.id}`,
+        headers: { authorization: `Bearer ${memberToken}` },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json<{
+        inventory: { notes: number; highlights: number };
+        lastHighlight: Record<string, unknown> | null;
+      }>();
+      // A arquivada de cada lado NÃO entra; a avulsa entra.
+      expect(body.inventory).toEqual({ notes: 1, highlights: 2 });
+      // ⚠️ O grifo mais recente, e ele traz a COR daquele grifo — é ela que
+      // pinta a bolinha e o papel da margem, nunca uma cor fixa.
+      expect(body.lastHighlight).toEqual({
+        id: expect.stringContaining('hl-novo') as unknown as string,
+        userId: MEMBER_ID,
+        quote: 'encaixar-se é o oposto de pertencer',
+        color: '#22c55e',
+        page: 138,
+      });
+    });
+
+    /** Livro recém-cadastrado: zero, zero e nenhum grifo — não `undefined`. */
+    it('carries a zeroed inventory and no last highlight for a fresh book', async () => {
+      const { book } = await createBook({ title: 'Sem Acervo' });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/books/${book.id}`,
+        headers: { authorization: `Bearer ${memberToken}` },
+      });
+
+      const body = response.json<Record<string, unknown>>();
+      expect(body['inventory']).toEqual({ notes: 0, highlights: 0 });
+      expect(body['lastHighlight']).toBeNull();
     });
   });
 

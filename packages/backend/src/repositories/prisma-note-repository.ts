@@ -273,6 +273,34 @@ export class PrismaNoteRepository implements NoteRepository {
   }
 
   /**
+   * Quantas anotações ACTIVE o livro tem — a avulsa INCLUÍDA.
+   *
+   * ⚠️ **`count()`, e NUNCA `(await this.find(...)).length` — é a razão de a
+   * Tarefa 44b existir.** O `find` logo acima tem `take: FIND_ROW_LIMIT`
+   * (500), que é **válvula de segurança, não paginação**: para um livro com
+   * 501 anotações o `length` daria **500**, e a margem publicaria um número
+   * plausível, estável e errado como se fosse fato. *Lista truncada é
+   * registro; contagem truncada é mentira.*
+   *
+   * O `count()` do Postgres resolve no banco e não traz linha nenhuma — o
+   * `doc` é a maior coluna da tabela, e trazê-lo para somar 1 seria o mesmo
+   * defeito que o `planItemWritersByBook` existe para não cometer.
+   *
+   * ⚠️ **Sem `planItemId: { not: null }`**, ao contrário do
+   * `planItemWritersByBook`: a anotação avulsa É acervo do livro (o acervo é
+   * por livro e tem filtro `FREE`). Pôr aquela cláusula aqui reproduziria
+   * exatamente o número "quase certo" que a nota nº 2 de
+   * `docs/tasks/44-o-livro.md` mediu e recusou.
+   *
+   * O acusador de tudo isto é o teste de contrato
+   * `counts every ACTIVE note of the book, past the 500-row valve of find()`:
+   * a suíte unitária **não** consegue vê-lo, porque o fake não trunca.
+   */
+  async activeCountByBook(bookId: string): Promise<number> {
+    return this.prisma.note.count({ where: { bookId, status: 'ACTIVE' } });
+  }
+
+  /**
    * Dos ids dados, quais têm alguma nota — **inclusive arquivada**.
    *
    * Sem cláusula de `status`: quem barra a remoção de um dia do plano é a FK

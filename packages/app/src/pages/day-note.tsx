@@ -10,9 +10,7 @@ import {
 import { ApiError } from '@clube/shared/client';
 import {
   Button,
-  cx,
   Eyebrow,
-  GrifoText,
   MarginRail,
   PersonAvatar,
   SaveIndicator,
@@ -42,7 +40,7 @@ import {
   nameOfWriter,
 } from './club-names';
 import { messageFor, resolveApiError } from './form-errors';
-import { COLOR_PEN_KEYS, PEN_DOT_CLASS } from './highlight-colors';
+import { MarginHighlight } from './margin-highlight';
 
 /**
  * A ANOTAÇÃO DO DIA — **a fatia que torna o app usável** (Tarefa 18).
@@ -1033,62 +1031,24 @@ export function DayNotePage() {
             <h2>
               <Eyebrow>{t('pages.dayNote.highlights.heading')}</Eyebrow>
             </h2>
-            {ofTheDay.map((highlight) => {
-              const writerName = nameOfWriter(
-                highlight.userId,
-                me,
-                memberNames,
-              );
-
-              return (
-                <div className="flex flex-col gap-[7px]" key={highlight.id}>
-                  <div className="flex items-center gap-2">
-                    {/*
-                      A bolinha de 9px do canvas (`:117`). `aria-hidden` porque a
-                      cor **nunca** é o único portador de informação (ADR 0002,
-                      regra 4 da Tarefa 25): o que a linha diz está escrito ao
-                      lado.
-                    */}
-                    <span
-                      aria-hidden="true"
-                      className={cx(
-                        'size-[9px] shrink-0 rounded-full',
-                        PEN_DOT_CLASS[COLOR_PEN_KEYS[highlight.color]],
-                      )}
-                    />
-                    <span className="font-mono text-micro uppercase tracking-[0.1em] text-muted">
-                      {highlight.page === null
-                        ? (writerName ?? t('pages.acervo.item.author.other'))
-                        : `${t('pages.acervo.item.page', {
-                            number: highlight.page,
-                          })} · ${
-                            writerName ?? t('pages.acervo.item.author.other')
-                          }`}
-                    </span>
-                  </div>
-                  {/*
-                    ⚠️ **DOIS ARREDONDAMENTOS DECLARADOS NESTA LINHA E NA DE
-                    CIMA**, os dois contra a escala fechada de sete degraus da
-                    Tarefa 39:
-
-                    - o trecho grifado tem **14,5px** no canvas
-                      (`DiaDesktop.dc.html:120`) e sai em `text-ui` (14px);
-                    - o rótulo em mono tem **9px** (`:118`) e sai em
-                      `text-micro` (9,5px).
-
-                    Meio pixel e meio pixel não pagam dois degraus novos — e
-                    cada degrau novo entra também na lista fechada de isenções
-                    ao `light-dark()`. É a mesma conta, e o mesmo registro, dos
-                    quatro arredondamentos que a Tarefa 41a deixou abertos.
-                  */}
-                  <p className="font-reading text-ui leading-[1.6]">
-                    <GrifoText pen={COLOR_PEN_KEYS[highlight.color]}>
-                      {highlight.quote}
-                    </GrifoText>
-                  </p>
-                </div>
-              );
-            })}
+            {/*
+              ⚠️ **O DESENHO DE UM GRIFO NA MARGEM SAIU DAQUI NA TAREFA 44b**,
+              para `./margin-highlight`, e o motivo é o §7.1 do
+              `docs/CONVENCOES-CODIGO.md` ("extrair, não cobrir duas vezes"): o
+              "Último grifo" da tela do livro é o MESMO bloco do MESMO canvas, e
+              a segunda cópia divergiria da primeira na primeira correção. O que
+              fica aqui é a lista — de quem são os grifos e como o nome se
+              resolve.
+            */}
+            {ofTheDay.map((highlight) => (
+              <MarginHighlight
+                authorName={nameOfWriter(highlight.userId, me, memberNames)}
+                color={highlight.color}
+                key={highlight.id}
+                page={highlight.page}
+                quote={highlight.quote}
+              />
+            ))}
           </section>
         )}
       </MarginRail>

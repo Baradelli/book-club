@@ -1,4 +1,5 @@
 import type { ActivityEvent } from '../../domain/activity-event';
+import { compareNewestFirst } from '../../domain/newest-first';
 import type {
   ActivityEventFilter,
   ActivityEventRepository,
@@ -80,10 +81,25 @@ export class ActivityEventRepositoryFake implements ActivityEventRepository {
     // que passou, e um filtro pinado que mudasse depois não pinaria nada.
     this.findFiltersSeen.push({ ...filter });
 
+    /*
+      A ordem do feed: o mais recente primeiro, empate desfeito pelo `id`
+      crescente. É a MESMA ordem que o `PrismaActivityEventRepository` pede ao
+      Postgres (`orderBy: [{ createdAt: 'desc' }, { id: 'asc' }]`), e é isso
+      que a torna fidelidade em vez de conveniência: o desempate não é
+      decoração — `createdAt` sozinho não é ordem total, e duas pessoas do
+      clube salvando no mesmo milissegundo é o caso normal.
+
+      ⚠️ **O `compareForTheFeed` LOCAL MORREU na rodada de correção da Tarefa
+      44b** (§7.1, "extrair, não cobrir duas vezes"): a conta estava escrita
+      cinco vezes no backend, e a quinta cópia — o `lastActiveByBook` do
+      `HighlightRepositoryFake` — já havia divergido com `localeCompare` no
+      lugar do code point, **sem nada acusando**. Agora o dono é
+      `domain/newest-first.ts`, e uma mutação dele acusa nos cinco.
+    */
     return [...this.store.values()]
       .reverse()
       .filter((event) => event.clubId === filter.clubId)
-      .sort(compareForTheFeed)
+      .sort(compareNewestFirst)
       .slice(0, activityFeedTake(filter.limit))
       .map((event) => this.clone(event));
   }
@@ -235,20 +251,4 @@ export class ActivityEventRepositoryFake implements ActivityEventRepository {
   private clone(event: ActivityEvent): ActivityEvent {
     return { ...event, createdAt: new Date(event.createdAt) };
   }
-}
-
-/**
- * A ordem do feed: o mais recente primeiro, empate desfeito pelo `id`.
- *
- * É a MESMA ordem que o `PrismaActivityEventRepository` pede ao Postgres
- * (`orderBy: [{ createdAt: 'desc' }, { id: 'asc' }]`), e é isso que a torna
- * fidelidade em vez de conveniência. O desempate não é decoração: `createdAt`
- * sozinho não é ordem total, e duas pessoas do clube salvando no mesmo
- * milissegundo é o caso normal.
- */
-function compareForTheFeed(a: ActivityEvent, b: ActivityEvent): number {
-  const byCreatedAt = b.createdAt.getTime() - a.createdAt.getTime();
-  if (byCreatedAt !== 0) return byCreatedAt;
-
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }

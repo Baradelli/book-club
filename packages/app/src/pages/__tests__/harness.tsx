@@ -239,7 +239,8 @@ export function booksReply(books: readonly BookResponse[]): Reply {
 }
 
 /**
- * `GET /books/:bookId` — `{ book, planItems, writers, readers }`.
+ * `GET /books/:bookId` — `{ book, planItems, writers, readers, inventory,
+ * lastHighlight }`.
  *
  * As DUAS sobreposições são **obrigatórias** no `bookWithPlanResponseSchema`, e
  * o cliente HTTP roda o schema sobre a resposta (§6.8): um fixture sem uma
@@ -253,12 +254,29 @@ export function booksReply(books: readonly BookResponse[]): Reply {
  * fixa `[]` nos dois porque ele nasceu para o ATALHO DA HOME, que não olha
  * sobreposição nenhuma — quem testa as marcas monta a resposta com elas
  * (`book.test.tsx`).
+ *
+ * ⚠️ **O `inventory` E O `lastHighlight` ENTRARAM NA TAREFA 44b, e NÃO houve
+ * fase 1.** Os dois nasceram obrigatórios de uma vez — o phase-in do `readers`
+ * existiu porque a Tarefa 32 não podia tocar `packages/app`, e esta fatia
+ * toca. O padrão deste helper é o acervo VAZIO e nenhum grifo, que é a verdade
+ * de todo teste que não fala da margem; quem testa "Neste livro" e "Último
+ * grifo" monta a resposta com eles (`book.test.tsx`).
  */
 export function bookWithPlanReply(
   book: BookResponse,
   planItems: readonly PlanItemResponse[],
 ): Reply {
-  return { status: 200, body: { book, planItems, writers: [], readers: [] } };
+  return {
+    status: 200,
+    body: {
+      book,
+      planItems,
+      writers: [],
+      readers: [],
+      inventory: { notes: 0, highlights: 0 },
+      lastHighlight: null,
+    },
+  };
 }
 
 /**

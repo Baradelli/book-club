@@ -2,6 +2,10 @@ import { z } from 'zod';
 
 import { isCalendarDay, isClubMonth } from './calendar-day';
 import { generalStatus } from './club';
+// O último grifo da margem: schema ESTREITO, declarado com o grifo e reusado
+// aqui — `CLAUDE.md` proíbe duplicar schema. `highlight.ts` não importa este
+// arquivo, então não há ciclo.
+import { lastHighlightResponseSchema } from './highlight';
 // A sobreposição de autoria é UM schema, declarado com a anotação e reusado
 // aqui — `CLAUDE.md` proíbe duplicar schema, e duas cópias divergiriam na
 // primeira vez que a sobreposição ganhasse um campo.
@@ -161,8 +165,41 @@ export const planItemResponseSchema = z.object({
 });
 
 /**
+ * ⚠️ **O TAMANHO DO ACERVO DO LIVRO — "Neste livro", Tarefa 44b.**
+ *
+ * Quantas anotações e quantos grifos `ACTIVE` o clube escreveu NESTE livro —
+ * a avulsa e o grifo sem dia de plano incluídos, porque o acervo é por livro.
+ *
+ * ⚠️⚠️ **É INVENTÁRIO, NÃO PLACAR — e isto está escrito aqui porque a próxima
+ * auditoria vai reler o parágrafo "nenhum contador" logo abaixo e precisar da
+ * distinção.** Três propriedades, e as três valem ao mesmo tempo:
+ *
+ * 1. **não há total contra o qual comparar.** "18" não é "18 de 30", e é por
+ *    isso que a frase da tela não casa o `COUNTER_SHAPE` da varredura
+ *    anti-culpa;
+ * 2. **o número não muda quando alguém deixa de escrever** — ele só sobe, com
+ *    o que o clube fez. Não existe estado em que ele vire dívida;
+ * 3. **não é por pessoa**, então não há com quem se comparar.
+ *
+ * O que o §1 do plano proíbe é comparação e cobrança; o tamanho do que o clube
+ * fez junto não é nenhuma das duas. O dono abriu a exceção ao fora-de-escopo
+ * do MVP 3.5 por escrito em 2026-09-22 (`docs/BACKLOG.md`, entrada 44b), e o
+ * bilhete ao lado de `pages.book.inBook.*` no `pt.ts` diz a mesma coisa.
+ *
+ * ⚠️ **NÚMERO EXATO OU NADA.** As duas listagens (`GET /clubs/:clubId/notes` e
+ * `/highlights`) cortam em `FIND_ROW_LIMIT = 500`, então contar o `length`
+ * delas daria **500** para todo livro maior — *lista truncada é registro;
+ * contagem truncada é mentira*. Estes dois números vêm de `count()` no banco,
+ * pelos métodos estreitos `activeCountByBook` dos dois repositórios.
+ */
+export const bookInventoryResponseSchema = z.object({
+  notes: z.number(),
+  highlights: z.number(),
+});
+
+/**
  * Abrir o livro: cadastro + plano + **quem já escreveu** + **quem já leu**
- * cada dia.
+ * cada dia, mais **o tamanho do acervo** e **o último grifo**.
  *
  * Os dois campos de sobreposição PRECISAM estar declarados aqui: o
  * `serializerCompiler` do Zod descarta campo não declarado, então um
@@ -183,8 +220,19 @@ export const planItemResponseSchema = z.object({
  * 11 (medido — o app lê o `writers` daqui), e criar a gêmea seria repetir um
  * erro já pago.
  *
- * ⚠️ E **nenhum contador**: nem `readDays`, nem total, nem percentual.
- * Progresso é presença, e é o contrato que torna o número irrenderizável.
+ * ⚠️ E **nenhum contador de PROGRESSO**: nem `readDays`, nem total de dias,
+ * nem percentual. Progresso é presença, e é o contrato que torna o número
+ * irrenderizável.
+ *
+ * ⚠️⚠️ **A PALAVRA "PROGRESSO" ENTROU NESTA FRASE NA TAREFA 44b, e ela é o
+ * conserto de uma imprecisão, não um afrouxamento.** A frase dizia "nenhum
+ * contador", e a partir de 2026-09-23 a resposta tem dois — o `inventory` (o
+ * TAMANHO do acervo do livro) e nada mais. A afirmação que este parágrafo
+ * sempre quis fazer continua inteira e continua testada: **a sobreposição de
+ * leitura não tem número**, nem por dia nem por pessoa, e é isso que
+ * `get-book-with-plan.test.ts › returns no reading count, no total and no
+ * percentage` guarda. A diferença entre as duas coisas está escrita no
+ * `bookInventoryResponseSchema` acima.
  *
  * ⚠️ **A JUSTIFICATIVA LARGA CAIU NA TAREFA 38c** — o dono reverteu a
  * pergunta 1 e pediu a corrente de leitura, que **é** um número por pessoa
@@ -241,6 +289,16 @@ export const bookWithPlanResponseSchema = z.object({
   planItems: z.array(planItemResponseSchema),
   writers: planItemWritersResponseSchema,
   readers: planItemReadersResponseSchema,
+  inventory: bookInventoryResponseSchema,
+  /**
+   * `null` é resposta legítima e é o caso de todo livro recém-cadastrado — a
+   * margem simplesmente não desenha o bloco. `.nullable()` e **não**
+   * `.optional()`, pela mesma razão do `planItemId` do grifo: `null` é o
+   * valor normal, não a ausência do campo, e o `response` schema é fronteira
+   * de segurança (§6.1) — com `optional` o serializer aceitaria uma resposta
+   * sem o campo e a tela leria `undefined` onde espera `null`.
+   */
+  lastHighlight: lastHighlightResponseSchema.nullable(),
 });
 
 /**
@@ -262,5 +320,6 @@ export type ReplacePlanBody = z.infer<typeof replacePlanSchema>;
 export type ListBooksQuery = z.infer<typeof listBooksQuerySchema>;
 export type BookResponse = z.infer<typeof bookResponseSchema>;
 export type PlanItemResponse = z.infer<typeof planItemResponseSchema>;
+export type BookInventoryResponse = z.infer<typeof bookInventoryResponseSchema>;
 export type BookWithPlanResponse = z.infer<typeof bookWithPlanResponseSchema>;
 export type ReplacePlanResponse = z.infer<typeof replacePlanResponseSchema>;

@@ -209,6 +209,8 @@ function bookReply(clubId: string = CLUB_ID): Reply {
       planItems: [aPlanItem({ id: 'p-1', order: 1 })],
       writers: [],
       readers: [],
+      inventory: { notes: 0, highlights: 0 },
+      lastHighlight: null,
     },
   };
 }

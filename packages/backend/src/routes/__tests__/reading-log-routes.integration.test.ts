@@ -745,7 +745,23 @@ describe('reading log routes', () => {
       expect(body.writers).toEqual([]);
     });
 
-    // Nenhum contador atravessa a resposta do livro: progresso é presença.
+    /**
+     * Nenhum contador de PROGRESSO atravessa a resposta do livro: progresso é
+     * presença.
+     *
+     * ⚠️ **A LISTA CRESCEU NA TAREFA 44b, e o que ela afirma não mudou.** O
+     * `inventory` é o TAMANHO do acervo do livro e o `lastHighlight` é o grifo
+     * mais recente — nenhum dos dois é progresso: não têm total ao lado, não
+     * mudam quando alguém deixa de escrever e não são por pessoa. A guarda
+     * continua sendo sobre as CHAVES, e é ela que faz um `readDays` acrescentado
+     * por engano ficar vermelho na borda. → o docblock do
+     * `bookInventoryResponseSchema`, em `packages/shared/src/book.ts`.
+     *
+     * ⚠️ E o valor **também** é assertado abaixo: uma lista de chaves sozinha
+     * deixaria passar um `inventory` que contasse a coisa errada. Este livro
+     * tem leitura e **nenhuma** anotação nem grifo — é o que o `beforeAll`
+     * deste bloco monta, e é a única resposta certa para ele.
+     */
     it('carries no progress count next to the overlay', async () => {
       const response = await app.inject({
         method: 'GET',
@@ -756,10 +772,14 @@ describe('reading log routes', () => {
       const body = response.json<Record<string, unknown>>();
       expect(Object.keys(body).sort()).toEqual([
         'book',
+        'inventory',
+        'lastHighlight',
         'planItems',
         'readers',
         'writers',
       ]);
+      expect(body['inventory']).toEqual({ notes: 0, highlights: 0 });
+      expect(body['lastHighlight']).toBeNull();
     });
 
     // Livro que ninguém leu: `[]`, e o campo EXISTE — a tela não tem de
