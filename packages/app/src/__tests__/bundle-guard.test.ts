@@ -71,6 +71,60 @@ const outDir = join(tmpdir(), 'clube-bundle-guard');
 const EDITOR_MARKERS = /prosemirror|tiptap/iu;
 
 /**
+ * ⚠️ **OS MÓDULOS QUE SÃO AS TELAS DE ADMINISTRAÇÃO DO LIVRO** (Tarefa 44c) —
+ * o `book-form.tsx` e o `plan-editor.tsx`.
+ *
+ * ⚠️ **A GUARDA EXISTE PORQUE O TETO DE BYTES NÃO GUARDA ESTA PROPRIEDADE.** O
+ * `ENTRY_CEILING_BYTES` mede TAMANHO: no dia em que alguém desfizer o
+ * `React.lazy()` do `router.tsx` e outra coisa encolher na mesma proporção,
+ * o teto continua verde e o formulário volta para o primeiro carregamento **em
+ * silêncio**. É a classe "guarda unidirecional" que a Tarefa 41b pagou e que a
+ * 44b pagou de novo. Medido nesta fatia, e não suposto: com o `lazy()`
+ * desfeito a entrada volta a **445.040 B**, que está **abaixo** dos 450.000 —
+ * o teto fica VERDE.
+ *
+ * ⚠️⚠️ **A ÂNCORA É O GRAFO DE MÓDULOS DO ROLLUP, e ela SUBSTITUIU uma marca
+ * de texto — a troca é da rodada de correção da 44c, e foi medida.**
+ *
+ * A primeira versão varria o CÓDIGO EMITIDO atrás do caminho de chave de
+ * catálogo `pages.bookForm.(fields|plan).`. Aquilo funcionava (string literal
+ * sobrevive à minificação; o `pt.ts` é objeto aninhado, então o caminho
+ * pontilhado só existe em quem chama o `t()`), mas tinha um defeito de
+ * classe: **a marca era acoplada a uma GRAFIA de código-fonte**, e a lista de
+ * exclusões dela já estava errada no dia em que nasceu. O docblock afirmava
+ * que `pages.bookForm.` cru dava **2** ocorrências na entrada, as duas de
+ * `entry.` — os rótulos dos links, escritos por `home.tsx:315` e
+ * `book.tsx:650`. **Remedido neste build: são 3.** A terceira é
+ * `pages.bookForm.loading`, e quem a pôs na entrada foi **esta mesma fatia**,
+ * pelo `fallback` do `Suspense` no `router.tsx`. Ou seja: a exclusão
+ * `(?!entry\.)` que qualquer "simplificação" escreveria deixaria a guarda
+ * vermelha para sempre, pela razão errada.
+ *
+ * O grafo do Rollup não tem esse problema. `build()` devolve, por chunk, os
+ * **ids dos módulos** que o Rollup pôs dentro dele — o caminho do ARQUIVO, que
+ * é o mesmo que o `import('./pages/book-form')` do `router.tsx` escreve. Um
+ * `import` estático põe o módulo no chunk da entrada e esta guarda cai;
+ * renomear o arquivo quebra o `import` antes de quebrar a guarda; e nenhuma
+ * mudança de tradução, de minificador ou de chave a alcança.
+ *
+ * ⚠️ **O que a troca NÃO muda:** quem responde "o que a pessoa baixa" continua
+ * sendo o `index.html` do build, nunca o `isEntry` do Rollup nem o nome do
+ * arquivo — é a disciplina que o docblock do topo defende, e as asserções
+ * abaixo cruzam as duas fontes de propósito.
+ */
+const BOOK_FORM_MODULES =
+  /[\\/]pages[\\/](?:book-form|plan-editor)\.tsx(?:$|\?)/u;
+
+/**
+ * ⚠️ **O PISO DO CHUNK DO FORMULÁRIO** — o irmão pequeno do `> 300_000` do
+ * editor, e ele existe pela mesma razão: um chunk de 1 kB seria o módulo de
+ * fachada do `lazy()`, com o formulário de verdade ainda na entrada. Medido
+ * nesta fatia: **10.059 B**. O piso é metade disso, para não cair num
+ * conserto de prosa.
+ */
+const BOOK_FORM_CHUNK_FLOOR_BYTES = 5_000;
+
+/**
  * O TETO DO QUE A PESSOA BAIXA PARA VER O LOGIN.
  *
  * Medido nesta fatia: **357.489 B** antes do editor entrar, e o mesmo número
@@ -96,6 +150,16 @@ interface Asset {
   code: string;
 }
 
+/**
+ * Um chunk como o ROLLUP o descreve: o nome do arquivo emitido e os ids dos
+ * módulos-fonte que entraram nele. É a âncora das duas guardas da 44c.
+ */
+interface BuiltChunk {
+  fileName: string;
+  moduleIds: string[];
+}
+
+let bundleChunks: BuiltChunk[] = [];
 let scripts: Asset[] = [];
 /** Os `.js` que o `index.html` manda buscar no primeiro carregamento. */
 let entryScripts: Asset[] = [];
@@ -183,10 +247,44 @@ function totalBytes(assets: readonly Asset[]): number {
   );
 }
 
-function contaminated(assets: readonly Asset[]): string[] {
+/**
+ * Os assets cujo CÓDIGO carrega uma das marcas — o nome deles, para a mensagem
+ * de falha dizer QUAL arquivo sujou.
+ *
+ * ⚠️ Generalizada na Tarefa 44c. Ela se chamava `contaminated` e tinha o
+ * `EDITOR_MARKERS` preso por dentro; a guarda do formulário de livro nasceu
+ * com uma marca de texto própria e precisava da MESMA varredura.
+ *
+ * ⚠️ **HOJE O ÚNICO CHAMADOR VOLTOU A SER O EDITOR** — a rodada de correção da
+ * 44c trocou a marca de texto do formulário pela âncora de GRAFO
+ * (`chunksBuiltFrom`), pelas razões medidas no `BOOK_FORM_MODULES`. O
+ * parâmetro fica: ele é o que separa "varrer" de "que marca varrer", e voltar
+ * a prender a marca por dentro seria desfazer a lição pela metade.
+ */
+function marked(assets: readonly Asset[], markers: RegExp): string[] {
   return assets
-    .filter((asset) => EDITOR_MARKERS.test(asset.code))
+    .filter((asset) => markers.test(asset.code))
     .map((asset) => asset.name);
+}
+
+/** Os chunks que o `index.html` NÃO manda buscar no primeiro carregamento. */
+function lazyChunks(): Asset[] {
+  return scripts.filter((asset) => !entryScripts.includes(asset));
+}
+
+/**
+ * Os NOMES dos chunks que o Rollup montou a partir de algum módulo que casa
+ * com `pattern` — a âncora de grafo que substituiu a marca de texto na rodada
+ * de correção da 44c.
+ *
+ * ⚠️ O nome volta como **basename**, para casar com o `Asset.name` (que vem do
+ * `readdirSync`) e com o que o `index.html` escreve. O `fileName` do Rollup
+ * traz o prefixo `assets/`.
+ */
+function chunksBuiltFrom(pattern: RegExp): string[] {
+  return bundleChunks
+    .filter((chunk) => chunk.moduleIds.some((id) => pattern.test(id)))
+    .map((chunk) => chunk.fileName.split('/').pop() ?? chunk.fileName);
 }
 
 /**
@@ -237,8 +335,9 @@ beforeAll(async () => {
   */
   const previousEnv = process.env['NODE_ENV'];
   process.env['NODE_ENV'] = 'production';
+  let result: Awaited<ReturnType<typeof build>>;
   try {
-    await build({
+    result = await build({
       root: process.cwd(),
       mode: 'production',
       logLevel: 'silent',
@@ -247,6 +346,28 @@ beforeAll(async () => {
   } finally {
     process.env['NODE_ENV'] = previousEnv;
   }
+
+  /*
+    ⚠️ **O GRAFO DE MÓDULOS, guardado antes de qualquer asserção.** `build()`
+    devolve `RollupOutput`, `RollupOutput[]` ou um `RollupWatcher` (que este
+    build nunca é, porque não há `watch`); o estreitamento é por `'output' in`,
+    sem `as`. É daqui que sai a âncora das duas guardas do formulário de livro:
+    o id do MÓDULO-FONTE que o Rollup pôs em cada chunk.
+  */
+  const outputs = Array.isArray(result)
+    ? result
+    : 'output' in result
+      ? [result]
+      : [];
+
+  bundleChunks = outputs.flatMap((output) =>
+    output.output
+      .filter((chunk) => chunk.type === 'chunk')
+      .map((chunk) => ({
+        fileName: chunk.fileName,
+        moduleIds: Object.keys(chunk.modules),
+      })),
+  );
 
   const assets = join(outDir, 'assets');
   scripts = readdirSync(assets)
@@ -320,7 +441,7 @@ describe('the app bundle (rule 21)', () => {
     // reexportou o `RichEditor` pelo barril de `@clube/ui`). O bundle do login
     // acabou de crescer ~454 kB. NÃO relaxe este teste: troque o import por
     // `React.lazy(() => import('@clube/ui/editor'))`.
-    expect(contaminated(entryScripts)).toEqual([]);
+    expect(marked(entryScripts, EDITOR_MARKERS)).toEqual([]);
   });
 
   it('puts the editor in a chunk of its OWN, which the first load does not fetch', () => {
@@ -334,10 +455,8 @@ describe('the app bundle (rule 21)', () => {
       Então o chunk do editor tem de EXISTIR, tem de ter as marcas, e tem de
       estar FORA do que o `index.html` manda buscar.
     */
-    const lazyScripts = scripts.filter(
-      (asset) => !entryScripts.includes(asset),
-    );
-    const withEditor = contaminated(lazyScripts);
+    const lazyScripts = lazyChunks();
+    const withEditor = marked(lazyScripts, EDITOR_MARKERS);
 
     expect(withEditor.length).toBeGreaterThan(0);
     // E o chunk é grande: se ele tivesse 2 kB, o editor de verdade continuaria
@@ -349,6 +468,83 @@ describe('the app bundle (rule 21)', () => {
 
     // E o `index.html` não o pede — nem por `src`, nem por `modulepreload`.
     for (const name of withEditor) {
+      expect(indexHtml).not.toContain(name);
+    }
+  });
+
+  it('⚠️ ships NO BOOK FORM in the FIRST LOAD (task 44c)', () => {
+    /*
+      ⚠️ **A GUARDA QUE DÁ SENTIDO À TAREFA 44c, e ela é de CONTEÚDO.**
+
+      As telas de ADMINISTRAÇÃO do livro (`book-form.tsx` + `plan-editor.tsx`)
+      não entram no arquivo que o navegador baixa antes de qualquer coisa
+      aparecer. Quem lê e escreve — que é todo mundo, todo dia — não paga o
+      formulário que dois administradores abrem uma vez por mês.
+
+      Medido na Tarefa 44c: a entrada caiu de **445.040 B** para **435.580 B**
+      (−9.460 B), e a folga contra os 450.000 subiu de 4.960 B para 14.420 B.
+
+      ⚠️ Falhou? Alguém trocou o `lazy(() => import('./pages/book-form'))` do
+      `router.tsx` por um `import { BookFormPage } from './pages/book-form'`
+      estático. NÃO relaxe esta guarda: desfaça o import.
+
+      ⚠️ E ela NÃO é redundante com o teto de bytes logo acima. O teto mede
+      TAMANHO: com o formulário de volta na entrada e outra coisa encolhendo na
+      mesma proporção, ele fica verde e o defeito volta sem acusador.
+
+      ⚠️⚠️ **MAS ELA TAMBÉM NÃO É "uma guarda, uma razão de cair" (§7.9) — e a
+      versão anterior deste comentário afirmava que era, o que é FALSO.** Ela
+      cai por DUAS razões, e as duas foram medidas na rodada de correção:
+
+      1. o formulário voltou para o primeiro carregamento (o defeito);
+      2. o ARQUIVO mudou de nome ou de pasta, e o `BOOK_FORM_MODULES` deixou de
+         casar — a guarda envelheceu, o app está certo.
+
+      A (2) é o preço de toda âncora, e ela é BARATA aqui: renomear
+      `pages/book-form.tsx` quebra o `import('./pages/book-form')` do
+      `router.tsx` e o `typecheck` antes de chegar a este teste. **Se esta
+      linha ficar vermelha sem que o `lazy()` tenha mudado, é a ÂNCORA que
+      envelheceu, e o conserto é a âncora, não o `lazy()`.**
+    */
+    const eager = new Set(entryScripts.map((asset) => asset.name));
+    const inFirstLoad = chunksBuiltFrom(BOOK_FORM_MODULES).filter((name) =>
+      eager.has(name),
+    );
+
+    expect(inFirstLoad).toEqual([]);
+  });
+
+  it('⚠️ puts the book form in a chunk of its OWN, which the first load does not fetch (task 44c)', () => {
+    /*
+      ⚠️ **O PAR POSITIVO, e ele é obrigatório** — a mesma terceira asserção que
+      o teste do editor acima tem, pela mesma razão exata: APAGAR as telas de
+      administração (ou o `import()` dinâmico) deixaria a asserção de cima
+      verde **por omissão**, que é o estado em que a Tarefa 14 mediu "zero
+      marcas" e concluiu a coisa errada.
+
+      Então o chunk do formulário tem de EXISTIR, tem de conter os dois
+      módulos, tem de ser grande o bastante para não ser só a fachada do
+      `lazy()`, e tem de estar FORA do que o `index.html` manda buscar.
+    */
+    const withBookForm = chunksBuiltFrom(BOOK_FORM_MODULES);
+
+    expect(withBookForm.length).toBeGreaterThan(0);
+
+    /*
+      ⚠️ O CRUZAMENTO DAS DUAS FONTES, e é ele que faz a âncora de grafo valer:
+      o Rollup diz QUAL chunk carrega os módulos, e o `lazyChunks()` — que sai
+      do `index.html` — diz que esse chunk não é buscado no primeiro
+      carregamento. Nenhum dos dois lados adivinha pelo nome do arquivo.
+    */
+    const onDisk = lazyChunks().filter((asset) =>
+      withBookForm.includes(asset.name),
+    );
+    expect(onDisk).toHaveLength(withBookForm.length);
+
+    expect(totalBytes(onDisk)).toBeGreaterThan(BOOK_FORM_CHUNK_FLOOR_BYTES);
+
+    // E o `index.html` não o pede — nem por `src`, nem por `modulepreload`.
+    for (const name of withBookForm) {
       expect(indexHtml).not.toContain(name);
     }
   });

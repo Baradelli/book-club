@@ -4185,8 +4185,11 @@ API o `FilterBar` da 41 acabou expondo.
       _**(D2) Uma fatia nova, a 44c, vai tirar as telas de ADMINISTRAÇÃO do primeiro
       carregamento** (code-splitting por rota). **A spec é do dono** e não foi escrita nesta
       rodada; a rodada **não** inventou code-splitting e **não** mexeu no teto do
-      `bundle-guard`. O motivo é o chunk de entrada: **444.876 B** contra o teto de 450.000,
-      **5.124 de folga (1,1%)**, com as Tarefas 45, 46 e 47 ainda por vir e a 48 como
+      `bundle-guard`. O motivo é o chunk de entrada: ~~**444.876 B** contra o teto de
+      450.000, **5.124 de folga (1,1%)**~~ → **CORRIGIDO pela 44c, nota nº 1**: os dois
+      números são de **antes** desta mesma rodada, e o parágrafo três acima já escrevia os
+      certos — **445.040 B** e **4.960 de folga (1,1%)**, medidos em `038ac20` por
+      `stat -c '%n %s' dist/assets/*`. Com as Tarefas 45, 46 e 47 ainda por vir e a 48 como
       veredito. → `tasks/44c-admin-fora-do-primeiro-carregamento.md`, escrita pelo dono em
       2026-09-23._
 
@@ -4314,6 +4317,196 @@ API o `FilterBar` da 41 acabou expondo.
       (`968c9986f7a2dfb4ccbd738b13d44715`), e o banco do dono provado idêntico POR CONTEÚDO
       (`md5` `44e6ea660a6f7f12b3b1ed83c8021a9e`: as mesmas 3 · 3 · 4 · 5 · 24 · 11 · 8 · 19 ·
       37 · 2 · 3 · 2 · 0 linhas)._
+- [x] **44c** — **As telas de administração saem do primeiro carregamento.** ⚠️ **Fatia de
+      ORÇAMENTO, decidida pelo dono em 2026-09-23** e antecipada do veredito da 48 para não
+      interromper a 46 ou a 47 no meio. `BOOK_NEW_PATH` e `BOOK_EDIT_PATH` passam a entrar
+      por `React.lazy()` + `Suspense` no `router.tsx`, no padrão dos dois `lazy()` do
+      editor (`day-note.tsx:129`, `free-note.tsx:100`). **Nenhuma mudança de comportamento,
+      de rota ou de permissão**: as mesmas URLs, os mesmos `OWNER`/`ADMIN`, o mesmo 404
+      para quem não é membro, e o `isClubAdmin` continua **dentro** da tela. →
+      `tasks/44c-admin-fora-do-primeiro-carregamento.md`
+
+      _**A DECISÃO A VEIO PRIMEIRO, e o número justificou a fatia.** Medido ANTES de
+      qualquer implementação, pelo método da diferença (separar, buildar, comparar) — o
+      `rollup-plugin-visualizer` **não** foi instalado e nenhum `sourcemap` foi ligado.
+      Chunk de entrada **445.040 → 435.580 B** (**−9.460 B**), folga contra o teto de
+      450.000 de **4.960 B (1,1%)** para **14.420 B (3,2%)**. Piso da decisão A era ~4 KB;
+      o ganho é **2,4×** isso. ⚠️ **O teto do `bundle-guard` NÃO subiu** — a fatia existe
+      para criar folga debaixo dele._
+
+      _**A GUARDA QUE DÁ SENTIDO À FATIA É DE CONTEÚDO, NÃO DE BYTE — e o motivo foi
+      MEDIDO, não suposto.** Com o `lazy()` desfeito para um `import` estático, a entrada
+      volta a **445.040 B**, que está **abaixo** dos 450.000: o teste
+      `keeps the FIRST LOAD under a ceiling…` fica **VERDE**. Quem acusa são duas guardas
+      novas de CONTEÚDO em `bundle-guard.test.ts` (`ships NO BOOK FORM in the FIRST LOAD`
+      e o par positivo `puts the book form in a chunk of its OWN…`) mais a asserção
+      do `lazy-admin-routes.test.tsx` — **3 acusadores, zero deles de byte**.
+      (⚠️ Remedido na rodada de correção: a entrada do mutante é **445.209 B**, não
+      445.040 — os 445.040 são o `038ac20` limpo. O teto fica verde dos dois jeitos.)_
+
+      _⚠️⚠️ **A ÂNCORA DESSAS DUAS GUARDAS MUDOU NA RODADA DE CORREÇÃO: era uma MARCA DE
+      TEXTO, é o GRAFO DE MÓDULOS DO ROLLUP** — notas nº 15 e nº 17 da tarefa. A marca
+      antiga era o caminho de chave de catálogo `pages.bookForm.(fields|plan).`, e ela
+      funcionava, mas era acoplada a uma **grafia de código-fonte**. O revisor mediu as
+      duas formas em que isso morde: um refactor honesto que extrai o prefixo da chave
+      para uma `const` (42 chamadas, runtime idêntico, `lazy()` intacto) deixava a guarda
+      vermelha **pela razão errada**, e o mesmo refactor + `import` estático de volta
+      deixava `ships NO BOOK FORM in the FIRST LOAD` **VERDE** — ponto cego real. ⚠️ E a
+      lista de exclusões da marca já nascera errada: o docblock dizia que
+      `pages.bookForm.` cru dava **2** ocorrências na entrada, e são **3** — a terceira,
+      `pages.bookForm.loading`, foi posta lá por **esta mesma fatia**, pelo `fallback` do
+      `Suspense`. **A âncora nova é `build()` do Vite**, que devolve por chunk os **ids
+      dos módulos-fonte**: medido neste build, o chunk de entrada tem 131 módulos e nenhum
+      é `book-form.tsx`/`plan-editor.tsx`; o chunk `book-form-*.js` tem exatamente os
+      dois. Com ela, o refactor de grafia dá **0 acusadores (942/942 verde)** e o refactor
+      + `import` estático dá **3**, com `ships NO BOOK FORM` entre eles. Quem responde "o
+      que a pessoa baixa" continua sendo o `index.html` do build._
+
+      _⚠️⚠️ **A DESCOBERTA DA FATIA, e ela contradiz o que "todo mundo sabe": um `lazy()`
+      sem `Suspense` NÃO estoura no React 18 — ~~ponto~~ NA RAIZ CONCORRENTE DO CLIENTE.
+      Sob `renderToString` ele LANÇA.** ⚠️ O qualificador é da rodada de correção (nota
+      nº 11), e ele importa porque a versão sem ele escondia o instrumento certo. A sonda
+      do cliente foi um `render(<Late />)` com `lazy()` e **nenhum** `<Suspense>` na
+      árvore: `document.body.innerHTML` é `'<div></div>'`, **sem exceção e sem
+      `console.error`**, e o conteúdo entra sozinho quando a promessa resolve — a raiz
+      concorrente se comporta como fronteira de `fallback={null}`. **Mas a mesma árvore
+      sob `renderToString` lança `Error: A component suspended while responding to
+      synchronous input.`**, e com a fronteira devolve o `fallback` renderizado._
+
+      _⚠️⚠️ **E `renderToString` É EXATAMENTE O QUE O §7.10 DAS CONVENÇÕES MANDA USAR, e
+      ele não tinha sido tentado.** O §7.10 registra por escrito que ele *"não roda efeito
+      nenhum — ou seja, é literalmente o frame que o `act()` descarta e o navegador
+      pinta"*, e o repositório **já o usava em três arquivos** (`home.test.tsx:9` e
+      `:2213`, `anti-guilt-dom.ts:309`, `anti-guilt-dom.test.ts:88`). A primeira versão
+      desta fatia construiu um mecanismo próprio (render síncrono do RTL + `beforeAll` de
+      aquecimento) para o problema que a convenção já resolvia. **A asserção do primeiro
+      quadro migrou para SSR**, e o que a migração comprou está medido: o acusador do
+      `Suspense` passou de um `queryByText` sutil para uma **exceção**; `fallback={null}`
+      passou de 1 para **2** acusadores; o mutante do `className` passou de **sobrevivente**
+      para morto; e o `beforeAll` daquele arquivo deixou de ser necessário — o SSR nunca
+      precisa que a promessa resolva._
+
+      _**O `fallback` é VISÍVEL, e a escolha tem acusador.** O precedente tem os dois
+      modos com a razão ao lado (`day-note.tsx:806` visível, `:949` `null`); aqui o
+      `lazy()` é a **rota inteira**, não há coluna ao lado dizendo outra coisa, e `null`
+      deixaria o `<main>` vazio. A frase é a que a tela já ia mostrar no quadro seguinte —
+      o mesmo `pages.bookForm.loading` no mesmo `<p className="text-sm text-muted">` de
+      `book-form.tsx:122` e `:191` —, então a troca não pisca. **Nenhuma chave de catálogo
+      nasceu** (regra 8). Sem título no fallback de propósito: o `<h1>` difere entre as duas
+      rotas, e um título ERRADO piscando é pior que nenhum. O mutante `fallback={null}`
+      acusa._
+
+      _⚠️⚠️ **E A FRASE "a troca não pisca" GANHOU ACUSADOR SÓ NA RODADA DE CORREÇÃO — até
+      ali ela era o MUTANTE SOBREVIVENTE.** O revisor trocou **só o `className`** do
+      `fallback` (mantendo a chave de catálogo) e mediu **941/941 VERDE, 0 acusadores**: a
+      promessa estava escrita em **três** lugares como propriedade medida, e dependia
+      inteiramente de a classe ser byte-idêntica à de `book-form.tsx:122`/`:191` — sem
+      nada a guardar. É a forma exata do §7.9. A guarda nova (`⚠️ paints the SAME loading
+      paragraph the screen itself paints, class included`) renderiza os DOIS quadros por
+      `renderToString` — o `fallback` do `router.tsx` e o `<p>` que a própria tela emite —
+      e compara o parágrafo inteiro, **classe inclusa**. Duas fontes independentes. Com o
+      mutante reaplicado: **1 acusador**._
+
+      _⚠️ **E HÁ UM TERCEIRO PRECEDENTE DE `fallback` VISÍVEL que a decisão E não citou:
+      `highlight-form.tsx:177-182`**, com o `<p className="text-sm text-muted">`
+      IDÊNTICO. Ele **reforça** a escolha. No mesmo censo: o `book-form` é o **QUARTO**
+      import dinâmico do app, não o terceiro — falta `highlight-form.tsx:82` (nota
+      nº 14)._
+
+      _**OS 47 TESTES DE `book-form.test.tsx` PASSAM SEM REESCRITA — nenhuma asserção,
+      nenhum `settle`, nenhum `describe` mudou.** O que entrou foi **uma** linha:
+      `beforeAll(async () => { await import('../book-form'); })`. Medido: no vitest o
+      `import()` do `lazy` é **I/O de verdade**, e o `settle()` do arquivo descarrega
+      **microtarefas** de propósito (*"a suíte não usa timers falsos"*) — ~~as **três**
+      primeiras asserções que abriam a rota falhavam~~ (⚠️ **o número não reproduz: são 2
+      a 4, conforme a carga da máquina — é uma CORRIDA de latência de I/O do vite-node.
+      Remedido três vezes na suíte inteira: 4, 3 e 3, e na rodada de 4 a quarta falha nem
+      estava entre as que abrem a rota primeiro.** Nota nº 16), e subir o laço de 10 para **60**
+      microtarefas **não** resolveu (prova de que não é contagem de tick). A alternativa de
+      pôr uma volta no laço de eventos dentro do `settle()` foi medida e **recusada**:
+      leva o arquivo de **1,07 s** para **24,35 s**, e com uma volta só ainda sobra 1
+      vermelho. O `beforeAll` tem acusador próprio (mutante M6: sem ele, **2 a 4** falhas).
+      ⚠️ **Ele FICA, e isso foi conferido, não presumido:** a migração para SSR alcança o
+      `lazy-admin-routes.test.tsx`, não este — os testes daqui abrem a rota pelo `<App />`
+      de verdade, e é ali que a corrida mora. No OUTRO arquivo o aquecimento **saiu**: o
+      `import` estático de `BookFormPage` (que a guarda do parágrafo precisa de qualquer
+      forma) já carrega o módulo em tempo de coleta, e um mutante que o remove deixa o
+      teste de RTL vermelho — prova de que ele É o aquecimento (nota nº 12)._
+
+      _**O PRECACHE GANHOU UMA ENTRADA, E ISSO É ESPERADO — anotado antes que a próxima
+      auditoria leia como regressão.** `globPatterns` lista **extensões** e precacheia todo
+      `.js` emitido (`vite.config.ts:97`); um chunk novo é uma entrada nova, por
+      construção. **26 / 1190,84 KiB → 27 / 1191,42 KiB (+0,58 KiB)**, porque os 10.059 B do
+      chunk novo são quase inteiramente os 9.460 B que SAÍRAM da entrada. ⚠️ **O
+      `vite.config.ts` não foi tocado** (`git diff` vazio nele) e **não há `globIgnores`**
+      — a decisão da 38d fica; `service-worker-config.test.ts` continua 4/4._
+
+      _⚠️ **A OPÇÃO QUE ESTA FATIA NÃO FEZ, registrada:** excluir o chunk do precache para
+      que quem não é admin **nunca** o baixe, nem em segundo plano. **Custo:** o admin perde
+      "cadastrar o livro do mês" **offline**, e é ele quem mais precisa dela. **Risco:** a
+      única forma é ressuscitar o `globIgnores`, e `vite.config.ts:98-113` registra por
+      escrito que *"é justamente esta chave que NÃO pode voltar com o `push-handler.js`
+      dentro"* e que ela *"já custou uma rodada de conserto"*. **É fatia própria, com ADR.**
+      E o que esta fatia **não** entrega continua valendo: num PWA instalado o chunk novo
+      continua chegando em segundo plano — ele só sai do **caminho crítico do primeiro
+      desenho**._
+
+      _**A TABELA DE MUTAÇÃO — NOVE mutantes, nove mortos ou explicados** (a da primeira
+      versão tinha seis, e um deles, o do `className`, nem estava na lista porque ninguém
+      o tinha tentado). Protocolo por mutante: `md5sum` + `cp -p` antes, par
+      `apply.mjs`/`spec.mjs` com a âncora **em arquivo** (contada, estoura se ≠ 1),
+      `grep` confirmando que entrou, suíte inteira, `cp -p` de volta com `md5sum -c` **e**
+      conferência por conteúdo. Nunca `git checkout`._
+
+      _**M1** `lazy()` → `import` estático: **3 acusadores** (as duas do `bundle-guard` +
+      a do primeiro quadro), e o teto de byte **ficou verde** (entrada do mutante:
+      **445.209 B**). **M2** `Suspense` apagado: **1 acusador**, e agora ele acusa
+      **LANÇANDO** (`A component suspended while responding to synchronous input`) em vez
+      de por um `queryByText` nulo. **M3** `fallback={null}`: **2 acusadores** (era 1).
+      **M3b/N3b** ⚠️ **só o `className` do `fallback`, mantendo a chave** — o
+      **SOBREVIVENTE** que o revisor achou (941/941 verde): agora **1 acusador**, a guarda
+      do parágrafo byte a byte. **M4** `isClubAdmin` desligado nos dois ramos: **4
+      acusadores** em `book-form.test.tsx`, nomeados — papel e corte de tenant inalterados
+      através do `lazy`. **M5** âncora de módulo apontando para nada: **1 acusador**, o par
+      positivo. **M6** `beforeAll` do aquecimento apagado (suíte inteira, três rodadas):
+      **4, 3 e 3** — é uma corrida, não um número. **M7** o `import` estático de
+      `BookFormPage` removido do `lazy-admin-routes.test.tsx`: o teste de RTL fica
+      **vermelho** — prova de que ele É o aquecimento. **N7** refactor de grafia da chave
+      (42 chamadas): **0 acusadores, 942/942 verde** — era 1 falso positivo antes da
+      âncora de grafo. **N8** N7 + `import` estático: **3 acusadores**, com
+      `ships NO BOOK FORM in the FIRST LOAD` entre eles — era **VERDE** antes._
+
+      _**Números da fatia (com a rodada de correção):** shared **607** · ui **303** ·
+      backend **1994** · app **942**
+      (+5: 2 guardas no `bundle-guard`, 3 no `lazy-admin-routes.test.tsx` — a terceira é
+      a guarda do parágrafo do `fallback`, nascida na correção) ·
+      integração **642**, não rodada (a fatia não toca o backend). `typecheck`, `lint` e
+      `prettier --check` verdes. Chunk de entrada **435.580 B** (teto 450.000, **sobram
+      14.420**, 3,2%) · chunk novo `book-form-*.js` **10.059 B** · CSS **35.279 B**,
+      `index.html` **1.638 B** e editor **449.522 B** inalterados · precache **27 /
+      1191,42 KiB**. Contador canônico: `router.tsx` **85**, `lazy-admin-routes.test.tsx`
+      **105** (era 67), `bundle-guard.test.ts` **219** (era 190); `book.tsx` **não foi
+      tocado** e continua em **414** (teto 420, folga 6).
+      **Nenhuma migration; `schema.prisma` intocado**
+      (`968c9986f7a2dfb4ccbd738b13d44715`). Varredura de invisíveis nos ~~quatro~~ **SEIS**
+      arquivos do diff (`git diff 038ac20`): **LIMPO — 0 achados**, com os code points
+      montados por número e provada num arquivo-isca (ZWSP + NBSP + U+2028 + BOM →
+      **4 achados**)._
+
+      _⚠️ **O QUE A FATIA NÃO ENTREGA, SEGUNDA METADE — registrado na rodada de correção:**
+      além do precache, **quem não é `OWNER`/`ADMIN` também paga o peso**. O guarda de
+      papel é o `isClubAdmin` de `book-form.tsx:140`/`:212`, ou seja **dentro** do módulo
+      preguiçoso: quem abre `/books/new` sem o papel baixa os 10.059 B e só então é
+      recusado. É **pré-existente** e a decisão G manda não movê-lo — mas a fatia se vende
+      como "quem nunca abre esta tela não paga o peso", e este caso não era mencionado em
+      lugar nenhum (nota nº 19)._
+
+      _⚠️ **E UM ERRO DA PRÓPRIA SPEC, corrigido:** a regra 6 dela diz que o
+      `service-worker-config.test.ts` *"pina propriedades, não texto"*. **É o contrário** —
+      as seis asserções dele são `toContain("…")` sobre o código-fonte de `vite.config.ts`
+      (`:57`, `:58`, `:65`, `:125`, `:126`, `:133`). Pré-existente, **4/4 verde**, e
+      `vite.config.ts` intocado (nota nº 21)._
+
 - [ ] **45** — **Início.** Correntes e feed descem para a margem; "Cadastrar o livro do mês"
       sai do primeiro lugar da tela e vira link no rodapé — é ação de admin que hoje empurra
       para baixo o gesto que é a razão de o app existir. ⚠️ **O `atRisk` fica.**

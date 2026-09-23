@@ -1,3 +1,5 @@
+import { lazy, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Route, Routes } from 'react-router-dom';
 
 import {
@@ -10,7 +12,6 @@ import {
 import { AcceptInvitePage } from './pages/accept-invite';
 import { AcervoPage } from './pages/acervo';
 import { BookPage } from './pages/book';
-import { BookFormPage } from './pages/book-form';
 import { BuscaPage } from './pages/busca';
 import { DAY_NOTE_PATH, DayNotePage } from './pages/day-note';
 import {
@@ -33,6 +34,136 @@ import {
   SETTINGS_PATH,
 } from './pages/paths';
 import { PreferenciasPage } from './pages/preferencias';
+
+/**
+ * ⚠️ **O FORMULÁRIO DE LIVRO ENTRA POR `React.lazy()`** (Tarefa 44c) — e é o
+ * ~~TERCEIRO~~ **QUARTO** import dinâmico do app, depois dos **três** do
+ * editor: `day-note.tsx:129`, `free-note.tsx:100` e `highlight-form.tsx:82`.
+ * (O censo errado era da primeira versão desta fatia; o terceiro do editor
+ * está lá desde a Tarefa 25 e se chama a si mesmo de terceiro na linha 81.)
+ *
+ * ⚠️ **O MOTIVO É ORÇAMENTO DE BYTE, E ELE FOI MEDIDO ANTES DE A FATIA
+ * COMEÇAR.** O `book-form.tsx` mais o `plan-editor.tsx` custavam
+ * **9.460 B** dentro do chunk que o navegador baixa antes de qualquer coisa
+ * aparecer — a entrada caiu de **445.040 B** para **435.580 B**, e a folga
+ * contra o teto de 450.000 do `bundle-guard.test.ts` subiu de **4.960 B**
+ * (1,1%) para **14.420 B** (3,2%). O chunk novo tem **10.059 B** (3,53 kB
+ * gzip), e o precache do Workbox foi de **26** para **27** entradas — esperado,
+ * e o parágrafo seguinte diz por quê.
+ *
+ * ⚠️ **E QUEM PAGAVA ERA QUEM NUNCA ABRE ESTA TELA.** Cadastrar o livro do mês
+ * e escrever o plano por dia é coisa de `OWNER`/`ADMIN`, uma vez por mês; ler
+ * o trecho de hoje e escrever a anotação é de todo mundo, todo dia. O corte é
+ * por ADMINISTRAÇÃO, não por tamanho: `preferencias`, `acervo` e `busca`
+ * ficam estáticas de propósito — todo mundo as usa, e o acervo é caminho de
+ * leitura.
+ *
+ * ⚠️ **O QUE ISTO NÃO ENTREGA, e não é suposição:** *"quem só lê nunca baixa
+ * esse pedaço"*. O `globPatterns` do Workbox
+ * (`vite.config.ts:97`) precacheia **todo** `.js` emitido, então num PWA
+ * instalado o chunk novo continua vindo em segundo plano — ele só sai do
+ * CAMINHO CRÍTICO do primeiro desenho. Tirá-lo do precache seria uma fatia
+ * própria, com ADR: custaria ao admin a tela de cadastro OFFLINE, e mexeria
+ * justamente no `globIgnores` que `vite.config.ts:98-113` proíbe de voltar.
+ *
+ * ⚠️ **E HÁ UM SEGUNDO CASO EM QUE O PESO É PAGO POR QUEM NÃO USA A TELA, que
+ * a primeira versão desta fatia não mencionou: QUEM NÃO É `OWNER`/`ADMIN`.** O
+ * guarda de PAPEL é o `isClubAdmin` de `book-form.tsx:140` e `:212` — ou seja,
+ * ele mora **dentro** do módulo preguiçoso. Quem abre `/books/new` sem o papel
+ * baixa os **10.059 B** do chunk e só então é recusado. É **pré-existente** (o
+ * guarda já era da tela antes desta fatia) e a decisão G manda não movê-lo — o
+ * `role` vem do `/me` por clube, e a rota de edição só sabe de qual clube é o
+ * livro depois de carregá-lo. Fica registrado porque a fatia se vende como
+ * *"quem nunca abre esta tela não paga o peso"*, e este é o caso em que isso
+ * não é verdade.
+ *
+ * O acusador de BYTE é `src/__tests__/bundle-guard.test.ts` (ele compila de
+ * verdade, e tem duas guardas ancoradas no GRAFO DE MÓDULOS do Rollup, além do
+ * teto); o acusador da FRONTEIRA e do `fallback` é
+ * `src/__tests__/lazy-admin-routes.test.tsx`, por `renderToString` (§7.10).
+ */
+const BookFormPage = lazy(async () => {
+  const page = await import('./pages/book-form');
+  return { default: page.BookFormPage };
+});
+
+/**
+ * As duas rotas de administração do livro, com a fronteira de `Suspense` do
+ * `lazy()` acima.
+ *
+ * ⚠️ **ELA NÃO É OBRIGAÇÃO DO REACT — É ESCOLHA DE TELA, e a diferença foi
+ * medida.** ⚠️ **MAS A AFIRMAÇÃO PRECISA DO QUALIFICADOR QUE A PRIMEIRA VERSÃO
+ * DESTA FATIA NÃO ESCREVEU: ~~"um `lazy()` sem fronteira não estoura"~~ vale
+ * NA RAIZ CONCORRENTE DO CLIENTE; sob `renderToString` ele LANÇA.**
+ *
+ * - **No cliente:** uma sonda com `lazy()` e NENHUM `<Suspense>` na árvore
+ *   renderiza `'<div></div>'`, sem exceção e sem `console.error`, e troca pelo
+ *   conteúdo quando a promessa resolve — a raiz concorrente se comporta como
+ *   uma fronteira de `fallback={null}`.
+ * - **Sob `renderToString`** (`react-dom/server`, que o `docs/CONVENCOES-
+ *   CODIGO.md` §7.10 manda tentar ANTES de declarar algo indecidível): a mesma
+ *   árvore lança `Error: A component suspended while responding to synchronous
+ *   input.` Com a fronteira, ela devolve o `fallback` renderizado.
+ *
+ * Então apagar este `<Suspense>` **não quebra a tela** — deixa o `<main>` vazio
+ * debaixo do cabeçalho enquanto o chunk viaja, em silêncio —, mas **quebra o
+ * teste**, e quebra lançando. Quem acusa é
+ * `src/__tests__/lazy-admin-routes.test.tsx`, que mede o primeiro quadro por
+ * SSR. (Na primeira versão da fatia o acusador era um `queryByText` do RTL, e
+ * era o único: 940 dos 941 testes do app ficavam verdes.)
+ *
+ * ⚠️ **O `fallback` É VISÍVEL, E NÃO `null`** (decisão E da Tarefa 44c). O
+ * precedente do editor tem os dois modos e diz por que cada um: `day-note.tsx`
+ * :806 é visível porque *"sem um fallback a tela ficaria em branco no lugar
+ * dele"*, e :949 é `null` porque *"a coluna principal já diz 'Abrindo o
+ * editor…'"*. ⚠️ **E há um TERCEIRO precedente, que a primeira versão desta
+ * fatia não citou: `highlight-form.tsx:177-182`** — visível, e com o
+ * `<p className="text-sm text-muted">` IDÊNTICO ao daqui. Ele reforça a
+ * escolha: dos três `Suspense` de tela que o app já tinha, dois são visíveis e
+ * os dois usam exatamente esta marcação.
+ *
+ * Aqui o `lazy()` é a ROTA INTEIRA — não há coluna ao lado dizendo outra
+ * coisa, e `null` deixaria o `<main>` vazio debaixo do cabeçalho, que numa
+ * rede ruim é indistinguível de "o app quebrou".
+ *
+ * ⚠️ **E A FRASE É A MESMA QUE A TELA MOSTRA NO QUADRO SEGUINTE** — o
+ * `pages.bookForm.loading` no mesmo `<p>` de `book-form.tsx:122` e `:191`.
+ * Não é economia de chave (nenhuma chave nasceu nesta fatia): é continuidade.
+ * Na rota de edição a tela continua "Carregando…" enquanto busca o livro, e a
+ * troca do fallback pelo conteúdo não pisca.
+ *
+ * ⚠️⚠️ **E ESSA ÚLTIMA FRASE SÓ VALE ENQUANTO OS DOIS `<p>` FOREM BYTE A BYTE
+ * IGUAIS — hoje ela tem acusador, e até a rodada de correção da 44c não
+ * tinha.** Trocar só o `className` daqui (mantendo a chave) deixava **941/941
+ * verdes, zero acusadores**: a promessa estava escrita em três lugares como
+ * propriedade medida, e nada a guardava (§7.9). Quem a guarda agora é
+ * `lazy-admin-routes.test.tsx`, que compara o `<p>` deste `fallback` com o `<p>`
+ * que a própria tela emite, **classe inclusa**, no HTML do `renderToString`.
+ *
+ * ⚠️ **SEM TÍTULO NO FALLBACK, DE PROPÓSITO.** O `<h1>` difere entre as duas
+ * rotas ("Novo livro" e "Editar o livro"), e quem escolhe é a tela. Repetir a
+ * escolha aqui seria um segundo lugar para mexer em um só — e um título ERRADO
+ * piscando é pior que título nenhum. É também o que dá acusador à fatia: o
+ * primeiro quadro sem `<h1>` é como o teste sabe que o chunk ainda não chegou.
+ *
+ * ⚠️ **O CORTE DE PAPEL NÃO MUDOU DE LUGAR** (decisão G). Quem recusa quem não
+ * é `OWNER`/`ADMIN` continua sendo o `isClubAdmin` DENTRO da tela — o
+ * comentário das rotas abaixo explica por que o guarda não é de rota, e esta
+ * fatia não toca nisso. O `Suspense` embrulha a tela; ele não decide nada.
+ */
+function BookFormRoute() {
+  const { t } = useTranslation();
+
+  return (
+    <Suspense
+      fallback={
+        <p className="text-sm text-muted">{t('pages.bookForm.loading')}</p>
+      }
+    >
+      <BookFormPage />
+    </Suspense>
+  );
+}
 
 /**
  * URL por página (`CLAUDE.md`). As telas de verdade chegam nas Tarefas 15–21;
@@ -108,8 +239,8 @@ export function AppRoutes() {
           `edit` é segmento ESTÁTICO — o ranking do react-router decide, e
           nenhum id de livro é a palavra "edit" (são `randomUUID()`).
         */}
-        <Route path={BOOK_NEW_PATH} element={<BookFormPage />} />
-        <Route path={BOOK_EDIT_PATH} element={<BookFormPage />} />
+        <Route path={BOOK_NEW_PATH} element={<BookFormRoute />} />
+        <Route path={BOOK_EDIT_PATH} element={<BookFormRoute />} />
         {/*
           O ACERVO DO LIVRO (Tarefa 28) — anotações **e** grifos num lugar só.
 

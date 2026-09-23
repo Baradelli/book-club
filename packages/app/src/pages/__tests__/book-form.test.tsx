@@ -2,7 +2,7 @@ import type { BookResponse, PlanItemResponse } from '@clube/shared';
 import { TOKEN_STORAGE_KEY } from '@clube/shared/client';
 import { pt } from '@clube/shared/locales';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../App';
 import type { ClubSummary } from '../../club/active-club';
@@ -37,6 +37,52 @@ import {
  * `@clube/ui/editor` — o chunk de entrada continua sem TipTap, e o acusador é
  * `src/__tests__/bundle-guard.test.ts`, que compila de verdade.
  */
+
+/**
+ * ⚠️ **O CHUNK DESTA TELA, CARREGADO UMA VEZ ANTES DE TUDO** (Tarefa 44c) — e
+ * é a ÚNICA linha deste arquivo que a fatia do `React.lazy()` acrescentou.
+ * Nenhuma asserção mudou, nenhum `settle` mudou, nenhum teste foi reescrito.
+ *
+ * ⚠️ **POR QUE ELA PRECISA EXISTIR, medido:** desde a Tarefa 44c o
+ * `router.tsx` monta esta tela por `lazy(() => import('./pages/book-form'))`,
+ * e no vitest esse `import()` é **I/O de verdade** — o vite-node ainda tem de
+ * ler e transformar `book-form.tsx` e `plan-editor.tsx`. O `settle()` abaixo
+ * descarrega MICROTAREFAS de propósito (a suíte não usa timers falsos), e
+ * microtarefa nenhuma alcança I/O: as asserções que abrem a rota **antes de o
+ * módulo estar em cache** falham, e as demais passam.
+ *
+ * ⚠️⚠️ **QUANTAS SÃO É UMA CORRIDA, NÃO UMA PROPRIEDADE — e a primeira versão
+ * desta fatia escreveu um número fixo ("as TRÊS primeiras"), que não
+ * reproduz.** Remedido na rodada de correção, com o `beforeAll` apagado e a
+ * suíte inteira rodada **três vezes seguidas**: **4, 3 e 3** falhas. E na
+ * rodada de 4 a quarta foi `marks the title and sends NOTHING when it is empty
+ * (rule 3)` — que **não** é uma das primeiras que abrem a rota. O que varia é
+ * a LATÊNCIA de I/O do vite-node sob a carga da máquina, então o número certo
+ * é uma faixa: **2 a 4**. O que não varia é a direção: sem esta linha o
+ * arquivo fica vermelho, e por um motivo que não tem nada a ver com o que ele
+ * testa.
+ *
+ * ⚠️ **E A ALTERNATIVA FOI MEDIDA E RECUSADA:** pôr uma volta no laço de
+ * eventos dentro do `settle()` resolve, e custa **24,4 s** de suíte contra
+ * **1,1 s** (dez `setTimeout` por `settle`, e são dezenas de `settle` por
+ * arquivo). Uma volta só não bastava. Esta linha custa **um** carregamento de
+ * módulo, uma vez, e deixa o `settle()` dizendo a verdade sobre o que faz.
+ *
+ * ⚠️ **ELA NÃO ESCONDE A FRONTEIRA, e o motivo mudou na rodada de correção.**
+ * Quem mede o primeiro quadro é `src/__tests__/lazy-admin-routes.test.tsx`, e
+ * ele o faz por **`renderToString`** (§7.10) — SSR não espera promessa
+ * nenhuma, então aquele acusador **não depende** de o módulo estar ou não em
+ * cache. Nada que este arquivo aqueça pode amolecê-lo.
+ *
+ * ⚠️ **E ELA CONTINUA NECESSÁRIA AQUI, o que foi conferido e não presumido.**
+ * A migração do outro arquivo para SSR não alcança este: os testes daqui abrem
+ * a rota pelo `<App />` de verdade, e é ali que a corrida de I/O mora. Ela fica
+ * — não por parecer limpo tirá-la, mas porque tirá-la foi medido e deixa o
+ * arquivo vermelho.
+ */
+beforeAll(async () => {
+  await import('../book-form');
+});
 
 const CLUB_ID = 'c-casal';
 const BOOK_ID = 'b-hobbit';
