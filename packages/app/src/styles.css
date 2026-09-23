@@ -1,6 +1,6 @@
 @import 'tailwindcss';
-/* Os tokens do projeto (--clube-*), claro e escuro. Vivem em `@clube/ui`
-   porque é lá que a paleta completa mora (Tarefa 13). */
+/* Os tokens do projeto, claro e escuro. Vivem em `@clube/ui` porque é lá que a
+   paleta completa mora (Tarefa 13, renomeada para os nomes do canvas na 39). */
 @import '@clube/ui/theme.css';
 /*
   O CSS do ProseMirror (Tarefa 14). A ORDEM importa e não é gosto: o preflight
@@ -10,6 +10,16 @@
   lista do editor voltaria a ser um parágrafo com recuo.
 */
 @import '@clube/ui/editor.css';
+/*
+  As quatro famílias, auto-hospedadas (decisão do dono, 2026-09-20). Os `woff2`
+  moram em `public/fonts/`, entram no `dist/` e portanto no precache — o app
+  abre offline com a tipografia certa, e nenhum pedido sai para terceiro.
+
+  Mora em `packages/app` e não em `@clube/ui` porque o `src: url('/fonts/…')`
+  aponta para a raiz servida, que é o `public/` DO APP. Um `@font-face` em
+  `ui/` prometeria um arquivo que o pacote não tem.
+*/
+@import './fonts.css';
 
 /*
   ⚠️ SEM ESTA LINHA, TODO COMPONENTE DE `@clube/ui` RENDERIZA CRU.
@@ -54,16 +64,46 @@
   declarado aqui, em CSS.
 
   `@theme inline` e não `@theme`: `inline` faz o utilitário apontar para a
-  variável (`var(--clube-bg)`) em vez de copiar o valor no momento da
-  compilação. É o que permite o mesmo `bg-surface` mudar de cor quando o
-  `color-scheme` troca o que o `light-dark()` do token resolve — com `@theme`
-  puro a cor ficaria congelada no valor claro.
+  variável (`var(--bg)`) em vez de copiar o valor no momento da compilação. É o
+  que permite o mesmo `bg-surface` mudar de cor quando o `color-scheme` troca o
+  que o `light-dark()` do token resolve — com `@theme` puro a cor ficaria
+  congelada no valor claro.
 
-  REGRA 2: cada `--clube-*` declarado no `theme.css` tem exatamente um
-  utilitário aqui, e nenhum utilitário aqui aponta para token inexistente.
-  Token sem utilitário não serve para nada, e utilitário sem token pinta
-  transparente em silêncio. `src/__tests__/theme-tokens.test.ts` amarra os dois
-  arquivos nas duas direções.
+  ⚠️ ESTE COMENTÁRIO ESTAVA ERRADO E A AUDITORIA DA TAREFA 39 O DERRUBOU. Ele
+  dizia, com a palavra "MEDIDO" na frente, que "`@theme inline` NÃO emite as
+  suas próprias variáveis no `:root` do CSS compilado". É falso. Medido no CSS
+  compilado de verdade (`dist/assets/index-*.css`): a PRIMEIRA regra do arquivo
+  é `:root,:host{…--shadow-sheet:var(--shadow-sheet);--shadow-popover:var(--shadow-popover)}`.
+  As variáveis SÃO emitidas, e são AUTO-REFERENTES.
+
+  O que salva o `--shadow-sheet: var(--shadow-sheet)` logo abaixo de ser uma
+  referência circular é OUTRA coisa: a ORDEM DOS `@import` no topo deste
+  arquivo. O `@import 'tailwindcss'` vem primeiro, então o `:root`
+  auto-referente que o `@theme inline` gera sai primeiro no arquivo; o `:root`
+  de `@import '@clube/ui/theme.css'` sai DEPOIS, com a MESMA especificidade, e
+  vence a cascata. O valor final é o do token de verdade.
+
+  ⚠️ INVERTER OS DOIS `@import` faz a sombra do sheet sumir em silêncio: o
+  auto-referente passaria a ser o último, `--shadow-sheet` resolveria para si
+  mesmo (inválido) e nada acusaria — nem build, nem renderização. Até esta
+  auditoria nada pinava a ordem. O acusador agora é
+  `imports tailwindcss BEFORE the theme tokens` em
+  `src/__tests__/theme-css.test.ts`.
+
+  (O lado esquerdo de cada linha do bloco abaixo continua sendo NOME DE
+  UTILITÁRIO do Tailwind e o lado direito, o token do `theme.css` — só que os
+  dois existem como variável CSS, e é a cascata que decide qual vale.)
+
+  ⚠️ OS NOMES DAS DUAS COLUNAS SÃO DE MUNDOS DIFERENTES, e isso é a fatia
+  inteira: à esquerda o vocabulário de UTILITÁRIO do app (`bg-canvas`,
+  `text-content`, `rounded-control`), que a Tarefa 39 NÃO mexeu; à direita os
+  nomes do CANVAS de design (`--bg`, `--text`, `--r-2`), que ela adotou.
+
+  REGRA 2: cada token declarado no `theme.css` tem exatamente um utilitário
+  aqui, e nenhum utilitário aqui aponta para token inexistente. Token sem
+  utilitário não serve para nada, e utilitário sem token pinta transparente em
+  silêncio. `src/__tests__/theme-tokens.test.ts` amarra os dois arquivos nas
+  duas direções.
 */
 @theme inline {
   /*
@@ -85,76 +125,223 @@
     contornável escrevendo a cor do jeito mais natural do mundo. Alargar o
     regex pegaria `red`, e deixaria `rose`, `orange`, `amber` e as próximas.
 
-    Com `--color-*: initial`, `text-red-600` deixa de existir: ele não compila,
-    não emite CSS, e cai no `ships no class without emitted CSS` do
-    `src/__tests__/ui-source-scan.test.ts`. A guarda passa a ser estrutural —
-    a cor errada não é detectada, ela é IMPOSSÍVEL.
+    Com `--color-*: initial`, `text-red-600` deixa de existir: ele não compila
+    e não emite CSS. A guarda passa a ser ESTRUTURAL — a cor errada não é
+    detectada, ela é IMPOSSÍVEL, e é essa a metade que vale.
 
-    O preço é declarar o que a gente de fato usa. Hoje é um: o `bg-black/50` do
-    fundo do `Sheet` (`packages/ui/src/components/sheet.tsx`) — varredura
-    completa de `packages/{app,ui}/src` achou essa única ocorrência de cor
-    padrão. Se uma tela nova precisar de outra, ela entra aqui, com nome do
-    projeto, e a conversa sobre "por que essa cor?" acontece no code review em
-    vez de acontecer nunca.
+    ⚠️ ESTE PARÁGRAFO CITAVA UM TESTE QUE NÃO EXISTE, E ERRAVA O ESCOPO —
+    corrigido na auditoria da Tarefa 41b (2026-09-21), e é a TERCEIRA vez que
+    esta classe aparece no bloco do MVP 3.5. Ele dizia que `text-red-600` "cai
+    no `ships no class without emitted CSS` do `ui-source-scan.test.ts`". Duas
+    coisas erradas numa frase:
+
+    1. **não existe teste com esse nome.** O real é
+       `emits every class packages/ui uses`
+       (`src/__tests__/ui-source-scan.test.ts:535`);
+    2. **ele não faria isso.** Aquele teste varre só `packages/ui/src` — um
+       `text-red-600` numa TELA do app não cai lá.
+
+    Quem cobre o app é outro par, e ele é de espécie diferente: a varredura de
+    DOM de `src/pages/__tests__/anti-guilt-dom.ts` (que procura `text-[#`,
+    `bg-[#` e `-danger` no que a tela renderiza) mais o `--color-*: initial`
+    acima, que é a parte estrutural. Uma frase falsa em arquivo permanente
+    custa mais que a ausência dela: é a lição do `dayRange` do `CLAUDE.md`.
+
+    ⚠️ E DESDE A TAREFA 39 ELE NÃO TEM MAIS EXCEÇÃO NENHUMA. Havia uma —
+    `--color-black`, para o `bg-black/50` do fundo do `Sheet` —, e uma exceção
+    é uma porta: enquanto o `black` do Tailwind estivesse vivo, uma cor de fora
+    do sistema compilava. O véu virou token (`--scrim`, valor do canvas) e o
+    `Sheet` passou a escrever `bg-scrim`.
   */
   --color-*: initial;
-  --color-black: #000;
 
   /* Superfície */
-  --color-canvas: var(--clube-bg);
-  --color-surface: var(--clube-surface);
-  --color-surface-raised: var(--clube-surface-raised);
-  --color-line: var(--clube-border);
-  --color-line-strong: var(--clube-border-strong);
+  --color-canvas: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-2);
+  --color-surface-today: var(--surface-today);
+
+  /* Filete */
+  --color-line: var(--border);
+  --color-line-soft: var(--border-soft);
+  --color-line-strong: var(--border-strong);
+  --color-leader: var(--leader);
+  --color-leader-future: var(--leader-future);
 
   /* Texto */
-  --color-content: var(--clube-fg);
-  --color-muted: var(--clube-fg-muted);
-  --color-subtle: var(--clube-fg-subtle);
+  --color-content: var(--text);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+  --color-faint: var(--text-faint);
 
   /* Ação */
-  --color-accent: var(--clube-accent);
-  --color-accent-fg: var(--clube-accent-fg);
-  --color-accent-hover: var(--clube-accent-hover);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
   /* O véu do botão ATIVO da barra do editor (Tarefa 14, `docs/EDITOR.md` §4.4). */
-  --color-accent-soft: var(--clube-accent-soft);
+  --color-accent-soft: var(--accent-soft);
 
-  /* Estado */
-  --color-danger: var(--clube-danger);
-  --color-danger-fg: var(--clube-danger-fg);
-  --color-success: var(--clube-success);
+  /* Ouro — o filete da edição crítica */
+  --color-gold: var(--gold);
+  --color-gold-strong: var(--gold-strong);
+  --color-gold-line: var(--gold-line);
+  --color-gold-soft: var(--gold-soft);
 
-  /* Foco. `focus` e não `ring`, senão o utilitário viraria `ring-ring`. */
-  --color-focus: var(--clube-ring);
+  /* Pessoa — o par único que SUBSTITUIU a paleta de seis (Tarefa 41a,
+     decisão F do MVP 3.5). Quem o pinta é o `PersonAvatar`. */
+  --color-person: var(--person-bg);
+  --color-person-line: var(--person-border);
+  --color-person-fg: var(--person-fg);
 
-  /* Avatar (regra 32: o contraste do par é testado, não confiado) */
-  --color-avatar-fg: var(--clube-avatar-fg);
-  --color-avatar-1: var(--clube-avatar-1);
-  --color-avatar-2: var(--clube-avatar-2);
-  --color-avatar-3: var(--clube-avatar-3);
-  --color-avatar-4: var(--clube-avatar-4);
-  --color-avatar-5: var(--clube-avatar-5);
-  --color-avatar-6: var(--clube-avatar-6);
+  /* Lombada tipográfica (Tarefa 44) */
+  --color-spine: var(--spine-bg);
+  --color-spine-edge: var(--spine-edge);
+  --color-spine-fg: var(--spine-fg);
+  --color-spine2: var(--spine2-bg);
+  --color-spine2-edge: var(--spine2-edge);
+  --color-spine2-fg: var(--spine2-fg);
+
+  /* As cinco canetas. Quem pinta com elas é a Tarefa 47. */
+  --color-pen-a: var(--pen-a);
+  --color-pen-a-dot: var(--pen-a-dot);
+  --color-pen-v: var(--pen-v);
+  --color-pen-v-dot: var(--pen-v-dot);
+  --color-pen-l: var(--pen-l);
+  --color-pen-l-dot: var(--pen-l-dot);
+  --color-pen-z: var(--pen-z);
+  --color-pen-z-dot: var(--pen-z-dot);
+  --color-pen-r: var(--pen-r);
+  --color-pen-r-dot: var(--pen-r-dot);
+
+  /*
+    Estado.
+
+    ⚠️ `--color-danger-fg` aponta para `--danger-bg`, e não é engano: o canvas
+    declara o vermelho como um PAR que se inverte entre os temas — `--danger` é
+    a tinta e `--danger-bg` é o papel. Num botão destrutivo o papel é exatamente
+    o que serve de tinta sobre a tinta, e é dessa leitura que o nome vem.
+
+    ⚠️ E O BOTÃO DESTRUTIVO NÃO EXISTE MAIS: a decisão B da Tarefa 41a matou a
+    variante `danger` do `Button` — medido, ZERO consumidores em
+    `packages/{app,ui}/src`, a única ocorrência era a declaração do tipo. Com
+    ela saíram os ÚNICOS usos de `bg-danger` e `text-danger-fg` no projeto.
+
+    Os dois utilitários FICAM aqui, e isto é decisão, não esquecimento: a
+    bijeção token↔utilitário exige um utilitário por token declarado, e
+    `--danger`/`--danger-bg` continuam no `theme.css` — `--danger` porque
+    `text-danger`/`border-danger` são o erro de formulário de **8** telas
+    (contado: `accept-invite`, `acervo`, `book-form`, `free-note`,
+    `highlight-fields`, `highlight-form`, `login`, `plan-editor`)
+    (`form-styles.ts:28,33`, `field.tsx`) e porque a guarda `DANGER_STYLE` da
+    varredura anti-culpa casa o nome deles por regex; `--danger-bg` porque é o
+    papel do par, e um par pela metade não tem contraste que se meça (o
+    acusador é `theme-tokens.test.ts › keeps the danger ink ON the danger
+    paper`). Um botão destrutivo que volte encontra os dois prontos.
+  */
+  --color-danger: var(--danger);
+  --color-danger-fg: var(--danger-bg);
+
+  /* Seleção de texto na coluna de leitura */
+  --color-sel: var(--sel);
+
+  /* O véu do bottom sheet — o que substituiu o `bg-black/50` */
+  --color-scrim: var(--scrim);
+
+  /*
+    Foco. `focus` e não `ring`, senão o utilitário viraria `ring-ring`.
+
+    São DOIS e não um (decisão do dono, 2026-09-20, o §A.6 literal): o
+    `outline-focus` é o contorno sólido e o `ring-focus-halo` é o halo de 3px
+    por cima. O halo sozinho dá ~1,4:1 contra o creme — medido —, então ele
+    nunca substitui o contorno. Quem os escreve juntos é o `FOCUS_RING` de
+    `@clube/ui`.
+  */
+  --color-focus: var(--ring);
+  --color-focus-halo: var(--ring-halo);
 
   /*
     Raio e sombra. Nomes PRÓPRIOS (`control`, `sheet`) e não `sm`/`lg`: o
     Tailwind já define `--radius-lg` e `--shadow-lg`, e reaproveitar o nome
     reescreveria `rounded-lg`/`shadow-lg` para todo o app sem ninguém pedir.
   */
-  --radius-control: var(--clube-radius);
-  --radius-sheet: var(--clube-radius-lg);
-  --shadow-sheet: var(--clube-shadow-sheet);
+  --radius-mark: var(--r-1);
+  /*
+    ⚠️ O 3px SAIU DO CONTROLE E VIROU `callout` NA TAREFA 41a. Medido no
+    canvas: todo botão, campo e link-botão tem `border-radius:4px`
+    (`Inicio.dc.html:56,57`, `Main.dc.html:56`, `Acervo.dc.html:51,52`) — são
+    32 ocorrências de `4px` contra 17 de `3px` nos 22 artboards —, e o `3px` é
+    a caixa de erro de formulário (`Main.dc.html:41`).
+
+    A troca não foi estética: a decisão I da 41a manda `--radius-sheet` apontar
+    para o `--r-4` novo (10px), e a bijeção token↔utilitário é UM PARA UM —
+    sem um utilitário novo, o `--r-3` ficaria órfão e `theme-tokens.test.ts`
+    acusaria.
+  */
+  --radius-control: var(--r-3);
+  /*
+    ⚠️ SEM CONSUMIDOR, E COM PRAZO — decisão B da Tarefa 41a diz que "o que
+    não tem consumidor não é contrato, é peso", então uma exceção sem data é
+    dois pesos em vez de um.
+
+    `rounded-callout` é o raio da CAIXA DE ERRO de formulário
+    (`Main.dc.html:41`: `border-radius:3px`), e quem a escreve hoje é o
+    `FORM_ERROR_CLASS` de `packages/app/src/pages/form-styles.ts:33` — sem raio
+    nenhum, porque a caixa nem existe ainda como caixa. **Prazo: Tarefa 47**
+    (formulários), ou 48 se a 47 não chegar nela. Se as duas passarem sem
+    usá-lo, ele sai — e o `--r-2` sai com ele, deixando a lista fechada de
+    isenções em quatro raios.
+
+    `rounded-mark` (`--r-1`, 2px) tem **zero** consumidores de produção desde a
+    Tarefa 13 (contado nesta fatia) e está na mesma situação, só há mais tempo:
+    ele é o raio da MARCA de grifo, e quem pinta grifo é a **Tarefa 47**. Mesmo
+    prazo, mesma saída.
+  */
+  --radius-callout: var(--r-2);
+  /* O bottom sheet do canvas: `border-radius: 10px 10px 0 0`
+     (`Avulsa.dc.html:79`). Era `--r-3` (4px) até a Tarefa 41a. */
+  --radius-sheet: var(--r-4);
+  --radius-pill: var(--r-pill);
+  --shadow-sheet: var(--shadow-sheet);
   /* A sombra que desce, para o que flutua SOBRE a seleção (Tarefa 14). */
-  --shadow-popover: var(--clube-shadow-popover);
+  --shadow-popover: var(--shadow-popover);
+
+  /*
+    As quatro famílias (Tarefa 39, decisão H). Os papéis, do §A.6 do
+    `docs/new-ui.md`: Fraunces é título e corpo de leitura; Instrument Serif
+    itálico é nome de pessoa e citação; Geist é toda a interface; Geist Mono é
+    rótulo, data, página e número.
+
+    ⚠️ `--font-mono` SUBSTITUI o padrão do Tailwind de propósito. Medido antes:
+    `font-mono`, `font-sans` e `font-serif` têm ZERO ocorrências em
+    `packages/{app,ui}/src`, então ninguém herda uma fonte trocada sem pedir.
+  */
+  --font-reading: var(--family-reading);
+  --font-quote: var(--family-quote);
+  --font-ui: var(--family-ui);
+  --font-mono: var(--family-mono);
+
+  /*
+    A escala. Ela é token para que exista UM lugar onde trocá-la — a
+    alternativa (`text-[17.5px]` espalhado por 15 telas) passa na guarda, que
+    só proíbe COR arbitrária, e é justamente por isso que ela precisava de uma
+    decisão.
+  */
+  --text-micro: var(--size-micro);
+  --text-eyebrow: var(--size-eyebrow);
+  --text-label: var(--size-label);
+  --text-ui: var(--size-ui);
+  --text-body: var(--size-body);
+  --text-reading: var(--size-reading);
+  --text-title: var(--size-title);
 }
 
 /*
   O `dark:` do Tailwind tem de OBEDECER o `data-theme`, e por padrão ele não
   obedece: sem esta declaração, `dark:bg-x` compila só para
   `@media (prefers-color-scheme: dark)` — medido. O resultado é um app
-  esquizofrênico: com sistema escuro e "Claro" escolhido, os tokens
-  (`--clube-*`) ficam claros e todo `dark:*` continua escuro; com sistema claro
-  e "Escuro" escolhido, os tokens escurecem e nenhum `dark:*` acende.
+  esquizofrênico: com sistema escuro e "Claro" escolhido, os tokens ficam
+  claros e todo `dark:*` continua escuro; com sistema claro e "Escuro"
+  escolhido, os tokens escurecem e nenhum `dark:*` acende.
 
   Ele NÃO é mais uma cópia da paleta — o `theme.css` deixou de duplicar valor
   quando passou a usar `light-dark()`. O que a cascata abaixo repete é só a
@@ -181,8 +368,16 @@
   }
 }
 
-/* Sem CSS inline nas telas (`CLAUDE.md`); o mínimo global fica aqui. */
+/*
+  Sem CSS inline nas telas (`CLAUDE.md`); o mínimo global fica aqui.
+
+  A `font-family` entrou na Tarefa 39: Geist é a fonte de TODA a interface, e
+  declará-la no `body` é o que faz as 15 telas trocarem de tipografia sem uma
+  linha de JSX tocada. Quem quiser serifa pede `font-reading`; quem quiser
+  monoespaçada pede `font-mono`.
+*/
 body {
-  background-color: var(--clube-bg);
-  color: var(--clube-fg);
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--family-ui);
 }

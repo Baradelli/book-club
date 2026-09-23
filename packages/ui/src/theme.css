@@ -1,8 +1,30 @@
 /*
-  @clube/ui — os tokens de tema (--clube-*). A paleta completa da Tarefa 13.
+  @clube/ui — os tokens de tema. A paleta do canvas de design (Tarefa 39).
 
   ============================================================================
-  COMO O TEMA É DECIDIDO — e por que agora é UM valor por token
+  OS NOMES SÃO OS DO CANVAS, E NÃO TÊM PREFIXO (Tarefa 39, decisão A)
+  ============================================================================
+
+  Até a Tarefa 38 todo token se chamava `--clube-*`. O prefixo morreu por
+  decisão do dono (2026-09-19) e os tokens passaram a se chamar como o canvas
+  de design os chama — `--bg`, `--surface`, `--accent`, `--gold-line`,
+  `--pen-a`… De quebra some um dos sete lugares que o `README-IA.md` lista em
+  "Como renomear o projeto": era o único em que o nome do projeto virava parte
+  do estilo.
+
+  ⚠️ E a guarda ficou MAIS forte, não mais fraca. O `theme-css.test.ts`
+  discriminava token por `startsWith('--clube-')`; hoje discrimina por
+  `startsWith('--')`. Antes, um token de cor escrito sem o prefixo escapava das
+  quatro varreduras em silêncio. Sem prefixo nenhum, não existe token que
+  escape — o `color-scheme` sai sozinho porque não começa com `--`.
+
+  ⚠️ O VOCABULÁRIO DE UTILITÁRIO NÃO MUDOU. `bg-canvas`, `text-content`,
+  `rounded-control` continuam se chamando assim; quem traduz token → utilitário
+  é o `@theme inline` de `packages/app/src/styles.css`, e o
+  `theme-tokens.test.ts` amarra os dois arquivos nos dois sentidos.
+
+  ============================================================================
+  COMO O TEMA É DECIDIDO — e por que é UM valor por token
   ============================================================================
 
   A Tarefa 12 escrevia cada cor escura DUAS vezes: um bloco
@@ -20,7 +42,7 @@
      É a primeira visita respeitada sem uma linha de JavaScript.
   2. `:root[data-theme='light']` e `:root[data-theme='dark']` — a escolha
      explícita, escrita por um script inline no `index.html` antes da primeira
-     pintura. Ela agora troca UMA declaração (`color-scheme`) e a paleta inteira
+     pintura. Ela troca UMA declaração (`color-scheme`) e a paleta inteira
      acompanha, em qualquer direção: "Claro" vence um sistema escuro e "Escuro"
      vence um sistema claro pelo MESMO mecanismo.
 
@@ -32,9 +54,9 @@
   ⚠️ ARMADILHA DO `light-dark()`: ele resolve no ponto de USO, não no de
   declaração. Um componente que declare `color-scheme` próprio (um cartão com
   `color-scheme: light` para forçar um `input date` claro, por exemplo) inverte
-  TODOS os tokens `--clube-*` lidos dentro dele — inclusive os herdados. Regra
-  do projeto: `color-scheme` se declara SÓ nos três seletores abaixo. Se algum
-  dia um componente precisar do seu, ele tem de reatribuir os tokens que usa.
+  TODOS os tokens lidos dentro dele — inclusive os herdados. Regra do projeto:
+  `color-scheme` se declara SÓ nos três seletores abaixo. Se algum dia um
+  componente precisar do seu, ele tem de reatribuir os tokens que usa.
 
   ⚠️ E o `@theme` do app tem de continuar `@theme inline`: com `@theme` puro o
   Tailwind copia o valor do token na compilação, e a cor congela no que o
@@ -50,23 +72,24 @@
 
   Provar por leitura não prova nada: uma página servida com este CSS, lendo
   `getComputedStyle` do elemento que usa os tokens, deu as QUATRO combinações
-  de sistema × escolha, lendo o `--clube-bg` (o valor claro e o escuro são os
-  declarados abaixo — a tabela não os repete, para não envelhecer):
+  de sistema × escolha, lendo o token de fundo da página (o valor claro e o
+  escuro são os declarados abaixo — a tabela não os repete, para não
+  envelhecer):
 
-  | sistema | data-theme  | color-scheme computado | --clube-bg resolvido |
-  |---------|-------------|------------------------|----------------------|
-  | claro   | (ausente)   | light dark             | o claro              |
-  | claro   | dark        | dark                   | o ESCURO             |
-  | escuro  | (ausente)   | light dark             | o escuro             |
-  | escuro  | light       | light                  | o CLARO              |
+  | sistema | data-theme  | color-scheme computado | fundo resolvido |
+  |---------|-------------|------------------------|-----------------|
+  | claro   | (ausente)   | light dark             | o claro         |
+  | claro   | dark        | dark                   | o ESCURO        |
+  | escuro  | (ausente)   | light dark             | o escuro        |
+  | escuro  | light       | light                  | o CLARO         |
 
   As duas linhas em MAIÚSCULA são as que importam: a escolha explícita vence o
   sistema nas duas direções, com uma declaração de `color-scheme` só.
 
   A armadilha também foi medida, e ela é real: numa página com o sistema
-  escuro, um elemento com `color-scheme: light` próprio resolveu
-  `--clube-bg` para o valor CLARO dentro de si, enquanto o resto da página
-  continuava escuro. Daí a regra dos três seletores.
+  escuro, um elemento com `color-scheme: light` próprio resolveu o token de
+  fundo para o valor CLARO dentro de si, enquanto o resto da página continuava
+  escuro. Daí a regra dos três seletores.
 */
 
 :root {
@@ -74,113 +97,365 @@
   color-scheme: light dark;
 
   /* --- Superfície ------------------------------------------------------- */
-  /* O fundo da página. Espelhado no `background_color` do manifest. */
-  --clube-bg: light-dark(#f5f2ec, #171614);
-  /* Cartão, item de lista, campo de formulário. */
-  --clube-surface: light-dark(#fdfcfa, #201e1b);
-  /* O que flutua ACIMA do resto: o sheet e o seu painel. */
-  --clube-surface-raised: light-dark(#ffffff, #2a2724);
-  --clube-border: light-dark(#e3ded6, #35322c);
-  /* Borda que precisa ser vista: campo com foco, divisor de seção. */
-  --clube-border-strong: light-dark(#c9c2b6, #4d4841);
+  /* O papel. Espelhado no `background_color` e no `theme_color` do manifest. */
+  --bg: light-dark(#f5f1e8, #17181a);
+  /* A folha: item de lista, campo, bloco de leitura. */
+  --surface: light-dark(#f9f5ec, #1e1f22);
+  /* O que flutua ACIMA do resto: o sheet, o popover, o cabeçalho de tabela. */
+  --surface-2: light-dark(#f0ece0, #26282b);
+  /* O dia de HOJE no sumário do plano — a única linha com fundo próprio. */
+  --surface-today: light-dark(#faf3e4, #2a2419);
+
+  /* --- Filete ----------------------------------------------------------- */
+  /* Nada de cartão com sombra: o caderno separa com filete de um pixel. */
+  --border: light-dark(#d8d1bf, #303236);
+  --border-soft: light-dark(#e3ddc9, #26282b);
+  /* Filete que precisa ser visto: campo com foco, divisor de seção. */
+  --border-strong: light-dark(#a89e80, #44464a);
+  /* Os pontinhos de condução do sumário — hoje e futuro. */
+  --leader: light-dark(#babcb2, #3a3c40);
+  --leader-future: light-dark(#d4d6cc, #2e3033);
 
   /* --- Texto ------------------------------------------------------------ */
-  --clube-fg: light-dark(#1c1a17, #f2efe9);
+  --text: light-dark(#1a201a, #e8e4d6);
   /* Metadado: "há 2 dias", o subtítulo do item de lista. */
-  --clube-fg-muted: light-dark(#6b6459, #a8a19a);
-  /* Placeholder e dica de campo. Mesmo "subtle" passa 4.5:1 nos dois temas —
-     placeholder ilegível é o jeito mais rápido de perder quem lê à noite. */
-  --clube-fg-subtle: light-dark(#726b5f, #948d84);
+  --text-muted: light-dark(#565b52, #a3a19c);
+  /*
+    Placeholder e dica de campo (`pages/form-styles.ts`, `components/field.tsx`,
+    `pages/highlight-fields.tsx`) — texto de verdade, que alguém precisa LER
+    para saber o que digitar. Logo, piso de TEXTO: 4,5:1.
+
+    ⚠️ PASSA 4,5:1 NOS DOIS TEMAS, contra as TRÊS superfícies — e desta vez com
+    os números ao lado, porque a frase sozinha já esteve aqui e sobreviveu ao
+    valor que a desmentia:
+
+    | lado   | valor     | vs `--bg` | vs `--surface` | vs `--surface-2` |
+    |--------|-----------|-----------|----------------|------------------|
+    | claro  | `#686c63` | 4,76:1    | 4,93:1         | 4,54:1           |
+    | escuro | `#95938e` | 5,79:1    | 5,37:1         | 4,82:1           |
+
+    ⚠️ CORRIGIDO EM 2026-09-20, por decisão do dono. Os valores do canvas eram
+    `#74786e` (claro: 4,00 / 4,15 / 3,82) e `#86847f` (escuro: 4,76 / 4,41 /
+    3,96) — nenhum dos dois fechava contra as três. A garantia "passa 4,5:1 nos
+    dois temas" existia neste comentário e foi APAGADA no mesmo commit em que o
+    valor deixou de cumpri-la; é isso que a torna perigosa, e é por isso que ela
+    voltou com a medição colada. O acusador é
+    `app/src/__tests__/theme-tokens.test.ts`, `gives --text-subtle 4.5:1 on
+    every surface, in both themes`.
+
+    ⚠️ NO TEMA ESCURO, FECHAR CONTRASTE É CLAREAR. A tinta está sobre papel
+    escuro: escurecer o lado escuro (a leitura apressada de "escurecer o cinza")
+    teria PIORADO os três números.
+  */
+  --text-subtle: light-dark(#686c63, #95938e);
+  /*
+    O que quase não se lê: o dia futuro apagado, o "Salvo" do autosave.
+
+    ⚠️ ESTE NÃO PASSA, E ISSO É UMA DECISÃO CONSCIENTE DO DONO (2026-09-20):
+    2,45:1 no claro e 2,58:1 no escuro, contra 4,5:1 de piso. O valor é o do
+    canvas e fica.
+
+    O que torna isso aceitável é uma coisa só, e ela é verificável: **nenhuma
+    tela usa `text-faint` hoje** — zero ocorrências em `packages/{app,ui}/src`.
+    Um token que ninguém pinta não reprova ninguém.
+
+    ⚠️ E É EXATAMENTE POR ISSO QUE EXISTE UMA GUARDA NO PRIMEIRO USO. No dia em
+    que alguém escrever `text-faint` numa tela, `theme-tokens.test.ts` fica
+    VERMELHO, e a saída é ESCURECER O TOKEN — não apagar a guarda. Está escrito
+    lá também.
+  */
+  --text-faint: light-dark(#9a9d92, #5c5a55);
 
   /* --- Ação ------------------------------------------------------------- */
   /* UMA cor de ação. O app não tem hierarquia de botão colorido: o que separa
      primário de secundário é preenchimento × fantasma, não matiz. */
-  --clube-accent: light-dark(#2c6a56, #6fbfa4);
-  --clube-accent-fg: light-dark(#ffffff, #12241d);
-  --clube-accent-hover: light-dark(#235445, #8ad0b8);
+  --accent: light-dark(#143524, #c89a44);
+  --accent-hover: light-dark(#1b4632, #d6ae64);
+  --accent-fg: light-dark(#f5f1e8, #17181a);
   /*
     O VÉU do controle ATIVO — o fundo do botão pressionado da barra do editor
-    (`docs/EDITOR.md` §4.4, Tarefa 14). Ele nasceu aqui porque não havia
-    substituto: `--clube-accent-hover` é a cor CHEIA de hover, e usá-la para
-    "negrito está ligado" pintaria o botão como se ele fosse a ação primária da
-    tela — num editor com 15 botões ligados ao mesmo tempo, isso vira uma barra
-    inteira de blocos verdes.
+    (`docs/EDITOR.md` §4.4, Tarefa 14). Ele existe porque não há substituto:
+    `--accent-hover` é a cor CHEIA de hover, e usá-la para "negrito está
+    ligado" pintaria o botão como se ele fosse a ação primária da tela — num
+    editor com 15 botões ligados ao mesmo tempo, isso vira uma barra inteira de
+    blocos cheios.
 
-    É `color-mix()` sobre o PRÓPRIO `--clube-accent`, e não um hex novo, porque
-    duplicar a cor de ação em outro lugar é a dessincronia que o cabeçalho deste
-    arquivo acabou de eliminar (§7.1): trocar o verde do clube passaria a exigir
+    É `color-mix()` sobre o PRÓPRIO `--accent`, e não um hex novo, porque
+    duplicar a cor de ação em outro lugar é a dessincronia que o cabeçalho
+    deste arquivo eliminou (§7.1): trocar o verde do clube passaria a exigir
     editar dois tokens, e quem esquecesse o segundo teria um estado ativo de
-    outra cor.
-
-    O `light-dark()` continua sendo o de fora (e é a regra 3 quem o cobra): o
-    véu precisa de MAIS opacidade no escuro para se separar do fundo, e o
-    `var(--clube-accent)` de dentro resolve na mesma direção do tema em vigor.
+    outra cor. É o único token derivado com dois lados DIFERENTES: o véu precisa
+    de mais opacidade no escuro para se separar do fundo.
   */
-  --clube-accent-soft: light-dark(
-    color-mix(in srgb, var(--clube-accent) 14%, transparent),
-    color-mix(in srgb, var(--clube-accent) 26%, transparent)
+  --accent-soft: light-dark(
+    color-mix(in srgb, var(--accent) 14%, transparent),
+    color-mix(in srgb, var(--accent) 26%, transparent)
   );
+
+  /* --- Ouro ------------------------------------------------------------- */
+  /* O filete dourado da edição crítica: abertura de seção, dia de hoje, foco. */
+  --gold: light-dark(#946d2c, #c89a44);
+  --gold-strong: light-dark(#785822, #d6ae64);
+  --gold-line: light-dark(#d6ae64, #4a3c1c);
+  --gold-soft: light-dark(#faf3e4, #2a2419);
+
+  /* --- Pessoa ----------------------------------------------------------- */
+  /* A marca de quem escreveu. O par único do canvas; quem o consome é a
+     Tarefa 41, junto com o `PersonAvatar` (decisão F do MVP 3.5). */
+  --person-bg: light-dark(#dde9e2, #24312a);
+  --person-border: light-dark(#b5d3c3, #3a5346);
+  --person-fg: light-dark(#1b4632, #b5d3c3);
+
+  /* --- Lombada ---------------------------------------------------------- */
+  /* O livro sem capa vira lombada tipográfica (Tarefa 44). São duas, para que
+     dois livros lado a lado não sejam o mesmo retângulo. */
+  --spine-bg: light-dark(#143524, #1e3a2c);
+  --spine-edge: light-dark(#0f2419, #132720);
+  --spine-fg: light-dark(#dde9e2, #cfe0d6);
+  --spine2-bg: light-dark(#785822, #5c4317);
+  --spine2-edge: light-dark(#5c4317, #3d2c0f);
+  --spine2-fg: light-dark(#f5ead4, #ecd8b0);
+
+  /* --- Caneta ----------------------------------------------------------- */
+  /*
+    ⚠️ AS CINCO CANETAS PINTAM, ELAS NÃO GUARDAM. `HIGHLIGHT_COLORS`
+    (`packages/shared/src/highlight-color.ts`) é DADO PERSISTIDO — `Highlight.color`
+    é coluna, é filtro de rota (`?color=%23facc15`) e é índice. O canvas define
+    como o grifo é PINTADO; nunca o que é GUARDADO. A tradução hex → token mora
+    em `highlight-colors.tsx`, e quem a escreve é a Tarefa 47. Aqui os tokens só
+    NASCEM.
+
+    Cada caneta é um par: o `--pen-x` é o papel grifado (fundo) e o
+    `--pen-x-dot` é a bolinha da paleta e o filete da citação.
+  */
+  --pen-a: light-dark(#f0e2b4, #4a3c1c);
+  --pen-a-dot: light-dark(#c89a44, #c89a44);
+  --pen-v: light-dark(#d7e5d5, #23372c);
+  --pen-v-dot: light-dark(#4a8e6e, #4a8e6e);
+  --pen-l: light-dark(#f2ddc9, #3d2a1e);
+  --pen-l-dot: light-dark(#a9613a, #b87a4e);
+  --pen-z: light-dark(#d8e0e8, #22303b);
+  --pen-z-dot: light-dark(#52708c, #6c8aa6);
+  --pen-r: light-dark(#f0dade, #3a2830);
+  --pen-r-dot: light-dark(#9c5a6b, #b0768a);
 
   /* --- Estado ----------------------------------------------------------- */
   /* ⚠️ PRINCÍPIO ANTI-CULPA (`docs/plano-clube-do-livro.md` §1): vermelho é
      erro de formulário e ação destrutiva, e NADA MAIS. Não existe vermelho de
-     "você não escreveu ontem", badge de pendência ou contador de dívida. */
-  --clube-danger: light-dark(#b3261e, #f2938c);
-  --clube-danger-fg: light-dark(#ffffff, #2a1211);
-  /* O "salvo" do autosave (Tarefa 18). Confirmação, nunca gamificação. */
-  --clube-success: light-dark(#2f6b3a, #7cc98a);
+     "você não escreveu ontem", badge de pendência ou contador de dívida.
+     O par é `--danger` (a tinta) e `--danger-bg` (o papel): num tema o escuro
+     é a tinta e no outro é o papel, e é por isso que os dois se invertem. */
+  --danger: light-dark(#7a3520, #f4c4ac);
+  --danger-bg: light-dark(#f4dcd0, #3a1e15);
+
+  /* --- Seleção ---------------------------------------------------------- */
+  /* O fundo da seleção de texto dentro da coluna de leitura. */
+  --sel: light-dark(#cfe0d6, #2e3a34);
+
+  /* --- Véu -------------------------------------------------------------- */
+  /*
+    O que escurece a tela atrás do bottom sheet (`Avulsa.dc.html`).
+
+    ⚠️ Ele existe para que `--color-*: initial` fique SEM EXCEÇÃO NENHUMA no
+    `@theme inline`: até a Tarefa 38 o backdrop do `Sheet` era `bg-black/50`, e
+    manter o `black` da paleta do Tailwind vivo era deixar uma porta aberta —
+    uma cor de fora do sistema que compila, pinta e passa em todas as guardas.
+
+    ⚠️ Os dois lados são o MESMO valor, e isso é MEDIDO, não esquecimento: o
+    canvas declara o véu uma vez só, e o `rgba()` já carrega a opacidade que faz
+    o trabalho nos dois temas. O `light-dark()` está aqui porque a regra 2 o
+    exige de todo token de cor — a lista fechada de exceções é só de não-cores.
+  */
+  --scrim: light-dark(rgba(20, 26, 20, 0.45), rgba(20, 26, 20, 0.45));
 
   /* --- Foco ------------------------------------------------------------- */
-  /* Decisão G: foco visível SEMPRE, inclusive no mobile. */
-  --clube-ring: light-dark(#1f6f5c, #8ad0b8);
-
-  /* --- Avatar ----------------------------------------------------------- */
   /*
-    A paleta do `PersonAvatar` mora aqui, e não em TypeScript, por duas razões:
-    `CLAUDE.md` proíbe CSS inline nas telas (cor sorteada em `style=` estaria
-    fora da regra), e o teste de contraste da regra 32 precisa dos DOIS valores
-    de cada slot para conferir claro e escuro — que é o que `light-dark()` põe
-    na mesma linha.
+    Foco visível SEMPRE, inclusive no mobile (decisão G da Tarefa 13).
 
-    Um `fg` só para os seis slots, claro nos dois temas; cada `bg` é escolhido
-    escuro o suficiente para passar 4.5:1 contra ele. É isso que impede o
-    gerador de sortear amarelo com texto branco (regra 32).
+    ============================================================================
+    O §A.6 LITERAL: CONTORNO SÓLIDO **MAIS** HALO (decisão do dono, 2026-09-20)
+    ============================================================================
 
-    Incentivo por presença, não por comparação: a cor diz QUEM escreveu. Ela
-    não ordena, não ranqueia e não significa nada além de identidade.
+    Os critérios de aceite "válidos para toda fase" do `docs/new-ui.md` pedem
+    duas coisas na MESMA frase — "`outline` nunca removido" **e** "anel de 3px
+    `color-mix(in oklch, var(--accent) 18%, transparent)`". Elas não são
+    alternativas, e lê-las como alternativa foi o erro da primeira entrega.
+
+    ⚠️ MEDIDO ANTES DE DECIDIR: o halo de 18% **sozinho** dá ~1,4:1 contra o
+    creme. Ele NÃO é visível por si — ele é halo **sobre** o contorno. Entregar
+    só o `color-mix()` seria entregar um foco que não se vê, com todas as
+    guardas verdes. Quem escreve os dois no DOM é o `FOCUS_RING`
+    (`components/styles.ts`), e há guarda lá.
+
+    ⚠️ E O ANEL PASSOU A SEGUIR A COR DE AÇÃO, não uma entrada de paleta. Até
+    2026-09-19 ele era `--gold` fixo. Contraste do contorno, medido (piso de
+    3:1 para componente não textual):
+
+    | tema   | contorno  | vs `--bg` | vs `--surface` | vs `--surface-2` |
+    |--------|-----------|-----------|----------------|------------------|
+    | claro  | `#143524` | 11,91:1   | 12,34:1        | 11,36:1          |
+    | escuro | `#c89a44` | 6,90:1    | 6,40:1         | 5,74:1           |
+
+    O `--gold` que ocupava este lugar dava 4,16 / 4,31 / 3,97 no claro — passava
+    raspando, e no `--surface-2` não passava (3,97). A troca quase TRIPLICA o
+    contorno no tema claro.
+
+    O halo é DERIVADO de `--accent` por `color-mix()`, nunca um hex novo: é a
+    mesma razão do `--accent-soft`. Duplicar a cor de ação é a dessincronia que
+    o cabeçalho deste arquivo existe para ter eliminado — trocar o verde do
+    clube passaria a exigir editar dois tokens, e quem esquecesse o segundo
+    teria um halo da cor antiga.
+
+    ----------------------------------------------------------------------------
+    REGISTRO HISTÓRICO, porque foi assim que se chegou aqui
+    ----------------------------------------------------------------------------
+
+    Este comentário afirmou, por uma rodada, uma medição que nunca foi feita:
+    "o canvas pinta o anel de foco com `--gold` nos DOIS temas
+    (`0 0 0 2px var(--surface), 0 0 0 3.5px var(--gold)`)". A auditoria da
+    Tarefa 39 a derrubou, e a recontagem mediu o contrário:
+
+    - regra de foco (`:focus`, `:focus-visible`, `:focus-within`) nos 21
+      artboards do canvas: ZERO;
+    - `outline` aparece em 18 dos 21 arquivos, e é SEMPRE `outline: none` —
+      essa é a ÚNICA forma de `outline` que o canvas tem;
+    - o `box-shadow` citado existe em dois lugares só — `Dia.dc.html:106` e
+      `DiaEscuro.dc.html:106` — e é o `<span>` da BOLINHA da caneta selecionada
+      na paleta de grifo. Não é foco, é a marca de qual cor está escolhida.
+
+    Ou seja: O CANVAS NÃO DESENHA FOCO EM LUGAR NENHUM. Por isso quem manda
+    aqui é o §A.6, e por isso a decisão precisou do dono.
   */
-  --clube-avatar-fg: light-dark(#ffffff, #f6f3ee);
-  --clube-avatar-1: light-dark(#8a4b2a, #7a4325);
-  --clube-avatar-2: light-dark(#2c6a56, #265d4b);
-  --clube-avatar-3: light-dark(#2b5b8a, #26507a);
-  --clube-avatar-4: light-dark(#6d4a8a, #5f4079);
-  --clube-avatar-5: light-dark(#8a2f4b, #7a2942);
-  --clube-avatar-6: light-dark(#5f6b23, #545e1f);
+  --ring: light-dark(var(--accent), var(--accent));
+  --ring-halo: light-dark(
+    color-mix(in oklch, var(--accent) 18%, transparent),
+    color-mix(in oklch, var(--accent) 18%, transparent)
+  );
+
+  /* --- Avatar ------------------------------------------------------------ */
+  /*
+    ⚠️ A PALETA DE SEIS MORREU NA TAREFA 41a — decisão F do MVP 3.5,
+    executada.
+
+    Ficaram aqui, até a 41a, `--avatar-fg` e `--avatar-1`…`--avatar-6`: os
+    únicos tokens deste arquivo cujo valor NÃO vinha do canvas. Eles
+    sobreviveram à Tarefa 39 por uma razão de ordem, não de mérito —
+    `ui-source-scan.test.ts` exige CSS emitido para toda classe que
+    `packages/ui` usa, e `bg-avatar-1`…`-6`/`text-avatar-fg` ainda eram
+    escritos pelo `PersonAvatar`, então matá-los antes do componente quebraria
+    a guarda.
+
+    A 41a reescreveu o componente sobre o par `--person-*` acima e os sete
+    tokens saíram, com os `--color-avatar-*` do `@theme inline` do app. Quem
+    carrega identidade é a INICIAL, não a cor: seis cores que ninguém consegue
+    nomear não identificam ninguém, e `filter-bar.test.tsx` já cobra por escrito
+    que a cor nunca seja o único portador de informação.
+
+    ⚠️ NÃO FAÇA A PALETA VOLTAR SEM O DONO. Se ela voltar, ela volta com os
+    seis pares medidos nos dois temas — e o `avatar-contrast.test.ts`, que hoje
+    mede UM par (`--person-fg` sobre `--person-bg`), volta a medir seis.
+  */
 
   /* --- Raio ------------------------------------------------------------- */
-  /* Sem `light-dark()` de propósito: raio não é cor e não muda com o tema.
-     O teste da regra 3 conhece esta exceção pelo nome. */
-  --clube-radius: 0.625rem;
-  --clube-radius-lg: 1.25rem;
+  /*
+    Sem `light-dark()` de propósito: raio não é cor e não muda com o tema. A
+    lista fechada de exceções do `theme-css.test.ts` conhece os CINCO pelo
+    nome, e cada um tem de existir de verdade aqui — e de casar a forma
+    `/^\d+(\.\d+)?(px|rem)$/`, que a Tarefa 40 acrescentou justamente para a
+    isenção nominal não ser um esconderijo.
+
+    São CINCO e quatro deles são pequenos porque o desenho é caderno
+    encadernado, não cartão de aplicativo: 999px é só para a pílula, e 10px é
+    só para o bottom sheet.
+
+    ⚠️ O QUE O CANVAS USA, CONTADO NOS 22 ARTBOARDS NA TAREFA 39: `999px`
+    (116×), `4px` (32×), `3px` (17×), `1px` (8×), `5px` (3×), `10px` (1×) — e
+    `2px` NÃO aparece nenhuma vez. O `--r-1: 2px` continua aqui porque é ele que
+    a decisão do dono nomeia; fica registrado que o canvas usa `1px` no lugar
+    que ele ocuparia.
+
+    ⚠️ `--r-4: 10px` NASCEU NA TAREFA 41a (decisão I), e a pendência estava
+    escrita na nota nº 4 da Tarefa 39: o bottom sheet do canvas tem
+    `border-radius: 10px 10px 0 0` (`Avulsa.dc.html:79`) e a escala de quatro
+    raios não tinha 10px, então `--radius-sheet` ficou apontando para `--r-3`
+    (4px) — o sheet vinha com metade do arredondamento que o desenho pede.
+
+    ⚠️ E A MUDANÇA DE `--r-4` ARRASTOU `--radius-control` PARA `--r-3`, porque
+    a bijeção token↔utilitário é exatamente um para um: com `--radius-sheet`
+    apontando para `--r-4`, o `--r-3` ficaria órfão e `theme-tokens.test.ts`
+    acusaria. Dar o 4px ao controle é o que o canvas já dizia — os 32 `4px` são
+    botão, campo e link-botão (`Inicio.dc.html:56,57`, `Main.dc.html:56`,
+    `Acervo.dc.html:51,52`) — e o 3px do `--r-2` foi para o `--radius-callout`,
+    que é o raio da caixa de erro do canvas (`Main.dc.html:41`).
+  */
+  --r-1: 2px;
+  --r-2: 3px;
+  --r-3: 4px;
+  --r-4: 10px;
+  --r-pill: 999px;
 
   /* --- Sombra ----------------------------------------------------------- */
-  /* A sombra MUDA com o tema (no escuro precisa ser mais funda para separar o
-     painel do fundo), então o `light-dark()` entra na cor dentro do valor —
-     é uma função de cor, e é numa posição de cor que ela é válida.
-     Negativa no Y: o sheet sobe de baixo, e a sombra tem de subir com ele. */
-  --clube-shadow-sheet: 0 -10px 30px
-    light-dark(rgb(28 26 23 / 0.16), rgb(0 0 0 / 0.55));
   /*
-    A sombra do POPUP (bubble menu da seleção, menu `/`, lista de menções —
-    Tarefa 14). Ela existe porque a do sheet NÃO serve: aquela sobe (`-10px`),
-    porque o sheet entra por baixo da tela, e um popup que flutua sobre a
-    palavra selecionada com sombra para cima parece colado no texto de cima.
+    Duas sombras, e a diferença entre elas é a DIREÇÃO, não a força.
 
-    Mesma difusão e mesmas cores da do sheet, Y invertido. A direção da
-    `--clube-shadow-sheet` é decisão registrada do dono e não se toca.
+    ⚠️ Medido nos dois artboards do canvas (`Dia.dc.html`, claro, e
+    `DiaEscuro.dc.html`, escuro): a sombra do menu de bolha é a MESMA `rgba` nos
+    dois temas. Até a Tarefa 38 este arquivo afirmava o contrário ("no escuro
+    precisa ser mais funda") e escurecia o lado escuro por conta própria. Os
+    dois lados do `light-dark()` são iguais porque é isso que o canvas diz; o
+    `light-dark()` continua aqui porque a regra 2 o exige.
+
+    Negativa no Y: o sheet sobe de baixo, e a sombra tem de subir com ele
+    (`Avulsa.dc.html`). Positiva no Y: o popup flutua SOBRE a palavra
+    selecionada, e uma sombra para cima o deixaria colado no texto de cima.
   */
-  --clube-shadow-popover: 0 10px 30px
-    light-dark(rgb(28 26 23 / 0.16), rgb(0 0 0 / 0.55));
+  --shadow-sheet: 0 -14px 40px -18px
+    light-dark(rgba(20, 30, 20, 0.55), rgba(20, 30, 20, 0.55));
+  --shadow-popover: 0 10px 26px -14px
+    light-dark(rgba(20, 30, 20, 0.45), rgba(20, 30, 20, 0.45));
+
+  /* --- Família ---------------------------------------------------------- */
+  /*
+    As quatro famílias do §A.6 do `docs/new-ui.md`, carregadas por UM `<link>`
+    do Google Fonts em `packages/app/index.html`.
+
+    ⚠️ O PREÇO ESTÁ MEDIDO E REGISTRADO: o `vite-plugin-pwa` precacheia o que
+    está em `dist/`, e uma folha de `fonts.googleapis.com` não está — OFFLINE, O
+    APP CAI NA FONTE DO SISTEMA. Auto-hospedar as quatro famílias em
+    `public/fonts/` resolve e custa ~250 KB de `woff2` no precache; é pergunta
+    em aberto para o dono, não decisão desta fatia.
+
+    Sem `light-dark()` pelo mesmo motivo dos raios: família não é cor. Os quatro
+    estão na lista fechada de exceções, com a razão escrita.
+  */
+  --family-reading: Fraunces, Georgia, serif;
+  --family-quote: 'Instrument Serif', Georgia, serif;
+  --family-ui: Geist, system-ui, sans-serif;
+  --family-mono: 'Geist Mono', Menlo, monospace;
+
+  /* --- Escala ----------------------------------------------------------- */
+  /*
+    Sete degraus, e eles existem para que a escala tenha UM lugar onde trocar.
+    A alternativa (`text-[17.5px]` espalhado) é permitida pela guarda — ela só
+    proíbe cor arbitrária —, mas espalharia a escala por 15 telas.
+
+    Os valores saem dos agrupamentos do canvas; o tamanho exato de cada elemento
+    chega com a fatia da tela dele (Tarefas 42 a 48). Não é cor: os sete estão
+    na lista fechada de exceções.
+  */
+  /* mono: a marca de presença e a nota de margem — o menor que ainda se lê */
+  --size-micro: 9.5px;
+  /* mono: o RÓTULO DE SEÇÃO, que substitui todo h2/h3 (§A.6 do `new-ui.md`) */
+  --size-eyebrow: 10px;
+  /* mono: data, página, número */
+  --size-label: 11px;
+  /* Geist: a interface (§A.6 diz 14–15px/1,5) */
+  --size-ui: 14px;
+  --size-body: 15px;
+  /* Fraunces: a coluna de leitura (§A.6 diz 17,5px/1,72 no celular) */
+  --size-reading: 17.5px;
+  /* Fraunces: o h1 no celular (§A.6 diz 25px, crescendo até 38px no desktop) */
+  --size-title: 25px;
 }
 
 /*

@@ -74,8 +74,8 @@ export default defineConfig({
         display: 'standalone',
         start_url: '/',
         scope: '/',
-        background_color: '#f5f2ec',
-        theme_color: '#1c1a17',
+        background_color: '#f5f1e8',
+        theme_color: '#f5f1e8',
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
@@ -88,7 +88,13 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
+        // ⚠️ `woff2` ENTROU EM 2026-09-20, e sem ele a decisão de auto-hospedar
+        // as fontes não vale nada: os arquivos iriam para o `dist/`, o
+        // `@font-face` os pediria, e OFFLINE O APP CAIRIA NA FONTE DO SISTEMA —
+        // exatamente o defeito que auto-hospedar existe para resolver, só que
+        // agora pagando ~277 KB para não resolvê-lo. É o `globPatterns` que
+        // decide o que o Workbox precacheia, e ele lista EXTENSÕES.
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,woff2}'],
         // ⚠️ **NÃO EXISTE `globIgnores` AQUI, e a ausência é uma DECISÃO
         // (Tarefa 38d).**
         //

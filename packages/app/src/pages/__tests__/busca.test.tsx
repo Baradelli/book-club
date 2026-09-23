@@ -1347,7 +1347,7 @@ describe('the source of the screen', () => {
   it('writes no danger colour anywhere in the screen', () => {
     const source = stripComments(buscaSource());
 
-    expect(source).not.toMatch(/text-\[#|bg-\[#|--clube-danger/u);
+    expect(source).not.toMatch(/text-\[#|bg-\[#|--danger/u);
     expect(source).not.toMatch(/\btext-danger\b|\bbg-danger\b/u);
   });
 });

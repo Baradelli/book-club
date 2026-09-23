@@ -30,6 +30,29 @@ export const SPACING_STEP_PX = 4;
  *
  * `focus-visible` e não `focus`: o anel aparece para quem navega por teclado e
  * não pisca no toque, que é o que faz alguém querer removê-lo por estética.
+ *
+ * ============================================================================
+ * O HALO ENTROU EM 2026-09-20 — o §A.6 LITERAL, por decisão do dono
+ * ============================================================================
+ *
+ * Os critérios de aceite "válidos para toda fase" do `docs/new-ui.md` pedem
+ * DUAS coisas na mesma frase: "`outline` nunca removido" **e** "anel de 3px
+ * `color-mix(in oklch, var(--accent) 18%, transparent)`".
+ *
+ * ⚠️ MEDIDO: o halo de 18% **sozinho** dá ~1,4:1 contra o creme — ele não é
+ * visível por si. Ele é halo **sobre** o contorno sólido, e é a soma dos dois
+ * que fecha a frase. Entregar só o `color-mix()` seria entregar um foco que
+ * não se vê. O acusador é `src/__tests__/focus-ring.test.ts`, e o teste
+ * `never ships the halo WITHOUT the solid outline` existe exatamente para que
+ * as duas metades não possam ser separadas.
+ *
+ * `ring-focus-halo` e não um valor arbitrário: o halo sai de token
+ * (`--ring-halo`), derivado de `--accent` por `color-mix()`. Um hex aqui seria
+ * a cor de ação duplicada num segundo lugar.
+ *
+ * ⚠️ E O CONTORNO PASSOU A SEGUIR `--accent`, não `--gold`: no tema claro isso
+ * vai de 4,16:1 para 11,91:1 contra a página. A medição completa está no
+ * `theme.css`, ao lado do token.
  */
 export const FOCUS_RING =
-  'outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus';
+  'outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus focus-visible:ring-3 focus-visible:ring-focus-halo';

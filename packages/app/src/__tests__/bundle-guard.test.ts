@@ -6,7 +6,7 @@
 // jsdom devolve um `Uint8Array` de OUTRO realm — a checagem dá falso e o
 // esbuild aborta com "your JavaScript environment is broken".
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -107,6 +107,8 @@ let serviceWorker = '';
  * O chunk do Rollup mora em `assets/`; o `push-handler.js` nunca passa por lá.
  */
 let rootScripts: Asset[] = [];
+/** Os `.woff2` que o build copiou de `public/fonts/` para o `dist/`. */
+let fontFiles: string[] = [];
 
 /** `assets/index-abc.js` → `index-abc.js`; ignora o que não é `.js` local. */
 function scriptFileName(reference: string): string | undefined {
@@ -262,6 +264,11 @@ beforeAll(async () => {
       name: entry.name,
       code: readFileSync(join(outDir, entry.name), 'utf8'),
     }));
+  const fontsDir = join(outDir, 'fonts');
+  fontFiles = existsSync(fontsDir)
+    ? readdirSync(fontsDir).filter((entry) => entry.endsWith('.woff2'))
+    : [];
+
   const eager = new Set(eagerScriptNames(indexHtml));
   entryScripts = scripts.filter((asset) => eager.has(asset.name));
 }, 300_000);
@@ -430,6 +437,41 @@ describe('the app bundle (rule 21)', () => {
     for (const name of styleNames) {
       expect(serviceWorker).toContain(name);
     }
+  });
+
+  it('⚠️ precaches EVERY self-hosted font, so offline keeps the typography (dono, 2026-09-20)', () => {
+    /*
+      ⚠️ A ASSERÇÃO QUE FAZ A DECISÃO DE AUTO-HOSPEDAR VALER ALGUMA COISA.
+
+      O dono trocou o `<link>` do Google Fonts por `@font-face` próprio com
+      arquivo em `public/fonts/`, e a razão foi UMA: offline, uma folha de
+      terceiro não é precacheada e o app cai na fonte do sistema.
+
+      Mas quem decide o que entra no precache é o `globPatterns` do
+      `vite.config.ts`, e ele lista EXTENSÕES. Até 2026-09-20 ele não tinha
+      `woff2`. Tirar `woff2` de lá devolve exatamente o defeito que a decisão
+      comprou — os arquivos ficam no `dist/`, o CSS os pede, e offline o
+      navegador não os tem — e NADA mais no projeto acusa:
+
+      - `service-worker-config.test.ts` só lê o TEXTO do `vite.config.ts`, e
+        um `globPatterns` sem `woff2` é texto perfeitamente válido;
+      - `index-html.test.ts` confere que o arquivo existe em `public/`, não que
+        ele foi precacheado;
+      - a suíte inteira fica verde, e a tipografia só falha no metrô.
+
+      É a QUINTA aparição da classe "a guarda pina o texto do config em vez do
+      comportamento" (29a, 34b, 38, 38d e esta). Por isso ela mede o `sw.js`
+      emitido, como as duas vizinhas.
+    */
+    // §7.4: um build sem fonte nenhuma deixaria o laço verde provando nada — e
+    // "a pasta sumiu" é justamente uma das formas de o defeito acontecer.
+    expect(fontFiles.length).toBeGreaterThan(0);
+
+    const missing = fontFiles.filter(
+      (name) => !serviceWorker.includes(`fonts/${name}`),
+    );
+
+    expect(missing).toEqual([]);
   });
 
   it('⚠️ precaches the push handler WITH a revision, so a fix REACHES an installed app (task 38)', () => {

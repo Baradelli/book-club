@@ -8,21 +8,17 @@
     />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <meta name="theme-color" content="#1c1a17" />
+    <meta name="theme-color" content="#f5f1e8" />
     <title>Clube do Livro</title>
     <!--
-      TEMA ANTES DA PRIMEIRA PINTURA (decisão F da Tarefa 12).
+      TEMA ANTES DA PRIMEIRA PINTURA (decisão F da Tarefa 12, regra 27).
 
-      Aplicar o tema num `useEffect` do React pisca branco antes de virar
-      escuro — o defeito que ninguém registra como bug e que incomoda toda
-      abertura. Este script é inline e SÍNCRONO de propósito: nem `defer` nem
-      `async`, e antes do módulo do app.
-
-      Só a escolha EXPLÍCITA precisa de JavaScript. "Do sistema" é o padrão e
-      quem responde por ele é o `@media (prefers-color-scheme: dark)` do
-      `@clube/ui/theme.css`, sem uma linha de script.
-
-      A chave 'clube.theme' é a mesma de `src/theme.ts` — há teste.
+      Síncrono, inline e sem `src`, de propósito: `defer`, `async` ou um
+      `<link rel="stylesheet">` na frente fariam isto rodar DEPOIS da primeira
+      pintura, e o flash branco volta. A chave 'clube.theme' é a mesma de
+      `src/theme.ts`. Quem acusa é `src/__tests__/index-html.test.ts`, e é lá
+      que mora o porquê por extenso — esta é a casca do PWA, que todo visitante
+      baixa, não lugar de argumento.
     -->
     <script>
       (function () {

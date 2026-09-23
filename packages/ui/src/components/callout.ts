@@ -14,7 +14,7 @@ import { mergeAttributes, Node } from '@tiptap/core';
  * e o paste de um parágrafo não substituir o aviso inteiro.
  *
  * O estilo vive em `editor.css`, no seletor `div[data-type='callout']` — e ele
- * usa a cor de AÇÃO, nunca `--clube-danger`: o princípio anti-culpa do
+ * usa a cor de AÇÃO, nunca `--danger`: o princípio anti-culpa do
  * `docs/plano-clube-do-livro.md` §1 reserva o vermelho para erro de formulário
  * e ação destrutiva. Um aviso amarelo-vermelho ensinaria que anotar é falta.
  */

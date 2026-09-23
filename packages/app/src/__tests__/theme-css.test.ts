@@ -55,7 +55,7 @@ const themeCss = stripComments(readFileSync(themeCssPath, 'utf8'));
 
 /**
  * O `vite.config.ts` — porque o `background_color` do manifest do PWA é o
- * MESMO valor claro do `--clube-bg`, e até agora esse espelhamento existia só
+ * MESMO valor claro do `--bg`, e até agora esse espelhamento existia só
  * numa frase de comentário ("Espelhado no `background_color` do manifest").
  *
  * §7.1: garantia afirmada em comentário não é garantia. E o dia em que o
@@ -73,7 +73,7 @@ const viteConfig = readFileSync(
  *
  * ⚠️ A expressão é montada com `\\s` e `\\(`, e não `\s`/`\(`: num template
  * literal o `\s` não é escape válido e o JavaScript o reduz a `s`, então a
- * expressão virava `--clube-bg:s*light-dark(s*...` — que estoura com
+ * expressão virava `--bg:s*light-dark(s*...` — que estoura com
  * "Unterminated group" em vez de simplesmente não casar. Foi o que aconteceu na
  * primeira versão deste teste, e o erro é barulhento por sorte: se o `(` não
  * estivesse na expressão, ela compilaria e passaria a nunca casar nada, e o
@@ -114,7 +114,7 @@ function blockAfter(source: string, selector: string): string {
   throw new Error(`chaves desbalanceadas depois de \`${selector}\``);
 }
 
-/** `--clube-bg: light-dark(#a, #b);` → `{ '--clube-bg': 'light-dark(#a, #b)' }` */
+/** `--bg: light-dark(#a, #b);` → `{ '--bg': 'light-dark(#a, #b)' }` */
 function declarations(block: string): Record<string, string> {
   const pairs: Record<string, string> = {};
 
@@ -150,9 +150,84 @@ function rootBlock(): Record<string, string> {
  * escreveu decide entre corrigir o token ou registrar a exceção com motivo.
  */
 const TOKENS_WITHOUT_LIGHT_DARK: Record<string, string> = {
-  '--clube-radius': 'raio não é cor e não muda com o tema',
-  '--clube-radius-lg': 'raio não é cor e não muda com o tema',
+  '--r-1': 'raio não é cor e não muda com o tema',
+  '--r-2': 'raio não é cor e não muda com o tema',
+  '--r-3': 'raio não é cor e não muda com o tema',
+  // ⚠️ Nasceu na Tarefa 41a (decisão I): o bottom sheet do canvas tem
+  // `border-radius: 10px 10px 0 0` (`Avulsa.dc.html:79`) e a escala de quatro
+  // raios não tinha 10px — `--radius-sheet` apontava para `--r-3` (4px). São
+  // CINCO raios isentos agora, e o quinto entra pela mesma porta dos outros
+  // quatro: nome na lista, motivo escrito, e a FORMA do valor conferida pelo
+  // `exemptionProblem` (um `--r-4: #ff0000` não passa).
+  '--r-4': 'raio não é cor e não muda com o tema',
+  '--r-pill': 'raio não é cor e não muda com o tema',
+  '--family-reading': 'família tipográfica não é cor',
+  '--family-quote': 'família tipográfica não é cor',
+  '--family-ui': 'família tipográfica não é cor',
+  '--family-mono': 'família tipográfica não é cor',
+  '--size-micro': 'corpo de texto não é cor',
+  '--size-eyebrow': 'corpo de texto não é cor',
+  '--size-label': 'corpo de texto não é cor',
+  '--size-ui': 'corpo de texto não é cor',
+  '--size-body': 'corpo de texto não é cor',
+  '--size-reading': 'corpo de texto não é cor',
+  '--size-title': 'corpo de texto não é cor',
 };
+
+/**
+ * A ISENÇÃO TAMBÉM TEM DE SER VERDADE — e isto NÃO é o "discriminador por
+ * FORMA do valor" que a nota nº 3 da Tarefa 39 recusou. A diferença decide, e
+ * está escrita aqui para o próximo leitor não desfazer:
+ *
+ * - o DISCRIMINADOR (o que entra na varredura) continua sendo `--`, sem olhar
+ *   o valor — é o que a decisão B fixou, e é o que impede um
+ *   `--x: rebeccapurple` de escapar por não "parecer cor". Intocado;
+ * - a ISENÇÃO (o que sai da varredura por estar na lista fechada acima) é
+ *   outra coisa: é um privilégio nominal, e um privilégio sem condição é um
+ *   esconderijo.
+ *
+ * ⚠️ MEDIDO na auditoria da Tarefa 39: plantar `--x-qualquer: #ff0000` no
+ * `:root` sem `light-dark()`, pôr o nome na lista fechada e mapear um
+ * `--color-x-qualquer` no `@theme inline` deixava 1.031 testes VERDES. O teste
+ * se chamava `…and only for non-colours` e não tinha uma única linha que
+ * decidisse o que é cor. Uma cor chapada, congelada no valor claro dentro do
+ * tema escuro, entrava sem vermelho nenhum.
+ *
+ * Só três coisas são isentáveis, e cada uma tem forma reconhecível: raio e
+ * corpo de texto são COMPRIMENTO; família é uma PILHA DE NOMES. Quem quiser
+ * isentar uma quarta tem de vir aqui e escrever por que ela não é cor — que é
+ * exatamente o custo que a lista fechada existe para cobrar.
+ */
+const LENGTH = /^\d+(?:\.\d+)?(?:px|rem)$/u;
+const FAMILY_STACK = /^[A-Za-z'"]/u;
+const COLOUR_SHAPED = /#|\brgba?\(|\bhsla?\(|\boklch\(|\bcolor-mix\(/iu;
+
+/** `undefined` = a isenção se sustenta; string = por que ela não se sustenta. */
+function exemptionProblem(
+  property: string,
+  value: string | undefined,
+): string | undefined {
+  if (value === undefined) {
+    return `${property}: está na lista de isenções e não existe no :root`;
+  }
+  if (value.includes('light-dark(')) {
+    return `${property}: usa light-dark() e não precisa de isenção nenhuma`;
+  }
+  if (/^--(?:r|size)-/u.test(property)) {
+    return LENGTH.test(value)
+      ? undefined
+      : `${property}: isenção de raio/corpo com valor que não é comprimento (${value})`;
+  }
+  if (/^--family-/u.test(property)) {
+    if (COLOUR_SHAPED.test(value)) {
+      return `${property}: isenção de família com valor com cara de cor (${value})`;
+    }
+    return FAMILY_STACK.test(value)
+      ? undefined
+      : `${property}: isenção de família com valor que não começa como nome de fonte (${value})`;
+  }
+  return `${property}: isenção fora das três isentáveis (raio, família, corpo de texto) — se não é cor, escreva aqui por quê`;
+}
 
 describe('@clube/ui theme.css — a cascata do tema (rules 3 and 4)', () => {
   it('declares enough tokens to be the full palette', () => {
@@ -160,15 +235,15 @@ describe('@clube/ui theme.css — a cascata do tema (rules 3 and 4)', () => {
     // ou um `blockAfter` quebrado, deixaria as varreduras verdes comparando
     // nada com nada — e a Tarefa 12 já tinha caído nessa forma.
     const tokens = Object.keys(rootBlock()).filter((property) =>
-      property.startsWith('--clube-'),
+      property.startsWith('--'),
     );
 
-    expect(tokens.length).toBeGreaterThan(20);
+    expect(tokens.length).toBeGreaterThan(40);
   });
 
   it('gives every colour token ONE declaration, with both themes inside it (rule 3)', () => {
     const offenders = Object.entries(rootBlock())
-      .filter(([property]) => property.startsWith('--clube-'))
+      .filter(([property]) => property.startsWith('--'))
       .filter(([property, value]) => {
         if (property in TOKENS_WITHOUT_LIGHT_DARK) return false;
         return !value.includes('light-dark(');
@@ -185,18 +260,94 @@ describe('@clube/ui theme.css — a cascata do tema (rules 3 and 4)', () => {
   it('keeps the list of light-dark() exceptions closed, and only for non-colours (rule 3)', () => {
     const root = rootBlock();
 
-    for (const [property] of Object.entries(TOKENS_WITHOUT_LIGHT_DARK)) {
-      // A exceção tem de existir de verdade: uma lista com token que ninguém
-      // declara mais é uma isenção pendurada, e ela isentaria um token futuro
-      // de mesmo nome sem ninguém reparar.
-      expect(root[property]).toBeDefined();
-      expect(root[property]).not.toContain('light-dark(');
-    }
+    // Cada isenção tem de existir de verdade (uma lista com token que ninguém
+    // declara mais isentaria um token futuro de mesmo nome sem ninguém
+    // reparar) E tem de ter a FORMA do que ela alega ser. O segundo pedaço é a
+    // correção da auditoria: sem ele, o nome na lista era a única condição.
+    const problems = Object.keys(TOKENS_WITHOUT_LIGHT_DARK)
+      .map((property) => exemptionProblem(property, root[property]))
+      .filter((problem): problem is string => problem !== undefined);
+
+    expect(problems).toEqual([]);
 
     expect(Object.keys(TOKENS_WITHOUT_LIGHT_DARK)).toEqual([
-      '--clube-radius',
-      '--clube-radius-lg',
+      '--r-1',
+      '--r-2',
+      '--r-3',
+      '--r-4',
+      '--r-pill',
+      '--family-reading',
+      '--family-quote',
+      '--family-ui',
+      '--family-mono',
+      '--size-micro',
+      '--size-eyebrow',
+      '--size-label',
+      '--size-ui',
+      '--size-body',
+      '--size-reading',
+      '--size-title',
     ]);
+  });
+
+  it('refuses a colour smuggled into the closed list (o par positivo)', () => {
+    /*
+      Sem este par, o teste acima prova só que as 16 isenções de HOJE estão
+      certas — nunca que a regra MORDE. Cada linha abaixo é uma isenção que a
+      lista aceitaria pelo nome e que a forma do valor tem de recusar; a
+      primeira é o mutante que a auditoria plantou e que passou verde.
+    */
+    const smuggled: Array<[string, string | undefined]> = [
+      ['--x-qualquer', '#ff0000'],
+      ['--r-9', '#ff0000'],
+      // ⚠️ O mutante da regra 9 da Tarefa 41a, com o nome do raio que a fatia
+      // acabou de isentar: o privilégio é nominal, e o nome na lista não basta.
+      ['--r-4', '#ff0000'],
+      ['--size-danger', 'rgb(255, 0, 0)'],
+      ['--family-brand', 'oklch(0.7 0.2 30)'],
+      ['--family-brand', 'color-mix(in srgb, #ff0000 50%, white)'],
+      ['--r-fantasma', undefined],
+    ];
+
+    for (const [property, value] of smuggled) {
+      expect(exemptionProblem(property, value)).toBeDefined();
+    }
+
+    // E o par negativo, senão a varredura acima ficaria verde recusando TUDO —
+    // uma guarda que não deixa passar nada não guarda, trava.
+    expect(exemptionProblem('--r-2', '3px')).toBeUndefined();
+    expect(exemptionProblem('--size-reading', '17.5px')).toBeUndefined();
+    expect(
+      exemptionProblem('--family-ui', 'Geist, system-ui, sans-serif'),
+    ).toBeUndefined();
+  });
+
+  it('keeps the scrim TRANSLUCENT, in both themes', () => {
+    /*
+      ⚠️ MEDIDO na auditoria da Tarefa 39: subir o alpha do `--scrim` de 0,45
+      para 1 não era acusado por NADA. E o defeito é o maior possível para um
+      valor tão pequeno: o véu opaco esconde o app inteiro atrás do bottom
+      sheet — a tela vira um retângulo de cor chapada com o sheet por cima, e
+      nenhum teste de renderização repara, porque a árvore continua lá.
+
+      A guarda mede a PROPRIEDADE (o véu deixa ver através dele), não a string:
+      trocar o `rgba` por outro `rgba` translúcido continua passando.
+    */
+    const scrim = rootBlock()['--scrim'];
+
+    // Sem isto a varredura abaixo é asserção vazia (§7.4): um `--scrim`
+    // apagado deixaria `alphas` vazio e o `for` não rodaria vez nenhuma.
+    expect(scrim).toBeDefined();
+
+    const alphas = [
+      ...(scrim ?? '').matchAll(/rgba\([^)]*,\s*([0-9.]+)\s*\)/gu),
+    ].map((match) => Number(match[1]));
+
+    expect(alphas.length).toBeGreaterThan(0);
+    for (const alpha of alphas) {
+      expect(alpha).toBeGreaterThan(0);
+      expect(alpha).toBeLessThan(1);
+    }
   });
 
   it('no longer duplicates the palette in a prefers-color-scheme block (rule 3)', () => {
@@ -234,7 +385,7 @@ describe('@clube/ui theme.css — a cascata do tema (rules 3 and 4)', () => {
       Ele resolve no ponto de USO, não no de declaração: um componente que
       declare `color-scheme` próprio (um cartão com `color-scheme: light` para
       forçar um `input date` claro, por exemplo) INVERTE todos os tokens
-      `--clube-*` lidos dentro dele, inclusive os herdados. O sintoma é uma
+      lidos dentro dele, inclusive os herdados. O sintoma é uma
       caixa de texto claro sobre fundo claro, no meio de uma tela escura.
 
       Os três lugares legítimos são o `:root` e os dois `[data-theme]`.
@@ -296,11 +447,66 @@ describe('the dark: utilities still obey data-theme', () => {
   });
 });
 
+/**
+ * A ORDEM DOS DOIS PRIMEIROS `@import` DO `styles.css`.
+ *
+ * ⚠️ MEDIDO no CSS compilado (`dist/assets/index-*.css`) na auditoria da
+ * Tarefa 39, e é o CONTRÁRIO do que este projeto afirmou por uma rodada: o
+ * `@theme inline` EMITE as suas próprias variáveis no `:root`, e as emite
+ * AUTO-REFERENTES. A primeira regra do arquivo compilado é
+ * `:root,:host{…--shadow-sheet:var(--shadow-sheet);--shadow-popover:var(--shadow-popover)}`.
+ *
+ * Isso funciona por UM motivo só: o `:root` que o `@import '@clube/ui/theme.css'`
+ * traz é emitido DEPOIS, com a MESMA especificidade, e por isso vence a
+ * cascata. Inverter os dois `@import` deixa o auto-referente por último,
+ * `--shadow-sheet` passa a resolver para si mesmo (inválido) e A SOMBRA DO
+ * SHEET SOME — sem erro de build, sem teste de renderização vermelho, sem uma
+ * linha de diferença em nenhum arquivo de componente.
+ *
+ * Até esta auditoria nada pinava a ordem. Agora pina.
+ */
+describe('a ordem dos @import do styles.css', () => {
+  it('imports tailwindcss BEFORE the theme tokens, so the real :root wins', () => {
+    const tailwind = appCss.indexOf("@import 'tailwindcss'");
+    const tokens = appCss.indexOf("@import '@clube/ui/theme.css'");
+
+    // Sem os dois `toBeGreaterThan(-1)` a comparação abaixo é asserção vazia
+    // (§7.4): um `@import` renomeado devolve `-1`, e `-1 < qualquer índice` —
+    // o teste ficaria verde provando que um dos dois não existe mais.
+    expect(tailwind).toBeGreaterThan(-1);
+    expect(tokens).toBeGreaterThan(-1);
+    expect(tailwind).toBeLessThan(tokens);
+  });
+});
+
 describe('o manifest do PWA e o token de fundo', () => {
-  it('paints the splash screen with the very light value of --clube-bg', () => {
-    const pageBackground = lightSideOf('--clube-bg');
+  it('paints the splash screen with the very light value of --bg', () => {
+    const pageBackground = lightSideOf('--bg');
     const manifest = /background_color:\s*'(#[0-9a-f]{6})'/i.exec(viteConfig);
 
     expect(manifest?.[1]?.toLowerCase()).toBe(pageBackground.toLowerCase());
+  });
+
+  it('gives the browser bar the SAME token as the splash screen', () => {
+    /*
+      ⚠️ MEDIDO na auditoria da Tarefa 39: voltar o `theme_color` do manifest
+      para `#1c1a17` — o valor do token de TEXTO, que é o que ele dizia até a
+      Tarefa 38 — não era acusado por ninguém. O `background_color` tinha
+      guarda; o `theme_color`, que é o irmão dele e aparece na mesma abertura,
+      não tinha.
+
+      Os dois têm de espelhar o MESMO token, e não só serem iguais entre si:
+      duas cores erradas iguais passariam numa comparação só entre elas.
+    */
+    const pageBackground = lightSideOf('--bg');
+    const background = /background_color:\s*'(#[0-9a-f]{6})'/i.exec(
+      viteConfig,
+    )?.[1];
+    const browserBar = /theme_color:\s*'(#[0-9a-f]{6})'/i.exec(viteConfig)?.[1];
+
+    expect(background).toBeDefined();
+    expect(browserBar).toBeDefined();
+    expect(browserBar?.toLowerCase()).toBe(pageBackground.toLowerCase());
+    expect(browserBar?.toLowerCase()).toBe(background?.toLowerCase());
   });
 });
