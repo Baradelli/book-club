@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { pt } from '../index';
-import { GUILT_TERMS, STREAK_KEYS } from './guilt-terms';
+import { COUNTER_EXEMPT_KEYS, GUILT_TERMS, STREAK_KEYS } from './guilt-terms';
 
 /**
  * ⚠️ **O PRINCÍPIO ANTI-CULPA, GUARDADO NO CATÁLOGO** —
@@ -89,8 +92,13 @@ describe('the anti-guilt principle is a property of the CATALOG (plano §1)', ()
     expect(leaves.length).toBeGreaterThan(20);
 
     const offenders = leaves.flatMap(([path, text]) => {
-      // ⚠️ A ÚNICA isenção do projeto (ADR 0010), e ela é nominal e PINADA
-      // logo abaixo: ampliá-la fica vermelho.
+      // ⚠️ A única isenção desta varredura — a do VOCABULÁRIO (ADR 0010) —, e
+      // ela é nominal e PINADA logo abaixo: ampliá-la fica vermelho.
+      //
+      // ⚠️ Desde a Tarefa 40 existe uma segunda isenção no projeto, o
+      // `COUNTER_EXEMPT_KEYS`, e ela NÃO tem efeito aqui: é isenção da guarda
+      // de FORMATO, que roda sobre o DOM. "Dia 11 de 30" passa nesta varredura
+      // por não ter palavra de cobrança nenhuma, não por estar isenta.
       if (STREAK_KEYS.includes(path)) return [];
       const normalized = withoutDiacritics(text);
       return GUILT_TERMS.filter((term) => normalized.includes(term)).map(
@@ -129,9 +137,149 @@ describe('the anti-guilt principle is a property of the CATALOG (plano §1)', ()
    * isenção com o caminho errado (um `pages.hoome.') não isentaria nada e
    * ninguém notaria — a guarda continuaria verde por não ter o que isentar.
    */
-  it('as chaves isentas existem no catálogo pt', () => {
+  it('as chaves isentas de vocabulário existem no catálogo pt', () => {
     const paths = new Set(entries(pt).map(([path]) => path));
     for (const key of STREAK_KEYS) expect(paths.has(key)).toBe(true);
+  });
+
+  /**
+   * ⚠️⚠️ **CADA LISTA ISENTA COM O DOCBLOCK DELA COLADO — e esta guarda nasceu
+   * de um BLOQUEADOR da auditoria da Tarefa 40.**
+   *
+   * O que aconteceu: o docblock da isenção nova foi escrito **abaixo** do
+   * docblock que ele queria emendar, e não acima da própria lista. Resultado
+   * medido: `COUNTER_EXEMPT_KEYS` herdou **os dois** docblocks e `STREAK_KEYS`
+   * ficou **sem nenhum** — a isenção do ADR 0010, que o dono reconfirmou contra
+   * o §1 do plano, perdeu a justificativa de ao lado. E as duas palavras
+   * "acima" apontaram para o lado errado do arquivo.
+   *
+   * Nada acusava, porque o TypeScript não liga para onde o comentário está e a
+   * suíte inteira ficava verde. Num projeto em que a prosa ao lado da decisão
+   * **é** o registro da decisão, um docblock órfão é perda de informação, não
+   * de estilo — é a mesma classe do nome que não existe (`dayRange`).
+   *
+   * Duas propriedades, e a segunda é a que pega o defeito exato:
+   *
+   * 1. toda lista exportada tem um docblock **imediatamente** acima;
+   * 2. não existem dois docblocks empilhados — um fechamento de bloco seguido
+   *    direto de uma abertura, sem nada entre os dois, significa que um deles
+   *    perdeu o dono.
+   *
+   * ⚠️ E a prosa acima não escreve os dois delimitadores literalmente de
+   * propósito: um deles dentro de crase **fecha este docblock** e joga o resto
+   * do texto para fora do comentário. Aconteceu ao escrever esta guarda, e o
+   * `eslint` foi quem acusou (`no-unused-expressions`).
+   */
+  it('⚠️ keeps each exempt list glued to ITS docblock (task 40, blocker B1)', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./guilt-terms.ts', import.meta.url)),
+      'utf8',
+    );
+    const lines = source.split(/\r?\n/);
+
+    const exported = lines
+      .map((line, index) => ({ line, index }))
+      .filter(({ line }) => /^export const [A-Z_]+/u.test(line));
+
+    // O par positivo (§7.4): as três listas do arquivo. Sem esta linha, um
+    // regex que não casa nada deixaria o laço abaixo verde para sempre.
+    expect(exported).toHaveLength(3);
+
+    const orphans = exported
+      .filter(({ index }) => lines[index - 1]?.trim() !== '*/')
+      .map(({ line }) => line);
+    expect(orphans).toEqual([]);
+
+    const stacked = lines
+      .map((line, index) => ({ line, index }))
+      .filter(
+        ({ line, index }) =>
+          line.trim() === '*/' && lines[index + 1]?.trim().startsWith('/**'),
+      )
+      .map(({ index }) => `linha ${index + 1}`);
+    expect(stacked).toEqual([]);
+  });
+
+  /**
+   * ⚠️ **A SEGUNDA ISENÇÃO DO PROJETO, E ELA É DE OUTRA GUARDA — a do FORMATO
+   * (`COUNTER_SHAPE`), não a do vocabulário.**
+   *
+   * `COUNTER_SHAPE` proíbe `\d+ de \d+` no DOM, porque é a forma do placar. Mas
+   * "Dia 11 de 30" **não é placar**: é a POSIÇÃO da leitura no plano — onde o
+   * clube está no mês —, e ela não compara ninguém com ninguém nem registra
+   * ausência. A decisão é do dono (`docs/BACKLOG.md`, decisões fechadas do MVP
+   * 3.5), e a forma é a mesma do `STREAK_KEYS` do ADR 0010: **isenção nominal,
+   * pinada por igualdade exata**.
+   *
+   * ⚠️ **POR QUE NOMINAL, E NÃO AFROUXAR O `COUNTER_SHAPE`.** Tirar `de` do
+   * regex entregaria a mesma frase e desprotegeria todo o app: "3 de 30 dias"
+   * em qualquer outra tela passaria a ser legal. A isenção por chave custa uma
+   * linha no `toEqual` abaixo, e o custo é o ponto.
+   *
+   * ⚠️ **E A LISTA POR SI NÃO ISENTA NADA**, porque o `COUNTER_SHAPE` roda
+   * sobre o DOM RENDERIZADO e não sobre chaves. Quem executa a isenção é a
+   * varredura de DOM (`packages/app/src/pages/__tests__/anti-guilt-dom.ts`):
+   * ela deriva desta lista a frase EXATA de cada chave — literal a literal,
+   * com buraco só de dígito —, subtrai essas frases do texto e só então mede o
+   * formato. Um `replace(/\d+ de \d+/g, '')` faria o mesmo teste ficar verde
+   * isentando todo contador do app; é por isso que a subtração é exata e tem
+   * par positivo lá.
+   */
+  it('⚠️ isenta EXATAMENTE a posição no plano do formato de placar (MVP 3.5)', () => {
+    expect([...COUNTER_EXEMPT_KEYS].sort()).toEqual(
+      ['pages.book.plan.dayOfPlan'].sort(),
+    );
+  });
+
+  /**
+   * ⚠️ O mesmo companheiro do `STREAK_KEYS`, e pela mesma razão: uma isenção
+   * com o caminho errado (`pages.book.plan.dayOfPan`) não isentaria nada, e a
+   * guarda ficaria verde por não ter o que isentar. Aqui é ainda pior que no
+   * `STREAK_KEYS`, porque a varredura de DOM **deriva** a frase desta chave —
+   * um caminho morto viraria uma subtração de string vazia.
+   */
+  it('as chaves isentas do contador existem no catálogo pt', () => {
+    const paths = new Set(entries(pt).map(([path]) => path));
+    for (const key of COUNTER_EXEMPT_KEYS) expect(paths.has(key)).toBe(true);
+  });
+
+  /**
+   * ⚠️⚠️ **A ISENÇÃO DE FORMATO NÃO PODE ESCONDER UMA PALAVRA — e esta guarda
+   * nasceu de um SOBREVIVENTE EQUIVALENTE da auditoria da Tarefa 40.**
+   *
+   * A varredura de DOM subtrai a frase isenta antes de medir o formato. Rotear
+   * também o VOCABULÁRIO por essa subtração — varrer os `GUILT_TERMS` no texto
+   * já subtraído — **sobrevive com zero acusadores**, e é equivalente HOJE por
+   * inalcançabilidade: os literais do único padrão isento são `'Dia '` e
+   * `' de '`, e nenhum dos 12 radicais é substring de nenhum dos dois.
+   *
+   * ⚠️ **Mas "equivalente hoje" é uma promessa com data.** No dia em que a
+   * lista isenta ganhar uma frase como `'Dia {{number}} · faltam {{count}}'`, a
+   * subtração passaria a apagar `falta` do texto junto com o formato — e a
+   * guarda de vocabulário ficaria cega exatamente na frase que mais cobra.
+   *
+   * Então a prova deixa de ser prosa e vira asserção: **nenhum literal de
+   * frase isenta contém radical de cobrança.** Com ela, a ordem das linhas do
+   * `expectNoGuilt()` deixa de ser a única coisa que separa as duas varreduras,
+   * e quem ampliar a isenção descobre o problema aqui em vez de na próxima
+   * auditoria.
+   */
+  it('⚠️ keeps guilt words OUT of the exempt literals (task 40, equivalent survivor)', () => {
+    const literals = COUNTER_EXEMPT_KEYS.flatMap((key) => {
+      const template = entries(pt).find(([path]) => path === key)?.[1] ?? '';
+      return template.split(/\{\{[A-Za-z][A-Za-z0-9]*\}\}/gu);
+    }).filter((literal) => literal !== '');
+
+    // O par positivo (§7.4): há literal de verdade para medir. Sem isto, uma
+    // chave isenta que sumisse do catálogo deixaria o laço vazio e verde.
+    expect(literals.length).toBeGreaterThan(0);
+
+    const collisions = literals.flatMap((literal) =>
+      GUILT_TERMS.filter((term) =>
+        withoutDiacritics(literal).includes(term),
+      ).map((term) => `"${literal}" contém "${term}"`),
+    );
+    expect(collisions).toEqual([]);
   });
 
   /**

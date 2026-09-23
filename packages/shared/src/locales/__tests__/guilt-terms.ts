@@ -69,7 +69,16 @@ export const GUILT_TERMS: readonly string[] = [
 ];
 
 /**
- * ⚠️ **AS ÚNICAS CHAVES ISENTAS DA VARREDURA — a corrente de leitura (ADR 0010).**
+ * ⚠️ **AS ÚNICAS CHAVES ISENTAS DA VARREDURA DE VOCABULÁRIO — a corrente de
+ * leitura (ADR 0010).**
+ *
+ * ⚠️ A palavra "de vocabulário" entrou na Tarefa 40, e não é enfeite: até ela,
+ * esta era a única isenção do projeto e o docblock dizia "da varredura". Desde
+ * o `COUNTER_EXEMPT_KEYS`, **logo abaixo**, há duas, de guardas diferentes —
+ * esta isenta das PALAVRAS (`GUILT_TERMS`), aquela isenta do FORMATO
+ * (`COUNTER_SHAPE`) —, e
+ * um "as únicas" sem qualificação passaria a ser falso dentro de um arquivo que
+ * o próximo agente lê como verdade.
  *
  * O dono pediu o "foguinho" do Duolingo e, avisado de que ele contraria o §1 do
  * plano, **reafirmou o pedido**. O mecanismo do Duolingo é enquadrado na PERDA:
@@ -97,4 +106,52 @@ export const STREAK_KEYS: readonly string[] = [
   // O corpo do LEMBRETE com a moldura de perda (a outra metade do ADR 0010).
   'notifications.readingReminder.streakBody_one',
   'notifications.readingReminder.streakBody_other',
+];
+
+/**
+ * ⚠️ **AS CHAVES ISENTAS DA VARREDURA DE **FORMATO** — a posição no plano
+ * (MVP 3.5).**
+ *
+ * Isto é a segunda isenção do projeto, e ela é de OUTRA guarda: o
+ * `STREAK_KEYS` acima isenta do VOCABULÁRIO (`GUILT_TERMS`); esta isenta do
+ * FORMATO (`COUNTER_SHAPE`, em
+ * `packages/app/src/pages/__tests__/anti-guilt-dom.ts`), que proíbe
+ * `\d+ de \d+` no DOM porque é a forma do placar.
+ *
+ * "Dia 11 de 30" **não é placar.** Placar conta o que foi feito contra o que
+ * havia para fazer, e compara; isto diz ONDE a leitura de hoje está no mês, e o
+ * número não muda com o que ninguém fez. Decisão do dono, em `docs/BACKLOG.md`
+ * ("decisões fechadas do MVP 3.5").
+ *
+ * ⚠️⚠️ **E A LISTA, POR SI, NÃO ISENTA NADA — este é o ponto que mais
+ * facilmente se lê errado.** O `COUNTER_SHAPE` roda sobre o DOM RENDERIZADO, e
+ * não sobre chaves: no texto de uma tela não há caminho de chave nenhum, só
+ * "Dia 11 de 30". Então quem executa a isenção é a varredura de DOM, que
+ * **deriva** a frase de cada chave daqui — pega o valor no catálogo, escapa
+ * cada literal e troca só os buracos `{{…}}` por dígito — e subtrai essas
+ * frases do texto ANTES de medir o formato.
+ *
+ * ⚠️ **POR QUE POR FRASE EXATA, E NUNCA POR REGEX LARGA.** Um
+ * `replace(/\d+ de \d+/g, '')` entregaria os mesmos testes verdes e isentaria
+ * **todo** contador do app: a guarda continuaria no relatório, verde, e teria
+ * parado de guardar — a pior das duas falhas (é a lição da Tarefa 39 com o
+ * `DANGER_STYLE`). O par positivo de `anti-guilt-dom.test.ts` planta
+ * "3 de 30 dias" ao lado da frase isenta e exige que ele continue acusado.
+ *
+ * ⚠️ **POR QUE NOMINAL, E NÃO AFROUXAR O `COUNTER_SHAPE`.** Tirar `de` do regex
+ * entregaria a mesma frase e desprotegeria **todas** as telas. A isenção por
+ * chave custa uma linha num `toEqual` de igualdade exata (`anti-guilt.test.ts`,
+ * no molde do `STREAK_KEYS`), e o custo é o ponto: ampliá-la fica VERMELHO, e
+ * quem ampliar diz por escrito que está ampliando.
+ *
+ * ⚠️ **O QUE NÃO ENTRA, e é pergunta em aberto para o dono:** o
+ * `searchResultCount` do §A.9 ("{n} resultados em todo o clube"). Quem o proíbe
+ * não é esta lista — é a decisão de produto da Tarefa 29, registrada em
+ * `busca.test.tsx` (`shows NO result count anywhere, in any state`). E o
+ * `COUNTER_SHAPE` nem o pegaria ("3 resultados" não tem `de` entre dois
+ * números), então isentá-lo aqui não resolveria nada. Registrado no
+ * `docs/new-ui.md` §A.9.
+ */
+export const COUNTER_EXEMPT_KEYS: readonly string[] = [
+  'pages.book.plan.dayOfPlan',
 ];

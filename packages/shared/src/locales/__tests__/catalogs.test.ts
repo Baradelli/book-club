@@ -14,6 +14,15 @@ function keyPaths(value: unknown, prefix = ''): string[] {
   );
 }
 
+/** Cada folha com o caminho dela — o par que a contagem de VALOR precisa. */
+function entriesOf(value: unknown, prefix = ''): Array<[string, string]> {
+  if (typeof value === 'string') return [[prefix, value]];
+  if (typeof value !== 'object' || value === null) return [];
+  return Object.entries(value).flatMap(([key, child]) =>
+    entriesOf(child, prefix === '' ? key : `${prefix}.${key}`),
+  );
+}
+
 function leaves(value: unknown): unknown[] {
   if (typeof value !== 'object' || value === null) return [value];
   return Object.values(value).flatMap(leaves);
@@ -115,6 +124,459 @@ describe('catálogos de i18n', () => {
     );
 
     expect(bad).toEqual([]);
+  });
+
+  /*
+    ⚠️ **AS CHAVES DA TAREFA 40, E O QUE ESTE TESTE GUARDA DE VERDADE.**
+
+    O catálogo é um objeto literal **sem `as const`**, e o tipo nasce por
+    inferência (`TranslationCatalog = typeof pt`). Consequência medida: uma
+    chave nova escrita no ramo ERRADO da árvore — `pages.dayNote.savedAt` em
+    vez de `pages.dayNote.save.savedAt` — **compila**, passa em todo o `tsc`, e
+    só aparece no dia em que a tela chama `t()` e recebe a chave de volta como
+    texto. Este teste é o acusador desse erro, e ele é o único que existe:
+    nenhuma guarda do projeto exige consumidor para chave de catálogo (varrido
+    em `shared`, `app` e `ui`), então as chaves nascem aqui e ganham tela nas
+    Tarefas 42–48.
+
+    ⚠️ **São 20 FOLHAS para as 17 chaves do §A.9**, e as duas contas são
+    diferentes de propósito: `savedAt` e `archivePreview` aparecem em DOIS
+    namespaces cada (a tela é a dona do seu indicador de salvamento, como
+    `save.saved` e `archive.*` já são hoje), e `days` tem par de plural. Quem
+    contar 17 no arquivo está contando outra coisa.
+  */
+  const TASK_40_KEYS = [
+    // A posição no plano — `pages.book.plan` é a dona do assunto, e o Início e
+    // a tela do dia a LEEM de lá (decisão C: chave de duas telas não duplica).
+    'pages.book.plan.dayOfPlan',
+    // As marcas de presença do livro.
+    'pages.book.marks.heading',
+    'pages.book.marks.read',
+    'pages.book.marks.wrote',
+    'pages.book.marks.hint',
+    // O bloco "Neste livro".
+    'pages.book.inBook.heading',
+    'pages.book.inBook.notes',
+    'pages.book.inBook.highlights',
+    // A anotação do dia.
+    'pages.dayNote.save.savedAt',
+    'pages.dayNote.highlights.heading',
+    // A anotação avulsa.
+    'pages.freeNote.save.savedAt',
+    'pages.freeNote.preview.heading',
+    /*
+      ⚠️ **`draftSaved` PLANO, e NÃO `save.draft` como o mapa da Tarefa 40
+      pedia. Medido:** `pages.highlightForm.save` já existe e é uma STRING (o
+      rótulo do botão "Salvar", lido por `highlight-form.tsx:610`).
+      Transformá-la em objeto para abrigar `draft` faria o `t()` daquela linha
+      devolver a chave crua na tela, e o conserto exigiria editar a tela — que
+      esta fatia não toca. A forma plana também é a consistente aqui: este
+      formulário grava por BOTÃO, e o vocabulário de gravação dele sempre foi
+      plano (`create`, `save`, `failed`); quem tem grupo `save.*` são as duas
+      telas que salvam sozinhas.
+    */
+    'pages.highlightForm.draftSaved',
+    'pages.highlightForm.preview.heading',
+    // O acervo.
+    'pages.acervo.filters.refine',
+    // O formulário de livro — `days` com par de plural, porque o português
+    // muda; `dayWithNote` sem, porque não conta nada.
+    'pages.bookForm.plan.days_one',
+    'pages.bookForm.plan.days_other',
+    'pages.bookForm.plan.dayWithNote',
+    // As preferências.
+    'pages.settings.reminderTimeHint',
+    // ⚠️ A ÚNICA fora de `pages.*`, e é a exceção ao §10 do `docs/EDITOR.md`:
+    // quem renderiza esta frase é a TELA (o rodapé da coluna de leitura), não
+    // o editor, e tela nenhuma tem texto solto.
+    'editor.slashHint',
+  ] as const;
+
+  it('⚠️ puts the twenty task-40 leaves in the namespace of their screen (§A.9)', () => {
+    const paths = new Set(keyPaths(pt));
+
+    // O par positivo (§7.4): sem ele, um `keyPaths` quebrado devolvendo `[]`
+    // deixaria o laço abaixo vermelho — mas um `paths` com tudo dentro (um
+    // `Set` de um caminho só, por exemplo) o deixaria verde sem catálogo.
+    expect(paths.size).toBeGreaterThan(20);
+    expect(TASK_40_KEYS).toHaveLength(20);
+
+    expect(TASK_40_KEYS.filter((key) => !paths.has(key))).toEqual([]);
+  });
+
+  it('⚠️ keeps every key inside a namespace, never at the root (task 40 decision A)', () => {
+    /*
+      O §A.9 do `docs/new-ui.md` escreveu as 21 frases SOLTAS, porque é uma
+      lista de compras e não um mapa. O arquivo não tem uma única chave plana
+      na raiz, e esta linha é o que impede a primeira: `refine: 'Refinar'` no
+      topo do catálogo compilaria, e a próxima tela a chamaria de `t('refine')`
+      sem ninguém saber de quem ela é.
+    */
+    expect(keyPaths(pt).filter((path) => !path.includes('.'))).toEqual([]);
+  });
+
+  it('⚠️ writes every placeholder as {{english}}, the i18next syntax (task 40 decision B)', () => {
+    /*
+      ⚠️ **MEDIDO NO §A.9: `{n}`, `{total}` e `{hora}`.** Nenhum dos três é a
+      sintaxe do i18next — chave única, não dupla —, então o i18next **não os
+      substituiria**: eles sairiam LITERAIS na tela ("Dia {n} de {total}"). E o
+      `{hora}` erra duas vezes, porque `CLAUDE.md` manda nome em inglês.
+
+      A guarda vale nos dois sentidos (§7.1): nenhuma chave simples, e todo
+      nome de buraco em camelCase inglês.
+    */
+    const values = leaves(pt).filter(
+      (leaf): leaf is string => typeof leaf === 'string',
+    );
+    expect(values.length).toBeGreaterThan(20);
+
+    const singleBrace = values.filter((value) =>
+      /(^|[^{])\{[^{}]+\}([^}]|$)/u.test(value),
+    );
+    expect(singleBrace).toEqual([]);
+
+    const badName = values.flatMap((value) =>
+      Array.from(value.matchAll(/\{\{([^{}]*)\}\}/gu))
+        .map(([, name]) => name ?? '')
+        .filter((name) => !/^[a-z][A-Za-z0-9]*$/u.test(name))
+        .map((name) => `${value} → "${name}"`),
+    );
+    expect(badName).toEqual([]);
+
+    /*
+      ⚠️ **A CHAVE DESBALANCEADA ESCAPAVA DAS DUAS REGEX ACIMA, e a auditoria
+      mediu:** `'Salva sozinho às {{time}.'` passava com **zero acusadores em
+      1.459 testes**. Ela não é chave simples (o `{{` está lá) e não tem nome
+      inválido (o nome é `time`) — mas o i18next não fecha a interpolação e
+      renderiza `{{time}` **literal na tela**, que é exatamente o defeito que a
+      decisão B existe para impedir.
+
+      A conta que pega o caso é a mais tola possível: contar `{` e `}` e exigir
+      que empatem. Ela também pega o excesso (`{{time}}}`), que o par de cima
+      deixa passar pelo mesmo motivo.
+    */
+    const unbalanced = values.filter(
+      (value) =>
+        (value.match(/\{/gu) ?? []).length !==
+        (value.match(/\}/gu) ?? []).length,
+    );
+    expect(unbalanced).toEqual([]);
+  });
+
+  it('⚠️ keeps _one and _other saying DIFFERENT things (task 40, audit M1)', () => {
+    /*
+      ⚠️ **O PAR DE PLURAL PODIA COLAPSAR, e a auditoria mediu:** com
+      `days_one: '{{count}} dias'` — idêntico ao `_other` — a suíte inteira
+      ficava verde (**zero acusadores em 1.459 testes**), e o app passaria a
+      dizer "1 dias". Eu escrevi exatamente esta asserção para `dayWithNote` ×
+      `dayHasNotes` e não para o par que esta fatia criou.
+
+      ⚠️ **E ELA É GENÉRICA DE PROPÓSITO**, não uma linha sobre
+      `bookForm.plan.days`: a mesma lacuna existia nos dois pares que o catálogo
+      já tinha antes desta fatia (`pages.home.streak.days_*` e
+      `notifications.readingReminder.streakBody_*`). Uma guarda que só olha o
+      par novo protege o que acabou de ser escrito e deixa o antigo exposto —
+      é o §7.9 ao contrário.
+
+      As três coisas exigidas de cada par: as DUAS metades existem (um `_one`
+      órfão faz o i18next devolver a chave crua), elas dizem coisas diferentes,
+      e as duas têm o buraco do `count` (sem ele o número desaparece da frase e
+      a pluralização não tem o que pluralizar).
+    */
+    const halves = new Map<string, { one?: string; other?: string }>();
+    for (const [path, value] of entriesOf(pt)) {
+      const isOne = path.endsWith('_one');
+      const isOther = path.endsWith('_other');
+      if (!isOne && !isOther) continue;
+
+      const base = path.slice(0, -(isOne ? '_one'.length : '_other'.length));
+      const slot = halves.get(base) ?? {};
+      if (isOne) slot.one = value;
+      else slot.other = value;
+      halves.set(base, slot);
+    }
+
+    /*
+      ⚠️ O par positivo (§7.4): o laço abaixo é uma varredura, e varredura sobre
+      mapa vazio é verde para sempre. Os três pares de hoje são o piso — ele não
+      congela o crescimento (um quarto par é bem-vindo), só impede que a guarda
+      fique medindo nada.
+    */
+    expect(halves.size).toBeGreaterThanOrEqual(3);
+
+    for (const [base, { one, other }] of halves) {
+      expect(one, `${base}_one`).toBeTypeOf('string');
+      expect(other, `${base}_other`).toBeTypeOf('string');
+      expect(one, base).not.toBe(other);
+      expect(one, `${base}_one`).toContain('{{count}}');
+      expect(other, `${base}_other`).toContain('{{count}}');
+    }
+  });
+
+  it('⚠️ says dayWithNote and dayHasNotes differently (task 40 decision D)', () => {
+    /*
+      ⚠️ **UM `s` DE DIFERENÇA, E DUAS COISAS DIFERENTES.**
+      `pages.bookForm.plan.dayHasNotes` **já existia**: é o recado do 400 do
+      domínio ao tentar REMOVER do plano um dia que já tem anotação do clube. A
+      chave nova é o RÓTULO da linha que tem anotação. O §A.9 pediu
+      `dayHasNote`, a um `s` da que existe — e duas chaves assim, uma dizendo
+      "Dia 3 · tem anotação" e a outra "Um dos dias que saiu do plano…", são
+      erro esperando acontecer. Daí `dayWithNote`.
+    */
+    const plan = pt.pages.bookForm.plan;
+
+    expect(plan.dayWithNote).not.toBe(plan.dayHasNotes);
+    // E cada uma diz a sua coisa: a do rótulo tem o número do dia, a do 400
+    // não pode tê-lo (o corpo do 400 não diz qual dia é, e inventar seria
+    // mentir — está escrito ao lado dela).
+    expect(plan.dayWithNote).toContain('{{number}}');
+    expect(plan.dayHasNotes).not.toContain('{{number}}');
+  });
+
+  it('⚠️ pins EVERY repeated phrase of the catalog, one group per value (task 40, audit A5)', () => {
+    /*
+      ⚠️⚠️ **ESTA GUARDA SUBSTITUIU UMA QUE NÃO GUARDAVA A PROPRIEDADE QUE
+      INVOCAVA, e a medição é da auditoria da Tarefa 40.**
+
+      A primeira versão se chamava *"reuses Arquivar and the quote hint instead
+      of growing a twin"* e fazia duas asserções: `'Arquivar'` em exatamente
+      dois caminhos, e a dica do trecho em um. Ela falhava nos dois sentidos:
+
+      1. **fraca.** Três folhas novas carregando valores que ESTA fatia criou
+         (`'As marcas'`, `'Refinar'`, `'Como vai aparecer no acervo'`) passavam
+         com **zero acusadores em 1.459 testes**. O nome do teste prometia "não
+         cresça uma gêmea"; o corpo media duas strings;
+      2. **quebradiça na direção errada.** Um reword legítimo do `quoteHint` na
+         Tarefa 47 a deixaria vermelha por um motivo que não tem nada a ver com
+         gêmeas — e guarda que grita por nada é guarda que alguém desliga.
+
+      É a **sexta** aparição da classe "a guarda pina o texto em vez da
+      propriedade" (29a, 34b, 38, 38d, o `globPatterns` da 39, e esta).
+
+      Agora a propriedade **é** a asserção: todo grupo de folhas que dividem o
+      mesmo valor está listado aqui, ordenado por valor e por caminho. Uma gêmea
+      nova de QUALQUER frase — recém-escrita ou antiga — deixa isto vermelho, e
+      quem a criar tem de escrever o grupo, que é justamente o ponto (o molde é
+      o `STREAK_KEYS`). A unicidade do `quoteHint` passa a ser guardada pela
+      AUSÊNCIA dele no mapa, e um reword que continue único não mexe em nada.
+
+      ⚠️ **27 GRUPOS, E NÃO TODOS SÃO CONTRATO — dois merecem leitura, e estão
+      aqui porque o mapa tem de ser COMPLETO para ser guarda:**
+
+      - ~~**`'Alguém do clube'` (3 caminhos) é DEFEITO, não convenção.** É UM
+        conceito — "o autor cujo nome a tela não sabe" — com três chaves
+        (`pages.acervo.item.author.other`, `pages.dayNote.others.author`,
+        `pages.freeNote.author`). … **Quando ela reduzir as três a uma, este
+        teste fica vermelho e a saída é APAGAR a linha, nunca crescê-la.**~~
+
+        ✅ **RESOLVIDO NA TAREFA 42, EM 2026-09-21 — e a linha foi APAGADA,
+        que é o que estava escrito aqui para ser feito.** A decisão F daquela
+        fatia matou `pages.dayNote.others.author` e `pages.freeNote.author`; as
+        duas telas passaram a resolver o nome de verdade pelo `nameOfWriter` do
+        `club-names.ts` (decisão E), e o genérico ficou com **um dono só**,
+        `pages.acervo.item.author.other`.
+
+        ⚠️ **Por que APAGAR e não reescrever para um caminho:** este mapa lista
+        **grupos de folhas que dividem um valor** — a linha 1259 abaixo filtra
+        `paths.length > 1`. Um valor com um dono só **não é um grupo**, e
+        deixá-lo aqui não seria possível sem afrouxar o filtro: pinaria um
+        não-defeito e faria o mapa deixar de ser "as repetições que existem".
+        A unicidade do genérico passa a ser guardada pela AUSÊNCIA dele aqui,
+        exatamente como a do `quoteHint` — é a propriedade, não o texto;
+      - **`'A leitura de hoje'` (2)** cruza MÍDIA: um é título de seção da tela,
+        o outro é o título do push. Mudar um sem o outro é legítimo, e é por
+        isso que são dois;
+      - **`'Ver o acervo do livro'` (2)** são dois botões, em duas telas, para o
+        MESMO destino. Convenção por-tela como o resto do arquivo, mas é o grupo
+        que mais se parece com gêmea.
+
+      Os 25 restantes são a convenção que o arquivo aplica desde a Tarefa 15:
+      cada tela é dona do próprio `loading`, `retry`, `bookUnavailable`,
+      `archive.*` e indicador de salvamento, porque a frase de uma tela muda sem
+      arrastar as outras.
+    */
+    const groups = (): Array<[string, string[]]> => {
+      const byValue = new Map<string, string[]>();
+      for (const [path, value] of entriesOf(pt)) {
+        byValue.set(value, [...(byValue.get(value) ?? []), path]);
+      }
+      return [...byValue.entries()]
+        .filter(([, paths]) => paths.length > 1)
+        .map(([value, paths]): [string, string[]] => [value, [...paths].sort()])
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    };
+
+    const REPEATED_PHRASES: Array<[string, string[]]> = [
+      [
+        'A leitura de hoje',
+        ['notifications.readingReminder.title', 'pages.home.today.heading'],
+      ],
+      [
+        'Abrindo o editor…',
+        [
+          'pages.dayNote.editorLoading',
+          'pages.freeNote.editorLoading',
+          'pages.highlightForm.editorLoading',
+        ],
+      ],
+      /*
+        ⚠️ A LINHA DE `'Alguém do clube'` (3 caminhos) FOI APAGADA AQUI, na
+        Tarefa 42 (2026-09-21). O defeito que ela registrava — um conceito com
+        três chaves — foi resolvido: veja o docblock acima.
+      */
+      [
+        'Arquivar',
+        ['pages.acervo.archive.confirm', 'pages.freeNote.archive.confirm'],
+      ],
+      [
+        'Carregando…',
+        [
+          'pages.book.loading',
+          'pages.bookForm.loading',
+          'pages.busca.clubLoading',
+          'pages.dayNote.loading',
+          'pages.freeNote.loading',
+          'pages.highlightForm.loading',
+          'pages.home.loading',
+        ],
+      ],
+      [
+        'Como vai aparecer no acervo',
+        [
+          'pages.freeNote.preview.heading',
+          'pages.highlightForm.preview.heading',
+        ],
+      ],
+      [
+        'Deixar como está',
+        ['pages.acervo.archive.cancel', 'pages.freeNote.archive.cancel'],
+      ],
+      ['E-mail', ['pages.acceptInvite.email', 'pages.login.email']],
+      ['Entrar', ['pages.login.submit', 'pages.login.title']],
+      [
+        'Fechar',
+        ['pages.acervo.archive.close', 'pages.freeNote.archive.close'],
+      ],
+      ['Nova anotação', ['pages.acervo.newNote', 'pages.freeNote.newTitle']],
+      [
+        'Novo grifo',
+        ['pages.acervo.newHighlight', 'pages.highlightForm.newTitle'],
+      ],
+      [
+        'Não foi possível abrir este livro agora.',
+        [
+          'pages.acervo.bookUnavailable',
+          'pages.book.bookUnavailable',
+          'pages.bookForm.bookUnavailable',
+          'pages.dayNote.bookUnavailable',
+          'pages.freeNote.bookUnavailable',
+          'pages.highlightForm.bookUnavailable',
+        ],
+      ],
+      [
+        'Não foi possível arquivar agora.',
+        ['pages.acervo.archive.failed', 'pages.freeNote.archive.failed'],
+      ],
+      [
+        'Não foi possível salvar agora. Seu texto continua na tela.',
+        ['pages.dayNote.save.failed', 'pages.freeNote.save.failed'],
+      ],
+      [
+        'Pode ficar em branco.',
+        [
+          'pages.bookForm.fields.optionalHint',
+          'pages.highlightForm.fields.pageHint',
+        ],
+      ],
+      ['Preferências', ['nav.settings', 'pages.settings.title']],
+      [
+        'Referência',
+        [
+          'pages.freeNote.fields.reference',
+          'pages.highlightForm.fields.reference',
+        ],
+      ],
+      [
+        'Salvando…',
+        ['pages.dayNote.save.saving', 'pages.freeNote.save.saving'],
+      ],
+      ['Salvar', ['pages.bookForm.save', 'pages.highlightForm.save']],
+      [
+        'Salvar de novo',
+        ['pages.dayNote.save.retry', 'pages.freeNote.save.retry'],
+      ],
+      ['Salvo', ['pages.dayNote.save.saved', 'pages.freeNote.save.saved']],
+      [
+        'Salvo {{time}}',
+        ['pages.dayNote.save.savedAt', 'pages.freeNote.save.savedAt'],
+      ],
+      ['Senha', ['pages.acceptInvite.password', 'pages.login.password']],
+      [
+        'Somente leitura',
+        ['pages.dayNote.others.readOnly', 'pages.freeNote.readOnly'],
+      ],
+      [
+        'Tentar de novo',
+        [
+          'pages.acervo.retry',
+          'pages.book.retry',
+          'pages.bookForm.retry',
+          'pages.busca.retry',
+          'pages.dayNote.retry',
+          'pages.freeNote.retry',
+          'pages.highlightForm.retry',
+          'pages.home.retry',
+          'pages.settings.retry',
+        ],
+      ],
+      [
+        'Título',
+        ['pages.bookForm.fields.title', 'pages.freeNote.fields.title'],
+      ],
+      [
+        'Ver o acervo do livro',
+        ['pages.book.acervoLink', 'pages.highlightForm.backToList'],
+      ],
+    ];
+
+    /*
+      O par positivo (§7.4): o mapa não é vazio (senão um `groups()` quebrado
+      devolvendo `[]` casaria com uma lista vazia e o teste diria "não há
+      gêmeas" provando "não há catálogo") e não é o catálogo inteiro.
+    */
+    // ⚠️ **28 → 27 na Tarefa 42 (2026-09-21)**: o grupo `'Alguém do clube'`
+    // saiu porque o valor passou a ter um dono só. O número é conferido aqui
+    // de propósito — ele é o que impede o mapa de encolher em silêncio.
+    expect(REPEATED_PHRASES).toHaveLength(27);
+    expect(REPEATED_PHRASES.length).toBeLessThan(entriesOf(pt).length / 4);
+
+    expect(groups()).toEqual(REPEATED_PHRASES);
+  });
+
+  it('⚠️ makes the archive dialogs offer to KEEP, not to cancel (task 40, §A.9 keepAsIs)', () => {
+    /*
+      ⚠️ **ESTE TESTE PINA TEXTO DE PROPÓSITO, e é a exceção — porque aqui a
+      DECISÃO É o texto.** `keepAsIs` não é chave nova: é troca de VALOR em
+      duas chaves que diziam "Cancelar". O botão que não arquiva passa a dizer
+      o que ele FAZ ("deixar como está") em vez de nomear o abandono de um
+      formulário que não existe — não há formulário, há um diálogo de duas
+      saídas.
+
+      Sem esta linha a troca não tem acusador NENHUM: `acervo.test.tsx` e
+      `free-note.test.tsx` buscam o botão por `pt.pages.*.archive.cancel`
+      (medido), então eles continuam verdes com qualquer valor — inclusive com
+      o antigo de volta. As duas telas dizem a MESMA frase porque é a mesma
+      ação, e é o bloco `archive.*` inteiro que já é duplicado por tela.
+    */
+    expect(pt.pages.acervo.archive.cancel).toBe('Deixar como está');
+    expect(pt.pages.freeNote.archive.cancel).toBe('Deixar como está');
+    // E ela não pode falar a língua do botão que arquiva de verdade.
+    expect(pt.pages.acervo.archive.cancel).not.toBe(
+      pt.pages.acervo.archive.confirm,
+    );
+    expect(pt.pages.freeNote.archive.cancel).not.toBe(
+      pt.pages.freeNote.archive.confirm,
+    );
   });
 
   it('says a missing invite and an invalid invite differently, in pt', () => {

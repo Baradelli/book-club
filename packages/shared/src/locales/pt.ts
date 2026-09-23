@@ -294,6 +294,29 @@ export const pt = {
       plan: {
         /* Nomeia a lista para o leitor de tela ("lista, 30 itens"). */
         label: 'Dias do plano de leitura',
+        /*
+          ⚠️ **A POSIÇÃO NO PLANO (Tarefa 40, §A.9), E ELA É A ÚNICA FRASE DO
+          APP ISENTA DA VARREDURA DE PLACAR.**
+
+          "Dia 11 de 30" tem a forma que a `COUNTER_SHAPE` proíbe
+          (`\d+ de \d+`), e passa por **isenção nominal**: a chave está em
+          `COUNTER_EXEMPT_KEYS`
+          (`packages/shared/src/locales/__tests__/guilt-terms.ts`), pinada por
+          igualdade exata, e a varredura de DOM subtrai esta frase — literal a
+          literal, com buraco só de dígito — antes de medir o formato.
+
+          ⚠️ **O QUE JUSTIFICA A ISENÇÃO:** isto não é placar. Placar conta o
+          que foi feito contra o que havia para fazer ("3 de 30 dias lidos") e
+          compara; isto diz ONDE a leitura de hoje está no mês, e o número não
+          muda com o que ninguém fez. Decisão do dono, em `docs/BACKLOG.md`
+          ("decisões fechadas do MVP 3.5").
+
+          ⚠️ **E ELA MORA AQUI porque o PLANO é o dono do assunto** (decisão C
+          da Tarefa 40): o Início e a tela do dia a LEEM deste namespace, sem
+          duplicar. Duas frases dizendo a mesma posição divergiriam na primeira
+          correção — o defeito que o `GUILT_TERMS` viveu até a Tarefa 19.
+        */
+        dayOfPlan: 'Dia {{number}} de {{total}}',
         /* A ÚNICA marca da lista (decisão C): hoje. Nada mais é destacado. */
         today: 'Hoje',
         /*
@@ -339,6 +362,58 @@ export const pt = {
           description:
             'Um administrador do clube cadastra o plano, com o tema de cada dia.',
         },
+      },
+      /*
+        ⚠️ **AS MARCAS DE PRESENÇA (Tarefa 40, §A.9) — UM GLIFO POR LEITOR,
+        NUNCA UM NÚMERO.**
+
+        `docs/ACEITE-MVP.md`, MVP 3, pergunta 1: progresso é PRESENÇA, não
+        placar. Um leitor a mais é uma marca a mais — e é por isso que a legenda
+        explica a FORMA do glifo (vazado × cheio) em vez de contar quantos são.
+
+        ⚠️ **A COR NUNCA É O ÚNICO PORTADOR**, a mesma regra do `PersonAvatar` e
+        das cinco canetas: o vazado e o cheio se distinguem por forma, e as três
+        frases abaixo são o que o leitor de tela fala. Quem renderiza é a Tarefa
+        44.
+      */
+      marks: {
+        heading: 'As marcas',
+        read: 'Leu neste dia',
+        wrote: 'Leu e escreveu',
+        hint: 'Cheio = escreveu',
+      },
+      /*
+        ⚠️ **"NESTE LIVRO" — DOIS RÓTULOS, E NENHUM DELES É O NÚMERO.**
+
+        O §A.9 chamou as duas chaves de `clubNotesCount` e `highlightsCount`, e
+        o `Count` do nome é o que elas NÃO são: o valor é dado, vem da API e
+        entra ao lado do rótulo. A frase diz de QUE se está falando —
+        "Anotações do clube", "Grifos" —, e um rótulo que trouxesse o número
+        dentro de si ("{{count}} anotações") seria a mesma coisa que o catálogo
+        prometendo o que a tela mostra.
+
+        ⚠️ **E NENHUMA DAS DUAS É PLACAR**: contagem de acervo é o tamanho do
+        que o clube escreveu, não a medida do que ninguém escreveu — não tem
+        total contra o qual comparar, que é o que faz um placar.
+
+        ⚠️⚠️ **O CONSUMIDOR DESTAS TRÊS CHAVES É A TAREFA 44b, e isso é decisão
+        do dono de 2026-09-22.** Elas nasceram na Tarefa 40 e a Tarefa 44 — que
+        deveria consumi-las — **parou** na regra 9: `GET /books/:bookId` não
+        devolve contagem nenhuma, e as duas listagens que teriam os dados
+        devolvem array cortado em `FIND_ROW_LIMIT = 500`. O dono abriu exceção
+        ao fora-de-escopo do MVP 3.5 e autorizou backend para isto, numa fatia
+        própria: `docs/tasks/44b-neste-livro-e-o-ultimo-grifo.md`.
+
+        ⚠️ **Até lá elas continuam SEM CONSUMIDOR de propósito** — não são
+        resto esquecido, são encomenda com endereço. Quem passar por aqui antes
+        da 44b não deve nem apagá-las nem ligá-las a uma contagem improvisada:
+        a nota nº 2 de `docs/tasks/44-o-livro.md` registra, com a medição, por
+        que o número "quase certo" que estava à mão estaria **errado**.
+      */
+      inBook: {
+        heading: 'Neste livro',
+        notes: 'Anotações do clube',
+        highlights: 'Grifos',
       },
     },
     /*
@@ -469,6 +544,20 @@ export const pt = {
           from: 'Da página',
           to: 'Até a página',
         },
+        /*
+          ⚠️ **"REFINAR" (Tarefa 40, §A.9) — O BOTÃO QUE RECOLHE AS SEIS
+          DIMENSÕES, e ele é o único rótulo desta família que não pertence a
+          uma dimensão.**
+
+          Daí ele ser folha direta de `filters`, e não de um sétimo grupo: as
+          seis chaves irmãs nomeiam POR QUE se filtra (pessoa, tipo, cor,
+          leitura, palavra, página); esta nomeia o gesto de abrir todas elas —
+          bottom sheet no celular, painel na margem no desktop (Tarefa 46).
+
+          ⚠️ **E ELA CONTINUA SENDO NAVEGAÇÃO, NÃO PERMISSÃO** (ADR 0002):
+          "refinar" fala de olhar melhor, nunca de esconder de alguém.
+        */
+        refine: 'Refinar',
       },
       item: {
         /* Só aparece quando o grifo TEM página — a ausência é silenciosa. */
@@ -507,7 +596,13 @@ export const pt = {
         title: 'Arquivar este grifo?',
         description: 'Ele sai da lista do clube. O trecho não é apagado.',
         confirm: 'Arquivar',
-        cancel: 'Cancelar',
+        /*
+          ⚠️ **"DEIXAR COMO ESTÁ" NO LUGAR DE "CANCELAR" (Tarefa 40, §A.9
+          `keepAsIs`)** — a mesma troca da anotação avulsa, e a MESMA frase de
+          propósito: é a mesma ação em duas telas, e o bloco `archive.*` já é
+          duplicado por tela porque cada uma é dona da sua confirmação.
+        */
+        cancel: 'Deixar como está',
         close: 'Fechar',
         failed: 'Não foi possível arquivar agora.',
       },
@@ -695,6 +790,37 @@ export const pt = {
         */
         dayHasNotes:
           'Um dos dias que saiu do plano já tem anotação do clube, então ele voltou para a lista. Salve de novo sem tirá-lo.',
+        /*
+          ⚠️ **QUANTOS DIAS O PLANO TEM (Tarefa 40, §A.9 `planDays`) — com par
+          de plural, porque o português muda.**
+
+          O i18next escolhe entre `days_one` e `days_other` a partir do
+          `count`; a chave que a tela escreve continua sendo `days`. O sufixo é
+          protocolo, não snake_case — e a lista de sufixos aceitos é FECHADA em
+          `_one`/`_other` por `catalogs.test.ts`.
+
+          ⚠️ **E ISTO NÃO É PLACAR**: é o tamanho do plano que o admin está
+          cadastrando, sem nada contra o que comparar. "1 dia" acontece de
+          verdade — o plano de um dia é válido.
+        */
+        days_one: '{{count}} dia',
+        days_other: '{{count}} dias',
+        /*
+          ⚠️ **"DIA 3 · TEM ANOTAÇÃO" (Tarefa 40, §A.9 `dayHasNote`) — E O NOME
+          DA CHAVE É `dayWithNote` DE PROPÓSITO.**
+
+          `dayHasNotes`, logo acima, já existe e é OUTRA coisa: o recado do 400
+          do domínio ao tentar remover do plano um dia que já tem anotação.
+          Duas chaves a um `s` de distância, uma dizendo "Dia 3 · tem anotação"
+          e a outra "Um dos dias que saiu do plano…", é erro esperando
+          acontecer — e o acusador é o teste que exige que as duas digam coisas
+          diferentes (`catalogs.test.ts`).
+
+          Esta é o RÓTULO da linha: ela avisa, antes do gesto, qual dia não sai
+          do plano de graça. Ela não cobra ninguém — fala do dia, não de quem
+          escreveu ou deixou de escrever.
+        */
+        dayWithNote: 'Dia {{number}} · tem anotação',
       },
     },
     /*
@@ -742,21 +868,65 @@ export const pt = {
       others: {
         heading: 'O que o clube escreveu',
         /*
-          ⚠️ LACUNA DE BACKEND, registrada: nenhuma rota lista os membros do
+          ⚠️ ~~LACUNA DE BACKEND, registrada: nenhuma rota lista os membros do
           clube, então o NOME de quem não é você não existe em resposta
           nenhuma da API hoje. "Alguém do clube" é honesto; uma inicial tirada
-          do UUID teria cara de inicial e não seria de ninguém.
+          do UUID teria cara de inicial e não seria de ninguém.~~
+          ~~author: 'Alguém do clube',~~
+
+          ⚠️ **A CHAVE `author` MORREU NA TAREFA 42 (decisão F), E A LACUNA QUE
+          ELA REGISTRAVA JÁ ESTAVA FECHADA HAVIA DEZESSEIS FATIAS.**
+          `GET /clubs/:clubId/members` existe desde a Tarefa 26a, e **seis**
+          telas já resolviam o nome por ele (`acervo`, `activity-feed`,
+          `book`, `busca`, `reading-marks`, `streak-bar`) — só esta e a avulsa
+          ficaram para trás, e a mesma pessoa era "Maria" no acervo e "Alguém
+          do clube" aqui.
+
+          O comentário é riscado em vez de apagado porque ele é o registro de
+          POR QUE a frase existiu, e apagá-lo faria a próxima pessoa achar que
+          nunca houve lacuna.
+
+          O genérico continua existindo, num dono só:
+          `pages.acervo.item.author.other`. Três chaves para um conceito era
+          **defeito**, e a Tarefa 40 o pinou dizendo isso — veja
+          `catalogs.test.ts`, no mapa de frases repetidas.
         */
-        author: 'Alguém do clube',
         /*
           REGRA 17: a nota da outra pessoa é só leitura, e a tela DIZ isso —
           em vez de simplesmente não ter botão, que se lê como bug.
         */
         readOnly: 'Somente leitura',
       },
+      /*
+        ⚠️ **OS GRIFOS DESTA LEITURA (Tarefa 40, §A.9) — O CABEÇALHO DE UMA
+        SEÇÃO QUE NÃO EXISTIA.**
+
+        Desde a Tarefa 38i o grifo carrega o dia do plano, e é isso que torna
+        esta seção possível: a tela do dia passa a poder mostrar os grifos
+        daquela leitura, e não os do livro inteiro. A frase fala da LEITURA, não
+        de quem grifou — nada aqui compara ninguém.
+      */
+      highlights: {
+        heading: 'Grifos desta leitura',
+      },
       save: {
         saving: 'Salvando…',
         saved: 'Salvo',
+        /*
+          ⚠️ **O "SALVO ÀS 21:42" (Tarefa 40, §A.9), E ELE É IRMÃO DO `saved`,
+          NÃO SUBSTITUTO.**
+
+          `saved` é o instante em que a gravação voltou; este é o estado que
+          fica DEPOIS, quando a pessoa para de digitar e a nota de margem
+          precisa dizer desde quando o texto está a salvo. O §A.9 escreveu
+          `{hora}`, que erra duas vezes: não é a sintaxe do i18next (sairia
+          literal na tela) e não é inglês (`CLAUDE.md`).
+
+          ⚠️ **A HORA É FORMATADA PELA TELA, nunca pelo catálogo**, e pelo fuso
+          do Settings (`CLAUDE.md`): o catálogo garante o buraco, jamais o que
+          entra nele.
+        */
+        savedAt: 'Salvo {{time}}',
         /*
           ⚠️ **A FILA OFFLINE (Tarefa 21, regra 15) — E ELA NÃO TEM TOM DE
           ERRO.** A escrita não chegou ao servidor, está guardada no aparelho e
@@ -807,8 +977,15 @@ export const pt = {
       /* O 404 do livro e a anotação que não está no acervo dele. */
       bookUnavailable: 'Não foi possível abrir este livro agora.',
       noteUnavailable: 'Não foi possível abrir esta anotação agora.',
-      /* Autoria da nota alheia — o mesmo limite de backend da Tarefa 18. */
-      author: 'Alguém do clube',
+      /*
+        ⚠️ ~~Autoria da nota alheia — o mesmo limite de backend da Tarefa 18.~~
+        ~~author: 'Alguém do clube',~~
+
+        **MORREU NA TAREFA 42 (decisão F)**, junto com a gêmea de
+        `pages.dayNote.others.author`: o "limite de backend" não existia mais
+        desde a Tarefa 26a. O nome sai do `nameOfWriter`, e o genérico tem um
+        dono só — `pages.acervo.item.author.other`.
+      */
       /* A tela DIZ que é leitura, em vez de só não ter botão (que se lê como
          bug). Leitura é sobre AUTORIA, nunca sobre quem pode ver. */
       readOnly: 'Somente leitura',
@@ -827,13 +1004,38 @@ export const pt = {
         title: 'Arquivar esta anotação?',
         description: 'Ela sai da lista do clube. O texto não é apagado.',
         confirm: 'Arquivar',
-        cancel: 'Cancelar',
+        /*
+          ⚠️ **"DEIXAR COMO ESTÁ" NO LUGAR DE "CANCELAR" (Tarefa 40, §A.9
+          `keepAsIs`) — troca de VALOR, não chave nova.**
+
+          O diálogo tem duas saídas e nenhuma delas é abandonar um formulário:
+          uma arquiva, a outra deixa a anotação onde está. "Cancelar" nomeia o
+          gesto de desistir de um preenchimento que aqui não existe; a frase
+          nova diz o que o botão FAZ. O par `confirm`/`cancel` continua com os
+          mesmos nomes de chave — quem muda é o que ele fala.
+        */
+        cancel: 'Deixar como está',
         close: 'Fechar',
         failed: 'Não foi possível arquivar agora.',
+      },
+      /*
+        ⚠️ **A PRÉVIA DO ACERVO (Tarefa 40, §A.9) — o cabeçalho que promete
+        exatamente uma coisa: que o que se vê ali é o que o CLUBE vai ver.**
+
+        ⚠️ E ela não é frase de privacidade (ADR 0002): "como vai aparecer no
+        acervo" fala de FORMA, não de quem pode ver — dentro do clube não existe
+        anotação que alguém não veja, e uma prévia que dissesse "o que os outros
+        vão poder ver" inverteria isso.
+      */
+      preview: {
+        heading: 'Como vai aparecer no acervo',
       },
       save: {
         saving: 'Salvando…',
         saved: 'Salvo',
+        /* O irmão do `saved`: o estado que FICA. A hora vem da tela, no fuso
+           do Settings — o catálogo garante o buraco, nunca o conteúdo. */
+        savedAt: 'Salvo {{time}}',
         /* O que a pessoa precisa saber é que o texto não se perdeu. */
         failed: 'Não foi possível salvar agora. Seu texto continua na tela.',
         /* 403/404 no `PATCH`: a nota deixou de ser sua, ou sumiu. */
@@ -921,9 +1123,44 @@ export const pt = {
         commentHint:
           'O que você pensou sobre esse trecho. Pode ficar em branco.',
       },
+      /*
+        ⚠️ **A PRÉVIA DO ACERVO (Tarefa 40, §A.9) — a MESMA frase da anotação
+        avulsa, e as duas chaves existem de propósito.**
+
+        Não é violação da decisão C (chave de duas telas não duplica): aquela
+        vale para frase cujo ASSUNTO é de uma tela e é lida por outra — o caso
+        do `pages.book.plan.dayOfPlan`. Aqui cada formulário é dono da própria
+        prévia, como cada um já é dono do próprio `archive.*` e do próprio
+        indicador de salvamento.
+      */
+      preview: {
+        heading: 'Como vai aparecer no acervo',
+      },
       /* REGRA 19: registrar é um BOTÃO, nunca autosave. */
       create: 'Registrar grifo',
       save: 'Salvar',
+      /*
+        ⚠️ **"RASCUNHO GUARDADO" (Tarefa 40, §A.9 `draftSaved`) — E O NOME DA
+        CHAVE NÃO É O QUE O §A.9 PEDIU. Medido, e o motivo é uma colisão:**
+
+        o mapa da Tarefa 40 manda `pages.highlightForm.save.draft`, e
+        `pages.highlightForm.save` **já existe e é uma STRING** — o rótulo do
+        botão "Salvar", lido por `highlight-form.tsx:610`. Transformá-la em
+        objeto faria `t('pages.highlightForm.save')` devolver a chave crua na
+        tela, e o conserto exigiria editar a tela, que esta fatia não toca.
+
+        ⚠️ **E A FORMA PLANA É A CONSISTENTE AQUI:** este formulário nunca teve
+        grupo `save.*` — o vocabulário de gravação dele é plano (`create`,
+        `save`, `failed`), porque ele grava por BOTÃO e não por autosave. As
+        telas que têm `save: { … }` (a do dia e a avulsa) são as que salvam
+        sozinhas. Então a chave entra plana, ao lado das irmãs, com o nome do
+        §A.9.
+
+        O que ela diz: o texto do grifo ficou guardado no aparelho, e o grifo
+        ainda não foi registrado. Nada de falha, nada de cobrança — é o mesmo
+        tom da fila offline da tela do dia.
+      */
+      draftSaved: 'Rascunho guardado',
       failed: 'Não foi possível salvar agora. O que você escreveu está aqui.',
     },
     notFound: {
@@ -953,6 +1190,16 @@ export const pt = {
       retry: 'Tentar de novo',
       saveFailed: 'Não foi possível guardar esta preferência. Tente de novo.',
       reminderTime: 'Me lembre às',
+      /*
+        ⚠️ **"SALVA SOZINHO." (Tarefa 40, §A.9 `savesItself`) — a dica do campo
+        de hora, e ela existe porque esta tela não tem botão de salvar.**
+
+        Cada controle grava ao mudar (`saveFailed` é o que aparece quando não
+        dá), e um campo sem botão ao lado faz a pessoa procurar o botão. A frase
+        fala do APARELHO fazendo o trabalho — nunca da pessoa que precisa
+        lembrar de salvar.
+      */
+      reminderTimeHint: 'Salva sozinho.',
       reminderEnabled: 'Quero o lembrete da leitura de hoje',
       notifyGroupActivity: 'Quero saber quando alguém do clube lê ou escreve',
       device: {
@@ -1126,6 +1373,39 @@ export const pt = {
     },
   },
   editor: {
+    /*
+      ⚠️ **`editor.slashHint` NÃO É EXCEÇÃO AO §10 DO `docs/EDITOR.md` — É A
+      REGRA DESTE NAMESPACE (Tarefa 40, §A.9 `editorSlashHint`).**
+
+      O §10 manda os rótulos INTERNOS do editor ficarem cravados em português
+      dentro de `packages/ui` — os tooltips da barra, os títulos do menu `/`, os
+      vazios dos popups. Esta frase não é rótulo interno.
+
+      ⚠️ **E o argumento verdadeiro é mais forte do que "quem renderiza",
+      medido na auditoria desta fatia:** `packages/ui` **não chama `t()` nenhuma
+      vez, e não pode** — são zero ocorrências, e `no-i18n.test.ts` as proíbe,
+      porque o design system não conhece idioma. Logo **todas** as folhas de
+      `editor.*` são lidas pela TELA e entram por prop: `image.uploading` e
+      `image.uploadFailed` chegam como `uploadingLabel`/`uploadFailedLabel`
+      (quem chama o `t()` é `day-note.tsx:617-618`), e `slashHint` é a terceira.
+
+      ⚠️ **A primeira versão deste comentário dizia "a mesma família do
+      `placeholder`, que o §10 já manda passar pelo `t()`" — e se apoiava numa
+      chave FANTASMA:** o §10 citava `t('editor.placeholder')`, que nunca
+      existiu. As telas usam `pages.dayNote.placeholder` e
+      `pages.freeNote.placeholder`. O §10 e o docblock da prop em
+      `RichEditor.tsx` foram corrigidos; esta frase cita os nomes que existem.
+
+      Quem renderiza, para o registro: a TELA, no rodapé da coluna de leitura
+      (`DiaDesktop`, `NovaAnotacaoDesktop`) — e tela nenhuma deste projeto tem
+      texto solto (`CLAUDE.md`).
+
+      ⚠️ Ela vive em `editor.*` e não em `pages.*` porque o namespace nomeia o
+      ASSUNTO, não o renderizador: as duas telas que a mostram são donas iguais,
+      e pôr em uma para a outra ler de lá seria eleger uma dona sem razão
+      (decisão C ao contrário).
+    */
+    slashHint: 'Digite / para inserir um bloco',
     image: {
       uploading: 'Enviando imagem…',
       uploadFailed: 'Falha ao enviar',
