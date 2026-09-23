@@ -2658,14 +2658,39 @@ describe('⚠️ ONE LINK TO THE COLLECTION, IN PLACE OF THE TWO TABS (rule 14 o
 
       ⚠️ **É a TERCEIRA aparição deste padrão neste arquivo** (as duas
       lombadas do cabeçalho, a legenda "As marcas" da Tarefa 44, e este par) e
-      a primeira em que só metade havia sido fechada. O `hidden` cru se procura
-      com fronteira de palavra: um `toContain('hidden')` casaria
-      `min-[1120px]:hidden` e daria o falso verde de novo.
+      a primeira em que só metade havia sido fechada.
+
+      ⚠️⚠️ **E A FRONTEIRA DE PALAVRA NÃO BASTAVA — corrigido na auditoria da
+      Tarefa 45.** O `/(^|\s)hidden(\s|$)/u` que estava aqui acusa `hidden`
+      cru e **deixa passar** `max-[1119px]:hidden`, `max-lg:hidden` e
+      `[@media(max-width:1119px)]:hidden` — ou seja, deixa passar justamente
+      "escondi este link no CELULAR", que é o lado que este par negativo
+      existe para fechar. Medido no `home.test.tsx`, onde a mesma regex nasceu:
+      a variante `max-[1119px]:` sobrevivia com **zero** acusadores.
+
+      A guarda passou a ser de TOKEN: toda classe do Tailwind é
+      `variante:…:utilitário`, então o utilitário é o último segmento depois de
+      `:`. Assim toda media query é pega, e `overflow-hidden` —
+      classe legítima e comum — continua em paz, que é a razão de isto nunca
+      ter sido um `toContain('hidden')`.
     */
-    expect(inBody?.parentElement?.className ?? '').not.toMatch(
-      /(^|\s)hidden(\s|$)/u,
-    );
-    expect(inRail?.className ?? '').toContain('hidden');
+    const hidesInSomeWidth = (classes: string): string[] =>
+      classes
+        .split(/\s+/u)
+        .filter((name) => name.split(':').at(-1) === 'hidden');
+
+    /*
+      ⚠️ **A LISTA EXATA, e não "nenhuma":** este link TEM de sumir acima de
+      1120px (é o par do da margem), então a resposta certa é uma classe de
+      sumiço e **exatamente** ela. Assim `hidden` cru, `max-[1119px]:hidden` e
+      qualquer terceira variante mudam a lista e ficam vermelhos, e a
+      mensagem de falha já diz qual classe apareceu.
+    */
+    expect(hidesInSomeWidth(inBody?.parentElement?.className ?? '')).toEqual([
+      'min-[1120px]:hidden',
+    ]);
+    // O da margem é o espelho: some ABAIXO do corte, e só lá ele aparece.
+    expect(hidesInSomeWidth(inRail?.className ?? '')).toEqual(['hidden']);
     expect(inRail?.className ?? '').toContain('min-[1120px]:inline-flex');
     // E o da margem está DENTRO do `<aside>`, não solto no corpo.
     expect(inRail?.closest('aside')).not.toBeNull();
@@ -3019,7 +3044,16 @@ describe('⚠️ THE SHELF OF THE HOME LINKS HERE, AND THE CLICK DOES NOT RELOAD
     const link = shelf.querySelector('a');
     expect(link).not.toBeNull();
     expect(link?.getAttribute('href')).toBe(`/books/${BOOK_ID}`);
-    expectNoGuilt();
+    /*
+      ⚠️ **A VARREDURA ESTRITA DOS DOIS LADOS DO CLIQUE, desde a Tarefa 45.**
+
+      Esta linha varre a HOME, e a home passou a mostrar a posição no plano
+      ("Dia 11 de 30", decisão F daquela fatia) — a mesma frase isenta que a
+      tela do livro já mostrava. As duas variantes são MUTUAMENTE EXCLUSIVAS:
+      deixar o `expectNoGuilt()` aqui ficaria vermelho, e é de propósito que
+      fique. Nada foi afrouxado; a exigência subiu nos dois lados.
+    */
+    expectNoGuiltWithPlanPosition();
 
     await act(async () => {
       if (link !== null) fireEvent.click(link);

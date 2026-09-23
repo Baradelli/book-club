@@ -7,9 +7,11 @@ import { StreakSeal } from '../streak-seal';
  * TAREFA 41b — O SELO DA CORRENTE DE LEITURA (o "foguinho" do ADR 0010).
  *
  * ⚠️ QUEM CONSOME (nota nº 10 da Tarefa 41a: parta do consumidor). A home, e
- * só ela: `pages/home.tsx` renderiza a `StreakBar` (`pages/streak-bar.tsx`),
- * que hoje escreve o fogo e o número por conta própria. A Tarefa 42 troca
- * aquele desenho por este componente.
+ * só ela: `pages/home.tsx` renderiza a `StreakBar` (`pages/streak-bar.tsx`).
+ * ~~que hoje escreve o fogo e o número por conta própria. A Tarefa 42 troca
+ * aquele desenho por este componente.~~ **Quem trocou foi a Tarefa 45** — não
+ * a 42, e a frase ficou no futuro por três fatias. A `StreakBar` de hoje
+ * consome este componente e não desenha marcação nenhuma por conta própria.
  *
  * As medidas, no artboard dessa tela:
  *
@@ -18,15 +20,34 @@ import { StreakSeal } from '../streak-seal';
  * | com corrente | `:97-101` — `border:1px solid var(--gold-line)`, `background:var(--gold-soft)`, `border-radius:999px`, `padding:6px 12px`, `gap:7px`; número mono 12px 500 em `--gold-strong`; rótulo 12px em `--text-muted` | `:108-112` — idem, `padding:7px 14px`, `gap:9px`, 12,5px |
  * | sem corrente | `:102-106` — `border:1px solid var(--border-soft)`, `background:var(--surface)`; número em `--text-muted` | `:113-117` — idem |
  *
- * ⚠️ **O QUE O CANVAS NÃO DECIDE, e está registrado:** nos dois artboards as
- * DUAS pílulas têm número maior que zero (11 e 4) — a de cima é "Você" e a de
- * baixo é "Bruno". O canvas desenha duas PINTURAS; ele não diz qual estado
- * ganha qual. Quem diz é a decisão da fatia ("dois estados, com corrente e
- * sem") e o código que já existe: `streak-bar.tsx:78` pinta pelo
- * `row.streak === 0`. É esse o mapeamento aqui.
+ * ⚠️⚠️ ~~**O QUE O CANVAS NÃO DECIDE, e está registrado:** nos dois artboards
+ * as DUAS pílulas têm número maior que zero (11 e 4) … O canvas desenha duas
+ * PINTURAS; ele não diz qual estado ganha qual.~~ **ELE DIZ, e este parágrafo
+ * estava errado — corrigido na auditoria da Tarefa 45.**
+ *
+ * Medido com o conteúdo impresso: a pílula de baixo é a do **Bruno**, que tem
+ * **4 dias de corrente** (`InicioDesktop.dc.html:115`), e ela é a APAGADA
+ * (`:113`: `border:1px solid #e3ddc9`, `background:#f9f5ec`). O celular
+ * desenha o mesmo (`Inicio.dc.html:102-105`). Ou seja: o que acende o selo é
+ * ser o de QUEM ESTÁ OLHANDO, não ter corrente — e o canvas diz isso com
+ * clareza, bastava ler o número ao lado da pintura.
+ *
+ * O componente não sabe quem está olhando: quem diz é a tela, pela prop
+ * `tone`. O `count > 0` que este parágrafo descrevia continua existindo como
+ * **padrão** da prop, para não quebrar chamador nenhum — ver o docblock dela.
  */
 describe('StreakSeal', () => {
-  it('lights up in gold while the chain is alive, and goes quiet at zero', () => {
+  /**
+   * ⚠️ **ISTO É O PADRÃO, E SÓ O PADRÃO — desde a auditoria da Tarefa 45.**
+   *
+   * Sem `tone` o selo acende por ter corrente, que é o desenho que este
+   * componente tinha desde a 41b e que fica exatamente onde estava para a prop
+   * nova ser acréscimo e não quebra. **Não é a regra do produto**: o canvas
+   * acende o selo de QUEM ESTÁ OLHANDO (`InicioDesktop.dc.html:113-116`
+   * desenha o Bruno, com 4 dias, apagado), e quem sabe disso é a tela. Ver o
+   * `it()` do `tone` abaixo.
+   */
+  it('lights up in gold while the chain is alive, and goes quiet at zero — BY DEFAULT', () => {
     const { container, rerender } = render(
       <StreakSeal count={11} label="dias seguidos · Você" />,
     );
@@ -57,12 +78,72 @@ describe('StreakSeal', () => {
       <StreakSeal count={11} label="dias seguidos · Você" />,
     );
 
-    expect(container.textContent).toBe('11dias seguidos · Você');
+    /*
+      ⚠️⚠️ **O ESPAÇO É UM NÓ DE TEXTO, e esta linha exigia a frase COLADA até
+      a auditoria da Tarefa 45.**
+
+      O DOM eram dois `<span>` irmãos sem nada entre eles, então o
+      `textContent` era `11dias seguidos · Você` — e o docblock da `StreakBar`
+      afirmava que quem ouve a tela lê a frase inteira. Não lia: o `gap-1.75`
+      é CSS e não chega à árvore de acessibilidade, e este próprio teste
+      pinava a forma colada.
+
+      O conserto é um espaço de verdade, **não** um `aria-label` (ele reporia
+      a informação duas vezes no DOM, que é o defeito que este componente
+      existe para não ter). Num contêiner `flex` o item anônimo só de espaço
+      não é desenhado, então a tela não mudou e a frase passou a ser a frase.
+    */
+    expect(container.textContent).toBe('11 dias seguidos · Você');
     // E o glifo NÃO fala: um ícone anunciado no meio da frase ("marcador, 11,
     // dias seguidos") atrapalha em vez de ajudar.
     expect(container.querySelector('svg')?.getAttribute('aria-hidden')).toBe(
       'true',
     );
+  });
+
+  /**
+   * ⚠️⚠️ **O `tone` — QUEM ACENDE É A TELA, e o canvas diz por quê.**
+   *
+   * `InicioDesktop.dc.html:113-116` desenha o selo do **Bruno**, que tem
+   * **4 dias de corrente**, na pílula APAGADA (`border:1px solid #e3ddc9`,
+   * `background:#f9f5ec`); `Inicio.dc.html:102-105` faz o mesmo no celular. O
+   * dourado é PERTENCIMENTO, não prêmio: `packages/ui` não sabe quem é o
+   * usuário, então a tela passa `isMine ? 'lit' : 'quiet'`.
+   *
+   * ⚠️ **As duas contagens aqui são > 0 de propósito.** Com um zero no meio, o
+   * padrão (`count > 0`) e a prop dariam a mesma resposta e este teste ficaria
+   * verde sem guardar nada — que foi exatamente como o defeito passou.
+   */
+  it('⚠️ lets the SCREEN say which seal is lit, whatever the count says', () => {
+    const { container, rerender } = render(
+      <StreakSeal count={4} label="dias seguidos · Bruno" tone="quiet" />,
+    );
+
+    const classes = () =>
+      (container.firstElementChild as HTMLElement).className.split(/\s+/u);
+
+    // Corrente VIVA e mesmo assim apagado — o padrão diria o contrário.
+    expect(classes()).toContain('border-line-soft');
+    expect(classes()).toContain('bg-surface');
+    expect(classes()).not.toContain('bg-gold-soft');
+    expect(
+      container.querySelector('svg')?.getAttribute('class')?.split(/\s+/u),
+    ).toContain('stroke-subtle');
+
+    // E o outro lado: zero dias, e aceso — porque é o SELO DE QUEM OLHA.
+    rerender(
+      <StreakSeal
+        count={0}
+        label="Comece a sua sequência hoje · Você"
+        tone="lit"
+      />,
+    );
+
+    expect(classes()).toContain('border-gold-line');
+    expect(classes()).toContain('bg-gold-soft');
+    expect(
+      container.querySelector('svg')?.getAttribute('class')?.split(/\s+/u),
+    ).toContain('stroke-gold');
   });
 
   it('⚠️ is a BOOKMARK, not a flame — the canvas draws one and the §1 wants one', () => {
@@ -149,17 +230,30 @@ describe('StreakSeal', () => {
     expect(classes).toContain('text-gold-strong');
   });
 
-  it('turns the number muted at zero, so nothing reads like a debt', () => {
+  it('⚠️ draws NO number at zero — a zero is a score read over an invitation', () => {
     /*
       ⚠️ PRINCÍPIO ANTI-CULPA (`docs/plano-clube-do-livro.md` §1): o zero é um
       estado, não uma cobrança. Nada de vermelho, nada de badge de pendência —
-      o selo apagado é a MESMA pílula, em cinza.
-    */
-    render(<StreakSeal count={0} label="ainda não começou · Bruno" />);
+      o selo é a MESMA pílula.
 
-    const classes = screen.getByText('0').className.split(/\s+/u);
-    expect(classes).toContain('text-muted');
-    expect(classes).not.toContain('text-danger');
+      ⚠️⚠️ **E ELE DEIXOU DE DESENHAR O NÚMERO, na auditoria da Tarefa 45.**
+      Até aqui este teste exigia um "0" em `text-muted`, e a tela mostrava
+      `0 Comece a sua sequência hoje · Maria`: um placar lido em voz alta
+      **antes** do convite, e a única parte daquela frase que fala de dívida.
+      O `0` saiu; a frase, que é o que o §1 quer que se leia, ficou.
+
+      A metade que este teste guardava — "nada aqui é vermelho" — continua, e
+      agora vale para o selo inteiro em vez de para um elemento só.
+    */
+    const { container } = render(
+      <StreakSeal count={0} label="ainda não começou · Bruno" />,
+    );
+
+    expect(screen.queryByText('0')).toBeNull();
+    expect(container.textContent).toBe('ainda não começou · Bruno');
+    expect(
+      (container.firstElementChild as HTMLElement).innerHTML,
+    ).not.toContain('text-danger');
   });
 
   it('is the pill of the canvas: rounded-full, hairline, and no shadow', () => {

@@ -7,7 +7,7 @@ import {
   type ClubStreaksResponse,
   clubStreaksResponseSchema,
 } from '@clube/shared';
-import { List, ListItem } from '@clube/ui';
+import { Eyebrow, List, ListItem } from '@clube/ui';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -565,9 +565,36 @@ export function ActivityFeed({ books, clubId, me }: ActivityFeedProps) {
   }
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-semibold text-muted">
-        {t('pages.home.feed.heading')}
+    /*
+      ⚠️ **O RITMO DA MARGEM MORA AQUI, E SÓ AQUI — `gap:18px`
+      (`InicioDesktop.dc.html:104`)**, que é onde esta seção passou a viver na
+      Tarefa 45. O rótulo, a corrente e as linhas são os três blocos que o
+      canvas espaça, e os três estão dentro deste `<section>`.
+
+      ⚠️ ~~Ele repete o `gap` do `MarginRail` que a envolve~~ — **repetia, e a
+      cópia de lá era LETRA MORTA**: o `MarginRail` é `flex flex-col` e esta
+      margem tem UM filho (esta seção), então o `gap` dela não espaçava nada.
+      A classe morta saiu de `home.tsx` na auditoria da fatia. Quem mudar este
+      número mudou o ritmo inteiro da margem — o acusador é
+      `home.test.tsx › ⚠️ o rótulo do feed é o Eyebrow, e a margem guarda o
+      ritmo de 18px`.
+    */
+    <section className="flex flex-col gap-[18px]">
+      {/*
+        O rótulo de seção em monoespaçada maiúscula — `Inicio.dc.html:93` e
+        `InicioDesktop.dc.html:105`, os dois em `--text-muted`. O `<h2>` fica e
+        o `Eyebrow` vai DENTRO dele: o componente é a TIPOGRAFIA do rótulo, não
+        a semântica (ele é um `<span>` de propósito).
+
+        ⚠️ **E ISTO TEM ACUSADOR DESDE A AUDITORIA DA TAREFA 45.** Medido:
+        devolver o `<h2 className="text-sm font-semibold text-muted">` que
+        estava aqui passava os 951 testes do app — o `Eyebrow` tinha entrado
+        sem ninguém guardando que ele ficasse. Quem guarda é
+        `home.test.tsx › ⚠️ o rótulo do feed é o Eyebrow, e a margem guarda o
+        ritmo de 18px`.
+      */}
+      <h2>
+        <Eyebrow>{t('pages.home.feed.heading')}</Eyebrow>
       </h2>
       {/*
         ⚠️ ACIMA das linhas, e é escolha: o foguinho é o que o dono quer ver

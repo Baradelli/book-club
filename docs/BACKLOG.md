@@ -4507,12 +4507,110 @@ API o `FilterBar` da 41 acabou expondo.
       (`:57`, `:58`, `:65`, `:125`, `:126`, `:133`). Pré-existente, **4/4 verde**, e
       `vite.config.ts` intocado (nota nº 21)._
 
-- [ ] **45** — **Início.** Correntes e feed descem para a margem; "Cadastrar o livro do mês"
+- [x] **45** — **Início.** Correntes e feed descem para a margem; "Cadastrar o livro do mês"
       sai do primeiro lugar da tela e vira link no rodapé — é ação de admin que hoje empurra
       para baixo o gesto que é a razão de o app existir. ⚠️ **O `atRisk` fica.**
       ⚠️ **E se o bloco de hoje mostrar a posição no plano, o estado dele chama
       `expectNoGuiltWithPlanPosition()`, não `expectNoGuilt()`** (mesma razão da 44: a
-      variante é o que prova que a isenção da Tarefa 40 está viva). → _a detalhar_
+      variante é o que prova que a isenção da Tarefa 40 está viva).
+      → `tasks/45-inicio.md`
+      _⚠️ **A entrada de admin tem DOIS locais de chamada, e só UM desceu.** O do estado
+      VAZIO continua botão — é ali que o mês começa ("o admin abre o app, não vê livro
+      nenhum, e o botão é a resposta", o docblock que `home.tsx` já carregava). Os dois
+      lados têm acusador: mover o do estado vazio dá 2 vermelhos, devolver o do estado
+      normal para cima do bloco de hoje dá 1._
+      _Entregue: a corrente virou o `StreakSeal` (o **último** componente da Tarefa 41b sem
+      consumidor, medido na 44b); corrente e feed vivem num `MarginRail` acima de 1120px e
+      **descem para o fluxo** abaixo dela; a posição no plano ("Dia 11 de 30") entrou na
+      home e os ~~**10**~~ **11** estados que a mostram varrem com
+      `expectNoGuiltWithPlanPosition()` (10 locais de chamada em `home.test.tsx` + 1 na
+      `book.test.tsx`; corrigido na rodada de auditoria, e é o "dez e eram onze" da 44
+      outra vez — a classificação estava certa nos dois sentidos, só o número não);
+      os três rótulos de seção viraram `Eyebrow`; e o `atRisk` ficou, com acusador.
+      **Testes: shared 607 · ui 303 · backend 1994 · app 951** (eram 607 · 303 · 1994 ·
+      942). Chunk de entrada **436.919 B** (era 435.580; **+1.339 B** — menos da metade do
+      orçamento de ~3.000 da fatia, teto 450.000, sobram **13.081** para as 46, 47 e 48) ·
+      CSS 35.445 B (era 35.279) · `book-form` 10.059 B, editor 449.522 B, `index.html`
+      1.638 B e precache 27 **inalterados**._
+      _**Os números que justificam a fatia: 13 mutantes, 13 acusados, zero sobreviventes.**
+      Os dois mais caros: (1) a posição no plano **vazando** para um estado sem dia de hoje
+      — o "Dia 0 de 3" que o §1 do plano proíbe — dá **28** vermelhos, e era o defeito que
+      nenhum pino de contagem via; (2) plantar `"11 de 30 dias"` no rótulo de um selo dá
+      **8**, inclusive no estado em que a **isenção está ligada** — que é o par positivo da
+      regra 4, e o que prova que a subtração por frase EXATA da Tarefa 40 não virou passe
+      livre. ⚠️ O fixture daquele `it()` **mudou por causa do mutante**: com a corrente
+      vazia, o texto plantado nem é renderizado e o mutante sobrevive._
+      _⚠️ **UMA CITAÇÃO DA SPEC ESTAVA ERRADA, e ela era a mais enfática da fatia.** A spec
+      afirmava, com "Medido" ao lado, que *"'Cadastrar o livro do mês' NÃO é desenhado em
+      lugar nenhum do artboard de desktop"*. **É falso:** `InicioDesktop.dc.html:98-101` o
+      desenha no pé da coluna de 680px (o `</div>` de `:102` fecha a coluna aberta em
+      `:37`), empurrado por um `flex-grow:1` em `:96`, com o mesmo tratamento do celular.
+      Medido por `grep -c "Cadastrar"` (= 1) e pelo script de citação linha a linha. A
+      entrega não muda — o rodapé nas duas larguras **é** o canvas —, mas **não há
+      divergência a declarar deste lado**. A divergência real é outra: no celular o rodapé
+      do admin fica **acima** do feed, porque o `MarginRail` vem sempre depois da coluna na
+      ordem do DOM (regra 6 da 41b), e o artboard o põe depois. Corrigido nos dois
+      documentos._
+      _⚠️ **E a decisão E estava meio certa:** o par de plural `streak.days_*` **não** é
+      idêntico a `InicioDesktop.dc.html:111` — o `:111` é só o sufixo ("dias seguidos ·
+      Você"), e o número está no `:110`, em elemento próprio. O `StreakSeal` desenha os
+      dois separados, e o catálogo não tem chave só do sufixo. **Nenhuma chave nasceu**: o
+      `replace` do i18next (`t(key, { count, replace: { count: '' } })`) apaga o buraco
+      `{{count}}` sem tocar na resolução de plural, e um acusador exige que
+      `número + rótulo` reconstrua a frase do catálogo caractere por caractere. De quebra,
+      `"Minhas"` (rótulo de chip de filtro) virou `"Você"` — a chave que o
+      `activity-feed.tsx` já usa para a mesma pessoa na mesma tela._
+      _⚠️⚠️ **RODADA DE CORREÇÃO (2026-09-23): doze afirmações derrubadas e QUATRO mutantes
+      sobreviventes, um deles um DEFEITO DE PRODUTO.** O mais caro: `lit` × `quiet` não é
+      "tem corrente" — é **"é a minha"**. `InicioDesktop.dc.html:113-116` desenha o Bruno
+      **com 4 dias** na pílula APAGADA, e o celular faz igual (`Inicio.dc.html:102-105`).
+      A entrega acendia por `count > 0`, e num clube de casal em que os dois leram **os
+      dois selos saíam dourados**; nenhum teste pegava porque o único `it()` de tom usava
+      12 × 0, onde as duas regras coincidem. **Causa raiz: um erro da spec** — a decisão B
+      afirmava que o `StreakSeal` já tinha prop `tone`, e ele **não tinha** (quem escreveu
+      leu as constantes de estilo e não a interface), ainda que a tabela da própria spec
+      dissesse "a minha" × "a do outro" duas linhas abaixo. **Decisão do dono: aceso = a
+      minha**, inclusive no zero — se o dourado chegasse com a corrente e sumisse com ela,
+      seria a moldura de PERDA que o §1 recusa e que já custou a troca da chama pelo
+      marcador. `packages/ui` foi tocado **por autorização nominal do dono**, só para a
+      prop `tone` (opcional, com o padrão preservando o desenho antigo para não quebrar
+      chamador nenhum), a prosa de acessibilidade e a prosa do `Flame`. O acusador usa
+      **duas correntes > 0** — a única forma de separar "a minha" de "tem corrente"._
+      _⚠️ **E o zero deixou de desenhar o número:** `0 Comece a sua sequência hoje · Maria`
+      punha um placar na frente de um convite. Junto, uma correção de acessibilidade: o
+      docblock da `StreakBar` afirmava que *"quem ouve a tela lê a frase sem `aria-label`
+      nenhum"*, e o DOM colava os dois `<span>` (`12dias seguidos · Você`) — o `gap` é CSS
+      e não chega à árvore de acessibilidade. O conserto é **um nó de texto de espaço**, não
+      um `aria-label` (ele reporia a informação duas vezes, o defeito que a fatia removeu);
+      num contêiner `flex` o item anônimo só de espaço não é desenhado, então a tela não
+      mudou um pixel._
+      _⚠️⚠️ **E A GUARDA DE `hidden` TINHA FALSO NEGATIVO, nos DOIS arquivos.** A regex
+      `/(^|\s)(min-\[1120px\]:)?hidden(\s|$)/u` deixa passar `max-[1119px]:hidden` —
+      literalmente "escondi a corrente e o feed no celular", que é o que o nome do `it()`
+      promete impedir (§7.9: o nome do teste é parte da guarda). Medido: **951/951, zero
+      acusadores**. A mesma forma tinha sido copiada para o `book.test.tsx` na 44b, com o
+      mesmo buraco, no par negativo do link do acervo. As duas viraram teste de **token** —
+      `c.split(':').at(-1) === 'hidden'` —, que acerta **13/13** casos contra 6/13 e 5/13
+      das regexes, pega toda media query e deixa `overflow-hidden` em paz._
+      _⚠️ **Três propriedades tinham saído SEM acusador nenhum**, e duas delas em
+      `activity-feed.tsx`, que era o único arquivo de produção do diff sem mutante: o
+      rótulo do feed ser `Eyebrow` (MC), o ritmo de 18px da margem (MD) e a posição no
+      plano ser **dourada** (ME, e o canvas a desenha assim em `Inicio.dc.html:41` e
+      `InicioDesktop.dc.html:42`). Os três ganharam acusador, 1 vermelho cada._
+      _**A rodada: 9 mutantes, 9 acusados, zero sobreviventes.** Testes **607 · 304 ·
+      1994 · 954** (eram 607 · 303 · 1994 · 951). Chunk de entrada **436.990 B** (+71 B;
+      folga **13.010 B**), CSS · `book-form` · editor · `index.html` · precache
+      **inalterados**. `schema.prisma` inalterado._
+      _⚠️ **Mais quatro correções de documento, todas da classe "medido e não medido":** a
+      nota nº 10 colava `git diff --name-only` com **5** caminhos e são **6** (faltava o
+      `docs/BACKLOG.md`); os estados com a varredura estrita são **11**, não 10; a
+      repartição das +49 linhas da home estava **subestimada 2×** num item (imports +
+      `isAdminHere()` são **+14**, não "≈7"; `rail()` são 14 brutas / **+8** líquidas, não
+      "≈10" — os totais e o limite estavam certos); e a terceira justificativa da nota nº 5
+      era **falsa** — `"…de 2026"` colado a um dígito **não** casa o `COUNTER_SHAPE`, mas
+      `Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' })` devolve `"17/09/2026"`, que
+      casa **sozinho** pelo ramo `\/`. **Quem entrar com a data precisa deste risco**, e não
+      do que estava escrito._
 - [ ] **46** — **Acervo e Busca.** As seis dimensões de filtro recolhem numa linha de resumo
       mais um botão "Refinar", que abre bottom sheet no celular e painel na margem no desktop;
       filtros ativos viram chips removíveis. ⚠️ **O modelo puro de `acervo-entries.ts` não

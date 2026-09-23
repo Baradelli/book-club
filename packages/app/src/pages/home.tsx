@@ -7,7 +7,16 @@ import {
   type PlanItemResponse,
 } from '@clube/shared';
 import { ApiError } from '@clube/shared/client';
-import { Button, cx, FOCUS_RING, List, ListItem } from '@clube/ui';
+import {
+  Button,
+  cx,
+  Eyebrow,
+  FOCUS_RING,
+  List,
+  ListItem,
+  MarginRail,
+} from '@clube/ui';
+import { Plus } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -293,17 +302,32 @@ export function HomePage() {
   const todayItem = plan.items.find((item) => item.date === today);
   const todayBook = plan.book;
 
+  /** Quem manda no livro e no plano — o guarda dos DOIS caminhos de cadastro. */
+  function isAdminHere(): boolean {
+    return (
+      activeClub !== null && isClubAdmin(activeClubState.clubs, activeClub.id)
+    );
+  }
+
   /**
-   * REGRA 1 (Tarefa 20) — A ENTRADA DO CADASTRO, **só para OWNER/ADMIN**.
+   * REGRA 1 (Tarefa 20) — A ENTRADA DO CADASTRO **NO ESTADO VAZIO**, só para
+   * OWNER/ADMIN.
    *
    * Ela mora aqui e não numa tela de administração à parte porque é daqui que
    * o mês começa: o admin abre o app, não vê livro nenhum, e o botão é a
    * resposta. Para quem é `MEMBER` ela simplesmente não existe — e a ROTA
    * recusa igual (`book-form.tsx`), senão isto seria só um botão escondido.
+   *
+   * ⚠️⚠️ **ESTE BOTÃO FICA BOTÃO, E É A DECISÃO A DA TAREFA 45.** A fatia desceu
+   * a entrada do estado NORMAL para o rodapé (ver `adminFooterLink` abaixo),
+   * porque lá ela empurrava para baixo o gesto que é a razão de o app existir.
+   * Aqui não há gesto nenhum para empurrar: a estante está vazia, e o parágrafo
+   * acima é literalmente a descrição deste botão. Descer os dois destruiria o
+   * estado que este docblock defende — e o acusador do par são os dois `it()`
+   * `(a)` e `(b)` de `home.test.tsx › o Início da Tarefa 45`.
    */
   function adminEntry(): ReactNode {
-    if (activeClub === null) return null;
-    if (!isClubAdmin(activeClubState.clubs, activeClub.id)) return null;
+    if (activeClub === null || !isAdminHere()) return null;
 
     return (
       <div className="flex">
@@ -314,6 +338,57 @@ export function HomePage() {
         >
           {t('pages.bookForm.entry.new')}
         </Button>
+      </div>
+    );
+  }
+
+  /**
+   * ⚠️ **A MESMA ENTRADA, NO RODAPÉ — decisão A da Tarefa 45.**
+   *
+   * `Inicio.dc.html:133-136` a desenha como o ÚLTIMO elemento do `<main>`, e
+   * `InicioDesktop.dc.html:98-101` a desenha no pé da coluna de 680px, depois
+   * de um `flex-grow:1` — nos dois casos um link de rótulo (mono, maiúscula,
+   * `--text-muted`) com um `+` de 14px, e **não** um botão cheio.
+   *
+   * ⚠️ **O ARTBOARD DE DESKTOP A DESENHA, SIM** — a spec da fatia dizia que
+   * não, e a nota nº 1 da tarefa corrige a medição. Ela fica nas duas larguras.
+   *
+   * ⚠️ **O GUARDA DE PAPEL VEM JUNTO (regra 9).** Um link de rodapé sem
+   * `isClubAdmin` seria o mesmo "botão escondido" que o docblock acima recusa
+   * por escrito — e a rota continua recusando igual. O acusador é
+   * `home.test.tsx › ⚠️ não mostra o cadastro — nem link, nem botão — para quem
+   * é MEMBER`.
+   *
+   * ⚠️ **`Link` DO ROTEADOR, e não o `useNavigate` do botão que ele substitui:**
+   * um link de verdade tem endereço, Ctrl+clique e "abrir em nova aba"; a
+   * navegação continua sendo do PWA, sem recarregar o shell.
+   */
+  function adminFooterLink(): ReactNode {
+    if (activeClub === null || !isAdminHere()) return null;
+
+    return (
+      <div className="flex">
+        <Link
+          className={cx(
+            /*
+              `gap:9px` e o ícone de 14px são de `Inicio.dc.html:133-134`;
+              `py-1.5` são os 6px de recuo vertical da mesma linha (o desktop
+              usa 10px em cima e 24px embaixo — divergência declarada, do
+              tamanho de um recuo).
+            */
+            'inline-flex items-center gap-2.25 rounded-control py-1.5 text-muted',
+            FOCUS_RING,
+          )}
+          to={bookNewPath(activeClub.id)}
+        >
+          {/*
+            ⚠️ **COMPONENTE DO `lucide-react`, NUNCA `<svg>` inline** — é o que
+            o `adr-0002-iconography.test.ts` cobra. Ele troca de lugar com o
+            `Flame` que a `StreakBar` deixou de importar nesta mesma fatia.
+          */}
+          <Plus aria-hidden="true" className="size-3.5 shrink-0" />
+          <Eyebrow>{t('pages.bookForm.entry.new')}</Eyebrow>
+        </Link>
       </div>
     );
   }
@@ -404,18 +479,62 @@ export function HomePage() {
 
     return (
       <>
-        {adminEntry()}
         {/*
           REGRA 15 e DECISÃO C: o atalho aparece SÓ quando existe item do plano
           com a data de hoje. Um atalho que abre "nada" é pior que a ausência
           dele — e a ausência dele é o anti-culpa: sem trecho hoje, a home não
           diz nada sobre isso.
+
+          ⚠️ **E ELE É O PRIMEIRO DA TELA DESDE A TAREFA 45.** Até aqui a
+          entrada de cadastro do admin vinha acima dele — uma ação de
+          administração empurrando para baixo o gesto que é a razão de o app
+          existir. Ela desceu para o rodapé (`adminFooterLink`).
         */}
         {todayItem !== undefined && todayBook !== null ? (
           <section className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold text-muted">
-              {t('pages.home.today.heading')}
-            </h2>
+            {/*
+              ⚠️⚠️ **"Dia 11 de 30" — A POSIÇÃO NO PLANO, E ELA É A ÚNICA FRASE
+              DO APP ISENTA DA VARREDURA DE PLACAR.**
+
+              `Inicio.dc.html:41` e `InicioDesktop.dc.html:42` a desenham em
+              dourado, na linha de mono que abre o bloco de hoje. Ela diz ONDE a
+              leitura de hoje está no mês; o número **não muda com o que
+              ninguém fez**, e é por isso que não é placar (decisão do dono,
+              `docs/BACKLOG.md`). A isenção é NOMINAL, por chave, em
+              `COUNTER_EXEMPT_KEYS` — e os estados desta tela que a mostram
+              varrem com `expectNoGuiltWithPlanPosition()`, que exige que a
+              subtração aconteça de verdade.
+
+              ⚠️ **A CHAVE É A DO PLANO, e ela é reusada de propósito:**
+              `pages.book.plan.dayOfPlan` tem dono declarado no próprio
+              catálogo (*"o Início e a tela do dia a LEEM deste namespace, sem
+              duplicar"*). Uma segunda frase dizendo a mesma posição divergiria
+              na primeira correção — o defeito que o `GUILT_TERMS` viveu até a
+              Tarefa 19.
+
+              ⚠️ **ELA SÓ EXISTE DENTRO DESTE RAMO**, que é o que tem dia de
+              hoje. Um "Dia 0 de 30" num plano sem hoje seria o vazio anunciado
+              que o §1 do plano proíbe — e seria um contador de verdade
+              entrando pela porta da isenção. O acusador do lado inverso é
+              `⚠️ não anuncia posição nenhuma quando não há leitura de hoje`.
+
+              ⚠️ **DIVERGÊNCIA DECLARADA:** o canvas emparelha a posição com a
+              DATA por extenso ("Sexta-feira · 18 set 2026", `:40`), e a data
+              não entrou — ela pediria um formatador de `Intl` novo e não está
+              na Definição de pronto desta fatia. A posição fica ao lado do
+              rótulo da seção, que é dourado no canvas (`:50`) como ela.
+            */}
+            <div className="flex items-baseline justify-between gap-3">
+              <h2>
+                <Eyebrow tone="gold">{t('pages.home.today.heading')}</Eyebrow>
+              </h2>
+              <Eyebrow className="shrink-0" tone="gold">
+                {t('pages.book.plan.dayOfPlan', {
+                  number: plan.items.indexOf(todayItem) + 1,
+                  total: plan.items.length,
+                })}
+              </Eyebrow>
+            </div>
             <Link
               className={cx(
                 'flex min-h-14 flex-col justify-center gap-0.5 rounded-control border border-line bg-surface p-4',
@@ -442,8 +561,14 @@ export function HomePage() {
         ) : null}
 
         <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-muted">
-            {t('pages.home.shelf.heading')}
+          {/*
+            O rótulo de seção em monoespaçada maiúscula — `Inicio.dc.html:66`,
+            `--text-muted`, que é o tom `muted` do `Eyebrow`. O da leitura de
+            hoje é dourado (`:50`) porque é o que é de HOJE; este só nomeia uma
+            seção (decisão I da Tarefa 41b).
+          */}
+          <h2>
+            <Eyebrow>{t('pages.home.shelf.heading')}</Eyebrow>
           </h2>
           {/*
             ⚠️ **A ENTRADA DA BUSCA (Tarefa 29), e ela mora AQUI porque a busca
@@ -502,24 +627,56 @@ export function HomePage() {
           </List>
         </section>
 
+        {adminFooterLink()}
+      </>
+    );
+  }
+
+  /**
+   * ⚠️ **A MARGEM DA HOME — decisão C da Tarefa 45.**
+   *
+   * `InicioDesktop.dc.html:104` é a coluna de 320px com `border-left` e
+   * `padding-left:40px`, e ela contém o rótulo (`:105`), as correntes
+   * (`:107-118`) e o feed (`:120-149`) — as três coisas que até aqui viviam no
+   * fim do corpo. Quem tem as medidas e o corte é o `MarginRail` de
+   * `@clube/ui`; ritmo de conteúdo é da tela (o componente não fixa nenhum).
+   *
+   * ⚠️ **O RITMO DE 18px NÃO ESTÁ AQUI, e a primeira entrega desta fatia dizia
+   * que estava.** Medido na auditoria: o `MarginRail` é `flex flex-col` e esta
+   * margem tem **UM** filho (o `ActivityFeed`), então um `gap` nela não espaça
+   * coisa nenhuma — quem espaça o rótulo, a corrente e as linhas é o
+   * `<section>` de `activity-feed.tsx`, que é onde os três moram. A classe
+   * morta saiu em vez de a prosa ganhar uma ressalva: código que não faz nada
+   * e um docblock que diz que faz é a combinação que o próximo agente copia.
+   *
+   * ⚠️ **NO CELULAR NADA DESAPARECE.** O `MarginRail` é montado **sempre**: o
+   * que muda abaixo de 1120px é que ele perde o filete e a largura e desce para
+   * o fluxo. É media query e só — nenhuma ramificação por dispositivo (decisão
+   * G da 41b). O acusador da VISIBILIDADE, e não da presença no DOM, é
+   * `home.test.tsx › ⚠️ põe corrente e feed na MARGEM, e não os esconde no
+   * celular`: um `hidden` cru em qualquer elo do caminho fica vermelho, com
+   * fronteira de palavra para `min-[1120px]:hidden` não dar falso verde.
+   *
+   * ⚠️ **AS CONDIÇÕES DE MONTAGEM SÃO AS MESMAS DE ANTES** (Tarefa 35, decisão
+   * F), e é por isso que elas se repetem aqui: é a estante que dá o NOME de
+   * cada livro do feed, e num clube sem livro nenhum não existe atividade
+   * possível — todo `ActivityEvent` carrega um `bookId`. Fora desses casos o
+   * `rail` é **ausente**, não vazio: um `<aside>` que nascesse sempre
+   * desenharia um filete vertical solto e um terço de tela em branco no estado
+   * de carregamento (é o que o `ScreenProps.rail` documenta).
+   *
+   * ⚠️ **SEM `aria-label` NA REGIÃO**, que o `MarginRail` declara opcional:
+   * nomeá-la pediria uma chave NOVA, e nenhuma nasce nesta fatia. O que se
+   * perde é o atalho de pular a região, não informação — o rótulo da seção está
+   * em texto dentro dela. É o mesmo registro das Tarefas 43 e 44.
+   */
+  function rail(): ReactNode {
+    if (activeClub === null) return undefined;
+    if (shelf.status !== 'ready' || shelf.books.length === 0) return undefined;
+
+    return (
+      <MarginRail className="pt-4 min-[1120px]:pt-0">
         {/*
-          ⚠️ **O FEED VEM DEPOIS DA ESTANTE, E SÓ NESTE RAMO** (Tarefa 35).
-
-          A ordem é a do produto: o atalho de hoje é por que a pessoa abriu o
-          app, a estante é o que o clube está lendo, e o feed é o acessório
-          (decisão F). Ele em cima empurraria o gesto de um toque para baixo da
-          dobra num celular.
-
-          ⚠️ **E ELE SÓ MONTA COM A ESTANTE PRONTA E NÃO VAZIA, por duas razões
-          medidas.** A primeira é de conteúdo: é a estante que dá o NOME de cada
-          livro do feed (medição 1 da spec), e um feed montado antes dela diria
-          "Livro do clube" em toda linha por um instante. A segunda é de escopo:
-          num clube sem livro nenhum não existe atividade possível — todo
-          `ActivityEvent` carrega um `bookId` —, então a seção seria uma
-          promessa de estado vazio embaixo de outro estado vazio. Com o feed
-          aqui, as DUAS requisições novas são, por construção, incapazes de
-          atrasar a estante.
-
           O `books` vai por prop, e não por uma segunda requisição: a home já
           tem a lista.
         */}
@@ -528,7 +685,7 @@ export function HomePage() {
           clubId={activeClub.id}
           me={activeClubState.me}
         />
-      </>
+      </MarginRail>
     );
   }
 
@@ -544,7 +701,7 @@ export function HomePage() {
     `Screen`, e a guarda é sobre o `<h1`, não sobre o nome de uma função.
   */
   return (
-    <Screen spacing="airy" title={t('pages.home.title')}>
+    <Screen rail={rail()} spacing="airy" title={t('pages.home.title')}>
       {body()}
     </Screen>
   );

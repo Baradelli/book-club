@@ -20,6 +20,7 @@ import {
   DANGER_STYLE,
   expectNoGuilt,
   expectNoGuiltInHtml,
+  expectNoGuiltWithPlanPosition,
   stripComments,
 } from './anti-guilt-dom';
 import {
@@ -611,7 +612,7 @@ describe("today's reading is a one-tap shortcut (rule 15)", () => {
       deixou 3 dias para trás" nasceria, e era o único que a varredura não
       visitava.
     */
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
 
     await act(async () => {
       fireEvent.click(link);
@@ -694,7 +695,7 @@ describe("today's reading is a one-tap shortcut (rule 15)", () => {
       // ofereceria o do dia 5 — o de amanhã, para quem está escrevendo.
       expect(link.textContent).toContain('A vespera');
       expect(link.getAttribute('href')).toBe('/books/b-hobbit/days/p-vespera');
-      expectNoGuilt();
+      expectNoGuiltWithPlanPosition();
     } finally {
       vi.useRealTimers();
     }
@@ -744,7 +745,7 @@ describe("today's reading is a one-tap shortcut (rule 15)", () => {
     // E o livro futuro não é perguntado: ele não é "o livro de agora", e pedir
     // o plano dele é gastar a metade do orçamento com quem não pode responder.
     expect(planRequests(calls)).toEqual(['https://api.teste/books/b-agora']);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('asks the NEXT book when the first non-future one has no reading today', async () => {
@@ -790,7 +791,7 @@ describe("today's reading is a one-tap shortcut (rule 15)", () => {
       'https://api.teste/books/b-corrente',
       'https://api.teste/books/b-anterior',
     ]);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('spends only ONE request when the first non-future book already has today (decision E)', async () => {
@@ -817,7 +818,7 @@ describe("today's reading is a one-tap shortcut (rule 15)", () => {
     // A segunda requisição é CONDICIONAL, e é ela que mantém o custo em uma no
     // caso comum.
     expect(planRequests(calls)).toEqual(['https://api.teste/books/b-corrente']);
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('never asks for more than TWO plans, however long the shelf is (decision E)', async () => {
@@ -1964,7 +1965,7 @@ describe('the activity feed of the club (rules 1 to 10)', () => {
     */
     expect(screen.queryByText(pt.pages.home.feed.empty)).toBeNull();
     expect(readableText()).not.toContain('Boom');
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('⚠️ members that fail do not take the FEED down (rule 8)', async () => {
@@ -2120,7 +2121,7 @@ describe('the activity feed of the club (rules 1 to 10)', () => {
     expect(memberRequests(calls)).toHaveLength(1);
     expect(readableText()).not.toContain('Boom do feed');
     expect(readableText()).not.toContain('Boom dos membros');
-    expectNoGuilt();
+    expectNoGuiltWithPlanPosition();
   });
 
   it('⚠️ does not ask for the feed when the SHELF is not there (the inversion of decision F)', async () => {
@@ -2244,6 +2245,30 @@ describe('the FIRST FRAME of a session never shows the empty state', () => {
 describe('a corrente de leitura (ADR 0010)', () => {
   const MARIA_ID = 'u-maria';
 
+  /**
+   * ⚠️ **O SELO SEPARA O NÚMERO DO RESTO DA FRASE — Tarefa 45, decisão B — MAS
+   * A FRASE CONTINUA SENDO A FRASE.**
+   *
+   * O canvas desenha os dois em elementos distintos
+   * (`InicioDesktop.dc.html:110` e `:111`), e é assim que o `StreakSeal` é
+   * feito: `count` num `<span>`, `label` no outro.
+   *
+   * ⚠️⚠️ ~~`textContent` cola irmãos sem separador, então a frase do catálogo
+   * ("12 dias seguidos") **não** aparece inteira no DOM~~ — **era verdade, e
+   * era um defeito, corrigido na auditoria da fatia.** O `gap` que dá o ar
+   * entre os dois é CSS e não chega à árvore de acessibilidade: quem OUVIA a
+   * tela ouvia `12dias seguidos`. Hoje o selo emite um nó de texto de verdade
+   * entre eles (um item anônimo só de espaço, que o `flex` não desenha), e a
+   * frase do DOM voltou a ser a frase do catálogo, caractere por caractere.
+   *
+   * Por isso este helper **interpola** em vez de subtrair: é a asserção mais
+   * forte disponível, e a que diz o que a pessoa lê e ouve.
+   */
+  function daysPhrase(count: number): string {
+    const key = count === 1 ? 'days_one' : 'days_other';
+    return pt.pages.home.streak[key].replace('{{count}}', String(count));
+  }
+
   it('mostra a corrente de cada pessoa do clube', async () => {
     await renderHome({
       streaks: {
@@ -2256,13 +2281,9 @@ describe('a corrente de leitura (ADR 0010)', () => {
     });
 
     await waitFor(() => {
-      expect(readableText()).toContain(
-        pt.pages.home.streak.days_other.replace('{{count}}', '12'),
-      );
+      expect(readableText()).toContain(daysPhrase(12));
     });
-    expect(readableText()).toContain(
-      pt.pages.home.streak.days_other.replace('{{count}}', '30'),
-    );
+    expect(readableText()).toContain(daysPhrase(30));
   });
 
   /**
@@ -2279,9 +2300,7 @@ describe('a corrente de leitura (ADR 0010)', () => {
     });
 
     await waitFor(() => {
-      expect(readableText()).toContain(
-        pt.pages.home.streak.days_one.replace('{{count}}', '1'),
-      );
+      expect(readableText()).toContain(daysPhrase(1));
     });
     expect(readableText()).not.toContain(
       pt.pages.home.streak.days_other.replace('{{count}}', '1'),
@@ -2317,9 +2336,7 @@ describe('a corrente de leitura (ADR 0010)', () => {
     });
 
     await waitFor(() => {
-      expect(readableText()).toContain(
-        pt.pages.home.streak.days_other.replace('{{count}}', '12'),
-      );
+      expect(readableText()).toContain(daysPhrase(12));
     });
     expect(readableText()).not.toContain(pt.pages.home.streak.atRisk);
   });
@@ -2371,5 +2388,615 @@ describe('a corrente de leitura (ADR 0010)', () => {
     });
     const streaks = requestsTo(calls, '/streaks')[0];
     expect(new URL(streaks?.url ?? '').pathname).toBe('/clubs/c-casal/streaks');
+  });
+});
+
+/**
+ * ============================================================================
+ * TAREFA 45 — O INÍCIO: o selo, a margem, e o admin fora da frente
+ * ============================================================================
+ *
+ * As quatro propriedades que esta fatia entrega, e cada uma tem o mutante que a
+ * provou (o relatório da fatia traz a tabela):
+ *
+ * 1. **a entrada de admin desce** — no estado NORMAL ela é link de rodapé; no
+ *    estado VAZIO ela **continua botão**, porque é lá que o mês começa;
+ * 2. **a corrente é o `StreakSeal`** de `packages/ui` (Tarefa 41b), que até
+ *    aqui era o último componente daquela fatia sem consumidor;
+ * 3. **corrente e feed vivem na MARGEM** acima de 1120px e **descem para o
+ *    fluxo** abaixo dela — media query, nunca condição de render;
+ * 4. **a posição no plano entra** ("Dia 11 de 30"), e os estados que a mostram
+ *    varrem com `expectNoGuiltWithPlanPosition()`.
+ */
+describe('o Início da Tarefa 45', () => {
+  const ADMIN_ENTRY = pt.pages.bookForm.entry.new;
+
+  /** Um plano cujo item de HOJE é o segundo de três — posição "Dia 2 de 3". */
+  function planWithToday(): Reply {
+    return bookWithPlanReply(aBook({ id: 'b-hobbit' }), [
+      aPlanItem({ id: 'p-ontem', date: otherDay(), order: 1 }),
+      aPlanItem({
+        id: 'p-hoje',
+        date: today(),
+        order: 2,
+        title: 'Cap. 3 — A promessa',
+        reference: 'p. 45-62',
+      }),
+      aPlanItem({ id: 'p-amanha', date: '2099-01-01', order: 3 }),
+    ]);
+  }
+
+  /** A frase da posição, montada como a tela a monta — chave, nunca literal. */
+  function dayOfPlan(number: number, total: number): string {
+    return pt.pages.book.plan.dayOfPlan
+      .replace('{{number}}', String(number))
+      .replace('{{total}}', String(total));
+  }
+
+  /**
+   * ⚠️ **OS DOIS LADOS DA DECISÃO A, E ELES SÃO UM PAR.**
+   *
+   * `home.tsx` chamava a mesma `adminEntry()` em DOIS lugares: dentro do estado
+   * vazio (`shelf.books.length === 0`) e no estado normal, **acima** do bloco
+   * de hoje. Só o segundo desce para o rodapé e vira link — mover os dois
+   * destruiria o que o docblock daquela função defende por escrito: *"é daqui
+   * que o mês começa: o admin abre o app, não vê livro nenhum, e o botão é a
+   * resposta"*.
+   *
+   * ⚠️ **Guardar metade do par é o defeito que este bloco já pagou TRÊS vezes**
+   * (as duas lombadas e a legenda na Tarefa 44, o link do acervo na 44b). Daí
+   * os dois `it()` abaixo, e a asserção de POSIÇÃO no primeiro: sem ela, o link
+   * voltar para cima da leitura de hoje passaria verde.
+   */
+  it('⚠️ (a) com estante cheia, o cadastro é LINK e vem DEPOIS da estante', async () => {
+    await renderHome({ book: planWithToday() });
+
+    const link = await screen.findByRole('link', { name: ADMIN_ENTRY });
+    expect(link.getAttribute('href')).toBe(`/clubs/${CASAL.id}/books/new`);
+    // Não é mais botão: o `Button` empurrava o gesto de um toque para baixo.
+    expect(screen.queryByRole('button', { name: ADMIN_ENTRY })).toBeNull();
+
+    /*
+      ⚠️ **A POSIÇÃO, e ela é o acusador do mutante (ii).** O link tem de vir
+      DEPOIS do atalho de hoje E depois da estante — é isso que "rodapé"
+      significa, e é o que se perde quando alguém o devolve para cima.
+    */
+    const shortcut = screen.getByRole('link', {
+      name: new RegExp(pt.pages.home.today.write, 'u'),
+    });
+    const shelf = screen.getByRole('list', { name: pt.pages.home.shelf.label });
+    for (const earlier of [shortcut, shelf]) {
+      // `FOLLOWING` exato: o link vem depois E não está DENTRO de nenhum dos
+      // dois (aí o valor traria também o bit de `CONTAINED_BY`).
+      expect(earlier.compareDocumentPosition(link)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    }
+
+    expectNoGuiltWithPlanPosition();
+  });
+
+  it('⚠️ (b) com estante VAZIA, o cadastro continua BOTÃO — é onde o mês começa', async () => {
+    await renderHome({ shelf: [booksReply([])] });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', { name: ADMIN_ENTRY }),
+      ).not.toBeNull();
+    });
+    // E não há um SEGUNDO caminho: o rodapé daquele estado não existe.
+    expect(screen.queryByRole('link', { name: ADMIN_ENTRY })).toBeNull();
+    expectNoGuilt();
+  });
+
+  /**
+   * ⚠️ **REGRA 9 — O PAPEL NÃO MUDOU DE LUGAR JUNTO COM O BOTÃO.**
+   *
+   * `adminEntry()` só existe para `OWNER`/`ADMIN`, *"e a ROTA recusa igual
+   * (`book-form.tsx`), senão isto seria só um botão escondido"* — a frase é do
+   * docblock de `home.tsx`. Um link de rodapé sem o guarda de papel seria o
+   * mesmo defeito com marcação nova.
+   */
+  it('⚠️ não mostra o cadastro — nem link, nem botão — para quem é MEMBER', async () => {
+    await renderHome({
+      clubs: [{ ...CASAL, role: 'MEMBER' }],
+      book: planWithToday(),
+    });
+
+    await screen.findByRole('list', { name: pt.pages.home.shelf.label });
+    expect(screen.queryByRole('link', { name: ADMIN_ENTRY })).toBeNull();
+    expect(screen.queryByRole('button', { name: ADMIN_ENTRY })).toBeNull();
+    expectNoGuiltWithPlanPosition();
+  });
+
+  /**
+   * ⚠️ **DECISÃO B — A CORRENTE É O `StreakSeal`, e ele era o ÚLTIMO
+   * componente da Tarefa 41b sem consumidor** (medido na 44b).
+   *
+   * ⚠️ **A RECONSTRUÇÃO É O QUE FAZ ESTA ASSERÇÃO VALER.** O canvas separa o
+   * NÚMERO (`InicioDesktop.dc.html:110`, mono, dourado) do RESTO DA FRASE
+   * (`:111`, "dias seguidos · Você"), e o catálogo tem **uma** frase com o
+   * número dentro (`'{{count}} dias seguidos'`). A tela compõe os dois sem
+   * chave nova; este teste exige que a composição **volte a ser** a frase do
+   * catálogo, caractere por caractere. Se o par de plural deixar de começar
+   * pelo `{{count}}`, isto fica vermelho — em vez de a tela passar a escrever
+   * meia frase em silêncio.
+   */
+  it('⚠️ desenha a corrente com o StreakSeal, e o número reconstrói a frase do catálogo', async () => {
+    await renderHome({
+      streaks: {
+        status: 200,
+        body: [
+          { userId: ME_ID, streak: 12, readToday: true },
+          { userId: MARIA, streak: 1, readToday: true },
+        ],
+      },
+    });
+
+    const list = await screen.findByRole('list', {
+      name: pt.pages.home.streak.mine,
+    });
+    const seals = Array.from(list.querySelectorAll('li'));
+    expect(seals).toHaveLength(2);
+
+    // O glifo é o MARCADOR DE LIVRO do `StreakSeal`, nunca a chama de antes
+    // (a metáfora de perda do Duolingo, que o §1 do plano recusa).
+    for (const seal of seals) {
+      const glyph = seal.querySelector('svg');
+      expect(glyph?.getAttribute('class')).toContain('lucide-bookmark');
+      expect(glyph?.getAttribute('class')).not.toContain('lucide-flame');
+    }
+
+    const [mine, hers] = seals;
+    /*
+      ⚠️⚠️ **A RECONSTRUÇÃO É A FRASE INTEIRA, COM O ESPAÇO — e o espaço é a
+      correção da rodada de auditoria (achado M4).**
+
+      Até aqui esta linha exigia `"12" + "dias seguidos · Você"` **colados**,
+      porque era isso que o DOM tinha: dois `<span>` irmãos sem nó de texto
+      entre eles. O `gap-1.75` do selo dá o ar na TELA e não existe para quem
+      OUVE — o `textContent` era `"12dias seguidos · Você"`, e o docblock da
+      `StreakBar` afirmava que a frase era lida inteira. Não era.
+
+      O conserto é um nó de texto de verdade entre os dois `<span>` (um
+      `{' '}`), que num contêiner `flex` **não é desenhado** (o CSS descarta o
+      item anônimo só de espaço) e entra no texto. Por isso a asserção agora é
+      a frase do catálogo INTERPOLADA, caractere por caractere — a forma mais
+      forte, e a que diz o que a pessoa de fato lê e ouve.
+    */
+    expect(mine?.textContent).toBe(
+      `${pt.pages.home.streak.days_other.replace('{{count}}', '12')} · ${pt.pages.acervo.item.author.you}`,
+    );
+    expect(hers?.textContent).toBe(
+      `${pt.pages.home.streak.days_one.replace('{{count}}', '1')} · Maria`,
+    );
+
+    expectNoGuilt();
+  });
+
+  /**
+   * ⚠️ **A COR NUNCA É O ÚNICO PORTADOR** — a mesma regra que o `PresenceMark`
+   * cumpre na Tarefa 44 e que `filter-bar.test.tsx` cobra desde a 41a.
+   *
+   * Aqui os dois tons pintam de formas diferentes (`bg-gold-soft` × `bg-surface`)
+   * **e** dizem coisas diferentes em texto: quem tem corrente lê o número de
+   * dias, quem está em zero lê o convite. Quem imprimiu a tela, ou não
+   * distingue o dourado do creme, continua com a informação inteira.
+   */
+  it('⚠️ distingue o selo aceso do apagado SEM depender da cor', async () => {
+    await renderHome({
+      streaks: {
+        status: 200,
+        body: [
+          { userId: ME_ID, streak: 12, readToday: true },
+          { userId: MARIA, streak: 0, readToday: false },
+        ],
+      },
+    });
+
+    const list = await screen.findByRole('list', {
+      name: pt.pages.home.streak.mine,
+    });
+    const [lit, quiet] = Array.from(list.querySelectorAll('li')).map(
+      (item) => item.firstElementChild as HTMLElement,
+    );
+
+    const classesOf = (element?: HTMLElement): string[] =>
+      (element?.className ?? '').split(/\s+/u);
+    expect(classesOf(lit)).toContain('bg-gold-soft');
+    expect(classesOf(quiet)).toContain('bg-surface');
+    expect(classesOf(quiet)).not.toContain('bg-gold-soft');
+
+    /*
+      ⚠️ **E A METADE QUE NÃO É COR.** Sem ela, trocar os dois mapas de classe
+      por um só deixaria a tela indistinguível para quem não vê a diferença de
+      matiz — e o teste acima continuaria sendo sobre classes, não sobre
+      informação.
+    */
+    expect(lit?.textContent).toContain(
+      pt.pages.home.streak.days_other.replace('{{count}} ', ''),
+    );
+    expect(quiet?.textContent).toContain(pt.pages.home.streak.none);
+    expect(quiet?.textContent).not.toContain(
+      pt.pages.home.streak.days_other.replace('{{count}} ', ''),
+    );
+
+    expectNoGuilt();
+  });
+
+  /**
+   * ⚠️⚠️ **O TOM DIZ "ESTA É A MINHA", NÃO "ESTA TEM CORRENTE" — e este `it()`
+   * nasceu de um DEFEITO DE PRODUTO que a primeira entrega da fatia deixou
+   * passar.**
+   *
+   * O canvas é explícito, e foi medido com o conteúdo impresso:
+   * `InicioDesktop.dc.html:113` desenha o selo do **Bruno** com
+   * `border:1px solid #e3ddc9` e `background:#f9f5ec` — **apagado** —, e o
+   * `:116` diz `dias seguidos · Bruno`. O Bruno tem **4** dias de corrente
+   * (`:115`). Ou seja: o que acende o selo é ser o MEU, não ter corrente. O
+   * celular desenha o mesmo (`Inicio.dc.html:102-105`).
+   *
+   * A entrega acendia por `count > 0` (`streak-seal.tsx`), e num clube de
+   * casal em que os dois leram **os dois selos saíam dourados** — a distinção
+   * que o artboard desenha simplesmente sumia. Nenhum teste pegava: o único
+   * `it()` de tom usava 12 × **0**, e nesse par "a minha" e "tem corrente"
+   * dão a mesma resposta.
+   *
+   * ⚠️ **POR ISSO AS DUAS CORRENTES SÃO > 0 AQUI.** É a única forma de separar
+   * as duas regras. Com um zero no fixture o mutante volta a sobreviver.
+   */
+  it('⚠️ acende o selo QUE É MEU — duas correntes vivas, e só uma dourada', async () => {
+    await renderHome({
+      streaks: {
+        status: 200,
+        body: [
+          { userId: ME_ID, streak: 12, readToday: true },
+          { userId: MARIA, streak: 4, readToday: true },
+        ],
+      },
+    });
+
+    const list = await screen.findByRole('list', {
+      name: pt.pages.home.streak.mine,
+    });
+    const [mine, hers] = Array.from(list.querySelectorAll('li')).map(
+      (item) => item.firstElementChild as HTMLElement,
+    );
+
+    const classesOf = (element?: HTMLElement): string[] =>
+      (element?.className ?? '').split(/\s+/u);
+    expect(classesOf(mine)).toContain('border-gold-line');
+    expect(classesOf(mine)).toContain('bg-gold-soft');
+    // ⚠️ A DELA TEM CORRENTE VIVA (4 dias) E MESMO ASSIM É A PÍLULA APAGADA.
+    expect(classesOf(hers)).toContain('border-line-soft');
+    expect(classesOf(hers)).toContain('bg-surface');
+    expect(classesOf(hers)).not.toContain('bg-gold-soft');
+
+    // O glifo acompanha o tom, com a mesma regra.
+    const glyphOf = (element?: HTMLElement): string[] =>
+      (element?.querySelector('svg')?.getAttribute('class') ?? '').split(
+        /\s+/u,
+      );
+    expect(glyphOf(mine)).toContain('stroke-gold');
+    expect(glyphOf(hers)).toContain('stroke-subtle');
+
+    /*
+      ⚠️ **E A DISTINÇÃO SOBREVIVE SEM A COR** — a mesma propriedade que o
+      `PresenceMark` cumpre na Tarefa 44. Quem imprimiu a tela, ou não
+      distingue o dourado do creme, continua sabendo qual linha é a sua:
+      quem fala é o NOME, em texto de verdade.
+    */
+    expect(mine?.textContent).toContain(pt.pages.acervo.item.author.you);
+    expect(hers?.textContent).toContain('Maria');
+    expect(hers?.textContent).not.toContain(pt.pages.acervo.item.author.you);
+
+    expectNoGuilt();
+  });
+
+  /**
+   * ⚠️⚠️ **O CASO DO ZERO, DECIDIDO COM O §1 NA MÃO — e são DUAS decisões numa
+   * tela só.**
+   *
+   * **(1) O meu zero é o selo ACESO.** Se o dourado só chegasse com a corrente
+   * viva, ele passaria a significar "você foi bem", e sumir dele no dia em que
+   * a corrente quebra seria exatamente a moldura de PERDA que o §1 do
+   * `docs/plano-clube-do-livro.md` recusa — a chama do Duolingo que o glifo
+   * deste selo já foi trocado para não ser. Com o tom preso a QUEM É, o
+   * dourado não carrega juízo nenhum: ele é a placa que diz "esta linha é
+   * você", e diz isso no primeiro dia igual ao décimo segundo.
+   *
+   * **(2) O zero não é desenhado como número.** "0 · Comece a sua sequência
+   * hoje · Você" é um placar lido em voz alta antes do convite; o `0` é a
+   * única parte da frase que fala de dívida. O selo passa a desenhar o número
+   * **só quando ele existe**, e quem fica é a frase — que é o que o §1 quer
+   * que se leia.
+   */
+  it('⚠️ o meu ZERO também é o selo aceso, e ele não desenha um número', async () => {
+    await renderHome({
+      streaks: {
+        status: 200,
+        body: [
+          { userId: ME_ID, streak: 0, readToday: false },
+          { userId: MARIA, streak: 4, readToday: true },
+        ],
+      },
+    });
+
+    const list = await screen.findByRole('list', {
+      name: pt.pages.home.streak.mine,
+    });
+    const [mine, hers] = Array.from(list.querySelectorAll('li')).map(
+      (item) => item.firstElementChild as HTMLElement,
+    );
+
+    const classesOf = (element?: HTMLElement): string[] =>
+      (element?.className ?? '').split(/\s+/u);
+    // Zero dias, e ainda assim dourado: o tom é de PERTENCIMENTO, não de placar.
+    expect(classesOf(mine)).toContain('bg-gold-soft');
+    expect(classesOf(hers)).toContain('bg-surface');
+
+    // E a frase é o convite inteiro, sem o "0" na frente.
+    expect(mine?.textContent).toBe(
+      `${pt.pages.home.streak.none} · ${pt.pages.acervo.item.author.you}`,
+    );
+    expect(mine?.textContent).not.toContain('0');
+    // A dela continua com número, porque ela tem um.
+    expect(hers?.textContent).toBe(
+      `${pt.pages.home.streak.days_other.replace('{{count}}', '4')} · Maria`,
+    );
+
+    expectNoGuilt();
+  });
+
+  /**
+   * ⚠️ **O RÓTULO DO FEED E O RITMO DA MARGEM — duas propriedades da fatia que
+   * saíram SEM acusador nenhum, medidas por mutante sobrevivente na auditoria.**
+   *
+   * `InicioDesktop.dc.html:105` e `Inicio.dc.html:93` desenham o rótulo em
+   * monoespaçada maiúscula de 10px com `letter-spacing:0.12em` — que é
+   * exatamente o `Eyebrow` (decisão I da Tarefa 41b), e não o
+   * `text-sm font-semibold` que a tela usava antes. E `:104` dá o ritmo da
+   * margem: `gap:18px` entre o rótulo, a corrente e as linhas.
+   *
+   * Medido na auditoria: devolver o `<h2 className="text-sm font-semibold
+   * text-muted">` e trocar o `gap-[18px]` por `gap-2` passavam os **951**
+   * testes do app. São dois mutantes, e este `it()` é o acusador dos dois.
+   */
+  it('⚠️ o rótulo do feed é o Eyebrow, e a margem guarda o ritmo de 18px', async () => {
+    await renderHome({
+      activity: {
+        status: 200,
+        body: [anActivity({ id: 'a-1', type: 'HIGHLIGHT' })],
+      },
+    });
+
+    const label = await screen.findByText(pt.pages.home.feed.heading);
+    const classes = label.className.split(/\s+/u);
+    expect(classes).toContain('font-mono');
+    expect(classes).toContain('text-eyebrow');
+    expect(classes).toContain('uppercase');
+    expect(classes).toContain('tracking-[0.12em]');
+    // O desenho anterior, nominalmente recusado.
+    expect(classes).not.toContain('text-sm');
+    expect(classes).not.toContain('font-semibold');
+
+    /*
+      O `Eyebrow` é a TIPOGRAFIA do rótulo, não a semântica: ele é um `<span>`
+      de propósito, e o `<h2>` de verdade fica por fora. Trocar um pelo outro
+      é o que o componente existe para impedir.
+    */
+    expect(label.tagName).toBe('SPAN');
+    expect(label.parentElement?.tagName).toBe('H2');
+
+    // O ritmo da margem, que é da TELA e não do `MarginRail` (ele não fixa
+    // nenhum): 18px entre o rótulo, a corrente e as linhas do feed.
+    expect(label.closest('section')?.className.split(/\s+/u)).toContain(
+      'gap-[18px]',
+    );
+
+    expectNoGuilt();
+  });
+
+  /**
+   * ⚠️ **DECISÃO C — A MARGEM, E A GUARDA É DE VISIBILIDADE, NÃO DE PRESENÇA.**
+   *
+   * `InicioDesktop.dc.html:104` é a coluna de 320px com `border-left`, e ela
+   * contém o rótulo (`:105`), as correntes (`:107-118`) e o feed (`:120-149`).
+   * O `MarginRail` é montado **sempre**: o que muda com a largura é o filete e
+   * a largura, e abaixo de 1120px ele desce para o fluxo.
+   *
+   * ⚠️⚠️ **A GUARDA É DE TOKEN, E NÃO DE REGEX — e a troca vem de um MUTANTE
+   * SOBREVIVENTE, medido na auditoria desta fatia.**
+   *
+   * A primeira entrega usava `/(^|\s)(min-\[1120px\]:)?hidden(\s|$)/u`, que
+   * acusa `hidden` cru e `min-[1120px]:hidden` e **deixa passar** todo o
+   * resto: `max-[1119px]:hidden` (aplicado na margem: **951/951, ZERO
+   * acusadores**), `max-lg:hidden`, `sm:`/`md:`/`lg:`/`print:hidden` e
+   * `[@media(max-width:1119px)]:hidden`. O primeiro deles é literalmente
+   * "escondi a corrente e o feed no celular", que é o que o NOME deste `it()`
+   * promete impedir — e o §7.9 diz que o nome do teste é parte da guarda.
+   *
+   * O conserto não é mais uma alternativa na regex (a próxima variante
+   * escaparia igual): é olhar o que a classe É. Toda classe do Tailwind é
+   * `variante:variante:utilitário`, então o utilitário é o último segmento
+   * depois de `:`. `hidden` como utilitário some da tela em ALGUMA largura;
+   * `overflow-hidden`, `overflow-x-hidden` e `group-hover:overflow-hidden`
+   * têm outro utilitário e ficam em paz — que é a razão de a guarda não ser um
+   * `toContain('hidden')`, e continua valendo.
+   */
+  it('⚠️ põe corrente e feed na MARGEM, e não os esconde no celular', async () => {
+    await renderHome({
+      streaks: {
+        status: 200,
+        body: [{ userId: ME_ID, streak: 12, readToday: true }],
+      },
+      activity: {
+        status: 200,
+        body: [anActivity({ id: 'a-1', type: 'HIGHLIGHT' })],
+      },
+    });
+
+    const streaks = await screen.findByRole('list', {
+      name: pt.pages.home.streak.mine,
+    });
+    const feed = screen.getByRole('list', { name: pt.pages.home.feed.label });
+
+    const rail = streaks.closest('aside');
+    expect(rail).not.toBeNull();
+    expect(feed.closest('aside')).toBe(rail);
+    // A estante continua na COLUNA — a margem é o aparato, não a tela inteira.
+    expect(
+      screen
+        .getByRole('list', { name: pt.pages.home.shelf.label })
+        .closest('aside'),
+    ).toBeNull();
+
+    // É o `MarginRail`: filete e largura só acima do corte.
+    const railClasses = rail?.className ?? '';
+    expect(railClasses).toContain('min-[1120px]:w-80');
+    expect(railClasses).toContain('min-[1120px]:border-l');
+
+    /*
+      ⚠️ **O PAR NEGATIVO, E ELE VALE NAS DUAS LARGURAS.** Nada no caminho da
+      margem pode ser `hidden` cru (abaixo de 1120px é ali que a corrente e o
+      feed VIVEM) **nem** `min-[1120px]:hidden` (acima do corte é ali que eles
+      são desenhados). O jsdom não enxerga media query nenhuma, então as duas
+      formas são invisíveis para qualquer asserção sobre o que "aparece" — e é
+      por isso que a guarda é sobre a CLASSE.
+
+      ⚠️ **E NÃO É UM `toContain('hidden')`:** ele casaria `overflow-hidden` —
+      classe legítima e comum — e acusaria um defeito que não existe. Guarda
+      que grita à toa é desligada, e guarda desligada não guarda nada (§7.9).
+
+      ⚠️ **A LISTA, e não um `toBe(false)` por nó:** quando isto ficar
+      vermelho, a mensagem tem de dizer QUAL classe escondeu — senão o próximo
+      a ler sabe que a margem some e não sabe onde.
+    */
+    const hidingClasses: string[] = [];
+    for (
+      let node: HTMLElement | null = streaks;
+      node !== null && node !== document.body;
+      node = node.parentElement
+    ) {
+      hidingClasses.push(
+        ...node.className
+          .split(/\s+/u)
+          .filter((name) => name.split(':').at(-1) === 'hidden'),
+      );
+    }
+    expect(hidingClasses).toEqual([]);
+
+    expectNoGuilt();
+  });
+
+  /**
+   * ⚠️ **DECISÃO D — O `atRisk` FICA, E O ACUSADOR DIZ QUE FICA.**
+   *
+   * O §A.5.9 do `docs/new-ui.md` manda remover "Você vai perder a sua
+   * sequência!"; o **ADR 0010** registra que o dono foi avisado de que a
+   * moldura de perda contraria o §1 do plano e **reafirmou o pedido**, e a
+   * precedência do `README-IA.md` põe ADR acima de spec. Uma fatia de redesenho
+   * é exatamente onde a frase sumiria sem ninguém reparar — daí a asserção
+   * aqui, ao lado do selo que a substituiu no resto da corrente.
+   */
+  it('⚠️ mantém o aviso de perda ao lado dos selos (ADR 0010 vence o §A.5.9)', async () => {
+    await renderHome({
+      streaks: {
+        status: 200,
+        body: [{ userId: ME_ID, streak: 12, readToday: false }],
+      },
+    });
+
+    await waitFor(() => {
+      expect(readableText()).toContain(pt.pages.home.streak.atRisk);
+    });
+    // Ele mora na margem, junto da corrente de que fala — não solto no corpo.
+    const warning = screen.getByText(pt.pages.home.streak.atRisk);
+    expect(warning.closest('aside')).not.toBeNull();
+  });
+
+  /**
+   * ⚠️⚠️ **DECISÃO F — A POSIÇÃO NO PLANO, E A ISENÇÃO SUBTRAINDO DE VERDADE.**
+   *
+   * `Inicio.dc.html:41` e `InicioDesktop.dc.html:42` escrevem "Dia 11 de 30" em
+   * dourado, ao lado do bloco de hoje. A frase tem a forma que o
+   * `COUNTER_SHAPE` proíbe, e é a ÚNICA do app isenta — por chave, em
+   * `COUNTER_EXEMPT_KEYS`.
+   *
+   * ⚠️ **`expectNoGuiltWithPlanPosition()` E NÃO `expectNoGuilt()`, e as duas
+   * são MUTUAMENTE EXCLUSIVAS** desde a rodada de correção da Tarefa 44: a
+   * primeira exige **zero** subtrações, a segunda exige **pelo menos uma**.
+   * Trocar uma pela outra fica vermelho no `it()` em que a troca acontece, e a
+   * posição vazando num estado sem dia de hoje fica vermelha do outro lado.
+   */
+  it('⚠️ diz ONDE a leitura de hoje está no plano, e a isenção SUBTRAI', async () => {
+    /*
+      ⚠️ **A CORRENTE ENTRA NESTE FIXTURE DE PROPÓSITO — é o PAR POSITIVO da
+      regra 4.** A isenção do contador está LIGADA aqui (a posição está na
+      tela), e é justamente o estado em que um placar de verdade passaria
+      despercebido: "11 de 30 dias" escrito num selo tem a mesma forma que a
+      frase isenta. Medido: com a corrente vazia, plantar esse texto num selo
+      não é sequer renderizado, e o mutante sobrevive. Com ela aqui, o
+      `COUNTER_SHAPE` acusa **apesar** da isenção — que é o que a subtração por
+      frase EXATA existe para garantir.
+    */
+    await renderHome({
+      book: planWithToday(),
+      streaks: {
+        status: 200,
+        body: [{ userId: ME_ID, streak: 12, readToday: true }],
+      },
+    });
+
+    await screen.findByRole('link', {
+      name: new RegExp(pt.pages.home.today.write, 'u'),
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('list', { name: pt.pages.home.streak.mine }),
+      ).not.toBeNull();
+    });
+    // O item de hoje é o SEGUNDO de três: a posição é a ORDEM no plano, não um
+    // placar de quem leu o quê.
+    expect(readableText()).toContain(dayOfPlan(2, 3));
+
+    /*
+      ⚠️ **E ELA É DOURADA — o canvas a desenha assim, e nada guardava isso.**
+
+      `Inicio.dc.html:41` usa `color:var(--gold)` e `InicioDesktop.dc.html:42`
+      usa `#946d2c`, que é o mesmo token: a posição é a ÚNICA coisa dourada da
+      linha de mono que abre o bloco de hoje (o `:40`/`:41` ao lado dela é
+      `--text-muted`). Medido na auditoria: tirar o `tone="gold"` desta
+      `Eyebrow` passava os **951** testes do app.
+
+      O tom `gold` do `Eyebrow` emite `text-gold-strong`, e não `text-gold`:
+      `--gold` dá 4,16:1 contra `--bg` num corpo de 10px, abaixo do piso de
+      4,5:1. A tinta é a decisão de contraste da Tarefa 39, não o hex do
+      artboard — é a mesma divergência que o próprio `Eyebrow` já declara.
+    */
+    const position = screen.getByText(dayOfPlan(2, 3));
+    expect(position.className.split(/\s+/u)).toContain('text-gold-strong');
+    expect(position.className.split(/\s+/u)).not.toContain('text-muted');
+
+    expectNoGuiltWithPlanPosition();
+  });
+
+  /**
+   * ⚠️ **O LADO INVERSO, e é o defeito que nenhum pino de contagem via:** sem
+   * dia de hoje **não há posição**. Inventar "Dia 0 de 3" seria o vazio
+   * anunciado que o §1 do plano proíbe — e seria, além disso, um contador de
+   * verdade entrando pela porta da isenção.
+   */
+  it('⚠️ não anuncia posição nenhuma quando não há leitura de hoje', async () => {
+    await renderHome({
+      book: bookWithPlanReply(aBook({ id: 'b-hobbit' }), [
+        aPlanItem({ id: 'p-ontem', date: otherDay(), order: 1 }),
+      ]),
+    });
+
+    await screen.findByRole('list', { name: pt.pages.home.shelf.label });
+    expect(readableText()).not.toContain(dayOfPlan(0, 1));
+    expect(readableText()).not.toContain(dayOfPlan(1, 1));
+    expectNoGuilt();
   });
 });

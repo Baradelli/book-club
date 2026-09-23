@@ -47,8 +47,41 @@ const COUNT_CLASS = {
 } as const;
 
 export interface StreakSealProps {
-  /** `ClubStreak.streak` — quantos dias seguidos. Zero é um estado válido. */
+  /**
+   * `ClubStreak.streak` — quantos dias seguidos.
+   *
+   * ⚠️ **Zero é um estado válido, e o selo NÃO desenha o número nele.** "0" ao
+   * lado de um convite ("Comece a sua sequência hoje") é a única parte da
+   * frase que fala de dívida, e o §1 do `docs/plano-clube-do-livro.md` é
+   * anti-culpa. Quem fica é a frase. O `count` continua sendo quem escolhe o
+   * tom PADRÃO, e quem o chamador passa em `label` continua sendo tudo o que
+   * se lê quando ele é zero.
+   */
   count: number;
+  /**
+   * ⚠️⚠️ **QUAL SELO ACENDE — e o padrão NÃO é a regra que a home usa.**
+   *
+   * O canvas acende o selo **de quem está olhando** e apaga o dos outros,
+   * mesmo quando os outros têm corrente viva: `InicioDesktop.dc.html:113-116`
+   * desenha o Bruno com **4 dias** na pílula APAGADA
+   * (`border:1px solid #e3ddc9`, `background:#f9f5ec`), e `Inicio.dc.html:102-105`
+   * faz o mesmo no celular. O dourado é PERTENCIMENTO ("esta linha é você"),
+   * nunca prêmio — se ele chegasse com a corrente e sumisse com ela, seria a
+   * moldura de PERDA que o glifo deste selo já foi trocado para não ser.
+   *
+   * ⚠️ **Por que opcional, e por que o padrão é o que é.** `packages/ui` não
+   * sabe quem é o usuário — só a tela sabe, e é ela que passa
+   * `isMine ? 'lit' : 'quiet'`. O padrão (`count > 0`) é o desenho que este
+   * componente já tinha, e ele fica **exatamente** onde estava para que a
+   * prop seja acréscimo e não quebra: nenhum chamador muda de comportamento
+   * por causa dela.
+   *
+   * ⚠️ **Quem escrever um SEGUNDO consumidor: passe `tone`.** Herdar o padrão
+   * reproduz o defeito que a auditoria da Tarefa 45 achou — dois selos
+   * dourados num clube em que as duas pessoas leram, e a distinção do artboard
+   * sumindo sem nenhum teste ficar vermelho.
+   */
+  tone?: 'lit' | 'quiet';
   /**
    * O resto da frase, JÁ TRADUZIDO pela tela — "dias seguidos · Você".
    *
@@ -97,14 +130,23 @@ export interface StreakSealProps {
  * auditoria (2026-09-21). O ADR 0010 **não é reaberto**: ele nomeia o
  * MECANISMO (a corrente visível, com "foguinho" de apelido), não o glifo.
  *
- * ⚠️ `pages/streak-bar.tsx` ainda importa `Flame` — **quem troca lá é a Tarefa
- * 45**, quando aquela tela passar a consumir este componente. Esta fatia não
- * toca `pages/`.
+ * ⚠️ ~~`pages/streak-bar.tsx` ainda importa `Flame` — **quem troca lá é a
+ * Tarefa 45**~~ **A TAREFA 45 TROCOU.** Medido na auditoria dela:
+ * `grep -rn "Flame" packages/{app,ui}/src/` devolve **só prosa** (este
+ * parágrafo e os docblocks que contam a história). A frase ficou riscada em
+ * vez de apagada porque ela explica POR QUE o glifo mudou; deixá-la no
+ * presente é a lição do `dayRange` do `CLAUDE.md` — uma instrução que aponta
+ * para um estado que não existe mais faz o próximo agente procurar, não achar
+ * e inventar.
  */
-export function StreakSeal({ className, count, label }: StreakSealProps) {
-  // A regra é a mesma que `pages/streak-bar.tsx:78` já aplica: o que acende o
-  // selo é existir corrente, não ser a minha.
-  const tone = count > 0 ? 'lit' : 'quiet';
+export function StreakSeal({ className, count, label, tone }: StreakSealProps) {
+  /*
+    ⚠️ **O PADRÃO, E ELE É O DESENHO ANTIGO DE PROPÓSITO.** Sem `tone` o selo
+    acende por ter corrente, que é o que este componente fazia desde a Tarefa
+    41b — assim a prop é acréscimo e nenhum chamador muda de comportamento.
+    Quem sabe de quem é a linha é a TELA, e ela passa `tone` (ver a prop).
+  */
+  const paint = tone ?? (count > 0 ? 'lit' : 'quiet');
 
   return (
     <span
@@ -117,7 +159,7 @@ export function StreakSeal({ className, count, label }: StreakSealProps) {
           `SPACING_STEP_PX` de `styles.ts`.
         */
         'inline-flex items-center gap-1.75 rounded-full border px-3 py-1.5',
-        SEAL_CLASS[tone],
+        SEAL_CLASS[paint],
         className,
       )}
     >
@@ -128,7 +170,7 @@ export function StreakSeal({ className, count, label }: StreakSealProps) {
       */}
       <Bookmark
         aria-hidden="true"
-        className={cx('size-[13px] shrink-0', GLYPH_CLASS[tone])}
+        className={cx('size-[13px] shrink-0', GLYPH_CLASS[paint])}
         focusable="false"
       />
       {/*
@@ -136,12 +178,33 @@ export function StreakSeal({ className, count, label }: StreakSealProps) {
         Tarefa 39 — `text-label` é 11px, e é o degrau mais próximo para baixo.
         É o mesmo arredondamento de corpo que a nota nº 7 da Tarefa 41a já
         listou (12px, 13px, 14,5px e 11,5px) e deixou aberto para o dono.
+
+        ⚠️⚠️ **O NÚMERO SÓ EXISTE QUANDO EXISTE, e o espaço ao lado dele é um
+        NÓ DE TEXTO DE VERDADE.** São as duas correções da auditoria da Tarefa
+        45:
+
+        **(1) o zero não se desenha.** "0 Comece a sua sequência hoje · Você"
+        põe um placar na frente de um convite, e o §1 do plano é anti-culpa.
+
+        **(2) o `{' '}` entre os dois `<span>`.** Sem ele o `textContent` era
+        `"12dias seguidos"` — colado —, e o docblock da `StreakBar` afirmava
+        que quem ouve a tela lia a frase inteira. Não lia: o `gap-1.75` é CSS
+        e não chega à árvore de acessibilidade. Num contêiner `flex` um item
+        anônimo só de espaço **não é desenhado**, então a tela não mudou um
+        pixel e a frase passou a ser a frase.
       */}
-      <span
-        className={cx('font-mono text-label font-medium', COUNT_CLASS[tone])}
-      >
-        {count}
-      </span>
+      {count > 0 ? (
+        <>
+          <span
+            className={cx(
+              'font-mono text-label font-medium',
+              COUNT_CLASS[paint],
+            )}
+          >
+            {count}
+          </span>{' '}
+        </>
+      ) : null}
       <span className="text-label text-muted">{label}</span>
     </span>
   );
