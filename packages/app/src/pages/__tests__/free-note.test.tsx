@@ -148,6 +148,14 @@ const BOOK_ID = 'b-hobbit';
 const CLUB_ID = 'c-casal';
 const NOTE_ID = 'n-minha';
 const HER_NOTE_ID = 'n-dela';
+/**
+ * ⚠️ **O CLUBE QUE NÃO É O ATIVO — o fixture hostil do corte de tenant.**
+ *
+ * O clube ativo do cabeçalho é o `CASAL` (`c-casal`). Um livro de OUTRO
+ * clube é o único caso em que "clube do livro" e "clube ativo" dão respostas
+ * diferentes — sem ele, a asserção da URL passa pelas duas origens.
+ */
+const OTHER_CLUB_ID = 'c-outro';
 
 /** O `id` que o `meReply()` do harness devolve. Sou eu. */
 const MARCOS = 'u-marcos';
@@ -181,13 +189,13 @@ function aNote(overrides: Partial<NoteResponse> = {}): NoteResponse {
   };
 }
 
-function bookReply(): Reply {
+function bookReply(clubId: string = CLUB_ID): Reply {
   return {
     status: 200,
     body: {
       book: {
         id: BOOK_ID,
-        clubId: CLUB_ID,
+        clubId,
         title: 'O Hobbit',
         author: 'J. R. R. Tolkien',
         month: '2026-09',
@@ -237,6 +245,14 @@ interface FreeNoteSetup {
   /** `PATCH` e `DELETE` em `/notes/:noteId`. */
   write?: Reply | Responder;
   me?: Reply;
+  /**
+   * `GET /clubs/:clubId/members` (Tarefa 26a) — quem é o clube, pelo nome.
+   *
+   * O padrão continua sendo a lista VAZIA, que é o estado em que os testes
+   * anteriores a esta fatia foram escritos: o clube é conhecido e não tem
+   * ninguém a nomear, logo o genérico.
+   */
+  members?: Reply;
 }
 
 /**
@@ -266,7 +282,7 @@ function freeNoteResponder(setup: FreeNoteSetup): Responder {
         27: o `replyByUrl` casa por SUBSTRING, e `/clubs/c-casal/members`
         **contém** `/me`.
       */
-      ['/members', { status: 200, body: [] }],
+      ['/members', setup.members ?? { status: 200, body: [] }],
       ['/highlights', { status: 200, body: [] }],
       ['/me', setup.me ?? meReply({ clubs: [CASAL] })],
       [
@@ -854,6 +870,122 @@ describe('⚠️ THE NOTE OF ANOTHER PERSON HAS NO AFFORDANCE AT ALL (rule 17)',
     expect(readableText()).toContain(pt.pages.freeNote.readOnly);
     expectNoGuilt();
     expectNoPrivacyTalk();
+  });
+});
+
+/**
+ * ⚠️⚠️ **O NOME DE QUEM ESCREVEU — a decisão E da Tarefa 42.**
+ *
+ * Esta tela dizia "Alguém do clube" desde a Tarefa 19, pelo mesmo motivo
+ * registrado (e vencido) na tela do dia: `GET /clubs/:clubId/members` existe
+ * desde a Tarefa 26a e **seis** telas já o usam pelo mesmo `club-names.ts`.
+ *
+ * As três propriedades são as da regra 6 da spec, e nenhuma delas é "a tela
+ * chama `nameOfWriter`": o nome na tela, o fallback quando a chamada falha, e
+ * o avatar recebendo **o mesmo nome** que o texto mostra.
+ *
+ * Fixture hostil (§7.2): `Maria Rita` → "MR", `u-maria` → "U", `Marcos` → "M".
+ */
+describe('⚠️ the name of whoever wrote it (decision E of Task 42)', () => {
+  const MARIA_NAME = 'Maria Rita';
+
+  function herNote(): Reply {
+    return {
+      status: 200,
+      body: [
+        aNote({
+          id: HER_NOTE_ID,
+          userId: MARIA,
+          title: 'O que ela achou da porta',
+          doc: aDoc('a porta redonda e verde'),
+          plainText: 'a porta redonda e verde',
+        }),
+      ],
+    };
+  }
+
+  function membersReply(): Reply {
+    return {
+      status: 200,
+      body: [
+        { userId: MARIA, name: MARIA_NAME, role: 'MEMBER', status: 'ACTIVE' },
+        { userId: MARCOS, name: 'Marcos', role: 'OWNER', status: 'ACTIVE' },
+      ],
+    };
+  }
+
+  /** O avatar é `aria-hidden` — a marca é o par `--person-*` do canvas. */
+  function avatars(): HTMLElement[] {
+    return Array.from(document.querySelectorAll('[class*="bg-person"]'));
+  }
+
+  it('shows the NAME of the other person when the club is known', async () => {
+    await renderFreeNote({
+      path: freeNotePath(BOOK_ID, HER_NOTE_ID),
+      list: herNote(),
+      members: membersReply(),
+    });
+
+    expect(readableText()).toContain(MARIA_NAME);
+    expect(readableText()).not.toContain(pt.pages.acervo.item.author.other);
+    expectNoGuilt();
+    expectNoPrivacyTalk();
+  });
+
+  it('⚠️ gives the avatar the SAME name the text shows', async () => {
+    await renderFreeNote({
+      path: freeNotePath(BOOK_ID, HER_NOTE_ID),
+      list: herNote(),
+      members: membersReply(),
+    });
+
+    const marks = avatars();
+    expect(marks).toHaveLength(1);
+    expect(marks[0]?.textContent).toBe('MR');
+  });
+
+  it('falls back to the neutral label when the members call FAILS — and shows the note anyway', async () => {
+    await renderFreeNote({
+      path: freeNotePath(BOOK_ID, HER_NOTE_ID),
+      list: herNote(),
+      members: { status: 500, body: { error: 'Internal Server Error' } },
+    });
+
+    expect(readableText()).toContain(pt.pages.acervo.item.author.other);
+    expect(readableText()).not.toContain(MARIA_NAME);
+    // A anotação continua inteira: o nome é legenda, o texto é o conteúdo.
+    expect(screen.getByTestId('reader-text').textContent).toBe(
+      'a porta redonda e verde',
+    );
+    // E o avatar cai no glifo NEUTRO, nunca na primeira letra do UUID.
+    expect(avatars()[0]?.textContent).toBe('');
+    expectNoGuilt();
+  });
+
+  /**
+   * ⚠️⚠️ **O CORTE DE TENANT — a primeira versão deste `it()` NÃO O TESTAVA.**
+   *
+   * Ela usava o fixture comum, em que
+   * `CASAL.id === CLUB_ID === book.clubId === 'c-casal'`, então a asserção da
+   * URL era verdadeira para **as duas** origens possíveis. Medido na auditoria:
+   * pedir os membros do clube **ATIVO** em vez do clube **DO LIVRO** passava
+   * por **886 testes**. Fixture hostil agora (§7.2): o livro é de `c-outro`.
+   */
+  it('⚠️ asks the club OF THE BOOK, not the ACTIVE one — and asks once', async () => {
+    const calls = await renderFreeNote({
+      // O clube ativo continua sendo o `c-casal` do `meReply({ clubs: [CASAL] })`.
+      book: bookReply(OTHER_CLUB_ID),
+      path: freeNotePath(BOOK_ID, HER_NOTE_ID),
+      list: herNote(),
+      members: membersReply(),
+    });
+
+    const asked = requestsTo(calls, '/members');
+    expect(asked).toHaveLength(1);
+    expect(requestAt(asked, 0).url).toBe(
+      `https://api.teste/clubs/${OTHER_CLUB_ID}/members`,
+    );
+    expect(requestAt(asked, 0).url).not.toContain(CLUB_ID);
   });
 });
 

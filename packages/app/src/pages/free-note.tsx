@@ -1,5 +1,6 @@
 import {
   bookWithPlanResponseSchema,
+  clubMembersResponseSchema,
   type NoteResponse,
   noteResponseSchema,
   notesResponseSchema,
@@ -12,6 +13,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -21,6 +23,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/auth-context';
 import { useActiveClub } from '../club/active-club';
 import { Notice, Screen } from './chrome';
+import {
+  memberNamesOf,
+  MEMBERS_UNKNOWN,
+  type MembersState,
+  nameOfWriter,
+} from './club-names';
 import { messageFor, resolveApiError } from './form-errors';
 import { TEXT_INPUT_CLASS } from './form-styles';
 import { acervoPath } from './paths';
@@ -159,8 +167,15 @@ const SAVE_SAVED: SaveState = { status: 'saved', error: undefined };
 
 type NoteState =
   | { status: 'loading' }
-  /** `mine` decide a tela inteira: campos e arquivar × leitura pura. */
-  | { status: 'ready'; note: NoteResponse; mine: boolean }
+  /**
+   * `mine` decide a tela inteira: campos e arquivar × leitura pura.
+   *
+   * `clubId` é o clube DO LIVRO (não o ativo do cabeçalho) e entrou na
+   * Tarefa 42, decisão E: é contra ele que os nomes do clube são pedidos,
+   * pelo mesmo argumento que já decidia de onde vêm as notas. Ele já era lido
+   * dentro do `load` e morria ali.
+   */
+  | { status: 'ready'; note: NoteResponse; mine: boolean; clubId: string }
   /** A nota não está no acervo ATIVO deste livro (arquivada, ou id errado). */
   | { status: 'missing' }
   | { status: 'failed'; error: unknown };
@@ -343,8 +358,15 @@ function NewFreeNote({ bookId }: { bookId: string }) {
     }
   }
 
+  /*
+    ⚠️ **O FILETE INVERTIDO (Tarefa 42, auditoria B2).**
+    `NovaAnotacao.dc.html:59` e `Avulsa.dc.html:58` desenham o hairline
+    PRIMEIRO e o traço de 2px depois — o gesto que entrega a página a quem vai
+    escrever. É a minoria (3 dos 10 filetes que ficam abaixo de um `h1`), e
+    por isso ela é declarada aqui em vez de ser o padrão do `Screen`.
+  */
   return (
-    <Screen title={t('pages.freeNote.newTitle')}>
+    <Screen rule="bottom" title={t('pages.freeNote.newTitle')}>
       <NoteFields
         onReference={setReference}
         onTitle={setTitle}
@@ -409,6 +431,7 @@ function ExistingFreeNote({
   const [save, setSave] = useState<SaveState>(SAVE_IDLE);
   const [confirming, setConfirming] = useState(false);
   const [archiveError, setArchiveError] = useState<unknown>(undefined);
+  const [members, setMembers] = useState<MembersState>(MEMBERS_UNKNOWN);
 
   const docRef = useRef<Record<string, unknown> | undefined>(undefined);
   const confirmedRef = useRef<Confirmed>({
@@ -447,7 +470,12 @@ function ExistingFreeNote({
       const note = notes.find((candidate) => candidate.id === noteId);
       if (note === undefined) return { status: 'missing' };
 
-      return { status: 'ready', note, mine: note.userId === myId };
+      return {
+        status: 'ready',
+        note,
+        mine: note.userId === myId,
+        clubId: withPlan.book.clubId,
+      };
     }
 
     void load()
@@ -472,6 +500,46 @@ function ExistingFreeNote({
       cancelled = true;
     };
   }, [api, bookId, noteId, myId, attempt]);
+
+  /**
+   * ⚠️ **QUEM É O CLUBE, PELO NOME — a decisão E da Tarefa 42.**
+   *
+   * Mesmo efeito, mesma rota e mesmo argumento da tela do dia e do
+   * `book.tsx`: `GET /clubs/:clubId/members` existe desde a Tarefa 26a, e
+   * quem transforma a resposta em nome é o `club-names.ts` — um dono só para
+   * as sete telas.
+   *
+   * A falha não tem frase: o nome degrada para o genérico e a anotação
+   * continua inteira na tela. O `catch` existe para a rejeição ter dono.
+   */
+  const clubOfNote = state.status === 'ready' ? state.clubId : null;
+
+  useEffect(() => {
+    if (clubOfNote === null) return;
+
+    let cancelled = false;
+    setMembers(MEMBERS_UNKNOWN);
+
+    void api
+      .get(
+        `/clubs/${encodeURIComponent(clubOfNote)}/members`,
+        clubMembersResponseSchema,
+      )
+      .then((list) => {
+        if (cancelled) return;
+        setMembers({ status: 'ready', members: list });
+      })
+      .catch(() => {
+        // O nome degrada em silêncio para o genérico (veja o docblock).
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, clubOfNote]);
+
+  /** `userId` → nome. O dono da regra é o `club-names.ts`. */
+  const memberNames = useMemo(() => memberNamesOf(members), [members]);
 
   /**
    * ⚠️ **O PATCH É O QUE MUDOU, E SÓ** (regra 12).
@@ -716,14 +784,30 @@ function ExistingFreeNote({
       conteúdo privado (ADR 0002).
     */
     if (!state.mine) {
+      /*
+        ⚠️ UMA resolucao, num `const` — o molde do `acervo.tsx:570`. A
+        primeira entrega chamava o `nameOfWriter` duas vezes com os mesmos
+        argumentos (avatar e texto), que sao dois lugares para alguem mexer em
+        um so e a inicial voltar a discordar do nome ao lado.
+      */
+      const writerName = nameOfWriter(state.note.userId, me, memberNames);
+
       return (
         <>
           <header className="flex flex-wrap items-center gap-2">
-            {/* Sem `label`: o texto ao lado já diz de quem é, e um `aria-label`
-                igual faria o leitor de tela repetir. */}
-            <PersonAvatar id={state.note.userId} name={null} size="sm" />
+            {/*
+              Sem `label`: o texto ao lado já diz de quem é, e um `aria-label`
+              igual faria o leitor de tela repetir.
+
+              ⚠️ ~~`name={null}`~~ **O NOME ENTROU NA TAREFA 42** (decisão E):
+              o mesmo `nameOfWriter` das outras seis telas, e o avatar recebe
+              **o mesmo nome** que o texto ao lado mostra. `null` continua
+              sendo a resposta honesta quando o `GET /members` falhou — glifo
+              neutro, nunca a primeira letra do UUID.
+            */}
+            <PersonAvatar id={state.note.userId} name={writerName} size="sm" />
             <span className="text-sm text-content">
-              {t('pages.freeNote.author')}
+              {writerName ?? t('pages.acervo.item.author.other')}
             </span>
             <span className="text-xs text-muted">
               {t('pages.freeNote.readOnly')}
@@ -816,6 +900,7 @@ function ExistingFreeNote({
   */
   return (
     <Screen
+      rule="bottom"
       title={
         state.status === 'ready' && !state.mine
           ? state.note.title

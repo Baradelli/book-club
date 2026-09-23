@@ -1,5 +1,15 @@
-import { cx, FOCUS_RING } from '@clube/ui';
+import {
+  ContextBar,
+  type ContextBarProps,
+  cx,
+  FOCUS_RING,
+  ReadingColumn,
+  RuleDouble,
+  type RuleDoubleAccent,
+} from '@clube/ui';
 import type { ReactNode } from 'react';
+
+import { listItemRouterLink } from '../router-link';
 
 /**
  * O CROMO DAS TELAS — o `Notice` e o `Screen`, num módulo só (Tarefa 25,
@@ -125,15 +135,40 @@ export function Notice({ action, description, title }: NoticeProps) {
 }
 
 /**
- * As três larguras que existem — e são as que as cópias tinham.
+ * AS DUAS LARGURAS QUE EXISTEM — e eram três até a Tarefa 42.
  *
- * `narrow` é a coluna de leitura e escrita; `wide` é o cadastro do livro
- * (decisão F da Tarefa 20: a linha do plano tem três campos, empilha no celular
- * e cabe inteira numa linha no desktop); `entry` é a coluna estreita das telas
- * de entrada (login e aceite de convite), que têm um formulário curto e nenhuma
- * lista.
+ * `reading` é a **edição crítica** do canvas: coluna de leitura de 680px com
+ * margem de 320px ao lado acima de 1120px, e uma coluna com 20px de recuo
+ * abaixo. É o `ReadingColumn` de `@clube/ui` (Tarefa 41b), que é quem tem as
+ * medidas e o corte.
+ *
+ * `entry` é a coluna estreita da tela de entrada, que tem um formulário curto
+ * e nenhuma lista — o canvas a desenha estreita (`Main.dc.html`).
+ *
+ * ⚠️ **UM CHAMADOR, NÃO DOIS: o `accept-invite.tsx` NÃO usa o `Screen`.** Esta
+ * frase dizia "login e aceite de convite" desde a Tarefa 25 e foi repetida na
+ * 42; medido (`grep -n "<Screen" pages/*.tsx`), quem passa `width="entry"` é
+ * só o `login.tsx`. O aceite tem `<section>` própria e está no
+ * `H1_EXCEPTIONS` — o `h1` dele vive num `div gap-2` junto com a descrição, o
+ * que este cromo não sabe expressar. O canvas o desenha estreito
+ * (`Convite.dc.html`) e ele É estreito, por conta própria (`max-w-md` na
+ * `<section>` dele).
+ *
+ * ⚠️ **`narrow` (`max-w-2xl`) E `wide` (`max-w-4xl`) MORRERAM NA TAREFA 42**,
+ * pela decisão B: as duas dão lugar ao modelo do canvas. O `book-form.tsx`
+ * era o único chamador de `wide` (quatro `Screen`) e passou a usar o padrão;
+ * ninguém nunca escreveu `width="narrow"`, que era o padrão.
+ *
+ * ⚠️ **E O QUE ISSO CUSTA AO `book-form.tsx` ESTÁ MEDIDO E REGISTRADO:** o
+ * canvas **não tem artboard de desktop para o cadastro de livro** (são cinco,
+ * e são `Inicio`, `Dia`, `Livro`, `NovaAnotacao` e `NovoGrifo`), então 680px
+ * ali é a decisão B aplicada, não uma medição. A linha do plano
+ * (`plan-editor.tsx:302`) vira `flex-row` a partir de `sm` (640px) com
+ * `sm:w-44` + `sm:flex-1` + `sm:w-44`, então ela continua cabendo numa linha —
+ * o campo do meio fica ~270px em vez de ~490px. Quem revisita é a Tarefa 47,
+ * que é a dona dos formulários.
  */
-export type ScreenWidth = 'narrow' | 'wide' | 'entry';
+export type ScreenWidth = 'reading' | 'entry';
 
 /**
  * O ar entre as seções: `tight` nas telas de conteúdo, `airy` onde há seções
@@ -147,25 +182,113 @@ export type ScreenSpacing = 'tight' | 'airy';
  * `max-w-${x}` em runtime não geraria CSS nenhum (o mesmo mecanismo do
  * `SCROLL_LOCK_CLASS` do `Sheet`).
  */
-const SCREEN_WIDTH_CLASS: Readonly<Record<ScreenWidth, string>> = {
-  narrow: 'max-w-2xl',
-  wide: 'max-w-4xl',
-  entry: 'max-w-md',
-};
-
 const SCREEN_SPACING_CLASS: Readonly<Record<ScreenSpacing, string>> = {
   tight: 'gap-4',
   airy: 'gap-6',
 };
 
+/**
+ * ============================================================================
+ * O TÍTULO DA TELA — medido h1 a h1, e a primeira entrega media UM só
+ * ============================================================================
+ *
+ * ⚠️ **A PRIMEIRA ENTREGA DESTA FATIA COPIOU O `Dia.dc.html` E APLICOU A OITO
+ * TELAS**, escrevendo que `Inicio` e `Livro` eram *"conteúdo de tela, não o
+ * degrau da escala"*. **As duas afirmações eram falsas**: os dois SÃO o
+ * `Screen.title` (`home.tsx` passa `pages.home.title`, e `book.tsx:617-620`
+ * passa o título do livro), e o `Dia` é o único dos dez que a classe
+ * reproduzia.
+ *
+ * **Medido agora** (`grep -n '<h1' *.html` nos 21 artboards → **15**
+ * ocorrências; destas, **10** são o `Screen.title` de uma tela que usa este
+ * cromo — as outras cinco são os três artboards de desktop, mais `Convite` e
+ * `NaoEncontrada`, que são as duas exceções do `H1_EXCEPTIONS`):
+ *
+ * | artboard | tela | px | `line-height` | `letter-spacing` |
+ * | --- | --- | --- | --- | --- |
+ * | `Acervo.dc.html:44` | `acervo` | 28 | 1.14 | −0.02em |
+ * | `Busca.dc.html:44` | `busca` | 28 | 1.14 | −0.02em |
+ * | `Dia.dc.html:45` | `day-note` | 25 | 1.18 | −0.015em |
+ * | `DiaEscuro.dc.html:45` | `day-note` (escuro) | 25 | 1.18 | −0.015em |
+ * | `EditarLivro.dc.html:47` | `book-form` | 26 | 1.15 | −0.02em |
+ * | `Inicio.dc.html:51` | `home` | 27 | 1.18 | −0.015em |
+ * | `Livro.dc.html:48` | `book` | 23 | 1.15 | −0.015em |
+ * | `Main.dc.html:34` | `login` | 30 | 1.14 | −0.02em |
+ * | `NovoLivro.dc.html:47` | `book-form` | 26 | 1.15 | −0.02em |
+ * | `Preferencias.dc.html:44` | `preferencias` | 28 | 1.14 | −0.02em |
+ *
+ * **Entregue a MAIORIA de cada propriedade, e não um artboard:**
+ * `line-height` **1.14** (4 contra 3 e 3) e `letter-spacing` **−0.02em** (6
+ * contra 4). Os dois são **arbitrários** (`leading-[…]`, `tracking-[…]`) e não
+ * degraus de escala, então nada obrigava arredondamento nenhum — é justamente
+ * por isso que copiar um artboard aqui era gratuito.
+ *
+ * ⚠️ **O TAMANHO É A DIVERGÊNCIA DECLARADA:** o canvas usa **sete** valores
+ * (23 · 25 · 26 · 26 · 27 · 28 · 28 · 28 · 30 · 30 px) e sai **25px**
+ * (`text-title`, o `--size-title` da Tarefa 39) em todas. Acrescentar os seis
+ * degraus que faltam à escala fechada de sete é decisão de desenho, e cada
+ * degrau novo entra também na lista fechada de isenções ao `light-dark()` —
+ * é a mesma conta, e o mesmo registro, dos quatro arredondamentos de corpo que
+ * a Tarefa 41a deixou em aberto para o dono.
+ *
+ * ⚠️ **`text-balance` FICA, e ele é minoria de propósito** (4 dos 10). Ele é
+ * **inócuo** num título de uma linha — `text-wrap: balance` só reparte o texto
+ * quando há mais de uma linha —, e as quatro telas em que o canvas o usa são
+ * exatamente as de título longo e vindo do conteúdo (o tema do dia, o nome do
+ * livro). Aplicá-lo às dez não muda nada em "Acervo" e melhora o que quebra.
+ */
+export const SCREEN_TITLE_CLASS =
+  'font-reading text-title font-medium leading-[1.14] tracking-[-0.02em] text-balance';
+
 export interface ScreenProps {
   /** Já traduzido, ou o título do conteúdo quando ele é a informação principal. */
   title: string;
   children: ReactNode;
-  /** O padrão é `narrow`: é o que quatro das sete telas usam. */
+  /** O padrão é `reading`: a edição crítica do canvas. */
   width?: ScreenWidth;
   /** O padrão é `tight`: é o que as quatro telas de conteúdo usam. */
   spacing?: ScreenSpacing;
+  /**
+   * ⚠️ **O APARATO DE MARGEM — a capacidade da decisão C, e NENHUMA TELA A
+   * PASSA na Tarefa 42.**
+   *
+   * Quem a preenche são as Tarefas 43 (os grifos desta leitura), 44 (as marcas
+   * e "Neste livro"), 45 (correntes e feed) e 46 (o painel de refinar). A
+   * capacidade nasce testada — inclusive o caso VAZIO, que é o que quebra
+   * calado: um `<aside>` que nascesse sempre desenharia um filete vertical
+   * solto e um terço de tela em branco em todas as telas, com o elemento
+   * existindo e o teste de render verde.
+   *
+   * Ausente ≠ vazio, como no `description` do `Notice`.
+   */
+  rail?: ReactNode;
+  /**
+   * O FILETE DUPLO: de que lado fica o traço grosso — ou se ele existe.
+   *
+   * ⚠️ **O PADRÃO É `top`, E A PRIMEIRA ENTREGA DESTA FATIA PÔS `bottom`**
+   * escrevendo "São TRÊS artboards na primeira linha e UM na segunda —
+   * contados, não generalizados". **Os dois números estavam errados.** Contado
+   * agora pelo par de `<div>` de `gap:3px` dos 21 artboards: o canvas tem
+   * **15** filetes duplos, e **10** deles ficam logo abaixo de um `<h1>`, que
+   * é onde este cromo põe o dele:
+   *
+   * | ordem | quantos | onde |
+   * | --- | --- | --- |
+   * | `top` (2px `--accent`, depois hairline) | **7** | `Acervo:45`, `Busca:45`, `Convite:37`, `EditarLivro:48`, `Main:35`, `NovoLivro:48`, `Preferencias:45` |
+   * | `bottom` (hairline, depois 2px) | **3** | `Dia:49`, `DiaEscuro:49`, `DiaDesktop:58` |
+   *
+   * `bottom` é a forma das telas de ESCRITA — o filete que fecha o título e
+   * *entrega a página* a quem vai escrever. `top` ABRE a seção, e é o que a
+   * maioria usa.
+   *
+   * ⚠️ **`'none'` NASCEU AQUI, e ele não é "desligar a decoração":** o canvas
+   * desenha **três** telas sem filete nenhum — `Livro.dc.html` (a tela do
+   * livro, que tem `h1` na linha 48 e nenhum par de `gap:3px`) e os dois
+   * artboards de grifo (`NovoGrifo`, `CorrigirGrifo`, que não têm nem `h1`).
+   * Sem esta forma o `Screen` inventa um traço nas três, e **nada acusaria**:
+   * um filete a mais não muda texto, nem papel, nem foco.
+   */
+  rule?: RuleDoubleAccent | 'none';
 }
 
 /**
@@ -180,20 +303,142 @@ export interface ScreenProps {
  */
 export function Screen({
   children,
+  rail,
+  rule = 'top',
   spacing = 'tight',
   title,
-  width = 'narrow',
+  width = 'reading',
 }: ScreenProps) {
+  /*
+    ⚠️ Um lugar só decide se há filete, e é o que impede os dois `return`
+    abaixo de divergirem. A primeira entrega desta fatia tinha o filete SÓ no
+    ramo de leitura, com um comentário afirmando que a tela de entrada "não tem
+    filete de abertura" — e `Main.dc.html:35` e `Convite.dc.html:37` **têm**,
+    na forma `top`, que é a mesma das outras sete.
+  */
+  const fillet = rule === 'none' ? null : <RuleDouble accent={rule} />;
+
+  if (width === 'entry') {
+    /*
+      A tela de entrada NÃO é a edição crítica: não há o que ler ao lado de um
+      formulário de dois campos, e por isso ela não tem coluna nem margem. É a
+      única forma que sobreviveu à decisão B.
+    */
+    return (
+      <section
+        className={cx(
+          'mx-auto flex w-full max-w-md flex-col p-6',
+          SCREEN_SPACING_CLASS[spacing],
+        )}
+      >
+        <h1 className={SCREEN_TITLE_CLASS}>{title}</h1>
+        {fillet}
+        {children}
+      </section>
+    );
+  }
+
   return (
-    <section
-      className={cx(
-        'mx-auto flex w-full flex-col p-6',
-        SCREEN_WIDTH_CLASS[width],
-        SCREEN_SPACING_CLASS[spacing],
-      )}
-    >
-      <h1 className="text-2xl font-semibold">{title}</h1>
-      {children}
-    </section>
+    /*
+      ⚠️ **O `ReadingColumn` ENTRA DENTRO DO `Screen`, NÃO NO LUGAR DELE**
+      (decisão A). É o que faz o `h1` continuar saindo daqui — e a guarda
+      `no page declares an h1 of its own` de `__tests__/chrome.test.tsx`
+      continuar sendo a mais forte do cromo, sem depender do nome de função
+      nenhuma.
+
+      `pt-5` = os 20px de topo do `<main>` do celular, que são a MAIORIA
+      medida: **11 dos 16** artboards de celular usam `padding-top:20px`
+      (`Livro.dc.html:41`, `Acervo`, `Busca`, `Preferencias`, `NovaAnotacao`,
+      `NovoGrifo`, `CorrigirGrifo`, `NovoLivro`, `EditarLivro`, `Avulsa`), dois
+      usam 18px (`Dia`, `DiaEscuro`) e os três restantes são telas de entrada e
+      404 (48 · 56 · 120px).
+
+      `min-[1120px]:pt-0` devolve o comando ao `min-[1120px]:pt-10` do
+      `ReadingColumn` acima do corte — os dois são do mesmo elemento, e é a
+      ordem de emissão do Tailwind (variante de mídia depois do utilitário cru)
+      que decide. O acusador da EXISTÊNCIA dele é
+      `chrome.test.tsx › the top gutter of the reading screen`; sem ele os dois
+      recuos se somam e o desktop fica com 60px.
+
+      ⚠️ **`pb-7` NÃO VEM DO CANVAS, e a primeira entrega desta fatia o citou
+      como se viesse** (`Inicio.dc.html:36`, `padding:… 28px …`). Medido:
+      **15 dos 16** artboards de celular têm `padding-bottom:0`, e o `Inicio` é
+      o único com 28px. Mas o zero dos 15 é **artefato do mock**, não decisão de
+      desenho: naqueles artboards o `<main>` é `flex-grow:1` com
+      `overflow:hidden` dentro de uma moldura de altura fixa, então o conteúdo
+      nunca chega à borda de baixo e o recuo inferior não pinta nada. O
+      `Inicio` é o único em que o conteúdo termina de verdade — e é o único
+      número que o canvas chegou a exercitar. Num app que ROLA, todas as telas
+      terminam. Fica 28px, **declarado como decisão do app** e não como medida
+      do canvas.
+    */
+    <ReadingColumn rail={rail}>
+      <section
+        className={cx(
+          'flex w-full flex-col pb-7 pt-5 min-[1120px]:pt-0',
+          SCREEN_SPACING_CLASS[spacing],
+        )}
+      >
+        <h1 className={SCREEN_TITLE_CLASS}>{title}</h1>
+        {fillet}
+        {children}
+      </section>
+    </ReadingColumn>
   );
+}
+
+/**
+ * ⚠️ **A BARRA DE CONTEXTO, COM O `Link` DO ROTEADOR — a decisão D.**
+ *
+ * A `ContextBar` de `@clube/ui` recebe a âncora por `renderLink`, e o padrão
+ * dela é um `<a href>` cru — porque `packages/ui` **não pode** conhecer o
+ * roteador (um design system que importa `react-router-dom` o arrasta para
+ * todo bundle que importa um `Button`).
+ *
+ * ⚠️ **E âncora crua num PWA é navegação de DOCUMENTO: ela recarrega o shell
+ * inteiro e perde o estado em memória** — a sessão, o clube ativo, o rascunho
+ * do editor. É o mesmo defeito que o `listItemRouterLink` fecha para as listas
+ * desde a Tarefa 17, e é **invisível em teste de render**: o `<a href>` existe,
+ * tem o endereço certo, e o teste de "o link aponta para o lugar certo" fica
+ * verde enquanto o app recarrega a cada volta.
+ *
+ * Por isso a fiação mora AQUI, e não em cada tela: uma tela que esquecesse o
+ * `renderLink` reabriria o defeito em silêncio, e as Tarefas 43 a 46 têm
+ * quatro telas para lembrar. O acusador é
+ * `__tests__/chrome.test.tsx › goes back WITHOUT reloading the PWA`.
+ *
+ * O `listItemRouterLink` é reusado de propósito: `ContextBarLinkProps` é um
+ * **alias** de `ListItemLinkProps` (declarado como tal em `context-bar.tsx`),
+ * e um segundo `renderLink` com o mesmo corpo seria o segundo nome para uma
+ * coisa só que este repositório já pagou três vezes.
+ *
+ * ⚠️ Nenhuma tela a usa NESTA fatia — quem a põe na tela são as 43 a 46.
+ */
+/**
+ * ⚠️ **`Omit` DISTRIBUTIVO, e o `T extends unknown` não é enfeite.**
+ *
+ * `ContextBarProps` é `ContextBarBase & (sem ação | com ação)` — uma união
+ * discriminada. Um `Omit<ContextBarProps, 'renderLink'>` direto **colapsa a
+ * união num objeto só**: o compilador perde a discriminação, e a barra com
+ * `actionLabel` mas sem `onAction` — a combinação que a decisão H da 41b
+ * existe para tornar impossível — volta a compilar. Medido: o `tsc` acusou
+ * (`TS2322`) no primeiro conserto desta auditoria.
+ *
+ * O `T extends unknown ? … : …` faz o `Omit` rodar **em cada membro** da
+ * união, preservando as duas formas.
+ */
+type WithoutRenderLink<T> = T extends unknown ? Omit<T, 'renderLink'> : never;
+
+export function ScreenContextBar(
+  /*
+    ⚠️ **Sem `renderLink`, e não `ContextBarProps` cru.** Com o tipo inteiro,
+    uma tela podia passar `renderLink` e ele era **descartado em silêncio** — o
+    `{...props}` vem ANTES, então o daqui sempre ganha. Uma prop aceita e
+    ignorada é pior que uma prop inexistente: ela parece funcionar. É o mesmo
+    defeito que a nota nº 1 da Tarefa 41a mediu no `className` do `Field`
+    ("seria uma prop nova com zero efeito"). Agora o compilador recusa.
+  */
+  props: WithoutRenderLink<ContextBarProps>,
+) {
+  return <ContextBar {...props} renderLink={listItemRouterLink} />;
 }

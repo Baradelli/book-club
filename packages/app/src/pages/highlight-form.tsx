@@ -267,8 +267,16 @@ function NewHighlight({ bookId }: { bookId: string }) {
     }
   }
 
+  /*
+    ⚠️ **SEM FILETE (Tarefa 42, auditoria B2).** O canvas não desenha o par de
+    traços nesta tela — conferido pelo `gap:3px` dos 21 artboards —, e o
+    padrão do `Screen` é `top`. Sem o `rule="none"` a tela ganha um traço
+    que o desenho não tem, e nada acusa: filete a mais não muda texto, nem
+    papel, nem foco. O acusador é
+    `chrome.test.tsx › the screens the canvas draws with NO rule`.
+  */
   return (
-    <Screen title={t('pages.highlightForm.newTitle')}>
+    <Screen rule="none" title={t('pages.highlightForm.newTitle')}>
       <HighlightFields
         color={color}
         colorError={
@@ -614,5 +622,9 @@ function ExistingHighlight({
     );
   }
 
-  return <Screen title={t('pages.highlightForm.editTitle')}>{body()}</Screen>;
+  return (
+    <Screen rule="none" title={t('pages.highlightForm.editTitle')}>
+      {body()}
+    </Screen>
+  );
 }

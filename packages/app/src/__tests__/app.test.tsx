@@ -46,6 +46,39 @@ function respondWith(status: number, body: unknown): void {
   );
 }
 
+/**
+ * Um servidor com UM clube, para o `ClubPicker` ter o que nomear.
+ *
+ * ⚠️ O `respondWith` acima responde a MESMA coisa a todo endereço, e é fiel o
+ * bastante para os testes de sessão — mas com ele o `/me` devolve
+ * `{ token: … }`, o `activeClub` fica `null` e o cabeçalho não escreve nome de
+ * clube nenhum. Quem mede o nome precisa de um `/me` de verdade.
+ */
+function respondWithOneClub(): void {
+  vi.stubGlobal('fetch', (url: string) =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      text: () =>
+        Promise.resolve(
+          JSON.stringify(
+            url.includes('/me')
+              ? {
+                  id: 'u-marcos',
+                  email: 'marcos@clube.test',
+                  name: 'Marcos',
+                  isSuperAdmin: false,
+                  clubs: [
+                    { id: 'c-casal', name: 'Clube do Casal', role: 'OWNER' },
+                  ],
+                }
+              : { token: 'token-renovado' },
+          ),
+        ),
+    }),
+  );
+}
+
 /** O `TypeError: Failed to fetch` do navegador sem rede. */
 function failWithNetworkError(): void {
   vi.stubGlobal('fetch', () =>
@@ -143,5 +176,122 @@ describe('App', () => {
     // sessão morta sai, pelo `onUnauthorized` do cliente.
     expect(storage.getItem(TOKEN_STORAGE_KEY)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Sair' })).toBeNull();
+  });
+});
+
+/**
+ * ⚠️ **O CABEÇALHO DO CANVAS — a decisão H da Tarefa 42, e ela é MEDIDA.**
+ *
+ * As duas alturas, conferidas artboard a artboard nos 21 arquivos do canvas
+ * (`grep -n '<header' *.html`):
+ *
+ * | largura | altura | recuo | papel | filete | artboards |
+ * | --- | --- | --- | --- | --- | --- |
+ * | celular | **52px** | `0 20px` | `--surface` | `1px --border` | **16**, entre eles `Inicio.dc.html:26` |
+ * | ≥1120px | **56px** | `0 40px` | `--surface` | `1px --border` | **5**: `InicioDesktop.dc.html:21`, `DiaDesktop:21`, `LivroDesktop:21`, `NovaAnotacaoDesktop:23`, `NovoGrifoDesktop:23` |
+ *
+ * ⚠️ **A SPEC CITAVA `Inicio.dc.html:32` E `InicioDesktop.dc.html:32` PARA OS
+ * DOIS, E AS DUAS LINHAS ESTÃO ERRADAS** — a 32 do `Inicio` é o `<main>` e a do
+ * `InicioDesktop` é o `</div>` do grupo da direita — o `</header>` está na
+ * :33. ⚠️ **E esta linha estava errada na PRIMEIRA correção desta fatia**, que
+ * é o mesmo defeito uma camada acima: conferir a spec de cabeça em vez de ler
+ * a linha. Os NÚMEROS (52 e 56) estão certos; as
+ * coordenadas não. Corrigido aqui contando o `<header>` de cada arquivo, que é
+ * a única forma de a próxima fatia reconferir sem adivinhar.
+ *
+ * ⚠️ **E ELAS SÃO UNÂNIMES DENTRO DE CADA CLASSE — 16 e 5, e não "os
+ * artboards"**: é a classe de erro nº 1 deste bloco (generalização de
+ * amostra), e por isso o número está escrito.
+ *
+ * O que se assere é a CLASSE, e não o pixel: o jsdom não tem layout, então
+ * "tem 52px de altura" não é medível aqui — é a mesma escolha, com a mesma
+ * razão, do `chrome.test.tsx` para as larguras.
+ */
+describe('the header of the canvas (decision H)', () => {
+  function headerOf(container: HTMLElement): HTMLElement {
+    const header = container.querySelector('header');
+    // Sem esta precondição as asserções abaixo seriam vazias (§7.4): um
+    // `querySelector` que não acha devolve `null`, e `null?.className` é
+    // `undefined` — que não contém classe nenhuma e passaria em todo `not`.
+    if (header === null) throw new Error('o shell não tem `<header>`');
+    return header;
+  }
+
+  it('is 52px tall on the phone and 56px above the 1120px cut', async () => {
+    respondWith(200, { token: 'token-renovado' });
+    await renderApp(memoryStorage({ [TOKEN_STORAGE_KEY]: 'token-da-sessao' }));
+
+    const className = headerOf(document.body).className;
+
+    // `h-13` = 52px e `h-14` = 56px (passo de 4px do Tailwind).
+    expect(className).toContain('h-13');
+    expect(className).toContain('min-[1120px]:h-14');
+    // Recuo: 20px no celular, 40px acima do corte.
+    expect(className).toContain('px-5');
+    expect(className).toContain('min-[1120px]:px-10');
+  });
+
+  it('paints the header with the CARD colour, not the page colour', async () => {
+    respondWith(200, { token: 'token-renovado' });
+    await renderApp(memoryStorage({ [TOKEN_STORAGE_KEY]: 'token-da-sessao' }));
+
+    const className = headerOf(document.body).className;
+
+    /*
+      ⚠️ O canvas dá ao cabeçalho `background:var(--surface)` enquanto a página
+      é `--bg` — são DUAS superfícies, e é exatamente por isso que a regra 9
+      desta fatia manda ler o `theme-tokens.test.ts` antes de mexer. Ele mede o
+      `<div>` de `min-h-dvh` (a PÁGINA), não este elemento: as duas guardas
+      falam de elementos diferentes e nenhuma precisou afrouxar.
+    */
+    expect(className).toContain('bg-surface');
+    expect(className).not.toContain('bg-canvas');
+    // O filete hairline embaixo, nunca sombra: o desenho é caderno.
+    expect(className).toContain('border-b');
+    expect(className).toContain('border-line');
+  });
+
+  /**
+   * ⚠️ **A DIVERGÊNCIA DO NOME DO CLUBE ESTAVA MEDIDA E CERTA — E SEM GUARDA.**
+   *
+   * O canvas desenha o nome do clube só nos cinco artboards de 1280px
+   * (`InicioDesktop.dc.html:24`), e esta fatia decidiu mantê-lo visível também
+   * no celular: é o ÚNICO lugar em que o clube é nomeado lá (o `ClubPicker` só
+   * vira `<select>` com 2+ clubes).
+   *
+   * Medido na auditoria: **esconder o nome com `hidden min-[1120px]:block`
+   * passava por 886 testes**. O jsdom não aplica CSS, então
+   * `home.test.tsx › shows the club name in the header even with a single club
+   * (decision F)` fica **verde** com o nome apagado na tela — a guarda que
+   * existe para isto é cega justamente para a forma mais provável de o defeito
+   * entrar.
+   *
+   * A propriedade testável é a CLASSE: um utilitário de visibilidade no
+   * elemento que carrega o nome é o que faria a próxima fatia escondê-lo sem
+   * querer.
+   */
+  it('⚠️ keeps the club name VISIBLE on the phone, against the canvas and on purpose', async () => {
+    respondWithOneClub();
+    await renderApp(memoryStorage({ [TOKEN_STORAGE_KEY]: 'token-da-sessao' }));
+
+    const name = screen.queryByText('Clube do Casal');
+    // Sem esta precondição a asserção abaixo é vazia (§7.4): um `null` não tem
+    // classe nenhuma, e "não contém `hidden`" passaria com o nome ausente.
+    expect(name).not.toBeNull();
+
+    for (const utility of ['hidden', 'invisible', 'sr-only', 'opacity-0']) {
+      expect(name?.className.split(/\s+/u)).not.toContain(utility);
+    }
+  });
+
+  it('writes the name of the app in the reading serif (Fraunces 16/600)', async () => {
+    respondWith(200, { token: 'token-renovado' });
+    await renderApp(memoryStorage({ [TOKEN_STORAGE_KEY]: 'token-da-sessao' }));
+
+    // `Inicio.dc.html:27`: `font-family:Fraunces;font-size:16px;font-weight:600`.
+    const name = screen.queryByText('Clube do Livro');
+    expect(name).not.toBeNull();
+    expect(name?.className).toContain('font-reading');
+    expect(name?.className).toContain('font-semibold');
   });
 });

@@ -13,6 +13,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/auth-context';
 import { HOME_PATH } from '../auth/require-auth';
 import { useActiveClub } from '../club/active-club';
+import { SCREEN_TITLE_CLASS } from './chrome';
 import {
   fieldMessage,
   type FormMessage,
@@ -161,9 +162,14 @@ export function AcceptInvitePage() {
   return (
     <section className="mx-auto flex w-full max-w-md flex-col gap-6 p-6">
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">
-          {t('pages.acceptInvite.title')}
-        </h1>
+        {/*
+          ⚠️ **A MESMA CLASSE DO `Screen`, importada e não copiada** (Tarefa
+          42, auditoria). Esta tela está no `H1_EXCEPTIONS` porque o `h1` dela
+          vive num `div gap-2` junto com a descrição — não porque a TIPOGRAFIA
+          do título divirja. O canvas a desenha na mesma serifa das outras
+          (`Convite.dc.html:35`: Fraunces 30px/500).
+        */}
+        <h1 className={SCREEN_TITLE_CLASS}>{t('pages.acceptInvite.title')}</h1>
         <p className="text-sm text-muted">
           {t('pages.acceptInvite.description')}
         </p>

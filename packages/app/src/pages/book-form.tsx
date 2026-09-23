@@ -45,10 +45,27 @@ import {
  * ⚠️ **O `Notice` E O `Screen` VÊM DE `./chrome`** desde a Tarefa 25 — eram
  * cópias locais, e a do `Notice` era uma de cinco (decisão H da 25).
  *
- * ⚠️ **E ESTA TELA PASSA `width="wide"` NOS QUATRO `Screen`** (`max-w-4xl`, a
+ * ⚠️ ~~**E ESTA TELA PASSA `width="wide"` NOS QUATRO `Screen`** (`max-w-4xl`, a
  * decisão F desta fatia): é a única tela de administração do MVP 1, e a linha
  * do plano tem três campos. No celular ela empilha; no desktop ela cabe inteira
- * numa linha. As outras telas ficam na coluna estreita, que é o padrão.
+ * numa linha. As outras telas ficam na coluna estreita, que é o padrão.~~
+ *
+ * ⚠️ **`width="wide"` SAIU NA TAREFA 42, pela decisão B do MVP 3.5:** as duas
+ * larguras de conteúdo (`max-w-2xl` e `max-w-4xl`) deram lugar ao modelo do
+ * canvas — coluna de 680px com margem de 320px acima de 1120px, uma coluna com
+ * 20px de recuo abaixo. Os quatro `Screen` desta tela passaram ao padrão, e
+ * **esta é a única tela fora de `day-note`/`free-note` que a Tarefa 42 tocou**:
+ * são quatro deleções de uma palavra, obrigadas pelo tipo.
+ *
+ * ⚠️ **O QUE ISSO CUSTA, MEDIDO E EM ABERTO:** o canvas **não tem artboard de
+ * desktop para o cadastro de livro** (os cinco de 1280px são `Inicio`, `Dia`,
+ * `Livro`, `NovaAnotacao` e `NovoGrifo`), então os 680px aqui são a decisão B
+ * aplicada, e não uma medição. A linha do plano continua cabendo: ela vira
+ * `flex-row` a partir de `sm` (640px) com `sm:w-44` + `sm:flex-1` + `sm:w-44`
+ * (`plan-editor.tsx:302,307,312,317`), e o campo do meio passa de ~490px para
+ * ~270px acima do corte. Abaixo de 1120px a tela ficou MAIS larga que antes,
+ * porque o `max-w-4xl` (896px) deixou de existir. Quem revisita é a Tarefa 47,
+ * dona dos formulários.
  */
 
 /** Identidade estável para o modo criar — o plano nasce vazio. */
@@ -114,11 +131,7 @@ function NewBook({ clubId }: { clubId: string }) {
 
   const waiting = meNotice(t, club);
   if (waiting !== null) {
-    return (
-      <Screen title={t('pages.bookForm.newTitle')} width="wide">
-        {waiting}
-      </Screen>
-    );
+    return <Screen title={t('pages.bookForm.newTitle')}>{waiting}</Screen>;
   }
 
   // REGRA 2: a rota também recusa. Sem isso, "a entrada não aparece" seria só
@@ -126,14 +139,14 @@ function NewBook({ clubId }: { clubId: string }) {
   // formulário para qualquer membro.
   if (!isClubAdmin(club.clubs, clubId)) {
     return (
-      <Screen title={t('pages.bookForm.newTitle')} width="wide">
+      <Screen title={t('pages.bookForm.newTitle')}>
         <Notice title={t('pages.bookForm.notAdmin')} />
       </Screen>
     );
   }
 
   return (
-    <Screen title={t('pages.bookForm.newTitle')} width="wide">
+    <Screen title={t('pages.bookForm.newTitle')}>
       <BookForm book={null} clubId={clubId} planItems={NO_PLAN} />
     </Screen>
   );
@@ -209,11 +222,7 @@ function EditBook({ bookId }: { bookId: string }) {
     );
   }
 
-  return (
-    <Screen title={t('pages.bookForm.editTitle')} width="wide">
-      {body()}
-    </Screen>
-  );
+  return <Screen title={t('pages.bookForm.editTitle')}>{body()}</Screen>;
 }
 
 /**

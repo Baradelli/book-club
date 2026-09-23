@@ -1,4 +1,5 @@
 import { loginResponseSchema } from '@clube/shared';
+import { cx, FOCUS_RING } from '@clube/ui';
 import { SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -68,7 +69,18 @@ function ClubPicker() {
 
   if (clubs.length < 2) {
     return (
-      <span className="max-w-32 truncate text-xs text-muted">
+      /*
+        ⚠️ **O NOME DO CLUBE EM MONO, e ele FICA no celular — divergência do
+        canvas, declarada.** O canvas desenha o nome do clube só nos cinco
+        artboards de 1280px (`InicioDesktop.dc.html:24`:
+        `'Geist Mono' 10px 0.12em maiúsculo`), e o cabeçalho de celular não o
+        tem. Escondê-lo abaixo de 1120px tiraria do celular o ÚNICO lugar em
+        que o clube é nomeado — e faria isso em silêncio, porque o jsdom não
+        aplica CSS: `home.test.tsx › shows the club name in the header even
+        with a single club (decision F)` continuaria verde com o nome
+        invisível. Divergência de pintura, não de informação.
+      */
+      <span className="max-w-32 truncate font-mono text-eyebrow uppercase tracking-[0.12em] text-muted">
         {activeClub.name}
       </span>
     );
@@ -78,7 +90,7 @@ function ClubPicker() {
     <label className="flex items-center gap-1 text-xs">
       <span className="sr-only">{t('pages.home.clubLabel')}</span>
       <select
-        className="max-w-32 rounded border border-line bg-surface px-1 py-0.5"
+        className="max-w-32 rounded-control border border-line bg-surface px-1 py-0.5"
         value={activeClub.id}
         onChange={(event) => {
           selectClub(event.target.value);
@@ -102,7 +114,7 @@ function ThemePicker() {
     <label className="flex items-center gap-1 text-xs">
       <span className="sr-only">{t('theme.label')}</span>
       <select
-        className="rounded border border-line bg-surface px-1 py-0.5"
+        className="rounded-control border border-line bg-surface px-1 py-0.5"
         value={theme.preference}
         onChange={(event) => {
           const next = event.target.value;
@@ -125,19 +137,86 @@ export function App() {
   useSessionRefresh();
 
   return (
-    // `bg-canvas` (→ `--clube-bg`) e NÃO `bg-surface`: `surface` é a cor de
+    // `bg-canvas` (→ `--bg`) e NÃO `bg-surface`: `surface` é a cor de
     // CARTÃO. Pintar a página com ela colapsa a hierarquia de superfície da
     // Tarefa 13 — todo `bg-surface`/`hover:bg-surface` dos componentes passa a
     // pintar exatamente a cor da página, com contraste MEDIDO de 1.0000:1 nos
     // dois temas, e o hover do `ListItem` (o único retorno visual de "dá para
     // tocar aqui") desaparece. E são duas pinturas de página em disputa: o
-    // `body { background-color: var(--clube-bg) }` do `styles.css` fica morto,
+    // `body { background-color: var(--bg) }` do `styles.css` fica morto,
     // porque este div ganha. O acusador é `__tests__/theme-tokens.test.ts`.
     <div className="flex min-h-dvh flex-col bg-canvas text-content">
-      <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
-        <span className="text-sm font-semibold">{t('app.name')}</span>
-        <div className="flex items-center gap-3">
+      {/*
+        ============================================================================
+        O CABEÇALHO DO CANVAS — a decisão H da Tarefa 42
+        ============================================================================
+
+        Medido contando o `<header>` dos 21 artboards, e as duas alturas são
+        unânimes DENTRO de cada classe (16 artboards de celular, 5 de desktop —
+        o número está escrito porque "os artboards concordam" é a generalização
+        de amostra que já derrubou afirmações nas fatias 39, 40, 41a e 41b):
+
+        | largura | altura | recuo | papel | filete |
+        | --- | --- | --- | --- | --- |
+        | celular | 52px (`h-13`) | `0 20px` (`px-5`) | `--surface` | `1px --border` |
+        | ≥1120px | 56px (`h-14`) | `0 40px` (`px-10`) | `--surface` | `1px --border` |
+
+        Fonte: `Inicio.dc.html:26` e `InicioDesktop.dc.html:21`. ⚠️ A spec da
+        fatia citava `:32` para os dois — a 32 do `Inicio` é o `<main>` e a do
+        `InicioDesktop` é o `</div>` do grupo da direita (o `</header>` está na
+        :33). Os números (52/56) estavam certos; as
+        linhas, não.
+
+        ⚠️ **DUAS SUPERFÍCIES A PARTIR DAQUI, e isso é a regra 9.** A página é
+        `--bg` (o `bg-canvas` do `div` acima) e o cabeçalho é `--surface`. As
+        duas guardas falam de elementos diferentes —
+        `theme-tokens.test.ts › paints the shell with exactly one background
+        utility` mede o literal que contém `min-h-dvh`, que continua tendo um
+        `bg-*` só — então nenhuma precisou afrouxar, e o acusador do cabeçalho
+        nasceu em `app.test.tsx`.
+
+        ⚠️ **O CORTE É MEDIA QUERY E SÓ** (decisão G do MVP 3.5): nenhum
+        `userAgent`, nenhum `isMobile`. E `min-[1120px]:` é escrito por extenso
+        em cada classe, nunca montado — o Tailwind emite o que está literal no
+        fonte.
+
+        `shrink-0` porque o `div` externo é `flex-col`: sem ele o cabeçalho
+        encolhe quando o `<main>` cresce, e as duas alturas medidas viram
+        sugestão.
+      */}
+      <header className="flex h-13 shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-5 min-[1120px]:h-14 min-[1120px]:px-10">
+        {/*
+          O canvas agrupa o nome do app e o do clube à ESQUERDA, alinhados pela
+          linha de base (`InicioDesktop.dc.html:22`: `align-items:baseline`,
+          `gap:20px`). No celular o clube não existe no desenho — veja o
+          `ClubPicker`, que registra por que ele fica mesmo assim.
+        */}
+        <div className="flex min-w-0 items-baseline gap-3 min-[1120px]:gap-5">
+          {/*
+            `Inicio.dc.html:27`: Fraunces 16px/600, `letter-spacing:-0.01em`.
+
+            ⚠️ **UM PIXEL DE DIVERGÊNCIA, DECLARADO:** o desktop usa 17px
+            (`InicioDesktop.dc.html:23`) e aqui saem 16px nas duas larguras.
+            17px não existe na escala fechada de sete degraus da Tarefa 39, e
+            um degrau novo entra também na lista fechada de isenções ao
+            `light-dark()` — caro demais para 1px. É a mesma decisão, e o mesmo
+            registro, dos 14/15px do chevron da `ContextBar` (Tarefa 41b).
+          */}
+          <span className="truncate font-reading text-base font-semibold tracking-[-0.01em]">
+            {t('app.name')}
+          </span>
           <ClubPicker />
+        </div>
+        {/*
+          ⚠️ **8px CONTRA OS 4px DO CANVAS (`Inicio.dc.html:28`), declarado.**
+          O canvas encosta o alvo de 44×44 do botao no rotulo "Sair", que la e
+          um `<a>` de 34px de altura. Aqui os dois sao alvos de 44px pelo piso
+          da decisao F, e 4px entre duas areas de toque de 44px deixa o dedo
+          acertar a errada — o mesmo argumento do `-mx-2 px-2` da
+          `ContextBar`. No desktop saem 16px, que e o que
+          `InicioDesktop.dc.html:26` desenha.
+        */}
+        <div className="flex items-center gap-2 min-[1120px]:gap-4">
           <ThemePicker />
           {isAuthenticated ? (
             <>
@@ -163,7 +242,13 @@ export function App() {
               */}
               <Link
                 aria-label={t('nav.settings')}
-                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-control text-content"
+                className={cx(
+                  // `Inicio.dc.html:29`: 44×44, `color:var(--text-muted)`. ⚠️ A
+                  // primeira entrega citava a :28, que e o `<div>` que o
+                  // CONTEM — conferido lendo a linha, nao contando de cabeca.
+                  'inline-flex min-h-11 min-w-11 items-center justify-center rounded-control text-muted transition-colors hover:text-content',
+                  FOCUS_RING,
+                )}
                 to={SETTINGS_PATH}
               >
                 <SlidersHorizontal
@@ -172,8 +257,24 @@ export function App() {
                   focusable="false"
                 />
               </Link>
+              {/*
+                `Inicio.dc.html:32`: `'Geist Mono'` 10px, `0.1em`, maiúsculo,
+                `--text-muted`, sem sublinhado — o mesmo rótulo de sistema que
+                a `ContextBar` usa para "voltar".
+
+                ⚠️ **`<button>` e não o `<a href="#">` do canvas.** Sair é uma
+                AÇÃO (apaga o token), não um endereço; uma âncora daria menu de
+                contexto com "abrir em nova aba" para algo que não abre nada. O
+                canvas desenha a pintura, não a semântica.
+
+                `min-h-11` = 44px: o canvas dá `padding:12px 0` (≈34px), e o
+                piso de toque da decisão F vence, como nas Tarefas 41a e 41b.
+              */}
               <button
-                className="text-xs underline"
+                className={cx(
+                  'inline-flex min-h-11 items-center rounded-control font-mono text-eyebrow uppercase tracking-[0.1em] text-muted transition-colors hover:text-content',
+                  FOCUS_RING,
+                )}
                 onClick={signOut}
                 type="button"
               >
