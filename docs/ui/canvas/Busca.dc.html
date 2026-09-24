@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>13 · Busca</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&amp;family=Geist+Mono:wght@400;500&amp;family=Geist:wght@400;500;600&amp;family=Instrument+Serif:ital@0;1&amp;display=swap">
+<style>
+/*TOKENS*/
+body{--bg:#f5f1e8;--surface:#f9f5ec;--surface-2:#f0ece0;--surface-today:#faf3e4;--border:#d8d1bf;--border-soft:#e3ddc9;--border-strong:#a89e80;--leader:#babcb2;--leader-future:#d4d6cc;--text:#1a201a;--text-muted:#565b52;--text-subtle:#74786e;--text-faint:#9a9d92;--accent:#143524;--accent-hover:#1b4632;--accent-fg:#f5f1e8;--gold:#946d2c;--gold-strong:#785822;--gold-line:#d6ae64;--gold-soft:#faf3e4;--person-bg:#dde9e2;--person-border:#b5d3c3;--person-fg:#1b4632;--spine-bg:#143524;--spine-edge:#0f2419;--spine-fg:#dde9e2;--spine2-bg:#785822;--spine2-edge:#5c4317;--spine2-fg:#f5ead4;--pen-a:#f0e2b4;--pen-a-dot:#c89a44;--pen-v:#d7e5d5;--pen-v-dot:#4a8e6e;--pen-l:#f2ddc9;--pen-l-dot:#a9613a;--pen-z:#d8e0e8;--pen-z-dot:#52708c;--pen-r:#f0dade;--pen-r-dot:#9c5a6b;--danger:#7a3520;--danger-bg:#f4dcd0;--sel:#cfe0d6}
+/*/TOKENS*/
+body{margin:0;font-family:Geist,system-ui,sans-serif;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+a{color:var(--accent)}
+a:hover{color:var(--accent-hover)}
+input,textarea,select{font-family:inherit;color:inherit;background:none;border:none;outline:none;padding:0;width:100%;box-sizing:border-box;resize:none}
+input::placeholder,textarea::placeholder{color:var(--text-faint)}
+</style>
+</helmet>
+
+<div style="width:390px;height:1100px;box-sizing:border-box;background:var(--bg);display:flex;flex-direction:column;overflow:hidden;">
+
+  <header style="height:52px;flex-shrink:0;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border);">
+    <span style="font-family:Fraunces,Georgia,serif;font-size:16px;font-weight:600;letter-spacing:-0.01em;">Clube do Livro</span>
+    <div style="display:flex;align-items:center;gap:4px;">
+      <button aria-label="Preferências" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="8" x2="20" y2="8"></line><line x1="4" y1="16" x2="20" y2="16"></line><circle cx="9" cy="8" r="2.4"></circle><circle cx="15" cy="16" r="2.4"></circle></svg>
+      </button>
+      <a href="#" style="font-family:'Geist Mono',Menlo,monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;text-decoration:none;color:var(--text-muted);padding:12px 0 12px 8px;">Sair</a>
+    </div>
+  </header>
+
+  <a href="Inicio.dc.html" style="height:38px;flex-shrink:0;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding:0 20px;background:var(--bg);border-bottom:1px solid var(--border-soft);text-decoration:none;color:var(--text-muted);">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="14.5 5 7.5 12 14.5 19"></polyline></svg>
+    <span style="font-family:'Geist Mono',Menlo,monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;">Início</span>
+  </a>
+
+  <main style="flex-grow:1;box-sizing:border-box;padding:20px 20px 0 20px;display:flex;flex-direction:column;gap:18px;overflow:hidden;">
+
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <h1 style="margin:0;font-family:Fraunces,Georgia,serif;font-size:28px;font-weight:500;line-height:1.14;letter-spacing:-0.02em;">Busca</h1>
+      <div style="display:flex;flex-direction:column;gap:3px;">
+        <div style="height:2px;background:var(--accent);"></div>
+        <div style="height:1px;background:var(--border);"></div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <label for="q" style="font-family:'Geist Mono',Menlo,monospace;font-size:9.5px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-muted);">O que você procura</label>
+      <div style="display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border-strong);padding-bottom:8px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.7" stroke-linecap="round" style="flex-shrink:0;"><circle cx="11" cy="11" r="6.5"></circle><line x1="16" y1="16" x2="20.5" y2="20.5"></line></svg>
+        <input id="q" type="text" value="vulnerabilidade" style="font-family:Fraunces,Georgia,serif;font-size:20px;">
+        <button aria-label="Limpar a busca" style="width:44px;height:44px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>
+        </button>
+      </div>
+      <span style="font-family:'Geist Mono',Menlo,monospace;font-size:9.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-subtle);">3 resultados em todo o clube</span>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px;">
+
+      <a href="Avulsa.dc.html" style="display:flex;flex-direction:column;gap:6px;text-decoration:none;color:inherit;padding-bottom:14px;border-bottom:1px solid var(--border-soft);">
+        <span style="font-family:'Geist Mono',Menlo,monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-subtle);">A Coragem de Ser Imperfeito</span>
+        <div style="display:flex;align-items:flex-start;gap:12px;">
+          <span style="width:24px;height:24px;flex-shrink:0;border-radius:999px;background:var(--person-bg);border:1px solid var(--person-border);display:flex;align-items:center;justify-content:center;font-family:'Geist Mono',Menlo,monospace;font-size:10px;color:var(--person-fg);">A</span>
+          <span style="flex-grow:1;display:flex;flex-direction:column;gap:4px;">
+            <span style="font-family:Fraunces,Georgia,serif;font-size:15.5px;font-weight:500;line-height:1.3;">Frases que quero guardar do livro</span>
+            <span style="font-size:13px;line-height:1.45;color:var(--text-muted);">Você · Estou juntando aqui as frases soltas que não cabem no dia…</span>
+          </span>
+          <span style="font-family:'Geist Mono',Menlo,monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-subtle);white-space:nowrap;">Avulsa</span>
+        </div>
+      </a>
+
+      <a href="#" style="display:flex;flex-direction:column;gap:6px;text-decoration:none;color:inherit;padding-bottom:14px;border-bottom:1px solid var(--border-soft);">
+        <span style="font-family:'Geist Mono',Menlo,monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-subtle);">A Coragem de Ser Imperfeito</span>
+        <div style="display:flex;align-items:flex-start;gap:12px;">
+          <span style="width:24px;height:24px;flex-shrink:0;border-radius:999px;background:var(--person-bg);border:1px solid var(--person-border);display:flex;align-items:center;justify-content:center;font-family:'Geist Mono',Menlo,monospace;font-size:10px;color:var(--person-fg);">B</span>
+          <span style="flex-grow:1;display:flex;flex-direction:column;gap:4px;">
+            <span style="font-family:Fraunces,Georgia,serif;font-size:15.5px;font-weight:500;line-height:1.3;">Cap. 2 — Vulnerabilidade não é fraqueza</span>
+            <span style="font-size:13px;line-height:1.45;color:var(--text-muted);">Bruno · O mito de que vulnerabilidade é fraqueza…</span>
+          </span>
+          <span style="font-family:'Geist Mono',Menlo,monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-subtle);white-space:nowrap;">Do dia</span>
+        </div>
+      </a>
+
+      <div style="display:flex;flex-direction:column;gap:9px;padding:14px;background:var(--surface);border:1px solid var(--border-soft);border-radius:4px;">
+        <span style="font-family:'Geist Mono',Menlo,monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-subtle);">A Coragem de Ser Imperfeito</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-family:'Geist Mono',Menlo,monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-subtle);">Grifo</span>
+          <span style="width:9px;height:9px;border-radius:999px;background:var(--pen-v-dot);"></span>
+          <span style="font-family:'Geist Mono',Menlo,monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);">Página 67</span>
+          <span style="width:20px;height:20px;border-radius:999px;background:var(--person-bg);border:1px solid var(--person-border);display:flex;align-items:center;justify-content:center;font-family:'Geist Mono',Menlo,monospace;font-size:9px;color:var(--person-fg);">A</span>
+          <span style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:15px;">Você</span>
+        </div>
+        <p style="margin:0;font-family:Fraunces,Georgia,serif;font-size:16px;line-height:1.6;"><span style="background:var(--pen-v);box-shadow:0 0 0 2px var(--pen-v);">Vulnerabilidade não é vencer nem perder; é ter a coragem de aparecer quando não se pode controlar o resultado.</span></p>
+        <p style="margin:0;font-size:13px;line-height:1.5;color:var(--text-muted);">Essa é a definição que eu queria ter há dez anos.</p>
+      </div>
+
+    </div>
+
+    <div style="flex-grow:1;"></div>
+
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

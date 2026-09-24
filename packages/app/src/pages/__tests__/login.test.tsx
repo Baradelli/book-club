@@ -7,6 +7,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LoginPage } from '../login';
+import { expectNoGuilt, expectNoGuiltBesidesFormError } from './anti-guilt-dom';
 import {
   alwaysReply,
   BackButton,
@@ -511,6 +512,69 @@ describe('the login screen and the password manager (rules 10, 11)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('location').textContent).toBe('/');
     });
+  });
+});
+
+/**
+ * ⚠️⚠️ **A VARREDURA ANTI-CULPA — ELA NUNCA TINHA RODADO NESTA TELA.**
+ *
+ * Medido na Tarefa 48: `expectNoGuilt` aparecia **zero** vezes neste arquivo,
+ * no `accept-invite.test.tsx` e no `preferencias.test.tsx`. As quatro telas
+ * desta fatia eram as quatro sem varredura — e a de entrada é justamente onde
+ * uma frase de cobrança ("você errou de novo") caberia sem revisão nenhuma.
+ *
+ * ⚠️ **A VARIANTE FOI ESCOLHIDA LENDO O `anti-guilt-dom.ts`, não copiada de
+ * teste antigo** (as duas são mutuamente exclusivas desde a rodada de correção
+ * da Tarefa 44). Aqui é `expectNoGuilt()` e nunca
+ * `expectNoGuiltWithPlanPosition()`: a tela de entrada não mostra posição no
+ * plano em estado nenhum, e a variante da posição exige ≥ 1 subtração efetiva
+ * — ela ficaria vermelha na hora, pelo motivo errado.
+ *
+ * Nos estados com campo ou formulário inválido é
+ * `expectNoGuiltBesidesFormError()`, com a lista EXATA dos vermelhos
+ * legítimos: o `Field` pinta a mensagem com `text-danger` por construção, e a
+ * varredura de cor não sabe distinguir "confira a senha" de uma cobrança.
+ */
+describe('⚠️ a varredura anti-culpa na tela de entrada (regra 8, Tarefa 48)', () => {
+  it('sweeps the form at rest', () => {
+    stubFetch(alwaysReply({ status: 200, body: { token: 't' } }));
+    renderPage(<LoginPage />);
+
+    expectNoGuilt();
+  });
+
+  it('sweeps the two INVALID fields, with the two legitimate reds', async () => {
+    stubFetch(alwaysReply({ status: 200, body: { token: 't' } }));
+    renderPage(<LoginPage />);
+    fill('nao-e-email', '');
+    await submit();
+
+    expectNoGuiltBesidesFormError([
+      pt.errors.fields.email,
+      pt.errors.fields.password,
+    ]);
+  });
+
+  it('⚠️ sweeps the error the person will actually see — the wrong password', async () => {
+    stubFetch(alwaysReply({ status: 401, body: { message: 'nope' } }));
+    renderPage(<LoginPage />);
+    fill('marcos@clube.test', 'errada');
+    await submit();
+
+    await screen.findByText(pt.pages.login.invalidCredentials);
+    expectNoGuiltBesidesFormError([pt.pages.login.invalidCredentials]);
+  });
+
+  it('sweeps the network failure too', async () => {
+    stubFetch(() => {
+      throw new TypeError('Failed to fetch');
+    });
+    renderPage(<LoginPage />);
+    fill('marcos@clube.test', 'senha-secreta');
+    await submit();
+
+    await screen.findByText(pt.errors.network);
+    expectNoGuiltBesidesFormError([pt.errors.network]);
   });
 });
 

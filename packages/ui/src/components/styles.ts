@@ -23,7 +23,7 @@ export const SPACING_STEP_PX = 4;
 /**
  * Decisão G: foco visível SEMPRE, inclusive no mobile.
  *
- * `outline-hidden` e não `outline-none`: no Tailwind v4 o `outline-hidden`
+ * `outline-hidden` e não o `outline: none` cru: no Tailwind v4 o `outline-hidden`
  * apaga o anel só para quem vê, e mantém o outline no modo de contraste
  * forçado do Windows — onde `outline: none` deixa o controle sem nenhuma
  * indicação de foco.
@@ -46,7 +46,7 @@ export const SPACING_STEP_PX = 4;
  * `never ships the halo WITHOUT the solid outline` existe exatamente para que
  * as duas metades não possam ser separadas.
  *
- * `ring-focus-halo` e não um valor arbitrário: o halo sai de token
+ * O halo sai de TOKEN e não de valor arbitrário:
  * (`--ring-halo`), derivado de `--accent` por `color-mix()`. Um hex aqui seria
  * a cor de ação duplicada num segundo lugar.
  *

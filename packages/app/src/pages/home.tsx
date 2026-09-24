@@ -46,7 +46,7 @@ import { bookNewPath, bookPath, isClubAdmin, searchPath } from './paths';
  * ⚠️ **O PRINCÍPIO ANTI-CULPA É REGRA TESTADA AQUI, NÃO INTENÇÃO** (regra 16).
  * Sem trecho de leitura hoje, ~~esta tela~~ **este arquivo não cobra nada**: nem
  * "você está atrasado", nem "faltam 3 dias", nem badge de pendência, nem vermelho
- * de atraso. `text-danger`/`bg-danger` não aparecem em lugar nenhum deste
+ * de atraso. `text-danger` e o fundo de `--danger` não aparecem em lugar nenhum deste
  * arquivo, e o acusador é a varredura de DOM (texto **e** atributos) de
  * `__tests__/home.test.tsx` — o mesmo espírito da guarda do ADR 0002 no
  * `FilterChip`.

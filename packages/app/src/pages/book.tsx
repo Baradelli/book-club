@@ -156,7 +156,8 @@ import { ReadMarks, TodayReading } from './reading-marks';
  * (`docs/plano-clube-do-livro.md` §1). Esta é a tela onde a cobrança nasceria
  * naturalmente: trinta dias em lista, e a maioria deles sem anotação. Então:
  *
- * - **nada de vermelho.** Nenhum `text-danger`/`bg-danger`, nenhuma cor de
+ * - **nada de vermelho.** Nenhum `text-danger`, nenhum fundo de `--danger`,
+ *   nenhuma cor de
  *   valor arbitrário (`[#…`), nenhum `style` com `--danger`;
  * - **nada de contador.** Nem "3 de 30 dias", nem "+2" ao lado dos avatares,
  *   nem número nenhum derivado de dado. As duas sobreposições dizem **quem**

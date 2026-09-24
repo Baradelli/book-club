@@ -5,5 +5,11 @@ pnpm-lock.yaml
 packages/backend/prisma/migrations
 
 # Documentacao e prosa: quebra de linha e do dono, nao do Prettier.
+#
+# E desde 2026-09-24 a razao ficou MAIOR que estilo: docs/ui/canvas/ guarda os
+# 21 artboards do canvas de design, e 914 citacoes "Arquivo.dc.html:NN" em 96
+# arquivos permanentes apontam para LINHAS deles. Uma passada de formatador
+# invalidaria as 914 de uma vez, em silencio. Quem tirar docs/** daqui quebra
+# packages/app/src/__tests__/canvas-citations.test.ts -- e essa e a intencao.
 *.md
 docs/**

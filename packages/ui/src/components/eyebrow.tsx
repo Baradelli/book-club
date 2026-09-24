@@ -22,7 +22,7 @@ export type EyebrowTone = 'muted' | 'gold';
  */
 const TONE_CLASS: Record<EyebrowTone, string> = {
   /*
-    ⚠️ `text-gold-strong` E NÃO `text-gold`, contra o canvas — e a razão é uma
+    ⚠️ `text-gold-strong` E NÃO o dourado puro, contra o canvas — e a razão é uma
     conta, não gosto. `--gold` no tema claro (`#946d2c`) dá **4,16:1** contra
     `--bg`, **4,31** contra `--surface` e **3,97** contra `--surface-2`; o
     rótulo tem 10px, então o piso é 4,5:1 e ele reprova nas três. O mesmo

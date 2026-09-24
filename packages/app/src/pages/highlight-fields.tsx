@@ -361,7 +361,7 @@ export function ColorField({
  * leitura**. Aqui o papel é um **bloco** com filete de 1px na cor escura da
  * caneta, raio de 3px, recuo de 34px à esquerda para a aspa caber, e um
  * `<textarea>` dentro. Reusar o componente exigiria três props novas
- * (`as`, `ring`, `border`) para um segundo chamador que não quer nada do que
+ * (o elemento, o anel e a borda) para um segundo chamador que não quer nada do que
  * ele faz. São dois desenhos, não duas instâncias de um.
  *
  * ⚠️⚠️ **CORREÇÃO MEDIDA (rodada de correção da 47a): "zero propriedades em
@@ -455,9 +455,43 @@ function QuoteField({
           {t('pages.highlightForm.fields.quoteHint')}
         </span>
       </div>
-      <div
-        className={cx(
-          /*
+      {/*
+        ⚠️⚠️ **A MOLDURA DE CAMPO — decisão do dono de 2026-09-24 (Tarefa 48).**
+
+        O papel do grifo ganhou **a mesma borda dos outros campos de texto do
+        app**: `border-line-field`, o filete que a decisão A daquela fatia
+        escureceu até fechar **3,63:1** contra a página no claro e **4,01:1**
+        no escuro. O tom da caneta continua pintando o papel **por dentro** —
+        nenhum valor de canvas mudou e nenhum hex persistido foi tocado.
+
+        ⚠️ **POR QUE SÓ AGORA, e a razão é medida:** a nota 19 da Tarefa 47a
+        RECUSOU exatamente isto, com o argumento de que o filete neutro dava
+        **1,35:1** e emoldurar o filete de caneta (2,28 no pior caso) com ele
+        *"não acrescenta fronteira"*. O argumento estava certo **para o filete
+        daquela época**. A decisão A criou um neutro que dá 3,63 / 4,01, e a
+        recusa caiu junto com a premissa em que se apoiava.
+
+        ⚠️⚠️ **E ELA É UM ELEMENTO PRÓPRIO POR NECESSIDADE, não por zelo.**
+        `border-line-field` e `border-pen-a-dot` são o MESMO utilitário
+        (`border-<cor>`), e o `cx` **não resolve conflito de utilitário**:
+        escritos no mesmo elemento, quem vence é a ordem de emissão do CSS —
+        uma invariante que ninguém declara e que já obrigou este bloco a pinar
+        um caso à mão (auditoria da Tarefa 46, B5). Em nós diferentes o
+        conflito não existe.
+
+        `rounded-control` e não `rounded-callout`: o raio de fora é o de dentro
+        mais a espessura do filete (3 + 1 = 4), senão o canto da moldura corta
+        o canto do papel. E 4px é o raio de todo campo e botão do canvas
+        (`Main.dc.html:57`), que é o que "a mesma borda dos outros campos" quer
+        dizer também de forma.
+
+        O acusador — e o do ALCANCE, nas duas rotas — é
+        `highlight-form.test.tsx › ⚠️⚠️ O PAPEL DENTRO DA MOLDURA DE CAMPO`.
+      */}
+      <div className="rounded-control border border-line-field">
+        <div
+          className={cx(
+            /*
             ⚠️ O `border` NU É A LARGURA, e ele não é decoração de escrita: sem
             ele a borda vai a ZERO e o filete da linha seguinte não pinta nada.
             Um mutante que o apagou sobreviveu a 975 testes na primeira entrega
@@ -467,38 +501,39 @@ function QuoteField({
             absoluto e não empurra o texto, então os 34px da esquerda são a
             única coisa que impede o trecho de começar debaixo dela.
           */
-          'relative rounded-callout border py-[18px] pr-[18px] pl-[34px]',
-          pen === null ? NO_PEN_FILL_CLASS : PEN_FILL_CLASS[pen],
-          error !== undefined
-            ? ERROR_EDGE_CLASS
-            : pen === null
-              ? NO_PEN_EDGE_CLASS
-              : PEN_EDGE_CLASS[pen],
-        )}
-      >
-        <span
-          aria-hidden="true"
-          className={cx(
-            'absolute left-2.5 top-2 font-quote text-[40px] leading-none',
-            pen === null ? NO_PEN_INK_CLASS : PEN_INK_CLASS[pen],
+            'relative rounded-callout border py-[18px] pr-[18px] pl-[34px]',
+            pen === null ? NO_PEN_FILL_CLASS : PEN_FILL_CLASS[pen],
+            error !== undefined
+              ? ERROR_EDGE_CLASS
+              : pen === null
+                ? NO_PEN_EDGE_CLASS
+                : PEN_EDGE_CLASS[pen],
           )}
         >
-          {'“'}
-        </span>
-        <textarea
-          aria-describedby={
-            error === undefined ? hintId : `${hintId} ${errorId}`
-          }
-          aria-invalid={error !== undefined ? true : undefined}
-          className={cx(
-            'min-h-[114px] w-full resize-none bg-transparent font-reading text-reading leading-[1.6] text-content',
-            FOCUS_RING,
-          )}
-          id={controlId}
-          onChange={(event) => onChange(event.target.value)}
-          rows={4}
-          value={value}
-        />
+          <span
+            aria-hidden="true"
+            className={cx(
+              'absolute left-2.5 top-2 font-quote text-[40px] leading-none',
+              pen === null ? NO_PEN_INK_CLASS : PEN_INK_CLASS[pen],
+            )}
+          >
+            {'“'}
+          </span>
+          <textarea
+            aria-describedby={
+              error === undefined ? hintId : `${hintId} ${errorId}`
+            }
+            aria-invalid={error !== undefined ? true : undefined}
+            className={cx(
+              'min-h-[114px] w-full resize-none bg-transparent font-reading text-reading leading-[1.6] text-content',
+              FOCUS_RING,
+            )}
+            id={controlId}
+            onChange={(event) => onChange(event.target.value)}
+            rows={4}
+            value={value}
+          />
+        </div>
       </div>
       {error !== undefined ? (
         <p className="text-sm text-danger" id={errorId}>
@@ -653,6 +688,13 @@ const RichEditor = lazy(async () => {
  * fatia **menor do que entrou**: 427 → 407, e este arquivo foi de 309 para
  * 337.
  * Os números estão na entrada 47b do `docs/BACKLOG.md`.
+ *
+ * ⚠️ **E ele foi de 337 para 340 na Tarefa 48**, com as três linhas da moldura
+ * de campo que o dono decidiu em 2026-09-24 (o `<div>` com
+ * `border-line-field` por fora do papel). Continua 60 abaixo do teto de 400.
+ * Some as linhas, não apague o número: foi exatamente por ele não ter sido
+ * somado que os docblocks daqui e do formulário carregaram valores velhos
+ * desde a Tarefa 38i.
  */
 export function LazyComment({
   doc,

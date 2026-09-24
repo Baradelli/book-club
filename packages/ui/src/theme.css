@@ -112,6 +112,43 @@
   --border-soft: light-dark(#e3ddc9, #26282b);
   /* Filete que precisa ser visto: campo com foco, divisor de seção. */
   --border-strong: light-dark(#a89e80, #44464a);
+  /*
+    ⚠️ A FRONTEIRA DO CAMPO DE TEXTO — DECISÃO DO DONO (2026-09-24, Tarefa 48).
+
+    WCAG 1.4.11 pede 3:1 para a fronteira de um COMPONENTE DE INTERFACE. A nota
+    19 da Tarefa 47a mediu o filete padrão contra a página e achou 1,35:1 no
+    claro e 1,38:1 no escuro — e mediu que NENHUM token do projeto passava
+    (o forte dá 2,37 / 1,88; o suave, 1,21 / 1,20). Não era defeito de uma
+    tela: era o estado da base, em NOVE telas de formulário ao mesmo tempo.
+
+    Então o campo ganhou tom PRÓPRIO, escurecido no claro e clareado no escuro
+    até fechar 3:1 contra as seis superfícies em que um campo pode cair:
+
+    | superfície        | claro | escuro |
+    |-------------------|-------|--------|
+    | `--bg`            | 3,63  | 4,01   |
+    | `--surface`       | 3,76  | 3,72   |
+    | `--surface-2`     | 3,47  | 3,33   |
+    | `--surface-today` | 3,70  | 3,47   |
+    | `--gold-soft`     | 3,70  | 3,47   |
+    | `--danger-bg`     | 3,12  | 3,44   |
+
+    ⚠️ O MATIZ É O DO FILETE NEUTRO, só mais fundo: os dois lados saem de
+    `--border` por escala multiplicativa nos três canais, para o campo não
+    virar um cinza de outra família dentro de um caderno creme.
+
+    ⚠️ E CARD E FILETE DECORATIVO NÃO MUDAM. O piso de 3:1 é para controle, não
+    para moldura, e o desenho "caderno encadernado" depende de filete discreto.
+    Quem quiser escurecer o `--border` estará mudando o DESENHO — e há uma
+    asserção em `theme-tokens.test.ts` que o pina discreto justamente para que
+    essa mudança precise ser declarada.
+
+    ⚠️ E O CANVAS TAMBÉM NÃO PASSA, medido: `Main.dc.html:48` desenha o campo
+    com `border-bottom: 1px solid var(--border-strong)` — 2,37:1 no claro.
+    O tom próprio não contraria o canvas por gosto; ele fecha o que o canvas
+    deixou aberto.
+  */
+  --border-field: light-dark(#827d73, #737882);
   /* Os pontinhos de condução do sumário — hoje e futuro. */
   --leader: light-dark(#babcb2, #3a3c40);
   --leader-future: light-dark(#d4d6cc, #2e3033);
@@ -384,7 +421,7 @@
     a bijeção token↔utilitário é exatamente um para um: com `--radius-sheet`
     apontando para `--r-4`, o `--r-3` ficaria órfão e `theme-tokens.test.ts`
     acusaria. Dar o 4px ao controle é o que o canvas já dizia — os 32 `4px` são
-    botão, campo e link-botão (`Inicio.dc.html:56,57`, `Main.dc.html:56`,
+    botão, campo e link-botão (`Inicio.dc.html:56,57`, `Main.dc.html:57`,
     `Acervo.dc.html:51,52`) — e o 3px do `--r-2` foi para o `--radius-callout`,
     que é o raio da caixa de erro do canvas (`Main.dc.html:41`).
   */

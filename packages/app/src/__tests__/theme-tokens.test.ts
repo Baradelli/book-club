@@ -808,3 +808,185 @@ describe('a orientação claro/escuro da paleta', () => {
     }
   });
 });
+
+/**
+ * ============================================================================
+ * A FRONTEIRA DO CAMPO DE TEXTO — decisão do dono de 2026-09-24 (Tarefa 48)
+ * ============================================================================
+ *
+ * WCAG 1.4.11 (contraste de não-texto) pede **3:1** para a fronteira de um
+ * componente de interface. A nota 19 da Tarefa 47a mediu o filete padrão do app
+ * contra a página e achou **1,35:1** no claro e **1,38:1** no escuro — e mediu
+ * também que NENHUM token do projeto passava: o forte dá 2,37 / 1,88 e o suave
+ * dá 1,21 / 1,20. Não era defeito de uma tela; era o estado da base.
+ *
+ * O dono decidiu que a borda de campo de texto ganha **tom próprio**,
+ * escurecido (clareado, no escuro) até passar 3:1 nos dois temas. Medido com o
+ * valor entregue, contra as seis superfícies em que um campo pode cair:
+ *
+ * | superfície        | claro | escuro |
+ * | ----------------- | ----- | ------ |
+ * | `--bg`            | 3,63  | 4,01   |
+ * | `--surface`       | 3,76  | 3,72   |
+ * | `--surface-2`     | 3,47  | 3,33   |
+ * | `--surface-today` | 3,70  | 3,47   |
+ * | `--gold-soft`     | 3,70  | 3,47   |
+ * | `--danger-bg`     | 3,12  | 3,44   |
+ *
+ * ⚠️ **CARD E FILETE DECORATIVO NÃO MUDAM, e isso é decisão escrita.** O piso
+ * de 3:1 é para **componente de interface**, não para moldura — e o desenho
+ * "caderno encadernado" do canvas depende de filete discreto. O utilitário do
+ * filete neutro segue pintando dezenas de lugares; quem troca de tom é só o
+ * campo de texto.
+ *
+ * ⚠️ **NO TEMA ESCURO, FECHAR CONTRASTE É CLAREAR** — a mesma armadilha que o
+ * `--text-subtle` documenta acima. O filete está sobre papel escuro.
+ */
+describe('a fronteira do campo de texto (decisão do dono, 2026-09-24)', () => {
+  /**
+   * As seis superfícies em que um campo de texto do app pode cair. As três
+   * primeiras são as do cromo; as três últimas existem porque o canvas pinta
+   * papel próprio no dia de hoje, no bloco dourado e na caixa de erro.
+   */
+  const FIELD_SURFACES = [
+    '--bg',
+    '--surface',
+    '--surface-2',
+    '--surface-today',
+    '--gold-soft',
+    '--danger-bg',
+  ] as const;
+
+  it('⚠️ gives the text field an edge of its OWN, at 3:1 on every surface, in both themes', () => {
+    const edge = lightDarkPair('--border-field');
+
+    for (const surface of FIELD_SURFACES) {
+      const paper = lightDarkPair(surface);
+      for (const theme of ['light', 'dark'] as const) {
+        expect(contrastRatio(edge[theme], paper[theme])).toBeGreaterThanOrEqual(
+          3,
+        );
+      }
+    }
+  });
+
+  it('⚠️ and the twelve PUBLISHED numbers are the real ones, to the second decimal', () => {
+    /*
+      ⚠️⚠️ **ESTA ASSERÇÃO EXISTE PORQUE DOIS DOS DOZE ESTAVAM ERRADOS, e o
+      erro sobreviveu à entrega inteira.** `--surface-today` e `--gold-soft` no
+      tema claro foram publicados como **3,48** e valem **3,70** — em QUATRO
+      arquivos permanentes ao mesmo tempo (este docblock, o `theme.css`, a spec
+      da tarefa e o `BACKLOG.md`).
+
+      A conclusão não mudou (3,70 passa com mais folga que 3,48), e é isso que
+      torna o caso instrutivo: um número errado que conclui certo não tem
+      sintoma. O que falhou foi o mecanismo — o script da entrega se validava
+      contra pares conhecidos, e **nenhum dos pares conhecidos tocava essas
+      duas superfícies**. A auto-validação pegou um erro do dourado porque
+      havia par ali; aqui não havia, e o número saiu.
+
+      Então a tabela publicada passou a ter acusador: o `>= 3` de cima prova o
+      piso, e isto prova **o número que está escrito na prosa**. Quem mudar o
+      token muda os doze aqui, e ao mudá-los passa pelo docblock.
+    */
+    const PUBLISHED: ReadonlyArray<readonly [string, number, number]> = [
+      ['--bg', 3.63, 4.01],
+      ['--surface', 3.76, 3.72],
+      ['--surface-2', 3.47, 3.33],
+      ['--surface-today', 3.7, 3.47],
+      ['--gold-soft', 3.7, 3.47],
+      ['--danger-bg', 3.12, 3.44],
+    ];
+    const edge = lightDarkPair('--border-field');
+
+    for (const [surface, light, dark] of PUBLISHED) {
+      const paper = lightDarkPair(surface);
+      expect([
+        surface,
+        Number(contrastRatio(edge.light, paper.light).toFixed(2)),
+        Number(contrastRatio(edge.dark, paper.dark).toFixed(2)),
+      ]).toEqual([surface, light, dark]);
+    }
+  });
+
+  it('⚠️ and the ratio itself is checked against an identity, on every colour it measures', () => {
+    /*
+      ⚠️ **A AUTO-VALIDAÇÃO QUE NÃO DEPENDE DE ALGUÉM LEMBRAR DO PAR.** A
+      lição do erro acima é que uma lista de pares conhecidos só cobre o que
+      quem a escreveu lembrou de pôr nela. Esta forma não tem lista: para
+      QUALQUER cor, razão-contra-branco × razão-contra-preto é exatamente
+      **21,00**, porque as duas frações se cancelam
+      (`(1,05 / (L+0,05)) × ((L+0,05) / 0,05)`).
+
+      Ou seja: toda superfície que esta suíte mede se valida sozinha, e um erro
+      de canal (o clássico: trocar R por B, ou pôr o coeficiente errado) quebra
+      a identidade em vez de produzir um número plausível.
+    */
+    const MEASURED = [
+      '--border-field',
+      '--bg',
+      '--surface',
+      '--surface-2',
+      '--surface-today',
+      '--gold-soft',
+      '--danger-bg',
+    ] as const;
+
+    for (const token of MEASURED) {
+      const colours = lightDarkPair(token);
+      for (const theme of ['light', 'dark'] as const) {
+        const product =
+          contrastRatio(colours[theme], '#ffffff') *
+          contrastRatio(colours[theme], '#000000');
+        expect(Number(product.toFixed(2))).toBe(21);
+      }
+    }
+  });
+
+  it('⚠️ is a DIFFERENT tone from the decorative fillets, and says by how much', () => {
+    /*
+      ⚠️ **O PAR GUARDADO DOS DOIS LADOS.** A metade de cima prova que o filete
+      novo passa; esta prova que os TRÊS filetes antigos continuam reprovando —
+      e é ela que mata o mutante que aponta o token novo de volta para o filete
+      neutro, que deixaria a metade de cima vermelha só por sorte do número.
+
+      Os números da nota 19 da 47a, reconferidos aqui contra a página: o neutro
+      dá 1,35 / 1,38, o forte 2,37 / 1,88 e o suave 1,21 / 1,20. Nenhum chega
+      a 3.
+    */
+    const page = lightDarkPair('--bg');
+    const field = lightDarkPair('--border-field');
+
+    for (const decorative of [
+      '--border',
+      '--border-soft',
+      '--border-strong',
+    ] as const) {
+      const fillet = lightDarkPair(decorative);
+      for (const theme of ['light', 'dark'] as const) {
+        // O decorativo REPROVA — é por isso que o campo precisou de tom próprio.
+        expect(contrastRatio(fillet[theme], page[theme])).toBeLessThan(3);
+        // E o do campo é ESTRITAMENTE mais forte que ele, nos dois temas.
+        expect(contrastRatio(field[theme], page[theme])).toBeGreaterThan(
+          contrastRatio(fillet[theme], page[theme]),
+        );
+      }
+    }
+  });
+
+  it('keeps the decorative fillet discreet — 3:1 is for controls, not for frames', () => {
+    /*
+      ⚠️ A metade que impede o conserto de virar varredura: se alguém "resolver"
+      o 1,35 escurecendo o filete neutro, o caderno encadernado vira cartão de
+      aplicativo em 23 arquivos. Esta asserção pina que o decorativo continua
+      SENDO discreto — e quem quiser mudá-lo terá de dizer que está mudando o
+      desenho, não consertando contraste.
+    */
+    const page = lightDarkPair('--bg');
+    const fillet = lightDarkPair('--border');
+
+    for (const theme of ['light', 'dark'] as const) {
+      expect(contrastRatio(fillet[theme], page[theme])).toBeLessThan(2);
+    }
+  });
+});

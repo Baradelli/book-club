@@ -3284,8 +3284,19 @@ nem era buraco.
 # MVP 3.5 — Reestruturação da UI
 
 > Nasceu de `docs/new-ui.md` (2026-09-19) e do canvas de design
-> `https://claude.ai/artifact/YDHTxyof7ji1xqKhoocdDt` — 35 artboards: as 15 telas no tema
-> claro, as mesmas 15 no escuro, e 5 em 1280 px mostrando o layout de duas colunas.
+> `https://claude.ai/artifact/YDHTxyof7ji1xqKhoocdDt` — ~~35 artboards: as 15 telas no tema
+> claro, as mesmas 15 no escuro, e 5 em 1280 px mostrando o layout de duas colunas.~~
+>
+> ⚠️ **São 21 em ARQUIVO, não 35 — medido na Tarefa 48 e corrigido aqui.** O `canvas.json`
+> **declara** os 35 boards, e a pasta tem 21: as 15 telas no claro, os 5 de 1280 px e **um
+> só** do tema escuro, o `DiaEscuro.dc.html`. As outras 14 do escuro (`MainEscuro`,
+> `ConviteEscuro`, `InicioEscuro`, `LivroEscuro`, `NovaAnotacaoEscuro`, `AvulsaEscuro`,
+> `AcervoEscuro`, `NovoGrifoEscuro`, `CorrigirGrifoEscuro`, `NovoLivroEscuro`,
+> `EditarLivroEscuro`, `BuscaEscuro`, `PreferenciasEscuro`, `NaoEncontradaEscuro`) **nunca
+> chegaram como arquivo**. Consequência, dita para ninguém herdar a premissa errada: toda
+> fidelidade ao tema escuro afirmada neste bloco foi conferida contra **um** artboard, e o
+> resto foi derivado dos tokens — que são medidos nos dois temas, então nada do que se
+> entregou muda. O que muda é o que se pode AFIRMAR.
 >
 > A direção, em duas frases: **edição crítica** (no desktop a tela se parte em coluna de
 > leitura de 680 px e margem de 320 px com o aparato; no celular a margem desce para o
@@ -4965,10 +4976,287 @@ API o `FilterBar` da 41 acabou expondo.
       verbatim) acusa **2 vezes**. E a prop `reference` saiu do `FreeNoteRail`: a margem não
       pode mostrá-la porque **não a recebe**. **Isto ENCOLHEU o pacote: 444.507 → 444.436 B
       (−71), folga 5.564; app 1006 → 1007.** Nota 31._
-- [ ] **48** — **Preferências, 404, login, convite, e a passagem final.** Varredura de
-      contraste nos dois temas com foco nos pontos de risco (os cinzas de legenda e os fundos
-      de grifo), 360 px sem rolagem horizontal, `prefers-reduced-motion`, e o veredito sobre
-      o teto de bytes do `bundle-guard`. → _a detalhar_
+- [x] **48** — **Preferências, 404, login, convite, e a passagem final.**
+      `docs/tasks/48-passagem-final.md`. ⚠️ **DECISÃO DO DONO (2026-09-24): a borda de campo
+      de texto ganhou tom PRÓPRIO** — `--border-field`, escurecido no claro e clareado no
+      escuro até fechar **3:1 contra as seis superfícies nos dois temas** (3,63 · 3,76 ·
+      3,47 · 3,70 · 3,70 · 3,12 no claro; 4,01 · 3,72 · 3,33 · 3,47 · 3,47 · 3,44 no
+      escuro). A nota 19 da 47a mediu o estado da base: o filete padrão dava **1,35 / 1,38**
+      contra a página e **nenhum** token do projeto passava (o forte, 2,37 / 1,88; o suave,
+      1,21 / 1,20). ⚠️ **O conserto tem UM dono e alcança NOVE telas** — o `TEXT_INPUT_CLASS`
+      de `pages/form-styles.ts` (`accept-invite`, `acervo-filters`, `book-form`, `busca`,
+      `free-note-fields`, `highlight-fields`, `login`, `plan-editor`, `preferencias`) —, e o
+      alcance é guardado dos dois lados: quem IMPORTA a constante (lista pinada por
+      igualdade) e quem a USA em cada controle (⚠️ **20 controles** — `<input>`, `<textarea>`
+      e `<select>` —, 18 com a constante e **duas** isenções escritas; o número era "18 tags,
+      17, uma isenção" e só via `<input>`, ver a rodada de correção abaixo). ⚠️ **Card e filete decorativo NÃO mudaram**: o piso de
+      3:1 é de controle, não de moldura, e há asserção pinando o decorativo como discreto.
+      ⚠️ **O canvas também não passava** — `Main.dc.html:48` desenha o campo com o filete
+      forte, 2,37:1.
+      _⚠️⚠️ **A TABELA DE CONTRASTE PAROU A FATIA EM QUATRO PONTOS** (decisão C: "se algum
+      reprovar além da decisão A, pare e pergunte"), **e o dono decidiu o primeiro deles na
+      mesma rodada**.
+      ⚠️ **C1 — RESOLVIDO. DECISÃO DO DONO (2026-09-24): o papel do grifo ganhou a MESMA
+      borda dos outros campos.** O `--pen-a-dot` dava **2,28** contra a página no claro e o
+      papel do grifo era a única fronteira de campo do app fora do estilo compartilhado. A
+      saída **não** foi mexer no token (valor de canvas, intocado, ainda 2,28): foi **somar**
+      a moldura `border-line-field` **por fora**, num elemento próprio, com o tom da caneta
+      continuando a pintar o papel **por dentro**. Os dez números pedidos (cinco canetas ×
+      dois temas, o filete externo contra a página) são **3,63 no claro e 4,01 no escuro** —
+      iguais de propósito, porque moldura de campo não depende de caneta.
+      ⚠️⚠️ **E a decisão só pôde existir agora: a nota 19 da 47a tinha RECUSADO esta mesma
+      saída, com razão, porque o filete neutro daquela época dava 1,35. A decisão A desta
+      fatia derrubou a premissa, e a recusa caiu com ela** — corrigido na 47a com emenda
+      datada, tabela antes/depois e o item (ii) riscado com o desfecho.
+      ⚠️ **A moldura é um elemento PRÓPRIO por necessidade:** `border-line-field` e
+      `border-pen-a-dot` são o mesmo utilitário, o `cx` não resolve conflito de utilitário, e
+      no mesmo elemento quem venceria seria a ordem de emissão do CSS — a invariante que a
+      auditoria da 46 (B5) teve de pinar à mão. Há asserção pinando que os dois filetes nunca
+      dividem elemento. ⚠️ **Alcance medido nas DUAS rotas** (registrar e corrigir): o
+      mutante que devolve o filete decorativo derruba **as duas**. ⚠️ **As quatro guardas da
+      47a sobre o papel foram relidas uma a uma e NENHUMA mudou de significado** — o
+      `paperParts()` acha o papel por `control.parentElement` e a moldura entrou acima dele,
+      então nenhuma delas consegue ver o nó novo; e o mutante "trocar em vez de somar" (a
+      saída que a 47a mediu como PIORA) tem **7** acusadores, três deles guardas da 47a.
+      ⚠️ **Ressalva declarada, de NOME e não de asserção:** o `it()` do erro promete "do jeito
+      que todo outro campo do app faz", e nos outros a borda única fica vermelha enquanto aqui
+      a interna fica vermelha e a moldura segue neutra — o vermelho contra a página dá 7,90 /
+      11,28, então ele se vê; mover o vermelho para fora é comportamento novo e ficou por
+      decidir. **Custo: +77 B e ZERO no CSS** (mesmo hash de conteúdo — as três classes já
+      eram emitidas). Cinco mutantes novos, cinco acusados. Nota 19.
+      **Os outros três ficam como estavam, e nenhum foi tocado:**
+      **C2** `--person-border` dá **1,43 / 2,12**, e a 41a já decidira não mexer
+      (o avatar não é controle; quem identifica é a inicial, 8,55:1); **C3** `--text-faint`
+      dá 2,45 a 2,15, que é decisão consciente do dono de 2026-09-20 com guarda de primeiro
+      uso; **C4** os cinco fundos de caneta dão 1,15 a 1,65 contra a página, e na leitura do
+      executor não reprovam (decoração atrás de texto que passa a 12:1). **Os quatro voltam
+      ao dono com o número.** O resto da tabela passa, inclusive os dez números da borda
+      dourada da caneta escolhida (3,51 a 5,35) e os dois cinzas de legenda que têm de
+      passar (`--text-muted` e `--text-subtle`, 4,54 a 6,88)._
+      _⚠️ **`prefers-reduced-motion` NÃO era "nada anima" — medido:** um `animate-*` (o giro
+      do botão), **doze** `transition-*` (todos `transition-colors`) e **zero**
+      `prefers-reduced-motion` em todo o repositório, contra uma decisão fechada do MVP 3.5
+      que a exige em letra literal. A regra entrou no `styles.css` com as quatro
+      propriedades, e o par é guardado dos DOIS lados: um `it()` exige a regra, outro exige
+      que EXISTA movimento para ela desligar. Entrou junto a guarda que faltava para a outra
+      metade da mesma decisão — hover e pressionado respondem com COR, nunca com geometria._
+      _⚠️ **360 px: a forma óbvia era a asserção vazia do §7.8, e está medida.** No jsdom
+      `scrollWidth`, `clientWidth`, `offsetWidth` e todo campo de `getBoundingClientRect()`
+      valem **0** — `0 <= 0` fica verde com um elemento de 800 px na tela. A propriedade é
+      decidível no FONTE (largura fixa se lê), e a varredura cobre as quinze telas por
+      construção, isentando por VARIANTE (`min-[1120px]:`) e nunca por valor. Medido hoje:
+      zero. Mutante com um elemento de 800 px: acusa._
+      _⚠️ **AS QUATRO TELAS NÃO TINHAM VARREDURA ANTI-CULPA NENHUMA** — `expectNoGuilt`
+      aparecia **zero** vezes em `login.test.tsx`, `accept-invite.test.tsx` e
+      `preferencias.test.tsx`, e a `not-found.tsx` era a única das quinze telas **sem suíte
+      própria**. Dezesseis estados varridos, inclusive a senha errada, o convite vencido, o
+      convite inexistente, a escrita que falhou e as quatro recusas do aparelho. Dois
+      mutantes de COR que tinham **0** acusadores em 1.007 testes passaram a ter 3 e 4.
+      ⚠️ E uma afirmação do docblock do `preferencias.test.tsx` estava METADE certa (ela
+      dizia que a varredura desta tela "é a do vocabulário e não mora aqui", omitindo a
+      outra metade da partição do §7.9: o que não é catálogo é DOM) — corrigida onde mora._
+      _⚠️ **O TETO DE BYTES FICA: +183 B**, 3,3% da folga. Entrada 444.436 → **444.619**,
+      folga **5.381**; CSS 36.804 → **37.131**; `book-form`, editor, `index.html` e precache
+      inalterados. Nada sai do primeiro carregamento e não há decisão a tomar._
+      _⚠️ **OS TOKENS "ÓRFÃOS", MEDIDOS HOJE, E A PREMISSA DA SPEC ESTAVA ERRADA PARA UM
+      DELES.** `--text-faint`: **zero** consumidores de produção — órfão de verdade, e
+      **fica**, porque é decisão consciente do dono de 2026-09-20 com guarda de primeiro uso
+      ativa cujo conserto prescrito é escurecer o token, não apagar a guarda.
+      ⚠️ **`--person-border` NÃO é órfão**: tem consumidor vivo em
+      `packages/ui/src/components/person-avatar.tsx`, com guarda de classe e medição de
+      contraste próprias. Nenhuma fatia jamais o chamou de "sem consumidor" — a 41a (nota 9)
+      diz coisa **diferente e correta**, que ele fica abaixo de 3:1 e que o dono decidiu não
+      mexer. A spec confundiu "abaixo do piso" com "sem consumidor", e as duas levam a ações
+      opostas. **Nada foi apagado.**_
+      _⚠️ **PROSA CUSTOU CSS, medido e pago:** três seletores estavam emitidos **sem nenhum
+      escritor de código**, vivos só porque um docblock os nomeava — os dois utilitários de
+      opacidade da tela 404 e o degrau de 24px em negrito, este último **desde a Tarefa 42**.
+      Reescritos em palavras; CSS 37.328 → 37.131 (−197). A guarda que os substituiu varre
+      por PREFIXO e não escreve nenhum dos nomes._
+      _⚠️ **A dívida do `acervo-filters.tsx` FICA (decisão H), com os três números
+      reconferidos** pelo contador canônico — arquivo **465**, `activeChips` **65**,
+      `RefineBand` **48**, o corte nomeado ≈125 linhas para um `acervo-band.tsx`. ⚠️ Mas o
+      **ponteiro** estava velho: ele dizia "endereçada à 47/48", e as duas passaram sem
+      cortar. Um endereço apontando para fatias encerradas é a forma que o §7.4 proíbe;
+      reescrito no arquivo — a dívida segue **aberta e sem fatia dona**._
+      _⚠️ **CORREÇÃO AO CABEÇALHO DESTA SEÇÃO: são 21 artboards em arquivo, não 35.** O
+      `canvas.json` declara 35 boards, e a pasta tem 21: **a fileira escura inteira falta,
+      menos o `DiaEscuro`**. Ou seja, toda afirmação de fidelidade ao tema escuro feita neste
+      bloco foi feita contra **um** artboard, e o resto foi derivado dos tokens (que são
+      medidos, então nada do que se entregou muda). A lista de artboards da Tarefa 48 estava
+      **completa** — os quatro existem e não há um quinto._
+      _**15 mutantes, 15 acusados, zero sobreviventes.** Protocolo inteiro em cada um, com
+      `.mjs` ancorado e restauração verificada por `md5sum -c` **e** `cmp`. ⚠️ Um falso
+      acusador declarado: a sonda de contagem do `ui-source-scan.test.ts` pinava
+      `rounded-control` em 10 arquivos do app e foi a **11** com a caixa da volta da tela
+      404 — corrigida no próprio arquivo (some um, não apague), e os 15 mutantes re-rodados
+      contra a base limpa. ⚠️ Sete guardas nasceram VERMELHAS contra a implementação e as
+      vinte restantes nasceram verdes, com o vermelho vindo do mutante: a distinção está
+      escrita, não disfarçada. Testes: shared 607 · ui 305 · backend 1994 · app
+      **1007 → 1044**. Notas 1 a 19._
+      _⚠️ **CORREÇÃO À PRÓPRIA SPEC DA 48, feita pelo dono em 2026-09-24:** a decisão G dizia
+      que `--text-faint` **e** `--person-border` "foram apontados como sem consumidor em
+      fatias antigas". Só o primeiro foi. O que a 41a (nota 9) registrou do segundo é coisa
+      diferente — que ele fica **abaixo de 3:1** e que o dono decidiu não mexer —, e
+      confundir "abaixo do piso" com "sem consumidor" manda a próxima pessoa para lados
+      opostos: um apaga, o outro mede e deixa quieto. Corrigido na spec, onde a frase mora._
+      _⚠️⚠️ **RODADA DE CORREÇÃO (2026-09-24) — um revisor derrubou CATORZE afirmações e achou
+      SEIS mutantes sobreviventes. Notas 20 a 33 da spec.**
+      ⚠️ **A1 — dois números de contraste errados em QUATRO arquivos permanentes:**
+      `--surface-today` e `--gold-soft` no claro valiam **3,70** e estavam publicados como
+      3,48 (os dois são o MESMO valor de token, `#faf3e4`, então nunca podiam divergir). A
+      conclusão não muda — 3,70 passa com mais folga —, e é isso que torna o caso
+      instrutivo: **número errado que conclui certo não tem sintoma**. O defeito é do
+      MECANISMO: o script se autovalidava contra 19 pares conhecidos e **nenhum tocava essas
+      duas superfícies**. Conserto em duas camadas — pares que cobrem as superfícies medidas
+      (23/23), e, sobretudo, **acusador PERMANENTE** em `theme-tokens.test.ts`: os doze
+      números pinados à segunda casa, mais a identidade que não depende de lista nenhuma
+      (razão-contra-branco × razão-contra-preto = **21,00** para qualquer cor). Corrigido no
+      `theme.css`, no docblock do teste, na spec e aqui.
+      ⚠️ **A2/A3 — o `<select>` não tinha dono e uma TELA podia anular a decisão A.** A
+      guarda de alcance lia `<input>` e só; medido, há também **um** `<textarea>` e **um**
+      `<select>`, os dois "componente de interface" da 1.4.11. E ela perguntava se a
+      constante estava na tag, não o que mais estava escrito nela: o mutante
+      `${TEXT_INPUT_CLASS} border-line` tinha **zero** acusadores, e quem venceria no
+      navegador seria a **ordem de emissão do CSS** (`.border-line` sai antes de
+      `.border-line-field`) — a decisão A funcionava por sorte alfabética. Hoje a tag é
+      achada por contagem de chaves (o `<select>` não é auto-fechado e `=>` tem um `>`
+      dentro do atributo), são **20 controles**, 18 com a constante e **duas** isenções
+      escritas, e os utilitários decorativos são recusados por token exato.
+      ⚠️ **A4 — a guarda de gesto × geometria estava meio pixel curta:** `hover:-translate-y-1`
+      (o "levantar no hover" mais idiomático do Tailwind), `hover:[transform:scale(1.1)]` e
+      `data-[state=open]:scale-105` passavam com **zero** acusadores. O estreitamento pela
+      VARIANTE estava certo; o padrão é que estava curto.
+      ⚠️ **A5 — PROSA CUSTA CSS, e eram VINTE E QUATRO seletores, não três.** Varri o CSS
+      construído por bloco e perguntei, para cada seletor de classe, se algum arquivo de
+      produção o escreve fora de comentário: **24 sem escritor nenhum**, 1.098 B de regra
+      nua. **Três são achado de bloco:** `reading-column.tsx` escrevia *"procurar isto
+      devolve só prosa"* — **a medição do defeito era o que mantinha o defeito vivo**;
+      `chrome.tsx` é o OBITUÁRIO de duas larguras que "MORRERAM NA TAREFA 42" e as emitia
+      seis fatias depois; e `RichEditor.tsx` dizia "não há mais `sticky top-0`" e havia os
+      dois. Nenhum comentário apagado — os 24 foram **reescritos** em palavras ou na forma de
+      propriedade CSS. **CSS 37.131 → 35.804 B (−1.327), e 0 seletores órfãos.**
+      ⚠️ **A guarda de 360 px tinha DOIS furos e se declarava "total":** `w-[50rem]` (= 800
+      px, outra unidade) e `size-96` (= 384 px, outro utilitário que este projeto usa)
+      passavam com zero acusadores. Hoje converte `px|rem|em|vw|ch` e cobre `size-`/`basis-`;
+      a palavra "total" virou uma tabela de o que ela cobre e o que **não** cobre.
+      ⚠️ **A razão do `!important` do `prefers-reduced-motion` estava errada** — medido no CSS
+      construído, `.transition-colors` está em `@layer utilities` e o bloco é **sem camada**,
+      e regra sem camada vence camada sem discutir especificidade. O que ele compra é regra
+      sem camada mais específica e o atributo `style`. Reescrito.
+      ⚠️ **Números que envelheceram DENTRO da fatia:** doze transições em **9** arquivos e não
+      10 (a décima é comentário — o número publicado discordava da guarda que o mede, na mesma
+      fatia; a lista virou `TRANSITION_FILES` com igualdade exata); o mutante M1 tem **3**
+      acusadores e não 1 (a nota 19 acrescentou dois depois da tabela); a moldura contra o
+      filete de caneta dá **1,05 a 1,59** no claro (1,72 é do escuro); `activeChips` está em
+      **756-833** e `RefineBand` em **889-952** (a própria fatia moveu as linhas ao escrever
+      prosa acima delas — por isso o docblock cita pelo NOME); e os itens 4 e 5 da nota 18
+      tinham caído **soltos no fim do arquivo**, fazendo "são cinco" listar três.
+      ⚠️ **A volta da tela 404 não tinha asserção de DESTINO** — a suíte pinava a forma do
+      botão e nunca para onde ele leva, numa tela cuja razão de existir é o destino. O mutante
+      que a aponta para rota inexistente tinha **zero** acusadores; a 404 devolvendo 404.
+      ⚠️ **Três citações de artboard corrigidas** (`Main.dc.html` **:57**, `NaoEncontrada`
+      **:38**, `Preferencias` **:85**), a primeira **herdada da 41a** e copiada para arquivo
+      novo sem passar o script de citação nela. ⚠️⚠️ **E isto não pôde ser reconferido por
+      mim: os `*.dc.html` NÃO ESTÃO neste repositório nem no histórico do git.**
+      ⚠️ **A ressalva de NOME (B4): o nome estreitou, o vermelho NÃO se moveu.** Mover o
+      vermelho para a moldura seria comportamento novo decidido por auditoria numa passagem
+      final; o `it()` perdeu a cláusula de paridade e a assimetria ficou declarada.
+      ⚠️ **Registrado em `docs/CONVENCOES-CODIGO.md` §7.11 (novo):** *a prova de que a árvore
+      voltou depois de um mutante é `md5sum -c` contra a baseline mais `cmp` — nunca uma
+      suíte verde (circular: um mutante sobrevivente é por definição invisível para a suíte) e
+      nunca uma busca por palavra (um mutante bem feito não se anuncia)*.
+      **7 mutantes, 7 acusados; 6 deles eram sobreviventes com zero acusadores antes.**
+      Testes app **1044 → 1048**; shared 607 · ui 305 · backend 1994 inalterados. Chunk de
+      entrada **444.696 B, sem mexer um byte** (folga 5.304) — o que esta rodada fez é teste,
+      comentário e número. `schema.prisma` intocado._
+      _⚠️⚠️ **AS CINCO DÍVIDAS SEM FATIA DONA, escritas aqui com endereço porque a rodada de
+      correção NÃO as conserta — e as cinco ficam ABERTAS:**
+      **(a) Não existe artboard do tema ESCURO para catorze das quinze telas.** O
+      `canvas.json` declara 35 boards e a pasta tem 21; só o `DiaEscuro` chegou. Toda
+      afirmação de fidelidade ao escuro deste bloco foi feita contra **um** artboard, e o
+      resto saiu dos tokens (que são medidos). Endereço: nota 2 da Tarefa 48.
+      **(b) A ORDEM DE EMISSÃO DO CSS é uma invariante de que o projeto depende e que ninguém
+      declara.** Ela aparece como razão em três decisões (a cascata do `MarginRail`, o
+      `border-y-0` do acervo, a moldura do grifo em nó próprio) e como **sorte** numa quarta
+      (a decisão A, até esta rodada). O `cx` não é `tailwind-merge` por decisão escrita, o
+      que torna a ordem o árbitro real de todo conflito de utilitário. Endereço: notas 19 e 21
+      da Tarefa 48, e a auditoria B5 da Tarefa 46.
+      **(c) A IDENTIDADE DA CANETA é dada só pela COR (WCAG 1.4.1, "uso de cor").** Cinco
+      canetas que se distinguem por matiz; quem não separa matizes não sabe qual é qual no
+      corpo da nota. ⚠️ **Isto nunca esteve escrito em lugar nenhum** — `grep -rn "1\.4\.1"
+      docs/ packages/` devolvia vazio —, e fica registrado agora sem conserto porque a saída
+      (rótulo, forma, ou aceitar que a caneta é decoração de autor e não informação) é decisão
+      de desenho do dono.
+      **(d) As fontes do Google não entram no precache** — offline o app cai na fonte do
+      sistema; auto-hospedar custa ~250 KB. Pergunta aberta ao dono desde a Tarefa 39.
+      **(e) Os artboards `*.dc.html` NÃO ESTÃO VERSIONADOS**, e por isso toda citação
+      `*.dc.html:NN` escrita em arquivo permanente deste projeto é hoje **inverificável a
+      partir da árvore de trabalho**. É a causa estrutural das três citações erradas desta
+      fatia, e a única classe de citação do bloco que não tem como ter acusador. A saída
+      (versionar os artboards, ou aceitar que essas citações são histórico e não referência) é
+      decisão do dono. Endereço: nota 27 da Tarefa 48._
+
+      _⚠️⚠️ **DUAS DECISÕES DO DONO (2026-09-24), depois da rodada de correção.**
+      ⚠️⚠️ **DECISÃO 1 — O CANVAS FOI VERSIONADO: `docs/ui/canvas/`.** 21 artboards
+      `.dc.html`, o `canvas.json` (que os posiciona, e é a prova documental de que a
+      fileira escura nunca chegou) e `ds/grine/tokens.json` (a paleta do canvas — conferida:
+      é a DESTE projeto, `#f5f1e8` é o `--bg`, `#946d2c` é o `--gold`, a serifa é Fraunces).
+      **Copiados com verificação**: `md5sum` na origem e no destino, arquivo a arquivo, 23 de
+      23 idênticos. **A dívida (e) da rodada de correção FECHA.**
+      ⚠️ **E fecha COM ACUSADOR, não com opinião:**
+      `packages/app/src/__tests__/canvas-citations.test.ts` varre o repositório inteiro e
+      confere **toda** citação `Arquivo.dc.html:NN` — **914 citações, em 96 arquivos
+      permanentes**. Resultado: **0 apontando para artboard inexistente, 0 apontando para
+      linha além do fim**. Mutante (uma citação para `:99` num arquivo de 67 linhas): **1
+      acusador**, era 0.
+      ⚠️ **A varredura ACHOU UM ERRO REAL que a auditoria não tinha visto:**
+      `Livro.dc.html:70,140,150` — a linha do sumário nas três variantes — estava errada
+      **nos três números**. Medido procurando `padding:9px 0` no artboard: as linhas do plano
+      estão em **71** (passada), **139** (hoje) e **149** (futura); a `:70` é **branca**, a
+      `:140` e a `:150` são `<div>` internos. Corrigido em quatro lugares
+      (`ui/components/list.tsx` ×2, `list.test.tsx`, Tarefa 41a).
+      ⚠️ **As contagens de linha publicadas BATEM todas:** `Main` 71 · `Convite` 74 ·
+      `Preferencias` 103 · `NaoEncontrada` 67 (Tarefa 48) e `Inicio` 150 (Tarefa 45) — os
+      cinco são a linha do `</html>`, conferidos. **E as três citações que a rodada de
+      correção tinha aplicado SEM poder medir estão confirmadas:** `Main.dc.html:56` é linha
+      em branco e o botão de raio 4px está na **:57**; `NaoEncontrada:39` é `<path>` e o
+      `<svg width="56">` está na **:38**; `Preferencias:88` é branca e o aviso do iPhone está
+      na **:85**.
+      ⚠️ **CUSTO NO PACOTE: ZERO, provado e não presumido.** Build depois da cópia: chunk de
+      entrada **444.696 B**, CSS **35.804 B**, `book-form` 10.244, editor 449.522,
+      `index.html` 1.638, precache **27** — e os quatro **hashes de conteúdo são os mesmos**
+      (`index-DR8hv80B.js`, `index-CuOTdgcm.css`), que é prova mais forte que tamanho igual.
+      Zero `.dc.html` no `dist/`. ⚠️ **E o scanner do Tailwind NÃO lê `docs/`, provado por
+      discriminador:** os artboards escrevem a palavra `grid` (como valor de `display`), o
+      app não a escreve em lugar nenhum, e `.grid` **não existe** no CSS emitido. Se `docs/`
+      fosse varrido, ela estaria lá. ⚠️ **`docs/**` já estava no `.prettierignore`** — a
+      razão escrita lá ficou maior: reformatar a pasta invalidaria as 914 citações de uma vez.
+      ⚠️⚠️ **DECISÃO 2 — A CANETA E A WCAG 1.4.1: MEDI, E A PREMISSA CAIU. PAREI.** O
+      enquadramento do dono era *"a caneta já tem rótulo em texto"*. Medido nos cinco lugares
+      em que a cor da caneta aparece, por leitura de fonte **e** por render:
+      **✅ acervo, chips do filtro** (`acervo-filters.tsx:291`, `label` do `FilterChip`);
+      **✅ acervo, card do grifo** (`acervo-rows.tsx:183`); **✅ busca** (`busca.tsx:570`);
+      **✅ prévia do formulário** (`highlight-rail.tsx:107`); **✅ paleta do formulário**
+      (`highlight-fields.tsx:321` → o `PenPill` imprime o `label` como texto visível). Nos
+      cinco a `ColorSwatch`/bolinha é `aria-hidden` **e o nome está escrito ao lado**.
+      ⚠️⚠️ **MAS NA MARGEM DO LIVRO NÃO ESTÁ.** `pages/margin-highlight.tsx` — usado por
+      `day-note.tsx:1044` ("Grifos deste dia") e `book.tsx:1081` ("Último grifo") — renderiza
+      a bolinha `aria-hidden` e o `GrifoText`, e a linha de mono ao lado diz **página ·
+      autor**, nunca a cor. Render medido: o DOM sai como
+      `<span aria-hidden class="… bg-pen-a-dot">` + `"página · Marcos"` +
+      `<span class="… bg-pen-a ring-pen-a">`, e **nenhum dos cinco nomes aparece** no texto
+      nem em `aria-*`. **Ali a cor é o único portador da identidade da caneta.**
+      ⚠️ **E o comentário do próprio componente afirma o contrário** (`margin-highlight.tsx`,
+      a bolinha: *"`aria-hidden` porque a cor **nunca** é o único portador de informação …: o
+      que a linha diz está escrito ao lado"*) — o que está escrito ao lado é a página e o
+      autor. A justificativa é falsa como está escrita, e ela é a 15ª afirmação derrubada
+      deste bloco.
+      **NÃO CONSERTEI NADA e NÃO escrevi a guarda de 1.4.1**, porque escrever uma guarda que
+      cobre cinco lugares e isenta o sexto seria forçar o enquadramento para caber, que é
+      exatamente o que a instrução proíbe. **A dívida (c) CONTINUA ABERTA e a decisão volta
+      para o dono**, agora com o lugar nomeado e o número medido._
+
 
 ## Definição de "MVP 3.5 pronto"
 

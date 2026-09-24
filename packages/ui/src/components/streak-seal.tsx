@@ -20,12 +20,13 @@ const SEAL_CLASS = {
  * passa, porque o piso de componente não textual é 3:1 — e é exatamente assim
  * que o canvas o usa aqui (`Inicio.dc.html:98`: `stroke="var(--gold)"`).
  *
- * Uma varredura de código-fonte não consegue adivinhar se um `text-gold` está
- * num `<span>` de texto ou num `<svg>`. Então a distinção virou estrutural:
- * quem pinta TRAÇO usa `stroke-*` (que só afeta SVG), e `text-gold` fica livre
- * para ser proibido como texto **sem proibir o token**. É isso que torna
- * possível a guarda de primeiro uso em
- * `app/src/__tests__/theme-tokens.test.ts › refuses the FIRST USE of text-gold`.
+ * Uma varredura de código-fonte não consegue adivinhar se o dourado como TINTA
+ * DE LETRA está num `<span>` de texto ou num `<svg>`. Então a distinção virou
+ * estrutural: quem pinta TRAÇO usa `stroke-*` (que só afeta SVG), e o dourado
+ * de letra fica livre para ser proibido como texto **sem proibir o token**. É
+ * isso que torna possível a guarda de PRIMEIRO USO em
+ * `app/src/__tests__/theme-tokens.test.ts` (o `it()` que recusa o primeiro uso
+ * do dourado como tinta de letra).
  *
  * O `stroke` do CSS vence o atributo `stroke="currentColor"` que o lucide
  * escreve no `<svg>`: propriedade CSS ganha de atributo de apresentação.

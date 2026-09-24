@@ -633,3 +633,40 @@ conferir. Dois foram conferidos na rodada da Tarefa 16, e o resultado foi um de 
 A regra: antes de escrever "isto não é testável aqui", tente a ferramenta que não roda efeito
 (SSR), a que escolhe o ambiente (`process.env.TZ`) e a que conta chamadas (§7.3). E se a
 afirmação sobreviver, ela vem com **onde a propriedade É provada** — não sozinha.
+
+### 7.11 A prova de que a árvore voltou depois de um mutante é `md5sum -c`, nunca uma suíte verde
+
+O protocolo de mutação deste projeto planta um mutante num arquivo de produção, roda a suíte,
+conta os acusadores e **restaura o arquivo**. A parte frágil não é plantar: é provar que o
+plantio saiu.
+
+⚠️ **Nunca `git checkout` / `restore` / `stash` / `reset` / `clean` para desfazer um
+mutante.** A árvore de trabalho deste projeto tem, quase sempre, uma fatia inteira ainda não
+commitada; um `checkout` para "voltar o arquivo" apaga trabalho entregue junto com o mutante.
+O estado antigo de um arquivo se lê com `git show <commit>:<caminho>`, e a restauração é
+`cp -p` de uma cópia feita **antes** do plantio.
+
+**Aconteceu, e é de onde a regra vem.** Numa rodada de auditoria a sessão do revisor caiu com
+um mutante ainda aplicado (`size-96`, plantado para medir a guarda de 360 px). A integridade
+da árvore foi "provada" de duas formas, e **as duas eram cegas**:
+
+| a prova que falhou | por que ela não podia funcionar |
+| --- | --- |
+| buscar a palavra "mutante" nos arquivos | o resíduo era uma **classe do Tailwind**, não uma anotação. Um mutante bem feito não se anuncia: ele é indistinguível de código |
+| rodar a suíte e vê-la verde | **circular.** Um mutante que a suíte acusa já foi removido pelo próprio protocolo; o que sobra na árvore depois de uma queda é, por definição, um mutante **sobrevivente** — e sobrevivente quer dizer *invisível para a suíte*. Suíte verde é exatamente o que um resíduo perigoso produz |
+
+Só o `md5sum` contra a baseline pegou.
+
+**A regra, então:**
+
+1. **Antes** de cada mutante: `md5sum` dos arquivos que a rodada vai tocar, num arquivo de
+   baseline, e `cp -p` de cada um.
+2. A edição é **ancorada**, com âncora e substituto em ARQUIVO (a shell corrompe crase, `$`,
+   NUL e U+2028 neste repositório), e o editor **estoura** se a âncora não aparecer
+   exatamente uma vez **ou** se âncora = substituto.
+3. Um `grep` de confirmação prova que o mutante entrou — sem ele, "0 acusadores" pode ser
+   "0 mutantes aplicados" (§ "o que não conta como medição por mutação").
+4. **Depois**: `cp -p` de volta, e a prova é `md5sum -c <baseline>` **mais** `cmp` contra a
+   cópia. Nunca uma suíte verde, nunca uma busca por palavra.
+5. Se a baseline mudar legitimamente no meio da rodada (uma correção entregue entre dois
+   mutantes), a baseline é **regravada e datada** — não ignorada.

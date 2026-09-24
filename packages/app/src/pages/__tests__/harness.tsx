@@ -522,7 +522,33 @@ export function requestAt(
 export function tokensOf(node: HTMLElement, utility: string): string[] {
   return node.className
     .split(/\s+/u)
-    .filter((name) => name.split(':').at(-1) === utility);
+    .filter((name) => utilityOf(name) === utility);
+}
+
+/**
+ * O UTILITÁRIO de uma classe: o último segmento depois de `:`.
+ *
+ * ⚠️ **ELE VIROU FUNÇÃO PRÓPRIA NA TAREFA 48, e a razão é a da 47b outra vez.**
+ * A 47b subiu o `tokensOf` para cá porque, enquanto a forma certa vivesse
+ * dentro de um arquivo de teste, a próxima tela a COPIARIA — e copiar é por
+ * onde a forma frágil volta. A 48 precisou da mesma regra em duas formas que o
+ * `tokensOf` não atende: sobre uma **string** de classes (a constante do campo
+ * de texto, que não é um nó) e por **PREFIXO** (as opacidades da tela 404).
+ * As duas iam virar a terceira e a quarta cópia da mesma linha.
+ *
+ * `hover:min-[1120px]:hidden` → `hidden`. Uma classe sem variante é o próprio
+ * utilitário. Quem quiser filtrar por nó continua chamando `tokensOf`.
+ */
+export function utilityOf(className: string): string {
+  return className.split(':').at(-1) ?? '';
+}
+
+/** Os utilitários de TODAS as classes de uma string — variantes descartadas. */
+export function utilitiesIn(classes: string): string[] {
+  return classes
+    .split(/\s+/u)
+    .filter((name) => name !== '')
+    .map(utilityOf);
 }
 
 /**

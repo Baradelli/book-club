@@ -45,7 +45,7 @@ export const LIST_ITEM_HEIGHT_PX = 14 * SPACING_STEP_PX;
  * A altura mínima da linha do SUMÁRIO, e por que ela é menor que a da linha
  * comum.
  *
- * ⚠️ MEDIDO no canvas (`Livro.dc.html:70`): a linha do plano tem
+ * ⚠️ MEDIDO no canvas (`Livro.dc.html:71`): a linha do plano tem
  * `padding:9px 0` sobre ~20px de conteúdo — algo em torno de **38px**, ABAIXO
  * do piso de 44px da decisão F. O sumário é denso de propósito (é sumário de
  * livro, não lista de aplicativo), mas ele também é um alvo de toque de
@@ -218,7 +218,8 @@ export function ListItem({
     variant === 'sumario'
       ? cx(
           /*
-            A LINHA DO SUMÁRIO — `Livro.dc.html:70,140,150`.
+            A LINHA DO SUMÁRIO — `Livro.dc.html:71,139,149`, as três
+            variantes: passada, HOJE e futura.
 
             Sem `rounded-*` e sem cartão: o desenho é caderno encadernado, e o
             que separa uma linha da outra é um filete hairline

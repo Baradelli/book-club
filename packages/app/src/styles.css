@@ -165,6 +165,14 @@
   --color-line: var(--border);
   --color-line-soft: var(--border-soft);
   --color-line-strong: var(--border-strong);
+  /*
+    ⚠️ O filete do CAMPO DE TEXTO (Tarefa 48, decisão do dono de 2026-09-24).
+    Ele é o único filete do app que tem de passar 3:1 — é fronteira de
+    controle, não moldura. Quem o escreve é o `TEXT_INPUT_CLASS` de
+    `pages/form-styles.ts`, num lugar só, e ele serve às NOVE telas com campo
+    de texto. O porquê, com os doze números, está no `theme.css`.
+  */
+  --color-line-field: var(--border-field);
   --color-leader: var(--leader);
   --color-leader-future: var(--leader-future);
 
@@ -224,7 +232,8 @@
     ⚠️ E O BOTÃO DESTRUTIVO NÃO EXISTE MAIS: a decisão B da Tarefa 41a matou a
     variante `danger` do `Button` — medido, ZERO consumidores em
     `packages/{app,ui}/src`, a única ocorrência era a declaração do tipo. Com
-    ela saíram os ÚNICOS usos de `bg-danger` e `text-danger-fg` no projeto.
+    ela saíram os ÚNICOS usos do FUNDO de `--danger` e de `text-danger-fg`
+    no projeto.
 
     Os dois utilitários FICAM aqui, e isto é decisão, não esquecimento: a
     bijeção token↔utilitário exige um utilitário por token declarado, e
@@ -248,11 +257,12 @@
   --color-scrim: var(--scrim);
 
   /*
-    Foco. `focus` e não `ring`, senão o utilitário viraria `ring-ring`.
+    Foco. O token se chama `focus`: batizá-lo com o nome do próprio
+    utilitário faria o utilitário virar `ring-ring`.
 
     São DOIS e não um (decisão do dono, 2026-09-20, o §A.6 literal): o
-    `outline-focus` é o contorno sólido e o `ring-focus-halo` é o halo de 3px
-    por cima. O halo sozinho dá ~1,4:1 contra o creme — medido —, então ele
+    `outline-focus` é o contorno sólido e o halo de 3px por cima sai de
+    `--ring-halo`. O halo sozinho dá ~1,4:1 contra o creme — medido —, então ele
     nunca substitui o contorno. Quem os escreve juntos é o `FOCUS_RING` de
     `@clube/ui`.
   */
@@ -268,7 +278,7 @@
   /*
     ⚠️ O 3px SAIU DO CONTROLE E VIROU `callout` NA TAREFA 41a. Medido no
     canvas: todo botão, campo e link-botão tem `border-radius:4px`
-    (`Inicio.dc.html:56,57`, `Main.dc.html:56`, `Acervo.dc.html:51,52`) — são
+    (`Inicio.dc.html:56,57`, `Main.dc.html:57`, `Acervo.dc.html:51,52`) — são
     32 ocorrências de `4px` contra 17 de `3px` nos 22 artboards —, e o `3px` é
     a caixa de erro de formulário (`Main.dc.html:41`).
 
@@ -390,4 +400,53 @@ body {
   background-color: var(--bg);
   color: var(--text);
   font-family: var(--family-ui);
+}
+
+/*
+  ============================================================================
+  QUEM PEDIU MENOS MOVIMENTO RECEBE MENOS MOVIMENTO (Tarefa 48, decisão E)
+  ============================================================================
+
+  É uma decisão fechada do MVP 3.5, e ela estava sem cumprimento nenhum até
+  aqui: "prefers-reduced-motion desligando transição, e hover/pressionado
+  mudando COR — sem transform, sem escala".
+
+  ⚠️ MEDIDO ANTES DE ESCREVER, porque a spec manda não inventar media query sem
+  consumidor: o app anima DUAS coisas, e as duas passam por aqui.
+
+  1. o giro do `Loader2` do `Button` enquanto o envio está em voo — o único
+     `animate-*` do projeto;
+  2. doze `transition-colors`, em NOVE arquivos — cor, e só cor. Não há
+     `transition-all` nem `transition-transform` em lugar nenhum.
+
+  ⚠️ `animation-iteration-count: 1` NÃO É REDUNDANTE com a duração. O
+  `animate-spin` é `infinite`; com duração quase zero e repetição infinita ele
+  continua girando — rápido demais para se ver e caro igual. As duas linhas
+  juntas é que o param.
+
+  ⚠️ E É `0.01ms`, NÃO `0`. Com duração zero o navegador pode não disparar o
+  evento `animationend`/`transitionend`, e código que espera por ele fica
+  pendurado para sempre. Este app não espera por nenhum hoje — mas a forma
+  padrão custa o mesmo e não instala a armadilha.
+
+  ⚠️ O `!important` NÃO É PARA VENCER O UTILITÁRIO QUE A TELA ESCREVEU, e a
+  razão que estava escrita aqui dizia isso — medido no CSS construído e falso.
+  O `.transition-colors` sai dentro de `@layer utilities` e este bloco sai SEM
+  CAMADA; regra fora de camada vence qualquer regra em camada, sem discutir
+  especificidade. O utilitário da tela já perdia.
+
+  O que o `!important` compra é o resto, e são duas coisas: uma regra também
+  SEM CAMADA e mais específica (o `editor.css` é a folha que mais teria como
+  escrevê-la) e o atributo `style` de um elemento, que vence toda folha e só
+  perde para `!important`. É a única declaração do projeto que o usa.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

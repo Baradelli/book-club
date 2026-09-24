@@ -23,9 +23,9 @@ import { cx } from '../cx';
  * dele é 1280px).
  *
  * ⚠️ E o prefixo é repetido por ESCRITO em cada classe, em vez de sair de uma
- * constante concatenada: `` `${AT_DESKTOP}w-80` `` compila em TypeScript e
- * pinta NADA — o Tailwind emite o CSS do que encontra escrito no fonte
- * (decisão C). A repetição é o preço, e ela é barata perto de uma margem sem
+ * constante concatenada: juntar o prefixo ao nome em tempo de execução compila
+ * em TypeScript e pinta NADA — o Tailwind emite o CSS do que encontra escrito
+ * no fonte (decisão C). A repetição é o preço, e ela é barata perto de uma margem sem
  * filete que nenhum teste de unidade veria.
  */
 
@@ -60,20 +60,20 @@ export interface ReadingColumnProps {
  * número certo no teste e o errado aqui, que é o arquivo que o próximo agente
  * lê primeiro (classe nº 6 da lista da Tarefa 41a, somada à nº 4).
  *
- * ~~**Decisão:** fica `pt-10` (40px, quatro dos cinco), e a HOME compensa com
- * `min-[1120px]:pt-12` pelo `className`. … a compensação **funciona, medido**:
- * `grep -bo` no CSS emitido deu `pt-10` no byte 19901 e `pt-12` no 19962 …
- * por isso a compensação da home é da Tarefa 42 e tem de ser conferida na
- * tela.~~
+ * ~~**Decisão:** fica o recuo de topo de 40px (quatro dos cinco), e a HOME
+ * compensa com 48px acima de 1120px pelo `className`. … a compensação
+ * **funciona, medido**: no CSS emitido os 40px saíam no byte 19901 e os 48px no
+ * 19962 … por isso a compensação da home é da Tarefa 42 e tem de ser conferida
+ * na tela.~~
  *
  * ⚠️ **A COMPENSAÇÃO NUNCA EXISTIU, e este parágrafo a descrevia como se
  * existisse — corrigido na auditoria da Tarefa 42 (2026-09-21).** Medido:
- * `grep -rn "pt-12" packages/{app,ui}/src/` devolve **só prosa** (este docblock e o
- * do teste vizinho), e o `ScreenProps` do app **não tem `className`** — a
+ * procurar o recuo de topo de 48px em `packages/{app,ui}/src/` devolve **só
+ * prosa** (este docblock e o do teste vizinho), e o `ScreenProps` do app **não tem `className`** — a
  * compensação não era sequer possível sem mexer no `Screen`. A Tarefa 42
  * passou e a home ficou em 40px.
  *
- * **Decisão, agora com o custo declarado: fica `pt-10` (40px) em TODAS as
+ * **Decisão, agora com o custo declarado: fica o recuo de topo de 40px em TODAS as
  * telas, inclusive a home**, e os 8px de `InicioDesktop.dc.html:35` são uma
  * **divergência declarada**, não uma tarefa pendente. As duas saídas foram
  * pesadas e as duas custam mais que 8px num artboard:
@@ -121,9 +121,9 @@ export function ReadingColumn({
           número para copiar — quem der o ar entre o texto e o aparato é a
           tela, com o número dela.
 
-          Desktop: `flex-row`, `gap:56px` (`gap-14`) e `padding-inline:92px`
-          (`px-23`), que os CINCO artboards têm iguais; `pt-10` (40px) é de
-          quatro deles — veja o docblock. `justify-center` porque a soma
+          Desktop: LINHA, `gap:56px` e `padding-inline:92px`, que os CINCO
+          artboards têm iguais; o recuo de topo de 40px é de quatro deles — veja
+          o docblock. `justify-center` porque a soma
           680+56+320 = 1056px é menor que a janela e o conjunto fica centrado.
         */
         'flex w-full flex-col px-5',

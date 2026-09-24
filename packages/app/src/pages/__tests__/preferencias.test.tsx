@@ -8,7 +8,13 @@ import type {
 } from '@clube/shared';
 import { TOKEN_STORAGE_KEY } from '@clube/shared/client';
 import { pt } from '@clube/shared/locales';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../App';
@@ -16,7 +22,7 @@ import type { ClubSummary } from '../../club/active-club';
 import { SETTINGS_PATH } from '../paths';
 import type { PushBlocker, PushDevice } from '../push-device';
 import { PushDeviceError } from '../push-device';
-import { stripComments } from './anti-guilt-dom';
+import { expectNoGuilt, stripComments } from './anti-guilt-dom';
 import {
   memoryStorage,
   meReply,
@@ -43,13 +49,24 @@ import {
  * quatro da decisão G), e a REGRA de cada recusa tem teste próprio em
  * `push-device.test.ts`, contra um host falso.
  *
- * ⚠️ **A VARREDURA ANTI-CULPA DESTA TELA É A DO VOCABULÁRIO, E ELA NÃO MORA
- * AQUI** (regra 11, §7.9): `GUILT_TERMS` percorre o catálogo inteiro em
- * `packages/shared/src/locales/__tests__/anti-guilt.test.ts`, e as chaves desta
- * fatia entram nela por construção. **Não** existe aqui a guarda de "nenhum
- * dígito" do feed (Tarefa 35): nesta tela o dígito é legítimo e obrigatório
- * (`07:30` **é** um número), e guarda copiada para onde a propriedade não vale
- * é a guarda no lugar errado — que o §7.9 diz ser pior que nenhuma.
+ * ⚠️⚠️ **ESTE PARÁGRAFO ESTAVA METADE CERTO, E A METADE QUE FALTAVA DEIXOU A
+ * TELA SEM VARREDURA DE DOM POR DOZE FATIAS — corrigido na Tarefa 48.**
+ *
+ * O que ele dizia, e continua verdade: a varredura de VOCABULÁRIO é do
+ * catálogo (regra 11, §7.9) — `GUILT_TERMS` percorre `pt` inteiro em
+ * `packages/shared/src/locales/__tests__/anti-guilt.test.ts`, e as chaves
+ * desta fatia entram nela por construção. E continua verdade que a guarda de
+ * "nenhum dígito" do feed (Tarefa 35) **não** cabe aqui: nesta tela o dígito é
+ * legítimo e obrigatório (`07:30` **é** um número), e guarda copiada para onde
+ * a propriedade não vale é a guarda no lugar errado.
+ *
+ * O que faltava é a OUTRA metade da mesma partição do §7.9: *"o que não é
+ * catálogo é DOM"* — a COR, o número renderizado a partir de dado, e a palavra
+ * que entrou na tela sem passar pelo `t()`. Nenhuma das três é vista pelo
+ * teste de catálogo. Medido na Tarefa 48: `expectNoGuilt` aparecia **zero**
+ * vezes neste arquivo, e esta tela tem SETE estados que pintam recado. A
+ * varredura de DOM está no último `describe` deste arquivo, com os estados
+ * escritos um a um.
  *
  * ⚠️ **NENHUMA CHAVE REAL** (regra 7): a chave pública abaixo é inventada, tem
  * forma de base64url e o nome diz que é falsa.
@@ -1173,5 +1190,112 @@ describe('o botão de testar a notificação', () => {
     await waitFor(() => {
       expect(readableText()).toContain(pt.pages.settings.device.testFailed);
     });
+  });
+});
+
+/**
+ * ⚠️⚠️ **A VARREDURA ANTI-CULPA DO DOM — E O DOCBLOCK DESTE ARQUIVO AFIRMAVA
+ * QUE ELA NÃO PRECISAVA EXISTIR AQUI. A afirmação era METADE verdadeira, que
+ * é a pior das duas.**
+ *
+ * O que ele dizia: *"a varredura anti-culpa desta tela é a do VOCABULÁRIO, e
+ * ela não mora aqui — `GUILT_TERMS` percorre o catálogo inteiro"*. Isso está
+ * certo, e é literalmente a partição do §7.9. O que ele omitia é a **outra
+ * metade da mesma partição**: *"o que NÃO é catálogo é DOM"* — a COR, o número
+ * renderizado a partir de dado, e a palavra que entrou na tela **sem** passar
+ * pelo `t()`. Nenhuma das três é olhada pelo teste de catálogo, e nenhuma
+ * tinha acusador nesta tela.
+ *
+ * Medido na Tarefa 48: `expectNoGuilt` aparecia **zero** vezes neste arquivo.
+ * A tela tem **sete** estados que pintam recado — a leitura que falhou, a
+ * escrita que falhou, a configuração que caiu, as quatro recusas do aparelho —
+ * e um `text-danger` novo em qualquer um deles passava em 1.007 testes.
+ *
+ * ⚠️ **A VARIANTE FOI ESCOLHIDA LENDO O `anti-guilt-dom.ts`, não copiada**
+ * (as duas são mutuamente exclusivas desde a rodada de correção da Tarefa 44):
+ * `expectNoGuilt()` em todos os estados — as preferências não mostram posição
+ * no plano em nenhum deles, então `expectNoGuiltWithPlanPosition()` ficaria
+ * vermelha na hora, por exigir ≥ 1 subtração efetiva.
+ *
+ * ⚠️ **E O `07:30` NÃO É PLACAR**, o que valia a conferência antes de escrever:
+ * o `COUNTER_SHAPE` casa `\d+ de \d+`, `\d+/\d+` e `+\d+`, e `21:00` não tem
+ * nenhuma das três formas. O dígito desta tela é legítimo e obrigatório.
+ */
+describe('⚠️ a varredura anti-culpa nas preferências (regra 8, Tarefa 48)', () => {
+  it('sweeps the three preferences, loaded and working', async () => {
+    await renderSettings();
+
+    await waitFor(() => {
+      expect(timeInput().value).toBe('07:30');
+    });
+    expectNoGuilt();
+  });
+
+  it('sweeps the reading that FAILED, and its way out', async () => {
+    await renderSettings({ settings: { status: 500, body: { error: 'x' } } });
+
+    await waitFor(() => {
+      expect(readableText()).toContain(pt.pages.settings.failed);
+    });
+    expectNoGuilt();
+  });
+
+  it('⚠️ sweeps the write that failed — the state that must not lie NOR blame', async () => {
+    await renderSettings({ patch: { status: 500, body: { error: 'x' } } });
+
+    await waitFor(() => {
+      expect(timeInput().value).toBe('07:30');
+    });
+    await act(async () => {
+      fireEvent.click(checkbox(REMINDER_LABEL));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(readableText()).toContain(pt.pages.settings.saveFailed);
+    });
+    expectNoGuilt();
+  });
+
+  it('sweeps the device section when the server has no VAPID at all', async () => {
+    await renderSettings({
+      config: { status: 200, body: { enabled: false, vapidPublicKey: null } },
+    });
+
+    await waitFor(() => {
+      expect(timeInput().value).toBe('07:30');
+    });
+    expectNoGuilt();
+  });
+
+  it('sweeps the device section when its config FELL', async () => {
+    await renderSettings({ config: { status: 500, body: { error: 'x' } } });
+
+    await waitFor(() => {
+      expect(readableText()).toContain(pt.pages.settings.device.configFailed);
+    });
+    expectNoGuilt();
+  });
+
+  it('⚠️ sweeps EACH of the four device refusals — none of them blames anyone', async () => {
+    /*
+      ⚠️ As quatro, e não uma. É o mesmo argumento do `it.each` das frases logo
+      acima: uma varredura num estado só deixa três sem dono, e "o iPhone não
+      está instalado" é exatamente o tipo de frase que escorrega para a culpa.
+    */
+    for (const blocker of [
+      'insecureContext',
+      'unsupported',
+      'iosNotInstalled',
+      'permissionDenied',
+    ] as const) {
+      cleanup();
+      await renderSettings({ device: { blocker } });
+
+      await waitFor(() => {
+        expect(readableText()).toContain(pt.pages.settings.device.title);
+      });
+      expectNoGuilt();
+    }
   });
 });

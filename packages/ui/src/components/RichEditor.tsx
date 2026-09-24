@@ -59,14 +59,14 @@ export type { NoteSearch, NoteSuggestion };
  *
  * ⚠️ NENHUMA RAMIFICAÇÃO POR DISPOSITIVO. Não há `userAgent`, não há
  * `isMobile`, não há JavaScript medindo janela. ~~A adequação ao celular é
- * ESTRUTURAL: alvos de toque de 36px, barra que rola de lado, `sticky` no topo
+ * ESTRUTURAL: alvos de toque de 36px, barra que rola de lado e GRUDA no topo
  * e o `preventDefault` da §4.4.~~
  *
  * ⚠️ **A FRASE ACIMA FICOU RISCADA NA TAREFA 43 (2026-09-22), e só a primeira
  * metade dela mudou.** A barra fixa do topo MORREU (decisão A): o que formata é
  * o menu de bolha na seleção e o menu `/` que já existe, e o que fica fixo na
  * tela é a barra de CANETAS (`penBar`). Com ela, três coisas daquela lista
- * deixaram de existir — não há mais scroll lateral, não há mais `sticky top-0`,
+ * deixaram de existir — não há mais scroll lateral, nada mais GRUDA no topo,
  * e o alvo de toque subiu de 36px para os **44px** do canvas, o que APAGA a
  * exceção consciente que a §4.1 registrava.
  *
@@ -924,7 +924,7 @@ export function RichEditor({
       */}
       {/*
         ⚠️ **A BARRA FIXA DO TOPO MORREU AQUI (decisão A da Tarefa 43).** Ela
-        era `<div data-editor-bar>` com treze controles, `sticky top-0`, scroll
+        era `<div data-editor-bar>` com treze controles, GRUDADA no topo, scroll
         lateral e fundo desfocado. O canvas põe o texto direto no papel
         (`Dia.dc.html:59`) e deixa a formatação onde ela é pedida: no menu de
         bolha, sobre a seleção. O que fica fixo na tela são as CANETAS, que

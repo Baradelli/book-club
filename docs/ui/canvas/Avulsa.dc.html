@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>7 · Anotação avulsa</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&amp;family=Geist+Mono:wght@400;500&amp;family=Geist:wght@400;500;600&amp;family=Instrument+Serif:ital@0;1&amp;display=swap">
+<style>
+/*TOKENS*/
+body{--bg:#f5f1e8;--surface:#f9f5ec;--surface-2:#f0ece0;--surface-today:#faf3e4;--border:#d8d1bf;--border-soft:#e3ddc9;--border-strong:#a89e80;--leader:#babcb2;--leader-future:#d4d6cc;--text:#1a201a;--text-muted:#565b52;--text-subtle:#74786e;--text-faint:#9a9d92;--accent:#143524;--accent-hover:#1b4632;--accent-fg:#f5f1e8;--gold:#946d2c;--gold-strong:#785822;--gold-line:#d6ae64;--gold-soft:#faf3e4;--person-bg:#dde9e2;--person-border:#b5d3c3;--person-fg:#1b4632;--spine-bg:#143524;--spine-edge:#0f2419;--spine-fg:#dde9e2;--spine2-bg:#785822;--spine2-edge:#5c4317;--spine2-fg:#f5ead4;--pen-a:#f0e2b4;--pen-a-dot:#c89a44;--pen-v:#d7e5d5;--pen-v-dot:#4a8e6e;--pen-l:#f2ddc9;--pen-l-dot:#a9613a;--pen-z:#d8e0e8;--pen-z-dot:#52708c;--pen-r:#f0dade;--pen-r-dot:#9c5a6b;--danger:#7a3520;--danger-bg:#f4dcd0;--sel:#cfe0d6}
+/*/TOKENS*/
+body{margin:0;font-family:Geist,system-ui,sans-serif;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+a{color:var(--accent)}
+a:hover{color:var(--accent-hover)}
+input,textarea,select{font-family:inherit;color:inherit;background:none;border:none;outline:none;padding:0;width:100%;box-sizing:border-box;resize:none}
+input::placeholder,textarea::placeholder{color:var(--text-faint)}
+</style>
+</helmet>
+
+<div style="width:390px;height:1100px;box-sizing:border-box;background:var(--bg);display:flex;flex-direction:column;overflow:hidden;position:relative;">
+
+  <header style="height:52px;flex-shrink:0;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border);">
+    <span style="font-family:Fraunces,Georgia,serif;font-size:16px;font-weight:600;letter-spacing:-0.01em;">Clube do Livro</span>
+    <div style="display:flex;align-items:center;gap:4px;">
+      <button aria-label="Preferências" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="8" x2="20" y2="8"></line><line x1="4" y1="16" x2="20" y2="16"></line><circle cx="9" cy="8" r="2.4"></circle><circle cx="15" cy="16" r="2.4"></circle></svg>
+      </button>
+      <a href="#" style="font-family:'Geist Mono',Menlo,monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;text-decoration:none;color:var(--text-muted);padding:12px 0 12px 8px;">Sair</a>
+    </div>
+  </header>
+
+  <div style="height:48px;flex-shrink:0;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 20px;background:var(--bg);border-bottom:1px solid var(--border-soft);">
+    <a href="Acervo.dc.html" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--text-muted);overflow:hidden;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="14.5 5 7.5 12 14.5 19"></polyline></svg>
+      <span style="font-family:'Geist Mono',Menlo,monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Acervo</span>
+    </a>
+    <span style="font-family:'Geist Mono',Menlo,monospace;font-size:9.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-subtle);flex-shrink:0;">Salvo 22:40</span>
+  </div>
+
+  <main style="flex-grow:1;box-sizing:border-box;padding:20px 20px 0 20px;display:flex;flex-direction:column;gap:18px;overflow:hidden;">
+
+    <span style="font-family:'Geist Mono',Menlo,monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold);">Anotação avulsa</span>
+
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <label for="titulo" style="font-family:'Geist Mono',Menlo,monospace;font-size:9.5px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-muted);">Título</label>
+      <input id="titulo" type="text" value="Frases que quero guardar do livro" style="font-family:Fraunces,Georgia,serif;font-size:24px;font-weight:500;line-height:1.2;letter-spacing:-0.015em;padding-bottom:8px;border-bottom:1px solid var(--border-strong);">
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      <label for="ref" style="font-family:'Geist Mono',Menlo,monospace;font-size:9.5px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-muted);">Referência</label>
+      <input id="ref" type="text" value="vários capítulos" style="font-family:'Geist Mono',Menlo,monospace;font-size:12px;padding-bottom:7px;border-bottom:1px solid var(--border-soft);">
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:3px;">
+      <div style="height:1px;background:var(--border);"></div>
+      <div style="height:2px;background:var(--accent);"></div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px;font-family:Fraunces,Georgia,serif;font-size:17.5px;line-height:1.72;text-wrap:pretty;">
+      <p style="margin:0;">Estou juntando aqui as frases soltas que não cabem no dia certo.</p>
+      <blockquote style="margin:0;padding-left:16px;border-left:2px solid var(--gold-line);font-style:italic;color:var(--text-muted);">A vulnerabilidade é o berço da inovação, da criatividade e da mudança.</blockquote>
+    </div>
+
+    <div style="flex-grow:1;"></div>
+
+    <button style="height:46px;flex-shrink:0;margin-bottom:20px;display:flex;align-items:center;justify-content:center;gap:9px;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);font-family:Geist,system-ui,sans-serif;font-size:14px;cursor:pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4"></rect><path d="M5 8v12h14V8"></path><line x1="10" y1="13" x2="14" y2="13"></line></svg>
+      Arquivar anotação
+    </button>
+
+  </main>
+
+  <div style="position:absolute;left:0;top:0;width:390px;height:1100px;background:rgba(20,26,20,0.45);"></div>
+
+  <div style="position:absolute;left:0;bottom:0;width:390px;box-sizing:border-box;background:var(--surface);border-top:1px solid var(--border);border-radius:10px 10px 0 0;box-shadow:0 -14px 40px -18px rgba(20,30,20,0.55);padding:12px 20px 28px 20px;display:flex;flex-direction:column;gap:16px;">
+    <div style="width:36px;height:4px;border-radius:999px;background:var(--border-strong);align-self:center;"></div>
+    <div style="display:flex;flex-direction:column;gap:7px;">
+      <h2 style="margin:0;font-family:Fraunces,Georgia,serif;font-size:20px;font-weight:500;letter-spacing:-0.015em;">Arquivar anotação</h2>
+      <p style="margin:0;font-size:14px;line-height:1.55;color:var(--text-muted);">Ela sai da lista do clube. O texto não é apagado.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:9px;">
+      <button style="height:48px;display:flex;align-items:center;justify-content:center;background:var(--accent);color:var(--accent-fg);border:none;border-radius:4px;font-family:Geist,system-ui,sans-serif;font-size:15px;font-weight:500;cursor:pointer;">Arquivar</button>
+      <button style="height:46px;display:flex;align-items:center;justify-content:center;background:none;border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:Geist,system-ui,sans-serif;font-size:14px;cursor:pointer;">Deixar como está</button>
+    </div>
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

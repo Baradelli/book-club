@@ -116,8 +116,17 @@ import {
  * que só existe abaixo de 1120px — e dependem de quatro coisas do resto:
  * `FilterGroup`, o `NEUTRAL_VALUE` lido do `acervo-entries.ts`, o `t` e o
  * pacote `AcervoControlsProps`. Cortar **agora** seria churn sobre uma fatia
- * já entregue e medida, então fica como **dívida endereçada à 47/48**, com o
- * endereço escrito aqui em vez de uma promessa genérica de "quando crescer".
+ * já entregue e medida, então fica como **dívida endereçada**, com o endereço
+ * escrito aqui em vez de uma promessa genérica de "quando crescer".
+ *
+ * ⚠️ **A 47 E A 48 PASSARAM E NÃO CORTARAM — E ISSO FOI DECISÃO, não
+ * esquecimento (decisão H da Tarefa 48).** Este ponteiro dizia "endereçada à
+ * 47/48"; a 48 é a última fatia do MVP 3.5, e um ponteiro para fatias
+ * encerradas é a forma de endereço que o §7.4 proíbe — quem o lesse depois
+ * iria bater numa porta fechada. **A dívida segue aberta e sem fatia dona**:
+ * quem reabrir este arquivo faz o corte. Os três números foram reconferidos
+ * pelo contador canônico na Tarefa 48 — `activeChips` **65**, `RefineBand`
+ * **48**, o arquivo **465** —, e os três batem com a tabela acima.
  *
  * ⚠️ **E NÃO FOI PARA O `acervo-entries.ts`, apesar de ser lá que o assunto
  * mora — a razão é MEDIDA e é o próprio motivo daquele módulo existir.** O
@@ -650,8 +659,9 @@ function AcervoControls({
  * ⚠️⚠️ **E O `hidden` DESTA LINHA COLIDE COM O `flex` QUE O `MarginRail` TRAZ
  * NA BASE — quem resolve é a ORDEM DE EMISSÃO DO CSS, não o `cx`.** Achado B5
  * da rodada de correção. O `cx` não é `tailwind-merge` (está escrito em
- * `packages/ui/src/cx.ts`, e é a mesma razão pela qual esta fatia recusou um
- * `border-y-0` no bloco recolhido): as três regras têm especificidade `0,1,0`
+ * `packages/ui/src/cx.ts`, e é a mesma razão pela qual esta fatia recusou
+ * ZERAR a borda de cima e de baixo no bloco recolhido): as três regras têm
+ * especificidade `0,1,0`
  * e `@media` não acrescenta nenhuma, então vence a última emitida. Isso
  * funciona, e agora está PINADO em vez de suposto — o acusador é
  * `src/__tests__/ui-source-scan.test.ts › the hidden × flex cascade`, que mede
@@ -840,7 +850,8 @@ export interface RefineBandProps {
  * dele e não dentro da moldura.** O bloco recolhido da Tarefa 41a já carrega o
  * `border-y border-line-soft py-3` do `:56` na própria linha do `:57`; pôr os
  * chips dentro da mesma moldura exigiria ou uma segunda decisão de borda aqui
- * (duas verdades sobre o mesmo filete) ou passar `border-y-0` pelo `className`
+ * (duas verdades sobre o mesmo filete) ou passar pelo `className` um
+ * utilitário que ZERE a borda de cima e de baixo
  * — e o `cx` **não resolve conflito de utilitário**, por decisão escrita
  * (`packages/ui/src/cx.ts`): quem venceria seria a ordem do CSS emitido, não a
  * ordem daqui. A divergência está declarada nas notas da fatia.

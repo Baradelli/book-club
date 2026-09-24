@@ -676,9 +676,10 @@ saídas que consigo enxergar, para o dono escolher:
 - **(i) Não mexer.** O estado de hoje é o melhor dos três em todas as dez medições, e a
   divergência que sobra (amarelo, 2,28 no claro) é o item que a ementa da Tarefa 48 já
   nomeia — *"varredura de contraste … e os fundos de grifo"*.
-- **(ii) Filete neutro por fora, assumido como PARIDADE e não como contraste.** É barato e
+- ~~**(ii) Filete neutro por fora, assumido como PARIDADE e não como contraste.** É barato e
   não machuca; a nota tem de dizer que ele não acrescenta fronteira, senão o próximo leitor
-  herda a premissa errada.
+  herda a premissa errada.~~ ⚠️ **ESCOLHIDA E IMPLEMENTADA NA TAREFA 48 — e sem a ressalva:
+  hoje ela acrescenta fronteira, sim (3,63 / 4,01).** Ver a emenda no fim desta nota.
 - **(iii) Levantar o piso do filete de caneta.** É o único caminho que resolve o amarelo de
   verdade, e mexe em valor de canvas (`--pen-a-dot`) ou cria um filete derivado. **Fora do
   alcance desta rodada** e, pela minha leitura, é exatamente o que a 48 existe para decidir.
@@ -687,6 +688,46 @@ saídas que consigo enxergar, para o dono escolher:
 todo campo de texto do projeto** (1,35 contra a página, 1,40 contra a superfície, nos dois
 temas). Não é um problema desta tela; é o estado da base. Fica registrado para a Tarefa 48
 com os números já medidos.
+
+---
+
+#### ⚠️⚠️ EMENDA DA TAREFA 48 (2026-09-24): **a premissa desta nota CAIU, e com ela a recusa da saída (ii)**
+
+_Escrito pelo executor da Tarefa 48, que veio buscar aqui os números de base. A nota fica
+inteira acima — ela não estava errada, ela **venceu**._
+
+**O que esta nota mediu, e continua verdade:** naquele commit o filete neutro do app dava
+**1,35:1** contra a página, o forte dava **2,37** e o suave **1,21**. Nenhum token do
+projeto passava 3:1. Com esses números, a saída (ii) — "filete neutro por fora" — era
+mesmo **emoldurar o melhor com o pior**, e a recusa estava certa.
+
+**O que mudou:** o último parágrafo desta nota mandou o achado para a Tarefa 48 ("é o estado
+da base"), e **o dono decidiu sobre ele em 2026-09-24**: a borda de campo de texto ganhou
+**tom próprio**, `--border-field`, escurecido até fechar 3:1 nos dois temas. Hoje o filete
+neutro **do campo** dá **3,63:1** contra a página no claro e **4,01:1** no escuro — contra
+os 1,35 / 1,38 que esta nota mediu.
+
+⚠️ **Então a frase "ele não acrescenta fronteira" deixou de valer.** Ela era uma conclusão
+sobre um número, e o número mudou. O dono reabriu a saída (ii) e ela foi **implementada na
+Tarefa 48**: o papel do grifo ganhou a moldura de campo **por fora**, num elemento próprio,
+e o tom da caneta continua pintando o papel **por dentro** — preenchimento e filete de
+caneta intactos, nenhum valor de canvas tocado.
+
+| o que | esta nota (47a) | depois da decisão do dono (48) |
+| --- | --- | --- |
+| o filete neutro contra a página, claro | **1,35** | **3,63** |
+| o filete neutro contra a página, escuro | **1,38** | **4,01** |
+| veredito da saída (ii) | recusada, com razão | **implementada** |
+
+⚠️ **A saída (iii) continua NÃO tomada, e o número dela continua de pé:** o `--pen-a-dot`
+segue em **2,28:1** contra a página no claro, porque ele é valor de canvas e a fronteira do
+campo passou a ser outra coisa — a moldura. Quem vier medir o filete de caneta vai achar
+2,28 e **não deve concluir que a fronteira reprova**: ela é a moldura, e ela passa.
+
+**A lição, e é a nº 3 outra vez, do lado bom:** uma recusa medida vale enquanto o número
+valer. Esta nota fez a coisa certa ao escrever o número ao lado da conclusão — foi ele que
+permitiu à fatia seguinte saber **exatamente** o que reabrir, em vez de herdar a frase e
+achar que o assunto estava fechado.
 
 ### 20 · M9 — o mapa de canetas: **cinco mapas literais, e a duplicação real é de cinco nomes**
 

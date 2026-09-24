@@ -228,7 +228,7 @@ describe('ListItem', () => {
     variante do que existe (uma linha interativa inteira), não um componente
     novo — quem a CONSOME é a Tarefa 44.
 
-    As medidas saem de `Livro.dc.html:70-171` e `LivroDesktop.dc.html`.
+    As medidas saem de `Livro.dc.html:71-171` e `LivroDesktop.dc.html`.
   */
   describe('the sumario variant (decision G)', () => {
     it('keeps `row` as the default, so the five screens do not change', () => {

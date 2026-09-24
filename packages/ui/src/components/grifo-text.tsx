@@ -102,7 +102,7 @@ export function GrifoText({ children, className, pen }: GrifoTextProps) {
       className={cx(
         /*
           `ring-2` é `box-shadow: 0 0 0 2px <cor do anel>`, que é exatamente o
-          que o canvas declara. Um `ring` sem número seria 1px e a marca
+          que o canvas declara. Um anel sem número seria de 1px e a marca
           encostaria nas letras da linha de cima.
 
           `rounded-mark` é `--r-1` (2px); o canvas declara `border-radius:1px`.

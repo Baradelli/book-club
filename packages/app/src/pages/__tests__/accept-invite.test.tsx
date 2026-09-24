@@ -4,6 +4,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AppRoutes } from '../../router';
+import { expectNoGuilt, expectNoGuiltBesidesFormError } from './anti-guilt-dom';
 import {
   alwaysReply,
   BackButton,
@@ -661,5 +662,59 @@ describe('the accept screen and the password manager (rules 10, 17)', () => {
     await waitFor(() => {
       expect(locationText()).toBe('/');
     });
+  });
+});
+/**
+ * ⚠️⚠️ **A VARREDURA ANTI-CULPA — ELA NUNCA TINHA RODADO NESTA TELA.**
+ *
+ * Medido na Tarefa 48: `expectNoGuilt` aparecia **zero** vezes aqui, no
+ * `login.test.tsx` e no `preferencias.test.tsx`. Esta tela é a PORTA do clube,
+ * e os dois estados que mais aparecem nela são recusas — o link errado e o
+ * link vencido. Se uma frase fosse cobrar alguém, seria numa delas.
+ *
+ * ⚠️ **A VARIANTE FOI ESCOLHIDA LENDO O `anti-guilt-dom.ts`** (as duas são
+ * mutuamente exclusivas desde a rodada de correção da Tarefa 44):
+ * `expectNoGuilt()` nos estados limpos, e nunca
+ * `expectNoGuiltWithPlanPosition()` — o aceite não mostra plano nenhum, e a
+ * variante da posição exige ≥ 1 subtração efetiva. Nos estados de recusa,
+ * `expectNoGuiltBesidesFormError()` com a lista exata: o recado do formulário
+ * é `text-danger` por construção.
+ */
+describe('⚠️ a varredura anti-culpa no aceite de convite (regra 8, Tarefa 48)', () => {
+  it('sweeps the blind form at rest', () => {
+    stubFetch(alwaysReply(acceptOk()));
+    renderPage(<AppRoutes />, { path: PATH });
+
+    expectNoGuilt();
+  });
+
+  it('⚠️ sweeps the EXPIRED invite — the state this screen exists to survive', async () => {
+    stubFetch(alwaysReply({ status: 410, body: { error: 'Gone' } }));
+    renderPage(<AppRoutes />, { path: PATH });
+    fill();
+    await submit();
+
+    await screen.findByText(pt.pages.acceptInvite.inviteExpired);
+    expectNoGuiltBesidesFormError([pt.pages.acceptInvite.inviteExpired]);
+  });
+
+  it('⚠️ sweeps the invite that does not exist', async () => {
+    stubFetch(alwaysReply({ status: 404, body: { error: 'Not found' } }));
+    renderPage(<AppRoutes />, { path: PATH });
+    fill();
+    await submit();
+
+    await screen.findByText(pt.pages.acceptInvite.inviteNotFound);
+    expectNoGuiltBesidesFormError([pt.pages.acceptInvite.inviteNotFound]);
+  });
+
+  it('sweeps the password that is too short', async () => {
+    stubFetch(alwaysReply(acceptOk()));
+    renderPage(<AppRoutes />, { path: PATH });
+    fill({ password: 'curta' });
+    await submit();
+
+    await screen.findByText(pt.errors.fields.password);
+    expectNoGuiltBesidesFormError([pt.errors.fields.password]);
   });
 });

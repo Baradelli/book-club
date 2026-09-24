@@ -76,7 +76,7 @@ import { nameOfWriter } from './club-names';
  * o acusador mata, procurando qualquer utilitário `bg-*` no vazado.
  *
  * ⚠️ **E A SILHUETA DEIXOU DE SER O ARGUMENTO.** O docblock antigo registrava,
- * medido, que trocar `rounded-sm` por `rounded-full` **sobrevivia** — a
+ * medido, que trocar o raio PEQUENO por `rounded-full` **sobrevivia** — a
  * silhueta não tinha acusador. Agora os dois SÃO `rounded-full` por decisão do
  * canvas, e o que carrega a distinção é o preenchimento, que tem acusador.
  *

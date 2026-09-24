@@ -41,6 +41,23 @@ Leia sob demanda:
   o briefing de reestruturação da UI que originou o MVP 3.5 (é dele que saem as decisões
   fechadas do `docs/BACKLOG.md`); o segundo são os 23 prints das telas **como elas eram**
   antes da reestruturação — o "antes" contra o qual o "depois" se compara.
+- **`docs/ui/canvas/`** — ⚠️ **o CANVAS DE DESIGN, versionado em 2026-09-24 por decisão do
+  dono.** São os **21 artboards** (`Nome.dc.html`) mais o `canvas.json` que os posiciona, e
+  `ds/grine/tokens.json`, a paleta do canvas. É o **alvo visual** de todo o MVP 3.5, e é o
+  arquivo que **914 citações** `Arquivo.dc.html:NN`, em **96 arquivos permanentes**,
+  apontam.
+  ⚠️⚠️ **ELES NÃO ESTAVAM NO REPOSITÓRIO ATÉ ESSA DATA** — nem em `docs/`, nem no histórico
+  do git —, e por isso todas essas citações eram **inverificáveis**: era a única classe de
+  afirmação deste projeto que não tinha como ter acusador, e foi a causa de três citações
+  erradas achadas por auditoria na Tarefa 48. Agora têm: a guarda é
+  `packages/app/src/__tests__/canvas-citations.test.ts`, e ela reprova se uma citação
+  apontar para um artboard que não existe ou para uma linha além do fim.
+  ⚠️ **NÃO REFORMATE NENHUM ARQUIVO DESTA PASTA.** Os números de linha são carga: uma
+  passada de formatador invalidaria as 914 citações de uma vez. `docs/**` já está no
+  `.prettierignore`, e é por isto que ele precisa continuar lá.
+  ⚠️ **A fileira ESCURA não existe:** o `canvas.json` declara **35** boards e há **21** em
+  disco — falta o tema escuro de catorze das quinze telas (só o `DiaEscuro` chegou). É
+  dívida aberta, registrada no `BACKLOG.md`.
 - **`docs/adr/*.md`** — quando quiser saber **por que** uma regra é assim, ou quando for
   tomar uma decisão nova (aí você escreve o próximo ADR).
 
@@ -59,6 +76,7 @@ Leia sob demanda:
 | `docs/EDITOR.md` | spec de uma peça específica | opcional |
 | `docs/new-ui.md` | o briefing da reestruturação da UI (MVP 3.5) e o link do canvas de design | decisão fechada — quem fecha é o `BACKLOG.md` |
 | `docs/ui/prints/` | os 23 prints das telas ANTES do MVP 3.5 | o alvo visual — esse é o canvas |
+| `docs/ui/canvas/` | o CANVAS: 21 artboards + `canvas.json` + a paleta `ds/`. O alvo visual do MVP 3.5, e o alvo de 914 citações `.dc.html:NN` | arquivo para formatar ou editar — os números de linha são carga |
 | `docs/ACEITE-MVP.md` | o roteiro e as perguntas de fechamento de cada MVP; as respostas do dono | detalhe de fatia |
 | `docs/PROMPT-MVP-2.md` | o prompt que pôs uma IA orquestradora para executar o MVP 2 inteiro | spec de tarefa |
 | `docs/PROMPT-MVP-3.md` | o mesmo, para o MVP 3 — e ele carrega as **20 lições medidas** dos MVPs 1 e 2 | spec de tarefa |

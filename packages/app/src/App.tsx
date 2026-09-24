@@ -159,7 +159,7 @@ export function App() {
         | largura | altura | recuo | papel | filete |
         | --- | --- | --- | --- | --- |
         | celular | 52px (`h-13`) | `0 20px` (`px-5`) | `--surface` | `1px --border` |
-        | ≥1120px | 56px (`h-14`) | `0 40px` (`px-10`) | `--surface` | `1px --border` |
+        | ≥1120px | 56px | `0 40px` | `--surface` | `1px --border` |
 
         Fonte: `Inicio.dc.html:26` e `InicioDesktop.dc.html:21`. ⚠️ A spec da
         fatia citava `:32` para os dois — a 32 do `Inicio` é o `<main>` e a do

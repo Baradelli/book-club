@@ -324,7 +324,7 @@ gosto:
 | --- | --- | --- | --- |
 | `--r-1` | 2px | `--radius-mark` | inalterado (e o canvas usa `1px` no lugar que ele ocuparia — nota nº 4 da Tarefa 39) |
 | `--r-2` | 3px | `--radius-callout` **(novo)** | a caixa de erro de formulário tem `border-radius:3px` (`Main.dc.html:41`) |
-| `--r-3` | 4px | `--radius-control` **(era `--r-2`)** | **32 ocorrências** de `4px` nos artboards, contra 17 de `3px`, e são todas botão, campo e link-botão (`Inicio.dc.html:56,57`, `Main.dc.html:56`, `Acervo.dc.html:51,52`) |
+| `--r-3` | 4px | `--radius-control` **(era `--r-2`)** | **32 ocorrências** de `4px` nos artboards, contra 17 de `3px`, e são todas botão, campo e link-botão (`Inicio.dc.html:56,57`, `Main.dc.html:57`, `Acervo.dc.html:51,52`) |
 | `--r-4` | 10px | `--radius-sheet` **(era `--r-3`)** | `Avulsa.dc.html:79`: `border-radius: 10px 10px 0 0` |
 | `--r-pill` | 999px | `--radius-pill` | inalterado |
 
@@ -400,7 +400,7 @@ A tabela, corrigida:
 | --- | --- | --- | --- |
 | pílula "Refinar" do `FilterBar` | **36px** | `min-h-11` (44px) | `Acervo.dc.html:59` |
 | botão `seal` no desktop | **40px** | `min-h-11` (44px) | `LivroDesktop.dc.html:55` |
-| linha do sumário | **~36–38px** (`padding:9px 0` + ~20px) | `min-h-11` (44px) | `Livro.dc.html:70` |
+| linha do sumário | **~36–38px** (`padding:9px 0` + ~20px) | `min-h-11` (44px) | `Livro.dc.html:71` ~~`:70`~~ |
 | ~~chip removível de filtro~~ | ~~30px~~ | — | **não é o `FilterChip`; o do canvas tem 44px** |
 
 A regra 7 desta spec manda `MIN_TOUCH_TARGET_PX` continuar 44 e o `FOCUS_RING` não mudar, e

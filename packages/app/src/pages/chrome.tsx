@@ -19,7 +19,8 @@ import { listItemRouterLink } from '../router-link';
  * fatia o `Notice` tinha **cinco** cópias em `pages/` — três byte-idênticas
  * (`book-form`, `day-note`, `free-note`) e **duas com um `description` a mais**
  * (`home`, `book`) — e o mesmo `<section>` + `h1` do `Screen` aparecia em
- * quatro telas, três com `max-w-2xl` e uma com `max-w-4xl`. A tela de grifos
+ * quatro telas, três com a largura de conteúdo de 672px e uma com a de 896px.
+ * A tela de grifos
  * seria a sexta cópia de um e a quinta do outro.
  *
  * A divergência já tinha começado (é o que as "duas variantes" são), e é
@@ -154,7 +155,7 @@ export function Notice({ action, description, title }: NoticeProps) {
  * (`Convite.dc.html`) e ele É estreito, por conta própria (`max-w-md` na
  * `<section>` dele).
  *
- * ⚠️ **`narrow` (`max-w-2xl`) E `wide` (`max-w-4xl`) MORRERAM NA TAREFA 42**,
+ * ⚠️ **`narrow` (672px de conteúdo) E `wide` (896px) MORRERAM NA TAREFA 42**,
  * pela decisão B: as duas dão lugar ao modelo do canvas. O `book-form.tsx`
  * era o único chamador de `wide` (quatro `Screen`) e passou a usar o padrão;
  * ninguém nunca escreveu `width="narrow"`, que era o padrão.
@@ -163,7 +164,7 @@ export function Notice({ action, description, title }: NoticeProps) {
  * canvas **não tem artboard de desktop para o cadastro de livro** (são cinco,
  * e são `Inicio`, `Dia`, `Livro`, `NovaAnotacao` e `NovoGrifo`), então 680px
  * ali é a decisão B aplicada, não uma medição. A linha do plano
- * (`plan-editor.tsx:302`) vira `flex-row` a partir de `sm` (640px) com
+ * (`plan-editor.tsx:302`) vira LINHA a partir de `sm` (640px) com
  * `sm:w-44` + `sm:flex-1` + `sm:w-44`, então ela continua cabendo numa linha —
  * o campo do meio fica ~270px em vez de ~490px. Quem revisita é a Tarefa 47,
  * que é a dona dos formulários.
@@ -219,8 +220,8 @@ const SCREEN_SPACING_CLASS: Readonly<Record<ScreenSpacing, string>> = {
  *
  * **Entregue a MAIORIA de cada propriedade, e não um artboard:**
  * `line-height` **1.14** (4 contra 3 e 3) e `letter-spacing` **−0.02em** (6
- * contra 4). Os dois são **arbitrários** (`leading-[…]`, `tracking-[…]`) e não
- * degraus de escala, então nada obrigava arredondamento nenhum — é justamente
+ * contra 4). Os dois entram como **valor arbitrário** e não como degrau de
+ * escala, então nada obrigava arredondamento nenhum — é justamente
  * por isso que copiar um artboard aqui era gratuito.
  *
  * ⚠️ **O TAMANHO É A DIVERGÊNCIA DECLARADA:** o canvas usa **sete** valores
@@ -232,7 +233,7 @@ const SCREEN_SPACING_CLASS: Readonly<Record<ScreenSpacing, string>> = {
  * a Tarefa 41a deixou em aberto para o dono.
  *
  * ⚠️ **`text-balance` FICA, e ele é minoria de propósito** (4 dos 10). Ele é
- * **inócuo** num título de uma linha — `text-wrap: balance` só reparte o texto
+ * **inócuo** num título de uma linha — a quebra equilibrada só reparte o texto
  * quando há mais de uma linha —, e as quatro telas em que o canvas o usa são
  * exatamente as de título longo e vindo do conteúdo (o tema do dia, o nome do
  * livro). Aplicá-lo às dez não muda nada em "Acervo" e melhora o que quebra.

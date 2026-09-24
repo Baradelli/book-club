@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>1 · Entrar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&amp;family=Geist+Mono:wght@400;500&amp;family=Geist:wght@400;500;600&amp;family=Instrument+Serif:ital@0;1&amp;display=swap">
+<style>
+/*TOKENS*/
+body{--bg:#f5f1e8;--surface:#f9f5ec;--surface-2:#f0ece0;--surface-today:#faf3e4;--border:#d8d1bf;--border-soft:#e3ddc9;--border-strong:#a89e80;--leader:#babcb2;--leader-future:#d4d6cc;--text:#1a201a;--text-muted:#565b52;--text-subtle:#74786e;--text-faint:#9a9d92;--accent:#143524;--accent-hover:#1b4632;--accent-fg:#f5f1e8;--gold:#946d2c;--gold-strong:#785822;--gold-line:#d6ae64;--gold-soft:#faf3e4;--person-bg:#dde9e2;--person-border:#b5d3c3;--person-fg:#1b4632;--spine-bg:#143524;--spine-edge:#0f2419;--spine-fg:#dde9e2;--spine2-bg:#785822;--spine2-edge:#5c4317;--spine2-fg:#f5ead4;--pen-a:#f0e2b4;--pen-a-dot:#c89a44;--pen-v:#d7e5d5;--pen-v-dot:#4a8e6e;--pen-l:#f2ddc9;--pen-l-dot:#a9613a;--pen-z:#d8e0e8;--pen-z-dot:#52708c;--pen-r:#f0dade;--pen-r-dot:#9c5a6b;--danger:#7a3520;--danger-bg:#f4dcd0;--sel:#cfe0d6}
+/*/TOKENS*/
+body{margin:0;font-family:Geist,system-ui,sans-serif;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+a{color:var(--accent)}
+a:hover{color:var(--accent-hover)}
+input,textarea,select{font-family:inherit;color:inherit;background:none;border:none;outline:none;padding:0;width:100%;box-sizing:border-box;resize:none}
+input::placeholder,textarea::placeholder{color:var(--text-faint)}
+</style>
+</helmet>
+
+<div style="width:390px;height:1100px;box-sizing:border-box;background:var(--bg);display:flex;flex-direction:column;overflow:hidden;">
+
+  <header style="height:52px;flex-shrink:0;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border);">
+    <span style="font-family:Fraunces,Georgia,serif;font-size:16px;font-weight:600;letter-spacing:-0.01em;">Clube do Livro</span>
+    <span style="font-family:'Geist Mono',Menlo,monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-muted);">Do sistema</span>
+  </header>
+
+  <main style="flex-grow:1;box-sizing:border-box;padding:56px 24px 0 24px;display:flex;flex-direction:column;gap:26px;overflow:hidden;">
+
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <h1 style="margin:0;font-family:Fraunces,Georgia,serif;font-size:30px;font-weight:500;line-height:1.14;letter-spacing:-0.02em;">Entrar</h1>
+      <div style="display:flex;flex-direction:column;gap:3px;">
+        <div style="height:2px;background:var(--accent);"></div>
+        <div style="height:1px;background:var(--border);"></div>
+      </div>
+    </div>
+
+    <div role="alert" style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;background:var(--danger-bg);border:1px solid var(--danger);border-radius:3px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.7" stroke-linecap="round" style="flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="7.5" x2="12" y2="13"></line><line x1="12" y1="16.5" x2="12" y2="16.6"></line></svg>
+      <span style="font-size:13.5px;line-height:1.45;color:var(--danger);">E-mail ou senha não conferem.</span>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:22px;">
+      <div style="display:flex;flex-direction:column;gap:7px;">
+        <label for="email" style="font-family:'Geist Mono',Menlo,monospace;font-size:9.5px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-muted);">E-mail</label>
+        <input id="email" type="email" value="marcos@exemplo.com" style="font-size:16px;padding:8px 0;border-bottom:1px solid var(--border-strong);">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:7px;">
+        <label for="senha" style="font-family:'Geist Mono',Menlo,monospace;font-size:9.5px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-muted);">Senha</label>
+        <input id="senha" type="password" value="12345678" style="font-size:16px;padding:8px 0;border-bottom:1px solid var(--border-soft);">
+      </div>
+    </div>
+
+    <button style="height:50px;display:flex;align-items:center;justify-content:center;background:var(--accent);color:var(--accent-fg);border:none;border-radius:4px;font-family:Geist,system-ui,sans-serif;font-size:15px;font-weight:500;cursor:pointer;">Entrar</button>
+
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

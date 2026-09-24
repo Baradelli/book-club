@@ -7,7 +7,8 @@
  * usam: strings condicionais.
  *
  * ⚠️ Ele NÃO resolve conflito de utilitário (não é `tailwind-merge`): passar
- * `p-2` e `p-4` deixa os dois no atributo e quem decide é a ordem no CSS
+ * dois recuos diferentes no mesmo elemento deixa os dois no atributo e quem
+ * decide é a ordem no CSS
  * compilado, não a ordem aqui. Por isso todo componente monta a lista base
  * ANTES do `className` de fora — o de fora vem por último, mas continua
  * valendo só quando não briga com nada.

@@ -514,8 +514,8 @@
   misturam.
 
   ⚠️ `--gold` aqui é TRAÇO, não texto — a guarda de primeiro uso da Tarefa 41b
-  (`refuses the FIRST USE of text-gold`) proíbe o dourado como TINTA DE LETRA,
-  onde ele dá 4,16:1. Como filete o piso é 3:1, e ele passa.
+  (em `app/src/__tests__/theme-tokens.test.ts`) proíbe o dourado como TINTA DE
+  LETRA, onde ele dá 4,16:1. Como filete o piso é 3:1, e ele passa.
 
   O seletor é o do PAI porque quem carrega o estado é o botão (`aria-pressed`),
   e a bolinha é um `<span>` decorativo dentro dele: o alvo de toque tem 44px, e

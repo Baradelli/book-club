@@ -189,7 +189,8 @@ export function ContextBar({
           `NovaAnotacaoDesktop.dc.html:37`, `NovoGrifoDesktop.dc.html:37`).
 
           ⚠️ `h-` e não `min-h-`, e a diferença importa: com ação o celular
-          pede 48px (`min-h-12`), e um `min-h-[46px]` no desktop NÃO desceria
+          pede 48px (`min-h-12`), e uma altura MÍNIMA de 46px no desktop NÃO
+          desceria
           dos 48 — a barra ficaria 2px fora do canvas justamente na tela em que
           o botão aparece. Altura FIXA acima do corte é o que faz as duas
           formas terem os 46px medidos, e ela é segura porque o alvo de 44px do

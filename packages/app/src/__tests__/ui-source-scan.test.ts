@@ -487,9 +487,17 @@ describe('the app CSS sees packages/ui (rule 1)', () => {
       `free-note-fields.tsx` deixou de escrever a classe, e o saldo da fatia
       inteira voltou a zero.
 
+      ⚠️ **E VOLTOU A 11 NA TAREFA 48, por um motivo que cabe numa linha e que
+      eu conferi em vez de deduzir:** a tela de endereço errado
+      (`not-found.tsx`) passou a desenhar a volta como uma CAIXA, e não como um
+      sublinhado — `NaoEncontrada.dc.html:51` desenha um retângulo de 48px com
+      filete e raio. O raio é `rounded-control`, e ele passou a ser escrito num
+      arquivo que nunca o escreveu. Nenhum outro arquivo deixou de escrevê-lo:
+      o saldo da fatia é exatamente +1.
+
       Mesmo recado de sempre: some um (ou tira um), não apague.
     */
-    expect(usagesOutsideUi('rounded-control')).toHaveLength(10);
+    expect(usagesOutsideUi('rounded-control')).toHaveLength(11);
     expect(usagesOutsideUi('min-h-11')).toHaveLength(6);
     // E que o par de fronteira do regex funciona: `border-leader-future` não é
     // `border-leader`. Sem isto a canária mais frágil acusaria por um vizinho.
