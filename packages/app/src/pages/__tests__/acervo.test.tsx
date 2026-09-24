@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../App';
 import type { ClubSummary } from '../../club/active-club';
+import { ACERVO_CARD_CLASS, ACERVO_META_CLASS } from '../acervo-rows';
 import { dayNotePath } from '../day-note';
 import { freeNotePath } from '../free-note';
 import { acervoPath, highlightNewPath, highlightPath } from '../paths';
@@ -28,6 +29,7 @@ import {
 import {
   aBook,
   aPlanItem,
+  hidingOf,
   memoryStorage,
   meReply,
   readableText,
@@ -39,6 +41,7 @@ import {
   requestsTo,
   type Responder,
   stubFetch,
+  tokensOf,
 } from './harness';
 
 /**
@@ -711,41 +714,6 @@ function marginRail(): HTMLElement {
   const node = readingSelect().closest('aside');
   if (node === null) throw new Error('a margem do desktop não está na tela');
   return node;
-}
-
-/**
- * OS TOKENS DE UM UTILITÁRIO na classe de UM nó.
- *
- * ⚠️ **POR TOKEN, NUNCA POR REGEX — a lição medida na rodada de correção da
- * Tarefa 45**, e por isso ela mora numa função e não copiada em dois `it()`.
- * `/(^|\s)(min-\[1120px\]:)?hidden(\s|$)/u` acerta **6 de 13** variantes e
- * deixa passar `max-[1119px]:hidden`, `max-lg:`, `sm:`, `md:`, `print:` e
- * `[@media…]:`. Toda classe do Tailwind é `variante:variante:utilitário`,
- * então o utilitário é o último segmento depois de `:` — e `flex-col` não é
- * `flex`, que é exatamente o que um `includes('flex')` erraria.
- */
-function tokensOf(node: HTMLElement, utility: string): string[] {
-  return node.className
-    .split(/\s+/u)
-    .filter((name) => name.split(':').at(-1) === utility);
-}
-
-/**
- * AS CLASSES QUE ESCONDEM um nó — as dele **e as dos ancestrais**.
- *
- * ⚠️ O ancestral entra porque esconder o pai esconde o filho, e uma guarda que
- * lesse só o próprio nó ficaria verde com a tela inteira invisível.
- */
-function hidingOf(node: HTMLElement): string[] {
-  const hiding: string[] = [];
-  for (
-    let at: HTMLElement | null = node;
-    at !== null && at !== document.body;
-    at = at.parentElement
-  ) {
-    hiding.push(...tokensOf(at, 'hidden'));
-  }
-  return hiding;
 }
 
 /**
@@ -3312,5 +3280,44 @@ describe('the catalog of the collection (rule 17)', () => {
     // ninguém — o defeito que a Tarefa 27 consertou.
     expect(pt.pages.acervo.filters.person.person).toContain('{{name}}');
     expect(pt.pages.acervo.item.page).toContain('{{number}}');
+  });
+});
+
+/**
+ * ============================================================================
+ * O CARD DE GRIFO TEM DOIS CONSUMIDORES DESDE A TAREFA 47b
+ * ============================================================================
+ *
+ * ⚠️⚠️ **ESTE `it()` NASCEU DE UM MUTANTE SOBREVIVENTE (M15 da 47b), e ele é
+ * a METADE QUE FALTAVA de um par.** As margens de desktop dos dois formulários
+ * mostram uma prévia que promete, por escrito, *"como vai aparecer no
+ * acervo"* — e elas cumprem a promessa importando daqui o papel do card e a
+ * classe da linha de cima, em vez de redesenhá-los.
+ *
+ * O lado DE LÁ já estava guardado (`highlight-form.test.tsx › wears the
+ * ACERVO'S card`). O lado DE CÁ não estava: sem esta asserção o acervo podia
+ * repintar o próprio card, a prévia continuava igual à constante, e a promessa
+ * quebrava sem um vermelho.
+ *
+ * ⚠️ **O QUE ESTA ASSERÇÃO PEGA, E O QUE ELA NÃO PEGA — a auditoria da rodada
+ * de correção mediu, e o nome antigo deste `it()` prometia mais do que ele
+ * entrega.** Ele se chamava *"draws the acervo card from the SAME constant"*,
+ * e isso é falso como asserção: a guarda compara a classe do nó com o VALOR da
+ * constante, então inlinar aqui a MESMA string dá 999 verdes. O mutante que
+ * ela pega é o que importa — **qualquer DESVIO**, de um lado ou do outro. E é
+ * o desvio que quebra a promessa: um inline idêntico não muda pixel nenhum
+ * hoje, e o dia em que ele passa a mentir é o dia em que alguém edita um dos
+ * dois — e aí este `it()` fica vermelho, que é exatamente o seu trabalho.
+ */
+describe('⚠️ THE HIGHLIGHT CARD IS SHARED WITH THE FORM PREVIEW (task 47b)', () => {
+  it('draws the acervo card with EXACTLY the class the preview reads', async () => {
+    await renderAcervo();
+    await waitForRows(10);
+
+    const card = highlightRows()[0]?.firstElementChild;
+    expect(card?.getAttribute('class')).toBe(ACERVO_CARD_CLASS);
+    expect(card?.firstElementChild?.getAttribute('class')).toBe(
+      ACERVO_META_CLASS,
+    );
   });
 });

@@ -466,6 +466,28 @@ describe('the app CSS sees packages/ui (rule 1)', () => {
       `form-styles.ts`). Quem mexer numa tela e vir este número vermelho: some
       um, não apague a asserção — ela é o que prova que a extração ALCANÇA o
       `packages/app`, e uma sonda de contagem apagada leva a propriedade junto.
+
+      ⚠️ **O PRIMEIRO FOI A 11 NA TAREFA 47b E VOLTOU A 10 NA RODADA DE
+      CORREÇÃO, e as duas contas estão aqui porque o RECADO é que envelhece,
+      não o número.**
+
+      A 47b explicava o +1 assim: *"o `highlight-form.tsx` deixou de escrevê-lo
+      no mesmo commit (o campo do comentário mudou para o
+      `highlight-fields.tsx`, que já o escrevia)"*. ⚠️ **A auditoria mediu e a
+      explicação é falsa:** em `e96204f` o `highlight-fields.tsx` tinha **zero**
+      ocorrências. A mudança do comentário foi uma TROCA de casa (−1 no
+      formulário, +1 nos campos, saldo 0), e o +1 vinha só do arquivo NOVO, o
+      `free-note-fields.tsx`. Pela explicação escrita o número teria de ser 10,
+      e o valor 11 estava certo pelo motivo errado — que é a pior combinação
+      possível numa sonda de contagem.
+
+      **E hoje são 10 de novo**, por uma razão que a auditoria também cobrou: o
+      papel do card da prévia da avulsa era cópia à mão, e virou
+      `ACERVO_PAPER_CLASS` em `acervo-rows.tsx` — que já contava. O
+      `free-note-fields.tsx` deixou de escrever a classe, e o saldo da fatia
+      inteira voltou a zero.
+
+      Mesmo recado de sempre: some um (ou tira um), não apague.
     */
     expect(usagesOutsideUi('rounded-control')).toHaveLength(10);
     expect(usagesOutsideUi('min-h-11')).toHaveLength(6);

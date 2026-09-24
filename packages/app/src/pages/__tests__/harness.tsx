@@ -498,3 +498,47 @@ export function requestAt(
   if (!call) throw new Error(`esperava uma requisição no índice ${index}`);
   return call;
 }
+
+/**
+ * ============================================================================
+ * OS TOKENS DE UM UTILITÁRIO na classe de UM nó — UM DONO, PARA TODAS AS TELAS
+ * ============================================================================
+ *
+ * ⚠️ **POR TOKEN, NUNCA POR REGEX.** Medido na rodada de correção da Tarefa
+ * 45: `/(^|\s)(min-\[1120px\]:)?hidden(\s|$)/u` acerta **6 de 13** variantes e
+ * deixa passar `max-[1119px]:hidden`, `max-lg:`, `sm:`, `md:`, `print:` e
+ * `[@media…]:`. Toda classe do Tailwind é `variante:variante:utilitário`,
+ * então o utilitário é o último segmento depois de `:` — e `flex-col` não é
+ * `flex`, nem `overflow-hidden` é `hidden`.
+ *
+ * ⚠️ **E ELA SUBIU PARA O HARNESS NA TAREFA 47b, que é o conserto do achado da
+ * 46.** A 46 encontrou a forma FRÁGIL (a regex) copiada de uma tela para
+ * outra, e a 45 já tinha pago por ela: enquanto a função certa viver dentro de
+ * um arquivo de teste, a próxima tela que precisar dela vai copiar — e copiar
+ * é onde a forma frágil volta. A 47b precisava da mesma guarda em mais duas
+ * telas (a margem da avulsa e a do grifo), então ela passou a ter um dono só,
+ * como o `readableText` e o `withoutDiacritics` já têm.
+ */
+export function tokensOf(node: HTMLElement, utility: string): string[] {
+  return node.className
+    .split(/\s+/u)
+    .filter((name) => name.split(':').at(-1) === utility);
+}
+
+/**
+ * AS CLASSES QUE ESCONDEM um nó — as dele **e as dos ancestrais**.
+ *
+ * ⚠️ O ancestral entra porque esconder o pai esconde o filho, e uma guarda que
+ * lesse só o próprio nó ficaria verde com a tela inteira invisível.
+ */
+export function hidingOf(node: HTMLElement): string[] {
+  const hiding: string[] = [];
+  for (
+    let at: HTMLElement | null = node;
+    at !== null && at !== document.body;
+    at = at.parentElement
+  ) {
+    hiding.push(...tokensOf(at, 'hidden'));
+  }
+  return hiding;
+}

@@ -6,7 +6,7 @@ import {
   notesResponseSchema,
 } from '@clube/shared';
 import { ApiError } from '@clube/shared/client';
-import { Button, Field, PersonAvatar, Sheet } from '@clube/ui';
+import { Button, PersonAvatar, Sheet } from '@clube/ui';
 import {
   lazy,
   type ReactNode,
@@ -30,7 +30,7 @@ import {
   nameOfWriter,
 } from './club-names';
 import { messageFor, resolveApiError } from './form-errors';
-import { TEXT_INPUT_CLASS } from './form-styles';
+import { FreeNoteRail, NoteFields } from './free-note-fields';
 import { acervoPath } from './paths';
 
 /**
@@ -66,6 +66,22 @@ import { acervoPath } from './paths';
  * usado por uma tela só seria a abstração errada com o custo da certa; quando a
  * Tarefa 21 puser a fila offline nos dois, é lá que o hook nasce, com dois
  * chamadores reais para desenhá-lo.
+ *
+ * ⚠️ **A TAREFA 47b CORTOU ESTE ARQUIVO EM DOIS, e o motivo é tamanho
+ * medido.** Ele entrou na fatia com **602** linhas pelo contador canônico
+ * (`acervo.tsx`, nunca `wc -l`) — o MAIOR do app, **202** acima do teto de
+ * 400 — e a fatia lhe acrescentava uma margem de desktop inteira. Os dois
+ * campos (`NoteFields`) saíram para `free-note-fields.tsx`, e a margem nasceu
+ * lá em vez de aqui. O saldo:
+ *
+ * ```
+ * free-note.tsx         602 → 568    (−34)
+ * free-note-fields.tsx    –  →  99    os campos, e o espelho deles
+ * ```
+ *
+ * ⚠️ E o que entrou está registrado **no arquivo que RECEBEU**, não só aqui —
+ * é a lição da Tarefa 46, em que uma tela encolheu 33 e a vizinha absorveu
+ * 208 sem uma linha de comentário em lugar nenhum.
  */
 
 /** As rotas. Constantes lidas pelo `router.tsx` e pelos construtores abaixo. */
@@ -228,56 +244,26 @@ function LazyEditor({
         doc={doc}
         editable={editable}
         onChange={onChange}
+        /*
+          ⚠️ **A BARRA DE CANETAS — decisão do dono, 2026-09-24.** A Tarefa 47b
+          a deixou de fora e registrou a ausência como pendência de desenho,
+          porque os dois artboards a põem em lugares diferentes
+          (`NovaAnotacao.dc.html:72-85` ancorada no fim da janela e
+          `NovaAnotacaoDesktop:77-88` como rodapé da coluna). ⚠️ A forma
+          `'fixed'` é **as duas**: o `RichEditor` a ancora acima do teclado no
+          celular e a devolve ao rodapé da coluna acima de 1120px, por media
+          query. A forma `'footer'` seria só a metade de desktop, e o celular
+          ficaria sem caneta.
+
+          ⚠️ **E LEITURA NÃO TEM CANETA.** A anotação de outra pessoa abre em
+          leitura (regra 17): uma barra ali ofereceria escrita sobre o texto
+          que só a autora edita.
+        */
+        penBar={editable === false ? 'none' : 'fixed'}
         placeholder={placeholder}
+        slashHintLabel={t('editor.slashHint')}
       />
     </Suspense>
-  );
-}
-
-/** Título + referência: os dois campos que só a avulsa tem. */
-function NoteFields({
-  onReference,
-  onTitle,
-  reference,
-  title,
-  titleError,
-}: {
-  title: string;
-  reference: string;
-  titleError: string | undefined;
-  onTitle: (value: string) => void;
-  onReference: (value: string) => void;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <>
-      <Field error={titleError} label={t('pages.freeNote.fields.title')}>
-        {(control) => (
-          <input
-            {...control}
-            className={TEXT_INPUT_CLASS}
-            onChange={(event) => onTitle(event.target.value)}
-            type="text"
-            value={title}
-          />
-        )}
-      </Field>
-      <Field
-        hint={t('pages.freeNote.fields.referenceHint')}
-        label={t('pages.freeNote.fields.reference')}
-      >
-        {(control) => (
-          <input
-            {...control}
-            className={TEXT_INPUT_CLASS}
-            onChange={(event) => onReference(event.target.value)}
-            type="text"
-            value={reference}
-          />
-        )}
-      </Field>
-    </>
   );
 }
 
@@ -303,6 +289,8 @@ export function FreeNotePage() {
 function NewFreeNote({ bookId }: { bookId: string }) {
   const { t } = useTranslation();
   const { api } = useAuth();
+  /* Só o avatar da prévia: nenhuma requisição nova — é o contexto do cromo. */
+  const { me } = useActiveClub();
   const navigate = useNavigate();
 
   const [title, setTitle] = useState('');
@@ -366,7 +354,11 @@ function NewFreeNote({ bookId }: { bookId: string }) {
     por isso ela é declarada aqui em vez de ser o padrão do `Screen`.
   */
   return (
-    <Screen rule="bottom" title={t('pages.freeNote.newTitle')}>
+    <Screen
+      rail={<FreeNoteRail me={me} t={t} title={title} />}
+      rule="bottom"
+      title={t('pages.freeNote.newTitle')}
+    >
       <NoteFields
         onReference={setReference}
         onTitle={setTitle}
@@ -900,6 +892,18 @@ function ExistingFreeNote({
   */
   return (
     <Screen
+      /*
+        ⚠️ **A MARGEM SÓ EXISTE ONDE HÁ FORMULÁRIO — e o teste que prova isso
+        é o da nota alheia.** Ausente ≠ vazia (`ScreenProps.rail`): num estado
+        de carga, de erro, ou na anotação de OUTRA pessoa não há campo para
+        espelhar, e uma prévia ali prometeria que o texto dela é o meu. É a
+        mesma guarda que a tela do livro e a do dia já aplicam ao `rail`.
+      */
+      rail={
+        state.status === 'ready' && state.mine ? (
+          <FreeNoteRail me={me} t={t} title={title} />
+        ) : undefined
+      }
       rule="bottom"
       title={
         state.status === 'ready' && !state.mine

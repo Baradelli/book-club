@@ -45,6 +45,65 @@ export function authorLabel(
     : (writerName ?? t('pages.acervo.item.author.other'));
 }
 
+/**
+ * ⚠️ **O PAPEL E A LINHA DE CIMA DO CARD DE GRIFO — DOIS CONSUMIDORES DESDE A
+ * TAREFA 47b, e é por isso que eles saíram do meio do JSX.**
+ *
+ * O segundo é a **prévia** da margem do desktop do formulário de grifo
+ * (`highlight-rail.tsx` — ⚠️ **e não o `highlight-fields.tsx`, que era o
+ * caminho ABANDONADO**: pendurar a margem lá empurrava o `highlight-form.tsx`
+ * para 441, e a auditoria da 47b achou este ponteiro apontando para o arquivo
+ * errado), que promete uma coisa por escrito — *"como vai aparecer no
+ * acervo"*. Uma prévia desenhada com classes PRÓPRIAS cumpre a promessa no dia
+ * em que é escrita e a quebra no primeiro retoque do acervo, sem nenhum
+ * vermelho: as duas telas continuariam renderizando, cada uma do seu jeito.
+ *
+ * ⚠️ **E DESDE A RODADA DE CORREÇÃO SÃO TRÊS: a prévia da AVULSA também.**
+ * Ela desenhava o mesmo papel escrito à mão (`free-note-fields.tsx`), que é
+ * exatamente o defeito que este par existe para impedir, do lado que ninguém
+ * tinha guardado. O papel virou `ACERVO_PAPER_CLASS` e a direção ficou com
+ * quem chama: o card de grifo empilha (`flex-col`), a prévia da avulsa põe o
+ * avatar ao lado do texto — é a única propriedade em que os dois discordam,
+ * e o canvas concorda (`Acervo.dc.html:87` × `NovaAnotacaoDesktop:94`).
+ *
+ * ⚠️ **O QUE NÃO FOI REUSADO, E O NÚMERO QUE DECIDIU** (decisão B da 47b). O
+ * `HighlightRow` inteiro não serve à prévia, medido prop a prop e propriedade
+ * a propriedade:
+ *
+ * - das **seis** props, a prévia entrega **duas** honestas (`t`, `mine`) e
+ *   teria de FABRICAR quatro;
+ * - o `highlight` é um `HighlightResponse` de **quinze** campos, e o
+ *   formulário tem **quatro** (trecho, cor, página, referência): os outros
+ *   onze seriam invenção — um `id` que não existe, um clube, um livro, um dia
+ *   de plano, um `status` `ACTIVE`, um `archivedAt`, um `createdAt` e um
+ *   `commentText`, que é DERIVADO no backend e não pode nascer aqui
+ *   (ADR 0001);
+ * - das **treze** propriedades visuais do card, a prévia quer **oito** e
+ *   recusa **cinco** — e duas das cinco são estruturais: o item de lista (a
+ *   prévia não está numa lista) e o par de ações (corrigir e arquivar um
+ *   grifo que ainda não foi registrado).
+ *
+ * **Escolhido: reusar as CLASSES e a truncagem, nunca o componente.** É o que
+ * dá um dono só às oito propriedades compartilhadas sem cobrar da prévia os
+ * onze campos que ela não tem.
+ */
+/**
+ * O PAPEL, sem direção: fundo, filete, raio e recuo. Quem empilha ou enfileira
+ * é o chamador — ver o docblock acima.
+ *
+ * ⚠️ **O FILETE É `border-line` e o canvas pede `--border-soft`**, e a
+ * divergência é **herdada**, não escolhida aqui: o card do acervo já a tinha
+ * desde a Tarefa 28, e `--border-soft` é mais claro (`#e3ddc9` contra
+ * `#d8d1bf`), logo pior de contraste. Registrada na nota 11 da 47b.
+ */
+export const ACERVO_PAPER_CLASS =
+  'flex rounded-control border border-line bg-surface p-3';
+
+export const ACERVO_CARD_CLASS = `${ACERVO_PAPER_CLASS} w-full flex-col gap-2`;
+
+export const ACERVO_META_CLASS =
+  'flex flex-wrap items-center gap-2 text-xs text-muted';
+
 export interface HighlightRowProps {
   t: TFunction;
   highlight: HighlightResponse;
@@ -104,8 +163,8 @@ export function HighlightRow({
 
   return (
     <li className="flex">
-      <div className="flex w-full flex-col gap-2 rounded-control border border-line bg-surface p-3">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+      <div className={ACERVO_CARD_CLASS}>
+        <div className={ACERVO_META_CLASS}>
           {/*
             REGRA 2 — O TIPO EM TEXTO, EM TODA LINHA. Numa lista unificada, a
             cor não basta: é o ADR 0004 exigindo que o leitor não precise

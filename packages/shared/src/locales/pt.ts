@@ -1069,6 +1069,60 @@ export const pt = {
       */
       preview: {
         heading: 'Como vai aparecer no acervo',
+        /*
+          ⚠️ **O PARÁGRAFO DA MARGEM (Tarefa 47b, decisão D) —
+          `NovaAnotacaoDesktop.dc.html:103`.**
+
+          Ele responde a pergunta que a prévia levanta: se isto não é a
+          anotação do dia, onde ela vai parar? A resposta é DESCRITIVA — diz
+          para onde a anotação vai, e nunca o que deixou de ser feito.
+
+          ⚠️ E ela NÃO fala de quem pode ver (ADR 0002): "aparece no acervo do
+          livro e na busca do clube" é onde, não permissão.
+        */
+        about:
+          'Anotação avulsa fica fora do plano do dia. Ela aparece no acervo do livro e na busca do clube, junto com as do dia.',
+      },
+      /*
+        ⚠️ **OS ATALHOS DO EDITOR (Tarefa 47b, decisão D) —
+        `NovaAnotacaoDesktop.dc.html:108-111`.**
+
+        ⚠️ **SÃO TRÊS, e a terceira entrou na RODADA DE CORREÇÃO, por decisão
+        do dono (2026-09-24).** A entrega parou em duas e deu um motivo
+        medido: naquela tela o gesto de grifar NÃO EXISTIA. Quem aplica caneta
+        é a barra de canetas do `RichEditor`, governada pela prop `penBar`, e
+        a tela da avulsa não a passava — só a do dia passava. Escrever
+        "selecionar · grifar com a caneta" numa tela sem caneta seria a tela
+        mentindo, que é a classe de defeito que a Tarefa 47a já tinha
+        recusado no "Rascunho guardado".
+
+        ⚠️ **O dono mandou ligar a barra, e com ela o gesto passou a existir**
+        — então a razão caiu por DECISÃO, não por erro de medição, e a linha
+        entrou. Ela custa duas chaves, e não uma: `select` é a caixa da
+        esquerda, que na terceira linha carrega uma PALAVRA em vez de uma
+        tecla, porque o gesto não tem tecla. Palavra é prosa, e prosa passa
+        pelo catálogo.
+
+        ⚠️⚠️ **E O MOTIVO ANTIGO DESTE COMENTÁRIO ERA FALSO — a auditoria
+        mediu, e o `pt.ts` é o arquivo que a próxima pessoa abre.** Ele dizia
+        que a linha ficava de fora "para nomear um gesto cujos cinco botões
+        estão desenhados na MESMA margem, três linhas abaixo
+        (`NovaAnotacaoDesktop:79-83`)". As linhas `:79-83` **são** as cinco
+        canetas ✅, mas elas estão no RODAPÉ DA COLUNA DE LEITURA (`:77-88`),
+        não na margem (que começa em `:91`), e ~29 linhas acima, não três — e
+        na tela entregue elas não existiam em lugar nenhum. A razão certa
+        estava na nota 2 da 47b; esta aqui dizia a oposta.
+
+        ⚠️ **O `/` e o `>` não são chave de catálogo de propósito:** são as
+        teclas que a pessoa digita, iguais em qualquer idioma — o que se
+        traduz é o que elas FAZEM.
+      */
+      shortcuts: {
+        heading: 'Atalhos do editor',
+        block: 'inserir bloco',
+        quote: 'citação',
+        select: 'selecionar',
+        highlight: 'grifar com a caneta',
       },
       save: {
         saving: 'Salvando…',
@@ -1175,6 +1229,19 @@ export const pt = {
       */
       preview: {
         heading: 'Como vai aparecer no acervo',
+        /*
+          ⚠️ **O PARÁGRAFO DA MARGEM (Tarefa 47b, decisão D) —
+          `NovoGrifoDesktop.dc.html:118`.**
+
+          Ele diz por que a escolha da caneta vale a pena: a cor é um FILTRO
+          nas duas telas que listam grifo, e um significado mantido ao longo
+          do livro é o que a transforma em busca.
+
+          ⚠️ Nada aqui cobra constância: "vale escolher uma" é convite, e a
+          frase não mede quantas vezes alguém manteve ou deixou de manter.
+        */
+        about:
+          'A cor da caneta é um filtro no acervo e na busca — vale escolher uma e manter o significado dela ao longo do livro.',
       },
       /* REGRA 19: registrar é um BOTÃO, nunca autosave. */
       create: 'Registrar grifo',

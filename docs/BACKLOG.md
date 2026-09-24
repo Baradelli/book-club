@@ -4853,20 +4853,118 @@ API o `FilterBar` da 41 acabou expondo.
       parcial é pior que nenhuma, porque é lida como completa (nota 26). O intervalo da tela de
       correção é `:48-65`, não `:48-64` (nota 24). E `bg-pen-a-dot` é escrito em outro
       arquivo, não na mesma tela (nota 12)._
-- [ ] **47b** — **Formulários: a anotação avulsa e o livro.** O que sobrou da 47 depois da
-      divisão acima: `free-note.tsx` (**602**, o maior arquivo do app), `book-form.tsx`
-      (**456**, remedido — a spec da 47a dizia 494) e `plan-editor.tsx` (**239**), sobre os
-      artboards `NovaAnotacao`,
-      `NovaAnotacaoDesktop`, `NovoLivro` e `EditarLivro`. ⚠️ **Entra com 8.703 B de folga, e a
-      48 vem depois dela.** → _a detalhar_
-      _⚠️ **ENTRA COM UM ARTBOARD A MAIS DO QUE A LISTA DIZ, achado na rodada de correção da
-      47a: `NovoGrifoDesktop.dc.html` desenha o MESMO campo do trecho** que a 47a entregou, e
-      com outras medidas — recuo `24 24 24 48`, mínimo de 168px, aspa de 54px, trecho de 20px,
-      dica de 12,5px, pílulas com recuo lateral de 16px e texto de 13,5px. ⚠️⚠️ **E o filete do
-      papel lá é `--gold-line`, NÃO o par escuro da caneta** — o canvas dá **duas fontes
-      diferentes** para o filete da decisão A, e a do desktop é a **mais fraca**: 1,84:1 contra
-      a página no claro, 1,65:1 no escuro. **Quem implementar não copia aquele valor sem ler a
-      nota 19 da 47a**, que mede o assunto inteiro._
+- [x] **47b** — **Formulários: a anotação avulsa e o livro.** ✅ **ENTREGUE.** As duas
+      margens de desktop passaram a mostrar **"Como vai aparecer no acervo"** — a chave que a
+      Tarefa 40 plantou nos dois namespaces e que estava **sem consumidor** desde então. A
+      prévia espelha o formulário tecla a tecla (título e referência na avulsa; trecho, cor,
+      página e referência no grifo), some no celular e reaparece acima de 1120px, e **não
+      existe** onde não há formulário para espelhar (carga, erro, conteúdo de outra pessoa).
+      → `docs/tasks/47b-avulsa-e-livro.md`
+      _⚠️ **A DECISÃO B, COM NÚMERO (nota 3): não reusar o `HighlightRow`, e reusar as
+      CLASSES.** Das **seis** props dele a prévia entrega **duas** honestas; o `highlight` é
+      um `HighlightResponse` de **quinze** campos e o formulário tem **quatro**; das **treze**
+      propriedades visuais a prévia quer **dez** e recusa **três**, ⚠️ **apenas UMA delas
+      estrutural** (o número "oito e cinco, duas estruturais" estava errado: faltava o
+      `authorLabel` entre as queridas e o comentário entre as recusadas, e o `<li>` era contado
+      três vezes — rodada de correção, nota 3). A conclusão não muda. Então
+      `ACERVO_PAPER_CLASS`/`ACERVO_CARD_CLASS`/`ACERVO_META_CLASS` saíram do JSX de
+      `acervo-rows.tsx` e viraram um
+      dono só, e a truncagem vem do mesmo `excerptOf` do acervo. **A prévia é o acervo por
+      construção**, sem fabricar um registro salvo._
+      _⚠️⚠️ **QUATRO MUTANTES SOBREVIVERAM em 20, e os dois piores apagavam a FRASE que dá
+      sentido à fatia** ("Como vai aparecer no acervo") deixando **999 testes verdes** — a
+      suíte guardava a caixa e não guardava a promessa. Os outros dois: meio par guardado
+      (o ACERVO podia deixar de usar a constante que a prévia lê) e a prévia sem avatar e sem
+      "Você". Todos com acusador hoje; a tabela nos dois eixos está na nota 9._
+      _⚠️ **DECISÃO C — "Seus grifos recentes" NÃO ENTROU**, e a ausência é declarada: aquele
+      bloco precisa de `GET /books/:bookId/highlights` sem filtro, e rota está fora de escopo
+      da seção inteira. **Não há mutante porque não há bloco** — o que há é uma guarda do
+      efeito (a margem não acrescenta requisição nenhuma)._
+      _⚠️ **DECISÃO F — o filete do papel continua o da CANETA.** O `NovoGrifoDesktop:54` pede
+      `--gold-line`, que dá **1,84:1** contra a página no claro (1,65 no escuro) — **pior que
+      as cinco canetas** (2,28 a 4,59) e pior que tudo. Copiá-lo pioraria os dez casos.
+      Divergência declarada, com acusador que diz por quê (M9, 4 acusadores)._
+      _⚠️ **DECISÃO G intacta:** o 400 do "dia que já tem anotação" não foi reimplementado
+      (M16, 2 acusadores). E agora está medido **por que** o rótulo `dayWithNote` segue sem
+      consumidor. ⚠️⚠️ **MAS A RAZÃO DADA AQUI ERA FALSA (rodada de correção, nota 23):** o
+      `PlanItemResponse` tem mesmo sete campos, **só que a tela não carrega um**. O
+      `book-form.tsx:168` carrega o `bookWithPlanResponseSchema`, que traz **`writers`**
+      (`planItemId` + `userIds[]`), e `userIds` não vazio **É** "este dia tem anotação" — é o
+      que o `CLAUDE.md` chama de *"`getBookWithPlan` devolve livro + plano + quem já escreveu"*.
+      **Zero schema, zero rota, zero requisição a mais: a pendência é de ESCOPO**, porque a
+      decisão G diz que o canvas descreve aquele rótulo e não o pede. O livro ganhou o que tinha dado e chave: a **contagem de dias**
+      (`plan.days`, outra chave órfã da 40), que aparece só quando há dia._
+      _**CINCO chaves novas** (o teto era seis), listadas antes de escrever. A terceira linha
+      de atalho do canvas ("selecionar · grifar com a caneta") **não entrou**, e o motivo é
+      melhor que orçamento: medido no `RichEditor`, **naquela tela o gesto não existia** — a
+      barra de canetas é governada pela prop `penBar`, cujo padrão é `none`, e o
+      `free-note.tsx` não a passava. Ligá-la é uma linha sem chave nova, **pendência
+      declarada**._
+      _⚠️⚠️ **DECISÃO DO DONO (2026-09-24), na rodada de correção: a barra foi LIGADA, e com
+      ela a terceira linha entrou** — a fatia vai a **sete** chaves, acima do teto de seis, e
+      isso está declarado. ⚠️ Os dois artboards **não discordavam**: a forma `penBar="fixed"`
+      é as duas ao mesmo tempo, por media query (ancorada acima do teclado no celular,
+      estática no rodapé da coluna acima de 1120px). O par está guardado dos DOIS lados, mais
+      o avesso (leitura não ganha caneta) — notas 17 e 18._
+      _**Tamanho, pelo contador canônico:** `free-note.tsx` **602 → 568** (o `NoteFields` saiu
+      para `free-note-fields.tsx`, 99, junto com a margem) e `highlight-form.tsx` **427 → 407**
+      (o `LazyComment` foi para `highlight-fields.tsx`, 309 → 337, e a margem virou
+      `highlight-rail.tsx`, 63). ⚠️ **Os dois arquivos acima do teto ENCOLHERAM**, que é a
+      frase da 47a levada a sério; `book-form.tsx` segue **456**, intocado; `plan-editor.tsx`
+      239 → 247. **Tudo registrado no arquivo que RECEBEU**, não só na spec._
+      _**Gates:** shared 607 · ui 305 · backend 1994 · app **981 → 999 → 1007** (a rodada de
+      correção somou 8). Entrada **441.343 → 444.231 → 444.507 → 444.436 B** (+2.888, +276 e
+      **−71**; folga **5.564** para a 48) · `book-form` 10.059 →
+      10.244 · **CSS 36.804 B, ZERO de delta e byte a byte idêntico** (nenhuma classe nova
+      entrou no projeto; conferido por `cmp`, não pelo total) · editor, `index.html` e precache
+      iguais. **A fatia custou 3.073 B**, dentro do orçamento de ~4.000.
+      `schema.prisma` segue `968c9986f7a2dfb4ccbd738b13d44715`._
+      _**Nove divergências de escala declaradas** (a 47a declarou duas e calou quatro), mais
+      ⚠️ **cinco** de token e de família — eram três, e a auditoria achou duas, uma delas
+      INTRODUZIDA pela fatia (o filete do card da prévia da avulsa) — nota 11. E duas escolhas contra o artboard, as duas porque
+      **a prévia promete o ACERVO e não o desenho**: a linha de metadados do grifo sai com a
+      tipografia do acervo (12px) e não com os 9px do canvas, e o corpo do texto **não** é
+      resumido na prévia porque `plainText` é derivado no backend (ADR 0001) e um segundo dono
+      da derivação dentro do PWA mentiria sobre o que a prévia promete._
+      _⚠️ **Uma guarda mudou de casa, e o motivo é um achado da 46:** `tokensOf`/`hidingOf`
+      (a visibilidade por TOKEN, nunca por regex) subiram do `acervo.test.tsx` para o
+      `harness.tsx`. Enquanto a forma certa vive dentro de um arquivo de teste, a próxima tela
+      **copia** — e copiar é por onde a forma frágil volta._
+      _**Correções à spec desta tarefa:** a tabela da nota 1 tem **18** linhas (a entrega
+      escreveu "as 12 citações"), e ⚠️ **DUAS delas estavam erradas**, contra o "zero citações
+      erradas" que a entrega comemorou: `pt.ts:1070`/`:1176` são `preview: {` e as `heading:`
+      estão em `:1071`/`:1177`; e o `Acervo.dc.html` **não** desenha "o mesmo desenho, na mesma
+      ordem" que a prévia do grifo — o acervo tem sete elementos e a prévia do canvas seis
+      (falta o NOME de quem escreveu), com recuo 14 × 16, espaço 9 × 10 e trecho 16 × 15._
+      _⚠️ **A lista de artboards estava incompleta em DOIS**, e a spec perguntou:
+      `Acervo.dc.html` (a referência de desenho que as duas prévias prometem — é ele que
+      resolve a decisão B) e `CorrigirGrifo.dc.html` (sem artboard de desktop, então o desktop
+      da correção é **derivado**, como o do acervo na 46). ⚠️ **E faltou declarar um terceiro
+      caso derivado**: o desktop de `NovoLivro`/`EditarLivro`, que também só existe em largura
+      de celular._
+      _⚠️⚠️ **RODADA DE CORREÇÃO (2026-09-24) — treze afirmações derrubadas e SEIS mutantes
+      sobreviventes, um BLOQUEADOR.** O bloqueador é a família do M2 fechada pela metade: a
+      rota de **correção** do grifo aceitava `draft={EMPTY_DRAFT}` e a da avulsa aceitava
+      `reference=""` com **999 testes verdes** — os seis `it()` da prévia do grifo usavam
+      todos o caminho de CRIAR. Os outros cinco: o avatar das duas prévias podia virar outra
+      pessoa (com o rótulo ainda dizendo "Você"), os dois atalhos podiam TROCAR de descrição,
+      e a palavra "Avulsa" sumia **quando havia referência** — as duas propriedades que o
+      docblock do `FreeNoteRail` nomeia em maiúsculas. ⚠️ **E a prévia da avulsa quebrava a
+      promessa que imprime**: o acervo mostra o autor SEMPRE (sem corpo, o subtítulo é só o
+      autor) e ela não mostrava nenhum; o card era cópia à mão do `ACERVO_CARD_CLASS`. Onze
+      mutantes novos, todos com acusador; degenerados declarados e não contados. Notas 17 a 30._
+      _⚠️⚠️ **DECISÃO DO DONO (2026-09-24): a prévia da avulsa PAROU de mostrar a
+      referência** — a promessa "Como vai aparecer no acervo" passou a ser literalmente
+      verdadeira. Medido: `reference` aparece **zero** vezes em `acervo.tsx` e
+      `acervo-entries.ts`. A alternativa (o **acervo** passar a mostrá-la) foi recusada por
+      mexer numa tela já entregue e auditada (a 46) e por custar bytes. ⚠️ **A referência não
+      some do produto, some da PRÉVIA**: continua no formulário, continua sendo salva e
+      continua na tela de leitura. ⚠️ **A ausência é guardada, não só apagada** — acusador na
+      rota de criar E na de corrigir, com as metades positivas primeiro (o campo tem o valor;
+      o `POST` o leva). O mutante que a traz de volta (o código da entrega restaurado
+      verbatim) acusa **2 vezes**. E a prop `reference` saiu do `FreeNoteRail`: a margem não
+      pode mostrá-la porque **não a recebe**. **Isto ENCOLHEU o pacote: 444.507 → 444.436 B
+      (−71), folga 5.564; app 1006 → 1007.** Nota 31._
 - [ ] **48** — **Preferências, 404, login, convite, e a passagem final.** Varredura de
       contraste nos dois temas com foco nos pontos de risco (os cinzas de legenda e os fundos
       de grifo), 360 px sem rolagem horizontal, `prefers-reduced-motion`, e o veredito sobre

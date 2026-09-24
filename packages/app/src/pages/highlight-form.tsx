@@ -6,14 +6,7 @@ import {
 } from '@clube/shared';
 import { ApiError } from '@clube/shared/client';
 import { Button } from '@clube/ui';
-import {
-  lazy,
-  type ReactNode,
-  Suspense,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
@@ -32,11 +25,13 @@ import {
   EMPTY_DRAFT,
   hasProblem,
   HighlightFields,
+  LazyComment,
   NO_PROBLEMS,
   type Problems,
   problemsOf,
   textOrAbsent,
 } from './highlight-fields';
+import { HighlightRail } from './highlight-rail';
 import { acervoPath } from './paths';
 
 /**
@@ -83,13 +78,22 @@ import { acervoPath } from './paths';
  * quando o campo do trecho virou o papel grifado. A divisão continua valendo, e
  * a 47a cresceu **só o lado de lá** de propósito — este já está 27 acima do teto
  * de 400, e um teto que vale para um arquivo só é um teto que anda de lado.
+ *
+ * ⚠️ **A TAREFA 47b FEZ ESTE ARQUIVO ENCOLHER, e é a mesma frase levada a
+ * sério.** A fatia acrescentou aqui a margem de desktop (as duas props de
+ * margem e o `me` do contexto, **+14**), então o campo do comentário
+ * (`LazyComment`, com o import dinâmico do editor) mudou para o vizinho, onde
+ * já moram os outros campos do grifo. O saldo, pelo contador canônico:
+ *
+ * ```
+ * highlight-form.tsx    427 → 407    (−20)
+ * highlight-fields.tsx  309 → 337    (+28)
+ * highlight-rail.tsx      –  →  63    a margem, em arquivo próprio
+ * ```
+ *
+ * ⚠️ E o que saiu está registrado **no arquivo que RECEBEU**, no docblock do
+ * `LazyComment` — não só aqui. É a lição da Tarefa 46.
  */
-
-/** O terceiro import dinâmico do editor no app. → `free-note.tsx`. */
-const RichEditor = lazy(async () => {
-  const editor = await import('@clube/ui/editor');
-  return { default: editor.RichEditor };
-});
 
 /**
  * O corpo do `POST`, montado campo a campo.
@@ -167,36 +171,6 @@ function isGone(error: unknown): boolean {
   );
 }
 
-/**
- * O editor, sempre dentro de um `Suspense` — o chunk é o maior do app, e sem
- * `fallback` a tela ficaria em branco no lugar dele (regra 20).
- */
-function LazyComment({
-  doc,
-  onChange,
-}: {
-  doc: Record<string, unknown> | undefined;
-  onChange: (doc: Record<string, unknown>) => void;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <Suspense
-      fallback={
-        <p className="text-sm text-muted">
-          {t('pages.highlightForm.editorLoading')}
-        </p>
-      }
-    >
-      <RichEditor
-        className="rounded-control border border-line bg-surface"
-        doc={doc}
-        onChange={onChange}
-      />
-    </Suspense>
-  );
-}
-
 export function HighlightFormPage() {
   const { bookId, highlightId } = useParams();
 
@@ -219,6 +193,8 @@ export function HighlightFormPage() {
 function NewHighlight({ bookId }: { bookId: string }) {
   const { t } = useTranslation();
   const { api } = useAuth();
+  /* Só o avatar da prévia: nenhuma requisição nova — é o contexto do cromo. */
+  const { me } = useActiveClub();
   const navigate = useNavigate();
 
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
@@ -283,7 +259,11 @@ function NewHighlight({ bookId }: { bookId: string }) {
     `chrome.test.tsx › the screens the canvas draws with NO rule`.
   */
   return (
-    <Screen rule="none" title={t('pages.highlightForm.newTitle')}>
+    <Screen
+      rail={<HighlightRail color={color} draft={draft} me={me} t={t} />}
+      rule="none"
+      title={t('pages.highlightForm.newTitle')}
+    >
       <HighlightFields
         color={color}
         colorError={
@@ -630,7 +610,21 @@ function ExistingHighlight({
   }
 
   return (
-    <Screen rule="none" title={t('pages.highlightForm.editTitle')}>
+    <Screen
+      /*
+        ⚠️ **A MARGEM SÓ EXISTE ONDE HÁ FORMULÁRIO.** Ausente ≠ vazia
+        (`ScreenProps.rail`): em carga, em erro e no grifo de OUTRA pessoa
+        (que esta tela recusa por autoria) não há campo para espelhar, e uma
+        prévia ali prometeria que o trecho dela é o meu.
+      */
+      rail={
+        state.status === 'ready' && state.mine ? (
+          <HighlightRail color={color} draft={draft} me={me} t={t} />
+        ) : undefined
+      }
+      rule="none"
+      title={t('pages.highlightForm.editTitle')}
+    >
       {body()}
     </Screen>
   );

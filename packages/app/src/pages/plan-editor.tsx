@@ -4,7 +4,7 @@ import {
   isCalendarDay,
   type PlanItemResponse,
 } from '@clube/shared';
-import { Button } from '@clube/ui';
+import { Button, Eyebrow } from '@clube/ui';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -337,9 +337,35 @@ export function PlanEditor({ onChange, problem, rows }: PlanEditorProps) {
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-lg font-semibold">
-        {t('pages.bookForm.plan.heading')}
-      </h2>
+      {/*
+        ⚠️ **QUANTOS DIAS O PLANO TEM (Tarefa 47b) — `EditarLivro.dc.html:71-74`
+        desenha o rótulo da seção e a contagem na MESMA linha, alinhados pela
+        base.**
+
+        A chave `days` nasceu na Tarefa 40 e ficou **sem consumidor** até aqui,
+        esperando a tela; o par de plural existe porque "1 dia" acontece de
+        verdade (um plano de um dia é válido).
+
+        ⚠️ **NÃO É PLACAR, e a diferença não é sutil:** o número é o tamanho do
+        que o admin está cadastrando, sem nada contra o que comparar — não há
+        meta, não há "de", não há quanto falta. É por isso que ele passa pela
+        varredura anti-culpa sem isenção nenhuma, ao contrário da posição no
+        plano ("Dia 11 de 30"), que precisa de uma.
+
+        E ele só existe quando há dia: num plano vazio, "0 dias" seria o
+        formulário dizendo que falta alguma coisa logo antes da frase que
+        explica que não falta (`plan.empty`).
+      */}
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-lg font-semibold">
+          {t('pages.bookForm.plan.heading')}
+        </h2>
+        {rows.length === 0 ? null : (
+          <Eyebrow>
+            {t('pages.bookForm.plan.days', { count: rows.length })}
+          </Eyebrow>
+        )}
+      </div>
       <p className="text-sm text-muted">
         {t('pages.bookForm.plan.description')}
       </p>

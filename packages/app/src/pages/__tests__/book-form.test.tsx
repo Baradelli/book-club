@@ -1314,3 +1314,68 @@ describe('THE DAY THAT COMES BACK COMES BACK AS THE PERSON HAD IT (rule 12)', ()
     expectNoGuiltBesidesFormError([pt.pages.bookForm.plan.dayHasNotes]);
   });
 });
+
+/**
+ * ============================================================================
+ * QUANTOS DIAS O PLANO TEM — `EditarLivro.dc.html:71-74` (Tarefa 47b)
+ * ============================================================================
+ *
+ * ⚠️ **A GUARDA É DE PRESENÇA E DE AUSÊNCIA, e é o eixo que a 47a aprendeu a
+ * não esquecer.** Uma asserção só sobre "o número aparece" fica verde com um
+ * "0 dias" pendurado no plano vazio — que é o formulário dizendo que falta
+ * alguma coisa exatamente onde a frase ao lado explica que não falta.
+ *
+ * ⚠️ **E O PLURAL NÃO É DECORAÇÃO:** o par `days_one`/`days_other` existe
+ * porque o português muda, e um plano de UM dia é válido. Sem a metade
+ * singular, a tela diria "1 dias" na primeira linha que alguém acrescentar.
+ */
+describe('⚠️ THE SIZE OF THE PLAN, WITHOUT A SCOREBOARD (task 47b)', () => {
+  it('counts the days it HAS, in the plural the language asks for', async () => {
+    await renderEdit();
+
+    expect(rowCount()).toBe(3);
+    expect(readableText()).toContain(
+      pt.pages.bookForm.plan.days_other.replace('{{count}}', '3'),
+    );
+
+    // Um dia é um dia, não "1 dias".
+    await pressLabel(rowLabel('remove', 3));
+    await pressLabel(rowLabel('remove', 2));
+    expect(rowCount()).toBe(1);
+    expect(readableText()).toContain(
+      pt.pages.bookForm.plan.days_one.replace('{{count}}', '1'),
+    );
+    /*
+      ⚠️ **E A METADE NEGATIVA, que um mutante mediu:** "1 dias" CONTÉM "1
+      dia", então a asserção positiva sozinha fica verde com o plural errado
+      na tela. É a armadilha de substring que esta série já pagou, aqui na
+      forma mais inocente que ela tem.
+    */
+    expect(readableText()).not.toContain(
+      pt.pages.bookForm.plan.days_other.replace('{{count}}', '1'),
+    );
+    expectNoGuilt();
+  });
+
+  it('⚠️ says NOTHING when the plan has no day — "0 dias" would be a complaint', async () => {
+    await renderBookForm({ role: 'OWNER' });
+
+    expect(rowCount()).toBe(0);
+    /*
+      ⚠️ **AS DUAS FORMAS, e a de baixo é a que acusa de verdade — medido.** O
+      i18next em português escolhe `days_one` para `count: 0` (a regra `one`
+      do CLDR cobre 0 e 1), então um contador indevido apareceria como "0
+      dia", nunca "0 dias". A primeira versão desta asserção procurava só o
+      plural, e o mutante que mostra o contador no plano vazio SOBREVIVIA.
+    */
+    expect(readableText()).not.toContain(
+      pt.pages.bookForm.plan.days_other.replace('{{count}}', '0'),
+    );
+    expect(readableText()).not.toContain(
+      pt.pages.bookForm.plan.days_one.replace('{{count}}', '0'),
+    );
+    // O que a tela diz no lugar é o que dá para FAZER, nunca o que falta.
+    expect(readableText()).toContain(pt.pages.bookForm.plan.empty);
+    expectNoGuilt();
+  });
+});

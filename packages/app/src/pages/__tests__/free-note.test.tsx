@@ -6,11 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../App';
 import type { ClubSummary } from '../../club/active-club';
+import { ACERVO_PAPER_CLASS } from '../acervo-rows';
 import { freeNoteNewPath, freeNotePath } from '../free-note';
 import { expectNoPrivacyTalk } from './adr-0002-dom';
 import { expectNoGuilt, expectNoGuiltBesidesFormError } from './anti-guilt-dom';
 import {
   aPlanItem,
+  hidingOf,
   memoryStorage,
   meReply,
   readableText,
@@ -22,6 +24,7 @@ import {
   requestsTo,
   type Responder,
   stubFetch,
+  tokensOf,
 } from './harness';
 
 /**
@@ -88,17 +91,31 @@ vi.mock('@clube/ui/editor', async () => {
     doc,
     editable = true,
     onChange,
+    penBar = 'none',
     placeholder,
+    slashHintLabel = '',
   }: {
     doc?: Record<string, unknown>;
     editable?: boolean;
     onChange: (doc: Record<string, unknown>) => void;
+    penBar?: string;
     placeholder?: string;
+    slashHintLabel?: string;
     className?: string;
   }) {
     return (
       <div
+        /*
+          ⚠️ **A PARTIÇÃO DA §7.9, APLICADA À BARRA DE CANETAS.** O que a TELA
+          decide é ONDE a barra fica — uma palavra, a prop `penBar` —, e é só
+          isso que este dublê expõe. Quem desenha a barra, e quem prova que
+          `'fixed'` vira `fixed inset-x-0 bottom-0` no celular e volta a ser
+          estática acima de 1120px, é o `RichEditor` de verdade, guardado em
+          `packages/ui/src/components/__tests__/pen-bar.test.tsx`.
+        */
         data-editable={String(editable)}
+        data-pen-bar={penBar}
+        data-slash-hint={slashHintLabel}
         data-testid={editable ? 'editor' : 'reader'}
       >
         <p data-testid={editable ? 'editor-text' : 'reader-text'}>
@@ -381,6 +398,22 @@ function screenIsUp(): boolean {
 
 function locationText(): string {
   return screen.getByTestId('location').textContent ?? '';
+}
+
+/**
+ * O QUE UM CAMPO DE TEXTO TEM ESCRITO — `instanceof`, nunca `as`.
+ *
+ * ⚠️ Um `as HTMLInputElement` mentiria em silêncio no dia em que o campo
+ * virasse `textarea` ou deixasse de existir: `.value` sairia `undefined` e a
+ * asserção positiva viraria comparação de `undefined` com `undefined`. O
+ * `throw` é o que faz a metade POSITIVA de um par negativo valer alguma coisa
+ * (§7.3).
+ */
+function valueOf(label: string): string {
+  const field = screen.getByLabelText(label);
+  if (!(field instanceof HTMLInputElement))
+    throw new Error(`"${label}" não é um campo de texto`);
+  return field.value;
 }
 
 const TITLE_LABEL = pt.pages.freeNote.fields.title;
@@ -1124,5 +1157,433 @@ describe('the standalone note when the address points at nothing (rule 21)', () 
     ).not.toBeNull();
     expect(readableText()).not.toContain('Boom');
     expectNoGuilt();
+  });
+});
+
+/**
+ * ============================================================================
+ * A MARGEM DO DESKTOP — "Como vai aparecer no acervo" (Tarefa 47b)
+ * ============================================================================
+ *
+ * `NovaAnotacaoDesktop.dc.html:91-113`. O que esta suíte guarda são as duas
+ * perguntas que a 47a aprendeu a fazer separado:
+ *
+ * - **de CONTEÚDO** — a prévia mostra o que o FORMULÁRIO tem, e não um texto
+ *   fixo; e ela continua mostrando depois da última tecla;
+ * - **de FORMA** — a margem existe no desktop e NÃO existe no celular, os
+ *   dois lados guardados, por TOKEN e nunca por regex.
+ *
+ * ⚠️ **VERMELHO HONESTO:** destas guardas, as de forma e as dos atalhos
+ * nasceram **verdes** contra a implementação — o comportamento foi escrito
+ * primeiro nesta fatia, e o que não existia era a guarda. O vermelho delas é
+ * o dos mutantes, medido um a um nas notas de reconciliação da 47b. As de
+ * conteúdo são as únicas que este arquivo poderia ter visto vermelhas antes.
+ */
+describe('⚠️ THE DESKTOP MARGIN MIRRORS THE FORM (task 47b, decision A)', () => {
+  function preview(): HTMLElement {
+    return screen.getByTestId('note-preview');
+  }
+
+  function previewText(): string {
+    return preview().textContent ?? '';
+  }
+
+  function rail(): HTMLElement {
+    const node = preview().closest('aside');
+    if (node === null) throw new Error('a margem do desktop não está na tela');
+    return node;
+  }
+
+  it('⚠️ shows the title of the LAST keystroke, and never a fixed text', async () => {
+    /*
+      ⚠️ **OS DOIS ACUSADORES DA REGRA 2, NUM `it()` SÓ de propósito.** O
+      primeiro é "a prévia mostra um TEXTO FIXO em vez do formulário": um
+      título que o fixture nunca escreveu reprova. O segundo é "ela deixa de
+      refletir a última tecla": o mesmo campo é reescrito, e a prévia tem de
+      ANDAR — comparar com o valor novo prova o que uma asserção sobre o
+      primeiro valor não prova (ela ficaria verde com a prévia congelada no
+      primeiro render).
+    */
+    await renderFreeNote({ path: freeNoteNewPath(BOOK_ID) });
+
+    // Antes de qualquer tecla, o eco do formulário é o formulário vazio.
+    expect(previewText()).not.toContain('a ideia');
+
+    await typeInto(TITLE_LABEL, 'A ideia da pagina 112');
+    expect(previewText()).toContain('A ideia da pagina 112');
+
+    await typeInto(TITLE_LABEL, 'A ideia da pagina 113');
+    expect(previewText()).toContain('A ideia da pagina 113');
+    expect(previewText()).not.toContain('A ideia da pagina 112');
+    expectNoGuilt();
+  });
+
+  it('⚠️ follows the keystroke on the CORRECTION screen too, not the loaded title', async () => {
+    /*
+      ⚠️ **ESTE `it()` NASCEU DE UM MUTANTE SOBREVIVENTE (M2 da Tarefa 47b), e
+      é a mesma lição da 47a: a suíte guardava a tela de CRIAR e deixava a de
+      corrigir sem dono.** O mutante é de uma linha — a margem recebe
+      `state.note.title` (o que o servidor mandou) em vez de `title` (o que a
+      pessoa está digitando) — e ele deixava 996 testes verdes enquanto a
+      prévia congelava para sempre no título carregado.
+
+      Os dois valores têm de ser DIFERENTES na asserção: comparar com o
+      carregado é justamente o que o mutante faria passar.
+    */
+    await renderFreeNote();
+
+    expect(previewText()).toContain('A ideia da pagina 112');
+
+    await typeInto(TITLE_LABEL, 'A ideia da pagina 113');
+    expect(previewText()).toContain('A ideia da pagina 113');
+    expect(previewText()).not.toContain('A ideia da pagina 112');
+    expectNoGuilt();
+  });
+
+  it('says WHERE the note lands, in the words the acervo itself uses', async () => {
+    /*
+      A prévia promete o ACERVO. Se ela inventasse um vocabulário próprio para
+      o mesmo objeto, a promessa quebraria sem quebrar teste nenhum — daí a
+      asserção ser sobre a chave DO ACERVO, e não sobre uma frase desta tela.
+    */
+    await renderFreeNote({ path: freeNoteNewPath(BOOK_ID) });
+
+    expect(previewText()).toContain(pt.pages.acervo.kind.free);
+    expectNoGuilt();
+  });
+
+  it('⚠️ does NOT show the reference — the acervo does not show it either', async () => {
+    /*
+      ⚠️⚠️ **DECISÃO DO DONO (2026-09-24), e este `it()` é o PAR NEGATIVO
+      dela.** A margem imprime "Como vai aparecer no acervo", e o acervo
+      **nunca** mostra a referência de uma anotação — medido: `reference`
+      aparece ZERO vezes em `acervo.tsx` e em `acervo-entries.ts`. A entrega
+      da 47b desenhava `Avulsa · p. 112`, uma linha que o acervo não desenha
+      em lugar nenhum, e a auditoria cobrou. O dono escolheu tornar a promessa
+      **literalmente verdadeira**: a prévia perde a referência.
+
+      ⚠️ **A AUSÊNCIA SE GUARDA, NÃO SE APAGA — é a forma da 44b e da 46.**
+      Sem este `it()`, a próxima fatia reintroduz a referência na prévia e a
+      promessa volta a ser falsa **sem um vermelho**. O acusador tem de morder
+      quando a linha VOLTA, não quando ela some.
+
+      ⚠️ **E A METADE POSITIVA VEM PRIMEIRO (§7.3), senão isto é asserção
+      vazia:** a referência continua existindo no formulário e continua sendo
+      salva. Uma tela que simplesmente perdeu o campo passaria em todas as
+      asserções negativas abaixo — e seria um defeito bem pior.
+    */
+    const calls = await renderFreeNote({ path: freeNoteNewPath(BOOK_ID) });
+
+    await typeInto(TITLE_LABEL, 'Frases que quero guardar');
+    await typeInto(REFERENCE_LABEL, 'p. 112');
+
+    // POSITIVO (1): o campo tem o valor escrito.
+    expect(valueOf(REFERENCE_LABEL)).toBe('p. 112');
+
+    // NEGATIVO: a prévia não a mostra, e nem o separador que a anunciaria.
+    expect(previewText()).not.toContain('p. 112');
+    expect(previewText()).not.toContain(`${pt.pages.acervo.kind.free} ·`);
+    expect(previewText()).toContain(pt.pages.acervo.kind.free);
+    expectNoGuilt();
+
+    /*
+      POSITIVO (2): e a referência CHEGA À API. Vem por último porque criar é
+      um BOTÃO (regra 16 da Tarefa 19) e ele NAVEGA — depois dele não há mais
+      formulário nem margem para olhar.
+    */
+    await pressLabel(pt.pages.freeNote.create);
+    expect(creates(calls)[0]?.body).toMatchObject({ reference: 'p. 112' });
+  });
+
+  it('⚠️ hides the LOADED reference too, on the correction screen', async () => {
+    /*
+      ⚠️ **O OUTRO LADO DA AUSÊNCIA, e ele existe pelo motivo do M2:** a tela
+      de criar e a de corrigir são dois `return` diferentes do mesmo arquivo,
+      e guardar um não guarda o outro. Aqui a referência chega **carregada do
+      servidor** (`aNote().reference === 'p. 112'`), que é o caminho por onde
+      ela reapareceria sem ninguém digitar nada.
+
+      ⚠️ **METADE POSITIVA:** o campo carregado mostra a referência. Sem ela,
+      um fixture mudo faria as duas negativas passarem provando nada.
+    */
+    await renderFreeNote();
+
+    expect(valueOf(REFERENCE_LABEL)).toBe('p. 112');
+    expect(previewText()).not.toContain('p. 112');
+    expect(previewText()).not.toContain(`${pt.pages.acervo.kind.free} ·`);
+    expect(previewText()).toContain(pt.pages.acervo.kind.free);
+    expectNoGuilt();
+  });
+
+  it('⚠️ signs the preview with ME — the avatar and the word the acervo uses', async () => {
+    /*
+      ⚠️ **QUEM ASSINA, e os dois mutantes que cobraram (M22 e a metade de
+      A5 da auditoria).**
+
+      1. **O avatar.** Ele mostrava a inicial de `me`, e nenhuma asserção
+         dizia de QUEM ele era: trocar `me?.name` por outra pessoa — ou por
+         `null`, que rende o glifo neutro — deixava 999 testes verdes. Daí o
+         `me` deste `it()` ter um nome que mais ninguém no fixture tem: a
+         inicial é a assinatura, e "Z" só pode ter vindo de `me.name`.
+      2. **O nome de quem escreveu.** A linha do acervo mostra o autor
+         SEMPRE (`acervo.tsx`: sem corpo, o subtítulo é SÓ o autor) — e a
+         prévia não mostrava autor nenhum. A auditoria mediu contra o
+         `Acervo.dc.html:99-106` e contra `NovaAnotacaoDesktop:98`, e os dois
+         desenham. `authorLabel` é `t()` puro, sem derivação: o argumento do
+         ADR 0001, que barra o RESUMO do corpo, não alcança o AUTOR.
+    */
+    await renderFreeNote({
+      me: meReply({ clubs: [CASAL], name: 'Zilda' }),
+      path: freeNoteNewPath(BOOK_ID),
+    });
+
+    expect(previewText()).toContain(pt.pages.acervo.item.author.you);
+
+    const avatars = preview().querySelectorAll('.bg-person');
+    expect(avatars).toHaveLength(1);
+    expect(avatars[0]?.textContent).toBe('Z');
+    expectNoGuilt();
+  });
+
+  it('⚠️ wears the ACERVO’S paper, and not a hand copy of it', async () => {
+    /*
+      ⚠️ **A METADE QUE FALTAVA DO PAR M14/M15, do lado da AVULSA.** A prévia
+      do grifo já importava a classe do card do acervo; esta desenhava o mesmo
+      papel **escrito à mão** — fundo, filete, raio e recuo repetidos —, que é
+      literalmente o defeito que aquele par existe para impedir. A auditoria
+      mediu, o papel virou `ACERVO_PAPER_CLASS` em `acervo-rows.tsx`, e a
+      direção ficou com quem chama (o card de grifo empilha; esta prévia põe o
+      avatar ao lado).
+
+      O outro lado do par é `acervo.test.tsx › draws the acervo card with
+      EXACTLY the class the preview reads`, e ele guarda a mesma constante
+      pela composição: `ACERVO_CARD_CLASS` É o papel mais a direção.
+    */
+    await renderFreeNote({ path: freeNoteNewPath(BOOK_ID) });
+
+    expect(preview().getAttribute('class')).toBe(`${ACERVO_PAPER_CLASS} gap-3`);
+  });
+
+  it('⚠️ keeps the margin OFF the phone and ON the desktop — the pair, both sides', async () => {
+    /*
+      ⚠️ **O PAR GUARDADO DOS DOIS LADOS, e este bloco já pagou CINCO vezes
+      por metade de par.** São dois defeitos OPOSTOS:
+
+      - sem o `hidden`, a margem aparece NO CELULAR — e aí o título que a
+        pessoa está digitando aparece duas vezes na mesma tela, uma no campo e
+        outra logo abaixo;
+      - sem o `min-[1120px]:flex`, a margem NUNCA aparece, e a fatia inteira
+        vira código morto que renderiza.
+
+      ⚠️ **O `flex` da base entra na asserção de propósito:** o `hidden` vem
+      do `className` da tela e o `flex` vem do `MarginRail` de `packages/ui`.
+      A margem só reaparece porque `.hidden` e `.flex` colidem e o
+      `min-[1120px]:` vence por media query — escrever os DOIS tokens aqui é o
+      que torna a colisão visível para quem mexer em qualquer um dos dois
+      arquivos. (`jsdom` não aplica media query: o que se prova é a classe.)
+    */
+    await renderFreeNote({ path: freeNoteNewPath(BOOK_ID) });
+
+    /*
+      ⚠️ **E O CABEÇALHO DA PRÉVIA ENTRA AQUI PORQUE UM MUTANTE O PEDIU (M17
+      da 47b).** Ele é a frase que dá sentido ao card — sem ela, o card é um
+      pedaço de tela repetindo o que a pessoa acabou de digitar, sem dizer por
+      quê. Apagá-lo deixava **999 testes verdes**: a margem continuava
+      existindo, com as classes certas, dizendo nada. É a lição da 47a
+      (a suíte guardava COR e não guardava FORMA) na versão "guardava a caixa
+      e não guardava a promessa".
+    */
+    expect(rail().textContent).toContain(pt.pages.freeNote.preview.heading);
+    expect(hidingOf(rail())).toEqual(['hidden']);
+    expect(tokensOf(rail(), 'flex')).toEqual(['flex', 'min-[1120px]:flex']);
+  });
+
+  it('lists the editor shortcuts as a KEY and what it does — PAIRED', async () => {
+    /*
+      ⚠️⚠️ **EM PARES, E ISSO NASCEU DE UM MUTANTE SOBREVIVENTE (M23 da
+      rodada de correção).** A asserção antiga olhava as teclas de um lado
+      (`['/', '>']`) e as descrições do outro (`toContain` solto no texto da
+      margem). Com as duas metades soltas, um mutante de UMA LINHA que TROCA
+      as descrições — `/` passa a dizer "citação" e `>` "inserir bloco" —
+      deixava **999 testes verdes** com a margem ensinando o gesto errado.
+
+      É exatamente a classe de defeito que esta mesma fatia recusou por
+      escrito ao deixar a terceira linha de fora ("seria a tela mentindo"): as
+      duas linhas que ficaram podiam passar a mentir sem um vermelho.
+
+      ⚠️ **E A TERCEIRA LINHA ENTROU** (decisão do dono, 2026-09-24): a caixa
+      da esquerda dela carrega uma PALAVRA, não uma tecla, porque o gesto não
+      tem tecla — o canvas a desenha assim (`NovaAnotacaoDesktop:111`).
+    */
+    await renderFreeNote({ path: freeNoteNewPath(BOOK_ID) });
+
+    const shortcuts = pt.pages.freeNote.shortcuts;
+    const pairs = Array.from(rail().querySelectorAll('kbd')).map((key) => [
+      key.textContent,
+      key.nextElementSibling?.textContent,
+    ]);
+    expect(pairs).toEqual([
+      ['/', shortcuts.block],
+      ['>', shortcuts.quote],
+      [shortcuts.select, shortcuts.highlight],
+    ]);
+
+    const text = rail().textContent ?? '';
+    expect(text).toContain(shortcuts.heading);
+    expect(text).toContain(pt.pages.freeNote.preview.about);
+    /*
+      ⚠️ **O FILETE ENTRE OS DOIS BLOCOS (`NovaAnotacaoDesktop:105`) — e ele
+      está aqui porque um mutante o apagou com a suíte inteira VERDE (M19 da
+      47b).** É decoração (`aria-hidden`), mas é a única coisa que separa a
+      prévia dos atalhos: sem ele os dois blocos viram um só, e nada no DOM
+      muda de texto. É exatamente a classe de defeito que a auditoria da 47a
+      nomeou — a suíte guardando a cor e não a FORMA.
+    */
+    expect(rail().querySelectorAll('[aria-hidden="true"].h-px')).toHaveLength(
+      1,
+    );
+    expectNoGuilt();
+  });
+
+  it('⚠️ has NO margin on the note of ANOTHER person — there is no draft to mirror', async () => {
+    /*
+      Ausente ≠ vazia. A anotação alheia abre em LEITURA (regra 17), e uma
+      prévia ali prometeria que o texto dela é o meu. É a mesma decisão que o
+      `rail` da tela do livro e o da tela do dia já tomam para os estados sem
+      dado.
+    */
+    await renderFreeNote({
+      path: freeNotePath(BOOK_ID, HER_NOTE_ID),
+      list: {
+        status: 200,
+        body: [aNote({ id: HER_NOTE_ID, userId: MARIA })],
+      },
+    });
+
+    expect(screen.queryByTestId('note-preview')).toBeNull();
+    expect(document.querySelector('aside')).toBeNull();
+    expectNoGuilt();
+    expectNoPrivacyTalk();
+  });
+
+  it('has no margin while the note is still loading, nor when the load failed', async () => {
+    await renderFreeNote({ book: { status: 404, body: { error: 'x' } } });
+    expect(document.querySelector('aside')).toBeNull();
+    expectNoGuilt();
+  });
+});
+
+/**
+ * ⚠️ **QUEM ARQUIVA É O AUTOR — a decisão H da Tarefa 47b, com acusador
+ * PRÓPRIO.**
+ *
+ * `Avulsa.dc.html:72` (o gatilho) e `:82` (o diálogo) desenham a tela do
+ * AUTOR. O `CLAUDE.md` é literal: *"ninguém edita ou arquiva conteúdo de
+ * outra pessoa"*.
+ *
+ * ⚠️ **POR QUE UM `it()` NOVO, se `opens it in reading mode` já conta os
+ * botões da tela.** Aquela asserção é `toHaveLength(0)` sobre TODO botão do
+ * `main`: ela acusa, mas acusa "apareceu um botão" — e no dia em que a tela
+ * ganhar um botão legítimo na leitura (um "voltar ao acervo", digamos), o
+ * conserto natural é afrouxar o número, e o arquivar alheio entra junto sem
+ * ninguém ver. Esta nomeia a propriedade: o gatilho de arquivar é do autor.
+ */
+describe('⚠️ ONLY THE AUTHOR ARCHIVES (decision H)', () => {
+  it('gives the archive trigger to MY note and to nobody else’s', async () => {
+    await renderFreeNote();
+    expect(
+      screen.queryByRole('button', { name: pt.pages.freeNote.archive.action }),
+    ).not.toBeNull();
+
+    cleanup();
+
+    await renderFreeNote({
+      path: freeNotePath(BOOK_ID, HER_NOTE_ID),
+      list: {
+        status: 200,
+        body: [aNote({ id: HER_NOTE_ID, userId: MARIA })],
+      },
+    });
+    expect(
+      screen.queryByRole('button', { name: pt.pages.freeNote.archive.action }),
+    ).toBeNull();
+    // E nem o diálogo, que é o que o gatilho abriria.
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(readableText()).not.toContain(pt.pages.freeNote.archive.title);
+    expectNoGuilt();
+    expectNoPrivacyTalk();
+  });
+});
+
+/**
+ * ============================================================================
+ * A BARRA DE CANETAS NA AVULSA (decisão do dono, 2026-09-24)
+ * ============================================================================
+ *
+ * A Tarefa 47b entregou a tela SEM a barra e registrou a ausência como
+ * pendência de desenho (nota 2): os dois artboards a desenham em lugares
+ * diferentes — `NovaAnotacao.dc.html:72-85` ancorada no fim da janela e
+ * `NovaAnotacaoDesktop:77-88` como rodapé da coluna de 680px — e escolher
+ * entre eles era decisão de desenho. **O dono escolheu: as duas, que é o que
+ * a prop `penBar="fixed"` já significa.**
+ *
+ * ⚠️⚠️ **O PAR, DOS DOIS LADOS, e este bloco já pagou CINCO vezes por metade
+ * de par.** A forma `fixed` não é "só no celular": ela ancora a barra acima
+ * do teclado no celular E a devolve ao rodapé da coluna acima de 1120px, por
+ * media query. A outra forma, `footer`, é a METADE de desktop sozinha: com
+ * ela o celular perde a barra que o `NovaAnotacao.dc.html` desenha. Por isso
+ * a asserção é sobre o valor EXATO, e não sobre "tem alguma barra".
+ *
+ * ⚠️ **A PARTIÇÃO É A DA §7.9.** Quem desenha as classes, e quem prova que
+ * a forma `fixed` carrega as duas larguras, é o `RichEditor` — guardado em
+ * `packages/ui/src/components/__tests__/pen-bar.test.tsx`, que afirma as
+ * duas metades no mesmo `it()`. O que se prova AQUI é o que a TELA decide:
+ * qual das três formas ela pede, e em que estado.
+ */
+describe('⚠️ THE PENS REACH THE STANDALONE NOTE (owner’s decision)', () => {
+  function penBarOf(testId: string): string | null {
+    return screen.getByTestId(testId).getAttribute('data-pen-bar');
+  }
+
+  it('asks for the FIXED bar — the one form that carries both widths', async () => {
+    await renderFreeNote({ path: freeNoteNewPath(BOOK_ID) });
+
+    expect(penBarOf('editor')).toBe('fixed');
+    /*
+      A dica do `/` é a terceira folha de `editor.*` lida pela TELA (o
+      `packages/ui` não chama `t()` nenhuma vez). Sem ela o desktop perde a
+      frase que o `NovaAnotacaoDesktop:86` põe à direita da barra.
+    */
+    expect(screen.getByTestId('editor').getAttribute('data-slash-hint')).toBe(
+      pt.editor.slashHint,
+    );
+    expectNoGuilt();
+  });
+
+  it('asks for it on the CORRECTION screen too, and NEVER when reading', async () => {
+    /*
+      ⚠️ **OS DOIS ESTADOS QUE A 47b MEDIU SEPARADO, pelo mesmo motivo do M2:**
+      a tela de criar e a de corrigir são dois `return` diferentes do mesmo
+      arquivo, e guardar um deles não guarda o outro.
+
+      ⚠️ E o terceiro estado é o oposto: na anotação de OUTRA pessoa a tela
+      abre em LEITURA, e uma barra de canetas ali seria affordance de escrita
+      sobre o texto que ninguém além da autora pode editar (regra 17).
+    */
+    await renderFreeNote();
+    expect(penBarOf('editor')).toBe('fixed');
+
+    cleanup();
+
+    await renderFreeNote({
+      list: {
+        status: 200,
+        body: [aNote({ id: HER_NOTE_ID, userId: MARIA })],
+      },
+      path: freeNotePath(BOOK_ID, HER_NOTE_ID),
+    });
+    expect(penBarOf('reader')).toBe('none');
+    expectNoGuilt();
+    expectNoPrivacyTalk();
   });
 });

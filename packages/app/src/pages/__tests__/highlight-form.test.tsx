@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../App';
 import type { ClubSummary } from '../../club/active-club';
+import { excerptOf, QUOTE_EXCERPT_LENGTH } from '../acervo-entries';
+import { ACERVO_CARD_CLASS, ACERVO_META_CLASS } from '../acervo-rows';
 import { acervoPath, highlightNewPath, highlightPath } from '../paths';
 import { expectNoPrivacyTalk } from './adr-0002-dom';
 import {
@@ -18,6 +20,7 @@ import {
 } from './anti-guilt-dom';
 import {
   aBook,
+  hidingOf,
   memoryStorage,
   meReply,
   readableText,
@@ -29,6 +32,14 @@ import {
   requestsTo,
   type Responder,
   stubFetch,
+  /*
+    ⚠️ Apelidado: este arquivo já tem um `tokensOf(element)` local, que devolve
+    TODAS as classes de um nó (é o que o bloco do papel grifado usa). O do
+    harness responde outra pergunta — quais tokens de UM utilitário estão na
+    classe —, e os dois nomes iguais em escopos diferentes seriam a armadilha
+    que o §7.4 chama de ponteiro ambíguo.
+  */
+  tokensOf as utilityTokens,
 } from './harness';
 
 /**
@@ -353,6 +364,22 @@ const COLORS = pt.pages.highlights.colors;
 
 function formSource(): string {
   return readFileSync(resolve(__dirname, '..', 'highlight-form.tsx'), 'utf8');
+}
+
+/**
+ * ⚠️ **O CAMPO DO COMENTÁRIO MUDOU DE ARQUIVO NA TAREFA 47b, e este ponteiro
+ * o segue PELO NOME.**
+ *
+ * O `LazyComment` — e com ele o import dinâmico do editor — passou a morar em
+ * `highlight-fields.tsx`, para o `highlight-form.tsx` não crescer estando 27
+ * linhas acima do teto de 400. O que se prova continua sendo o mesmo: que a
+ * FORMA do import é `lazy(() => import(...))`, e não um `import` estático no
+ * topo de tela nenhuma. Por isso a varredura lê **os dois** arquivos — se
+ * alguém trouxer o editor de volta para o formulário de forma estática, o
+ * segundo ramo acusa.
+ */
+function fieldsSource(): string {
+  return readFileSync(resolve(__dirname, '..', 'highlight-fields.tsx'), 'utf8');
 }
 
 beforeEach(() => {
@@ -990,12 +1017,15 @@ describe('the source of the form (rules 20, 21)', () => {
       ficar vermelho, e ele pina a FORMA: `lazy(() => import(...))`, nunca um
       `import` estático no topo.
     */
-    const source = stripComments(formSource());
+    const form = stripComments(formSource());
+    const fields = stripComments(fieldsSource());
 
-    expect(source).toContain("import('@clube/ui/editor')");
-    expect(source).toContain('lazy(');
-    expect(source).not.toMatch(/^import .*@clube\/ui\/editor/mu);
-    expect(source).not.toContain('@tiptap');
+    expect(fields).toContain("import('@clube/ui/editor')");
+    expect(fields).toContain('lazy(');
+    for (const source of [form, fields]) {
+      expect(source).not.toMatch(/^import .*@clube\/ui\/editor/mu);
+      expect(source).not.toContain('@tiptap');
+    }
   });
 });
 
@@ -1534,5 +1564,297 @@ describe('⚠️ THE PAPER HAS A SHAPE, NOT ONLY A COLOUR (rodada de correção 
     // E o papel continua sendo o papel — o erro pinta a fronteira, não o fundo.
     expect(tokens).toContain(pen.paper);
     expectNoGuiltBesidesFormError([FIELDS.quoteRequired]);
+  });
+});
+
+/**
+ * ============================================================================
+ * A MARGEM DO DESKTOP DO GRIFO — "Como vai aparecer no acervo" (Tarefa 47b)
+ * ============================================================================
+ *
+ * `NovoGrifoDesktop.dc.html:104-120`, menos o bloco `:122-132` — ver o
+ * docblock de `highlight-rail.tsx` para por que "Seus grifos recentes" não
+ * entrou (ele precisa de rota, e rota está fora do escopo da seção inteira).
+ *
+ * ⚠️ **VERMELHO HONESTO:** as guardas de forma nasceram **verdes** contra a
+ * implementação — nesta fatia o comportamento foi escrito primeiro, e o que
+ * não existia era a guarda. O vermelho delas é o dos mutantes, medido um a um
+ * nas notas de reconciliação da 47b.
+ */
+describe('⚠️ THE DESKTOP MARGIN OF THE HIGHLIGHT (task 47b, decisions A and C)', () => {
+  function preview(): HTMLElement {
+    return screen.getByTestId('highlight-preview');
+  }
+
+  function previewText(): string {
+    return preview().textContent ?? '';
+  }
+
+  function rail(): HTMLElement {
+    const node = preview().closest('aside');
+    if (node === null) throw new Error('a margem do desktop não está na tela');
+    return node;
+  }
+
+  it('⚠️ shows the quote of the LAST keystroke, and never a fixed text', async () => {
+    /*
+      ⚠️ **OS DOIS ACUSADORES DA REGRA 2 DA 47b.** O primeiro é "a prévia
+      mostra um TEXTO FIXO em vez do formulário"; o segundo é "ela deixa de
+      refletir a última tecla" — e é por isso que o mesmo campo é reescrito e
+      a asserção olha o valor NOVO: uma asserção sobre o primeiro valor ficaria
+      verde com a prévia congelada no primeiro render.
+    */
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    expect(previewText()).not.toContain('a permissão de tentar');
+
+    await typeInto(FIELDS.quote, 'quem perde a permissão de tentar');
+    expect(previewText()).toContain('quem perde a permissão de tentar');
+
+    await typeInto(FIELDS.quote, 'quem perde a permissão de errar');
+    expect(previewText()).toContain('quem perde a permissão de errar');
+    expect(previewText()).not.toContain('a permissão de tentar');
+    expectNoGuilt();
+  });
+
+  it('⚠️ follows the keystroke on the CORRECTION screen too, not the loaded draft', async () => {
+    /*
+      ⚠️⚠️ **ESTE `it()` NASCEU DO MUTANTE BLOQUEADOR DA RODADA DE CORREÇÃO
+      (M20b), e a lição é a mesma da 47a com outra roupa: a suíte guardava a
+      tela de CRIAR e deixava a de corrigir sem dono.**
+
+      Medido: os SEIS `it()` desta suíte que tocam a prévia usavam **todos** o
+      `highlightNewPath`. Consequência — `draft={EMPTY_DRAFT}` na margem da
+      rota de correção deixava **999 testes verdes** com a prévia congelada
+      num rascunho vazio para sempre. E a Definição de pronto da 47b marcava
+      *"com os dois acusadores da regra 2"*.
+
+      A forma é a única que prova o que precisa ser provado: DIGITAR POR CIMA
+      do valor carregado e afirmar o novo **e a metade negativa do carregado**.
+      Uma asserção só sobre o valor carregado ficaria verde com a prévia presa
+      no servidor; uma só sobre o novo ficaria verde com ela presa no vazio.
+    */
+    await renderForm();
+
+    // O que o servidor mandou chega à prévia — os três campos de texto.
+    expect(previewText()).toContain('a porta redonda e verde');
+    expect(previewText()).toContain('Cap. 1');
+    expect(previewText()).toContain(
+      pt.pages.acervo.item.page.replace('{{number}}', '9'),
+    );
+
+    await typeInto(FIELDS.quote, 'a porta amarela no fim do corredor');
+    expect(previewText()).toContain('a porta amarela no fim do corredor');
+    expect(previewText()).not.toContain('a porta redonda e verde');
+
+    await typeInto(FIELDS.reference, 'Cap. 7');
+    expect(previewText()).toContain('Cap. 7');
+    expect(previewText()).not.toContain('Cap. 1');
+
+    await typeInto(FIELDS.page, '138');
+    expect(previewText()).toContain(
+      pt.pages.acervo.item.page.replace('{{number}}', '138'),
+    );
+    expect(previewText()).not.toContain(
+      pt.pages.acervo.item.page.replace('{{number}}', '9'),
+    );
+    expectNoGuilt();
+  });
+
+  it('⚠️ signs the preview with ME — the avatar and the word the acervo uses', async () => {
+    /*
+      ⚠️ **QUEM ASSINA, e o mutante que cobrou (M22b).** A prévia mostrava a
+      inicial de `me`, e nenhuma asserção dizia de QUEM ela era: trocar
+      `me?.name` por outra pessoa — ou por `null`, que rende o glifo neutro —
+      deixava 999 testes verdes **com o rótulo ao lado ainda dizendo "Você"**,
+      que é a tela se contradizendo dentro de um card de 22 pixels.
+
+      Daí o `me` deste `it()` ter um nome que mais ninguém no fixture tem: a
+      inicial é a assinatura, e "Z" só pode ter vindo de `me.name`.
+    */
+    await renderForm({
+      me: meReply({ clubs: [CASAL], name: 'Zilda' }),
+      path: highlightNewPath(BOOK_ID),
+    });
+
+    expect(previewText()).toContain(pt.pages.acervo.item.author.you);
+
+    const avatars = preview().querySelectorAll('.bg-person');
+    expect(avatars).toHaveLength(1);
+    expect(avatars[0]?.textContent).toBe('Z');
+    expectNoGuilt();
+  });
+
+  it('follows the PEN, the page and the reference as they are filled in', async () => {
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    // Sem caneta escolhida, a prévia não inventa uma cor.
+    expect(previewText()).not.toContain(COLORS.yellow);
+    expect(previewText()).not.toContain(COLORS.green);
+
+    await press(screen.getByRole('button', { name: COLORS.green }));
+    expect(previewText()).toContain(COLORS.green);
+    expect(previewText()).not.toContain(COLORS.yellow);
+
+    await typeInto(FIELDS.page, '138');
+    expect(previewText()).toContain(
+      pt.pages.acervo.item.page.replace('{{number}}', '138'),
+    );
+
+    await typeInto(FIELDS.reference, 'Cap. 4');
+    expect(previewText()).toContain('Cap. 4');
+
+    // E as palavras são as DO ACERVO — é o que a prévia promete.
+    expect(previewText()).toContain(pt.pages.acervo.kind.highlight);
+    expect(rail().textContent).toContain(pt.pages.highlightForm.preview.about);
+    expectNoGuilt();
+  });
+
+  it('⚠️ has NO "your recent highlights" block — it would need a route (decision C)', async () => {
+    /*
+      ⚠️ **ESTA GUARDA É DE AUSÊNCIA, e a spec da 47b diz por que ela não tem
+      mutante: o bloco NÃO DEVE EXISTIR.** O que se prova aqui é o efeito
+      observável da decisão — a margem não faz requisição nenhuma além das que
+      o formulário já fazia, porque não há de onde tirar grifo anterior.
+
+      Se alguém improvisar o bloco com o que está na tela (o grifo que ainda
+      não foi registrado), a primeira asserção acusa; se alguém o implementar
+      de verdade, a segunda acusa, e aí a conversa com o dono acontece ANTES
+      do endpoint, que é o ponto.
+    */
+    const calls = await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    await typeInto(FIELDS.quote, 'um trecho qualquer');
+
+    expect(rail().querySelectorAll('li')).toHaveLength(0);
+    expect(requestsTo(calls, '/highlights')).toHaveLength(0);
+    expectNoGuilt();
+  });
+
+  it('⚠️ wears the ACERVO’S card, and cuts the quote where the acervo cuts it', async () => {
+    /*
+      ⚠️ **A DECISÃO B DA 47b, GUARDADA DOS DOIS LADOS.** A prévia promete o
+      acervo; o que a torna verdadeira não é disciplina, é ter UM dono para as
+      propriedades compartilhadas — a classe do card, a da linha de cima e a
+      truncagem do trecho, todas importadas de `acervo-rows`/`acervo-entries`.
+
+      Sem estas duas asserções, dois mutantes de UMA LINHA sobrevivem: a prévia
+      passa a escrever as próprias classes (e some do acervo no primeiro
+      retoque dele), ou deixa de truncar (e promete um card de três linhas que
+      o acervo vai mostrar com uma).
+    */
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    expect(preview().getAttribute('class')).toBe(ACERVO_CARD_CLASS);
+    /*
+      ⚠️ **E QUEM ASSINA, que um mutante apagou com a suíte VERDE (M20 da
+      47b).** No acervo toda linha diz de quem é — é a regra 3 da Tarefa 28 —,
+      e uma prévia sem autoria promete um card que o acervo não desenha.
+      "Você" é a palavra do acervo para a própria linha, e vem do mesmo
+      `authorLabel`.
+    */
+    expect(previewText()).toContain(pt.pages.acervo.item.author.you);
+    expect(preview().querySelectorAll('.bg-person')).toHaveLength(1);
+    expect(preview().firstElementChild?.getAttribute('class')).toBe(
+      ACERVO_META_CLASS,
+    );
+
+    const long = 'palavra '.repeat(40).trim();
+    await typeInto(FIELDS.quote, long);
+    const shown = previewText();
+    expect(shown).not.toContain(long);
+    expect(shown).toContain(excerptOf(long, QUOTE_EXCERPT_LENGTH));
+  });
+
+  it('⚠️ keeps the margin OFF the phone and ON the desktop — the pair, both sides', async () => {
+    /*
+      ⚠️ **O PAR GUARDADO DOS DOIS LADOS.** Sem o `hidden`, a prévia aparece no
+      celular e o trecho passa a estar escrito duas vezes na mesma tela; sem o
+      `min-[1120px]:flex`, ela nunca aparece e a fatia é código morto que
+      renderiza. O `flex` da base entra de propósito: ele vem do `MarginRail`
+      de `packages/ui`, e é a colisão dos dois que faz a margem reaparecer
+      acima do corte.
+    */
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    /*
+      ⚠️ **O CABEÇALHO DA PRÉVIA ENTRA AQUI PORQUE UM MUTANTE O PEDIU (M18 da
+      47b):** apagá-lo deixava **999 testes verdes**, com a margem inteira no
+      lugar e sem a frase que diz o que aquele card é.
+    */
+    expect(rail().textContent).toContain(
+      pt.pages.highlightForm.preview.heading,
+    );
+    expect(hidingOf(rail())).toEqual(['hidden']);
+    expect(utilityTokens(rail(), 'flex')).toEqual([
+      'flex',
+      'min-[1120px]:flex',
+    ]);
+  });
+
+  it('has NO margin on the highlight of another person, nor while it loads', async () => {
+    await renderForm({
+      list: {
+        status: 200,
+        body: [aHighlight({ id: HER_HIGHLIGHT_ID, userId: MARIA })],
+      },
+      path: highlightPath(BOOK_ID, HER_HIGHLIGHT_ID),
+    });
+
+    expect(screen.queryByTestId('highlight-preview')).toBeNull();
+    expect(document.querySelector('aside')).toBeNull();
+    expectNoGuilt();
+    expectNoPrivacyTalk();
+  });
+});
+
+/**
+ * ⚠️⚠️ **O FILETE DO PAPEL NO DESKTOP — a decisão F da Tarefa 47b, e o
+ * acusador diz POR QUÊ.**
+ *
+ * O canvas dá **duas fontes diferentes** para o mesmo filete: o artboard de
+ * celular (`NovoGrifo.dc.html:51`) usa o par escuro da caneta, e o de desktop
+ * (`NovoGrifoDesktop.dc.html:54`) usa `#d6ae64`, que é o dourado de filete.
+ * Medido contra a página, no tema claro, e os números estão na nota 19 da
+ * Tarefa 47a.
+ *
+ * ⚠️ **O CRITÉRIO É O 1.4.11 (contraste de não-texto, mínimo 3:1), e não o
+ * "3.2.2" que a 47a escreveu e a 47b herdou.** `3.2.2` é "On Input" — não tem
+ * nada a ver com contraste; neste repositório o número aparece como apelido
+ * da FÓRMULA de luminância relativa, e a fórmula não é o critério. A asserção
+ * logo abaixo sempre escreveu `1.4.11` certo; o cabeçalho é que estava
+ * errado, o que é a pior das duas metades para quem lê só o topo.
+ *
+ * ```
+ * o dourado de filete do artboard de desktop    1,84 : 1
+ * o par escuro da caneta, pior caso (amarelo)   2,28 : 1
+ * o par escuro da caneta, melhor caso (azul)    4,59 : 1
+ * o filete neutro do app                        1,35 : 1
+ * ```
+ *
+ * Ou seja: copiar o valor do desktop **pioraria as cinco canetas**, e o pior
+ * caso dele é o pior filete de todo o projeto. **Fica o da caneta**, e a
+ * divergência com o artboard é declarada.
+ *
+ * ⚠️ E não há "versão de desktop" do papel: os dois artboards são a MESMA
+ * tela em duas larguras, servida por media query (decisão G do
+ * `ReadingColumn`). Um filete diferente por largura exigiria ramificação por
+ * dispositivo, que é o que o projeto não faz.
+ */
+describe('⚠️ THE EDGE OF THE PAPER IS THE PEN’S, never the canvas gold (decision F)', () => {
+  it('refuses the desktop artboard’s gold edge, in all five pens', async () => {
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    for (const pen of PENS) {
+      await press(screen.getByRole('button', { name: pen.name }));
+      const { paper } = paperParts();
+      const classes = paper.getAttribute('class') ?? '';
+
+      // O que o artboard de desktop pede, e que reprova 1.4.11 (1,84:1).
+      expect(classes).not.toContain('border-gold');
+      // O que a tela pinta: o par ESCURO da caneta escolhida.
+      expect(classes).toContain(pen.edge);
+    }
+    expectNoGuilt();
   });
 });

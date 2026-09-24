@@ -1,6 +1,6 @@
 import { HIGHLIGHT_PAGE_MAX, type HighlightResponse } from '@clube/shared';
 import { cx, Eyebrow, Field, FOCUS_RING, type PenKey } from '@clube/ui';
-import { useId } from 'react';
+import { lazy, Suspense, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { TEXT_INPUT_CLASS } from './form-styles';
@@ -631,4 +631,51 @@ export function problemsOf(
 
 export function hasProblem(problems: Problems): boolean {
   return problems.quote || problems.color || problems.page;
+}
+
+/** O terceiro import dinâmico do editor no app. → `free-note.tsx`. */
+const RichEditor = lazy(async () => {
+  const editor = await import('@clube/ui/editor');
+  return { default: editor.RichEditor };
+});
+
+/**
+ * O CAMPO DO COMENTÁRIO — o editor, sempre dentro de um `Suspense`, porque o
+ * chunk é o maior do app e sem `fallback` a tela ficaria em branco no lugar
+ * dele (regra 20 da Tarefa 25).
+ *
+ * ⚠️ **ELE MUDOU DE ARQUIVO NA TAREFA 47b, E O MOTIVO É O TETO DE 400.** A
+ * fatia acrescentou ao `highlight-form.tsx` a margem de desktop (duas props
+ * `rail` e o `me` do contexto), e aquele arquivo já estava **27 acima do
+ * teto** — a 47a o deixou em **427** de propósito, escrevendo que "um teto que
+ * vale para um arquivo só é um teto que anda de lado". Então o comentário veio
+ * para cá, que é onde moram os outros campos do grifo, e o formulário saiu da
+ * fatia **menor do que entrou**: 427 → 407, e este arquivo foi de 309 para
+ * 337.
+ * Os números estão na entrada 47b do `docs/BACKLOG.md`.
+ */
+export function LazyComment({
+  doc,
+  onChange,
+}: {
+  doc: Record<string, unknown> | undefined;
+  onChange: (doc: Record<string, unknown>) => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <Suspense
+      fallback={
+        <p className="text-sm text-muted">
+          {t('pages.highlightForm.editorLoading')}
+        </p>
+      }
+    >
+      <RichEditor
+        className="rounded-control border border-line bg-surface"
+        doc={doc}
+        onChange={onChange}
+      />
+    </Suspense>
+  );
 }
