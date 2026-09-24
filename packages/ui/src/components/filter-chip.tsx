@@ -69,23 +69,43 @@ export function FilterChip({
           chip REMOVÍVEL de filtro aplicado, componente que nem existe aqui
           (quem o cria é a Tarefa 46).
 
-          ⚠️ O `FilterChip` de verdade está desenhado em
-          `CorrigirGrifo.dc.html:59-63` e `NovoGrifo.dc.html:60-64`, dentro do
-          `<fieldset><legend>Cor da caneta</legend>` — que é o que
-          `highlight-fields.tsx:138` renderiza com este componente. Lá o
-          repouso é `<button height:44px>` com `background:none`,
+          ⚠️⚠️ **E ESTE COMPONENTE JÁ NÃO DESENHA ARTBOARD NENHUM — corrigido
+          na rodada de correção da Tarefa 47a.** A frase que estava aqui dizia
+          que a paleta de canetas do canvas era "literalmente o que
+          `highlight-fields.tsx:138` renderiza com este componente". Medido: a
+          47a mediu o custo de pintar o pressionado por `className` (quatro
+          sobreposições, e o `cx` não resolve conflito de utilitário), não
+          tomou esse caminho, e a paleta nasceu como uma pílula LOCAL do app.
+          Este componente não é mais renderizado naquela tela, em linha
+          nenhuma — e o ponteiro era **por linha**, que é o que o §7.4 proíbe
+          nominalmente: a linha 138 já tinha virado outra coisa.
+
+          O repouso que a Tarefa 41a reverteu continua certo, e a medição dele
+          continua de pé: as pílulas não escolhidas do canvas são
+          `<button height:44px>` com `background:none`,
           `border:1px solid var(--border)`, `border-radius:999px` e
-          **`color:var(--text-muted)`**. É exatamente isto.
+          **`color:var(--text-muted)`** — é o tom que o desenho dá a toda
+          pílula em repouso, e é o que o `FilterBar` (o consumidor real deste
+          componente) herda. O que mudou é de onde a prova vem: não de um
+          artboard que este arquivo implementa, e sim do vocabulário de
+          repouso do canvas inteiro.
 
           ⚠️ E A ALTURA NÃO É DIVERGÊNCIA: o canvas desenha este chip com
           **44px**, o mesmo piso da decisão F. (A pílula "Refinar" de 36px é do
           `FilterBar`, não deste componente, e ali o piso vence.)
 
-          O pressionado do canvas é a cor da CANETA (`background:var(--pen-a)`,
-          `border:1.5px solid var(--gold)`) — dado por opção, e `HIGHLIGHT_COLORS`
-          é dado persistido. Quem pinta isso é a Tarefa 47, pelo `start`/
-          `className` da opção; o `bg-accent` daqui é o estado "escolhido"
-          genérico, das dimensões que não têm cor própria.
+          ⚠️ **O PRESSIONADO DA PALETA DE CANETAS NÃO É MAIS ASSUNTO DAQUI.**
+          Ele é a cor da própria caneta com filete dourado de 1,5px, e a
+          Tarefa 47a mediu que trazê-lo para cá custaria **quatro**
+          sobreposições (preenchimento, cor do filete, **espessura** do filete
+          e cor do texto) num componente que não resolve conflito de
+          utilitário — quem venceria seria a ordem de emissão do CSS, a mesma
+          invariante que a auditoria da Tarefa 46 teve de pinar à mão. A
+          pílula de caneta é local de `highlight-fields.tsx` (procure por
+          `PenPill`, **não por número de linha**).
+
+          O estado "escolhido" daqui é o GENÉRICO, das dimensões que não têm
+          cor própria — e é o que o `FilterBar` usa.
         */
         pressed
           ? 'border-accent bg-accent text-accent-fg'

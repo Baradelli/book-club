@@ -279,22 +279,32 @@
   */
   --radius-control: var(--r-3);
   /*
-    ⚠️ SEM CONSUMIDOR, E COM PRAZO — decisão B da Tarefa 41a diz que "o que
-    não tem consumidor não é contrato, é peso", então uma exceção sem data é
-    dois pesos em vez de um.
+    ⚠️⚠️ **AS DUAS DÍVIDAS DESTE BLOCO ESTÃO QUITADAS, E ELE ESTAVA VELHO HÁ
+    SEIS FATIAS — corrigido na rodada de correção da Tarefa 47a.**
 
-    `rounded-callout` é o raio da CAIXA DE ERRO de formulário
-    (`Main.dc.html:41`: `border-radius:3px`), e quem a escreve hoje é o
-    `FORM_ERROR_CLASS` de `packages/app/src/pages/form-styles.ts:33` — sem raio
-    nenhum, porque a caixa nem existe ainda como caixa. **Prazo: Tarefa 47**
-    (formulários), ou 48 se a 47 não chegar nela. Se as duas passarem sem
-    usá-lo, ele sai — e o `--r-2` sai com ele, deixando a lista fechada de
-    isenções em quatro raios.
+    O texto que estava aqui dizia que `rounded-callout` e `rounded-mark` não
+    tinham consumidor de produção, "prazo Tarefa 47 ou 48; se as duas passarem
+    sem usá-lo, ele sai — e o `--r-2` sai com ele". Medido: os DOIS ganharam
+    consumidor no **mesmo commit**, a Tarefa 41b, e esta prosa não foi
+    atualizada junto.
 
-    `rounded-mark` (`--r-1`, 2px) tem **zero** consumidores de produção desde a
-    Tarefa 13 (contado nesta fatia) e está na mesma situação, só há mais tempo:
-    ele é o raio da MARCA de grifo, e quem pinta grifo é a **Tarefa 47**. Mesmo
-    prazo, mesma saída.
+    - `rounded-callout` (`--r-2`, 3px) — `packages/ui/src/components/`,
+      no botão do `ContextBar` desde a 41b, e desde a Tarefa 47a também no
+      papel grifado do campo do trecho (`highlight-fields.tsx`, procure por
+      `QuoteField`). **Dois** consumidores de produção.
+    - `rounded-mark` (`--r-1`, 2px) — o `GrifoText`, desde a 41b, que é
+      literalmente o raio da marca de grifo que esta prosa dizia estar
+      esperando. **Um** consumidor de produção, com teste próprio.
+
+    ⚠️ **POR QUE ISTO IMPORTA E NÃO É COSMÉTICO:** a frase velha é uma LICENÇA
+    MEDIDA para apagar. Ela manda remover o utilitário e o token "se as duas
+    passarem sem usá-lo" — e as duas passaram, usando-o. Quem lesse só este
+    bloco na Tarefa 48 apagaria um token vivo e quebraria o `GrifoText`. Um
+    prazo escrito sem quem o reconfira vence sozinho, e vence apontando para o
+    lado errado (a lição nº 3).
+
+    Os dois seguem na lista fechada de isenções, agora por consumo e não por
+    prazo.
   */
   --radius-callout: var(--r-2);
   /* O bottom sheet do canvas: `border-radius: 10px 10px 0 0`

@@ -74,8 +74,15 @@ import { acervoPath } from './paths';
  * comando que o docblock de `highlights.tsx` fixa: num arquivo só esta tela
  * daria **618 linhas de código**, mais que o `free-note.tsx` (**565**), que a
  * Tarefa 19 registrou como o próximo lugar onde a complexidade morde.
- * Divididos, são **423 aqui + 189 lá**. Aqui fica o que fala com a API; lá, os
+ * Divididos, eram **423 aqui + 189 lá**. Aqui fica o que fala com a API; lá, os
  * campos, a paleta e o que a tela recusa antes de enviar.
+ *
+ * ⚠️ **OS DOIS NÚMEROS ENVELHECERAM, E FORAM REMEDIDOS NA TAREFA 47a** (pelo
+ * contador canônico do docblock de `acervo.tsx`, não por estimativa): este
+ * arquivo tem **427** desde a Tarefa 38i e o vizinho foi de 189 para **304**
+ * quando o campo do trecho virou o papel grifado. A divisão continua valendo, e
+ * a 47a cresceu **só o lado de lá** de propósito — este já está 27 acima do teto
+ * de 400, e um teto que vale para um arquivo só é um teto que anda de lado.
  */
 
 /** O terceiro import dinâmico do editor no app. → `free-note.tsx`. */

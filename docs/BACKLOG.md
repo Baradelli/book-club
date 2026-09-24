@@ -4738,9 +4738,135 @@ API o `FilterBar` da 41 acabou expondo.
       espaçamento) e o fato de que **no desktop não há linha de resumo nem chip removível**
       (B4), porque o `RefineBand` inteiro é `min-[1120px]:hidden` — escolha defensável que a
       Definição de pronto prometia sem qualificar._
-- [ ] **47** — **Formulários.** O grifo vira o próprio papel grifado: o campo do trecho tem o
-      fundo da caneta escolhida, com aspa serifada pendurada, e repinta ao trocar de cor.
-      Mais a anotação avulsa e o novo/editar livro. → _a detalhar_
+- [x] **47a** — **O grifo vira o próprio papel grifado.** O campo do trecho tem o fundo da
+      caneta escolhida, com aspa serifada pendurada, e **repinta nos três elementos** (fundo,
+      filete e aspa) ao trocar de cor; as cinco canetas viram pílulas de 44px com a escolhida
+      distinguível **sem cor**. → `tasks/47a-o-grifo-vira-papel.md`
+      _⚠️ **A TAREFA 47 FOI DIVIDIDA EM DUAS, como a 44 tinha sido — e a divisão é aritmética,
+      não gosto.** A 47 do plano encostaria em **cinco** arquivos, três deles já acima do teto
+      de 400 (`free-note.tsx` **602**, o maior do app; `book-form.tsx` ~~494~~ **456**;
+      `highlight-form.tsx` **427**), sobre **oito** artboards, com **10.392 B** de folga para
+      ela e a 48 juntas. Esta é o grifo; a **47b** é a anotação avulsa e o novo/editar livro._
+      _Entregue: `highlight-fields.tsx` **189 → 304** linhas canônicas e o `highlight-form.tsx`
+      **nos 427 que já tinha** — o crescimento foi todo para o lado com folga, **e registrado
+      no docblock do arquivo que recebeu**, não só no relatório (a lição da 46, onde uma tela
+      encolheu 33 e a vizinha absorveu +208 em silêncio). **607 shared · 305 ui · 1994 backend**
+      (os três intocados) **· 975 app** (era 964). Entrada **441.297 B** (+1.689; folga
+      **8.703** para a 47b e a 48) · CSS **36.804 B** (+885, e o detalhe estava errado: são **932 B em 22
+      seletores novos menos os 47 B de um que SUMIU**, não 823 em 20 — dois foram excluídos
+      por falso positivo de `grep` por substring, remedidos na rodada de correção. **A
+      conclusão sobrevive: nenhum byte veio de prosa**) · `book-form` 10.059,
+      editor 449.522, `index.html` 1.638 e precache 27, todos idênticos._
+      _**16 mutantes, 16 acusados, zero sobreviventes** — incluindo os quatro que provam que
+      cada um dos três elementos do papel repinta sozinho, e o que troca um hex de
+      `HIGHLIGHT_COLORS` (**17** acusadores em `packages/shared`: o dado persistido continua
+      intocado, `schema.prisma` em `968c9986f7a2dfb4ccbd738b13d44715`)._
+      _⚠️ **DUAS GUARDAS QUE JÁ EXISTIAM MANDARAM NA PINTURA, e as duas ficaram vermelhas com
+      o valor literal do canvas.** (1) O rótulo dourado do campo é **`--gold-strong`**, não o
+      `--gold` de `NovoGrifo.dc.html:48`: `--gold` dá 4,16 / 4,31 / 3,97 contra as três
+      superfícies no claro, o rótulo tem 10px, e `theme-tokens.test.ts › refuses the FIRST USE
+      of text-gold` existe desde a auditoria da 41b citando **este** artboard. A saída foi usar
+      o `Eyebrow`, cujo docblock já nomeava "Trecho grifado" como o exemplo do tom dourado — e
+      a decisão D virou `tone="gold"` × tom ausente, mais difícil de uniformizar por descuido
+      que duas listas de classes. (2) A aspa do estado **sem caneta** é `text-subtle` e não o
+      cinza mais claro, que reprova 4,5:1 nos dois temas._
+      _**Os dez números de contraste da borda dourada sobre as cinco canetas** (piso de 3:1,
+      componente não textual): claro **3,62 · 3,58 · 3,56 · 3,51 · 3,52**; escuro **4,18 · 4,93
+      · 5,27 · 5,25 · 5,35**. Nenhum reprova. ⚠️ **Mas um número VIZINHO reprova e fica para a
+      48:** o filete do PAPEL (`--pen-a-dot` sobre a página) dá **2,28:1** no claro, e o fundo
+      do papel contra a página dá 1,15 — ou seja, no tema claro com a caneta amarela a
+      fronteira do campo quase não se vê. Não foi tocado (os `--pen-*` são valor de canvas e os
+      cinco hexes são dado persistido), e é exatamente a ementa da 48._
+      _⚠️ **A DECISÃO H FICOU EM ABERTO, e o executor parou nela em vez de assumir.** Ela manda
+      pôr o `SaveIndicator` com "Rascunho guardado" (`NovoGrifo.dc.html:96`), mas esta tela
+      **não tem autosave por decisão escrita** (regra 19 da Tarefa 25: um autosave aqui criaria
+      um grifo por tela aberta, porque `POST` não é idempotente), rascunho local é **fila
+      offline** — fora de escopo do MVP 3.5 inteiro, com instrução literal de parar e
+      perguntar —, e os dois artboards discordam entre si (o `CorrigirGrifo` não tem barra
+      inferior nenhuma). `pages.highlightForm.draftSaved` segue sem consumidor, como
+      `pages.highlightForm.preview.heading`. **Pergunta aberta para o dono.**_
+      _**Quatro correções à spec da própria tarefa, medidas** (as outras nove citações estavam
+      exatas; esta linha dizia "três" e a Definição de pronto já listava quatro — a quarta é o
+      `book-form.tsx` **456 ≠ 494**): (a) o intervalo da tela de correção é `CorrigirGrifo.dc.html:48-64`, não
+      `:50-63`; (b) ⚠️ **a decisão D só vale no `NovoGrifo`** — na tela de correção o rótulo do
+      trecho é `--text-muted` 9,5px (`:49`) e o dourado está num rótulo de TELA (`:46`) que o
+      `NovoGrifo` não tem. Os dois modos dividem um componente só desde a Tarefa 25, e o
+      dourado entrou nos dois, pelo argumento da própria decisão D; se o dono quiser a
+      fidelidade literal, é uma prop de tom e uma linha em cada chamador; (c) o "Arquivar este
+      grifo" de `CorrigirGrifo.dc.html:87-90` **não existe nesta tela** — quem arquiva grifo é
+      o acervo —, então o "estado de arquivar" da regra 7 não tinha o que varrer._
+      _⚠️ **UMA DÍVIDA DE PONTEIRO, DECLARADA E NÃO PAGA:** o docblock de
+      `packages/ui/src/components/filter-chip.tsx` diz que a Tarefa 47 o pintaria pelo
+      `className` da opção. Medido, o caminho foi outro: o pressionado dele precisaria de
+      **quatro** sobreposições (preenchimento, cor e **espessura** do filete, cor do texto) e o
+      `cx` não resolve conflito de utilitário — quem venceria seria a ordem de emissão do CSS
+      (`.bg-pen-a` sai 366 B depois de `.bg-accent`, medido), que é a invariante B5 que a 46
+      teve de pinar à mão. A pílula nasceu local. ~~**Corrigir aquele docblock é uma linha para a
+      47b ou a 48.**~~ ⚠️ **PAGA NA RODADA DE CORREÇÃO, e era MAIOR: quatro frases em dois
+      arquivos**, duas delas ponteiros **por número de linha** (a forma que o §7.4 proíbe
+      nominalmente — e a linha citada já tinha virado outra coisa) e **uma delas o NOME de um
+      teste**, que jurava fidelidade a um artboard que o componente deixou de desenhar. Depois
+      da 47a o `FilterChip` não implementa artboard nenhum, e a auditoria inteira da 41a estava
+      pendurada nesse nome. Reapontado **pelo nome** (`PenPill`), nunca pela linha._
+      _~~**E uma dívida com prazo foi QUITADA:** `rounded-callout` estava sem consumidor, e
+      `rounded-mark` continua sem.~~ ⚠️⚠️ **AS DUAS FRASES ERAM FALSAS, e a segunda armava uma
+      DELEÇÃO na Tarefa 48.** Medido no commit de entrada: os **dois** utilitários já tinham
+      consumidor de produção, ganho no **mesmo commit** (a Tarefa 41b) — `rounded-callout` no
+      botão do `ContextBar` e `rounded-mark` no `GrifoText`, este com teste próprio. A frase
+      foi copiada de um comentário do `styles.css` que envelheceu ali e que não diz só "sem
+      consumidor": diz *"se as duas passarem sem usá-lo, ele sai — e o `--r-2` sai com ele"*.
+      Repetida no registro permanente, ela entregava à 48 uma licença medida para **apagar um
+      token vivo e quebrar o `GrifoText`**. Corrigido no comentário do `styles.css` (que é o
+      que estava velho), na nota 18 e aqui. A 47a acrescentou um **segundo** consumidor ao
+      `rounded-callout`; não quitou dívida nenhuma, porque não havia dívida._
+      _⚠️⚠️ **RODADA DE CORREÇÃO DA 47a — o veredito do revisor em uma linha: "a suíte guarda
+      COR e não guarda FORMA".** Os 16 mutantes da entrega atacam todos o mesmo eixo (qual
+      caneta pinta o quê) e nenhum ataca se a pintura EXISTE: **seis de oito mutantes inéditos
+      sobreviveram com ZERO acusadores** — o filete some (largura apagada, cor mantida), a
+      aspa migra para o canto oposto, o recuo vira simétrico e a aspa cai sobre o texto, as
+      cinco bolinhas viram uma só, o papel perde a altura e o trecho perde o degrau de
+      leitura. **Os seis, mais o vermelho de erro que o campo havia perdido, têm acusador
+      agora: sete mutantes, sete acusados** (nota 17). ⚠️ **O mais grave era de UMA LINHA**: a
+      asserção guardava a COR do filete e o nome do teste jurava `its edge` — §7.9 literal.
+      App **975 → 981**, entrada **+46 B** (folga **8.657**), **CSS em zero** — e o zero tem
+      explicação medida: o seletor do vermelho de erro já estava no CSS, **emitido por três
+      docblocks e por nenhum código de produção** (nota 23)._
+      _⚠️⚠️ **A DECISÃO A4 DO DONO ESTÁ EM ABERTO, E O EXECUTOR PAROU NELA: a premissa está
+      invertida, medido.** A decisão manda trocar o filete de caneta pela "borda padrão do
+      app", por ser regressão de contraste introduzida na fatia. Medido (WCAG 2.1 3.2.2, hexes
+      do `theme.css`): o filete neutro dá **1,35:1** contra a página no claro e **1,38:1** no
+      escuro — **os dez números são iguais, porque ele não depende da caneta**, e os dez
+      reprovam 3:1. O filete de caneta que a fatia entregou dá **2,28 · 3,46 · 4,18 · 4,59 ·
+      4,56** no claro e **6,90 · 4,56 · 5,02 · 4,93 · 4,91** no escuro. E o que havia ANTES da
+      fatia era o mesmo neutro: **1,40:1**. Ou seja: **não houve regressão — a fatia melhorou a
+      fronteira em todos os casos**, e a troca prescrita a pioraria nos dez. Nenhum token de
+      filete do projeto resolve o amarelo (neutro 1,35 · neutro forte 2,37 · o dourado de
+      filete do artboard de desktop **1,84**). ⚠️ **E o achado maior: o filete neutro reprova
+      1.4.11 em TODO campo de texto do app** — é estado da base, não desta tela, e é ementa da
+      48. Três saídas na nota 19, para o dono escolher. **Pergunta aberta.**_
+      _**Mais seis correções ao registro permanente** (nota a nota): o `GrifoText` **tem** uma
+      propriedade em comum com o papel — o preenchimento é a mesma classe literal em dois
+      pacotes, e o projeto tem **cinco** mapas de caneta; a conclusão "não reusar" sobrevive,
+      agora com o número, e com o gatilho escrito para reabrir (nota 20). A nota 10 calava
+      **quatro** divergências (a dica 11,5→11, o rótulo da correção 9,5→10, o papel da correção
+      132/96/3 entregue como 150/114/4, e a dica renderizada onde o canvas não a tem) — lista
+      parcial é pior que nenhuma, porque é lida como completa (nota 26). O intervalo da tela de
+      correção é `:48-65`, não `:48-64` (nota 24). E `bg-pen-a-dot` é escrito em outro
+      arquivo, não na mesma tela (nota 12)._
+- [ ] **47b** — **Formulários: a anotação avulsa e o livro.** O que sobrou da 47 depois da
+      divisão acima: `free-note.tsx` (**602**, o maior arquivo do app), `book-form.tsx`
+      (**456**, remedido — a spec da 47a dizia 494) e `plan-editor.tsx` (**239**), sobre os
+      artboards `NovaAnotacao`,
+      `NovaAnotacaoDesktop`, `NovoLivro` e `EditarLivro`. ⚠️ **Entra com 8.703 B de folga, e a
+      48 vem depois dela.** → _a detalhar_
+      _⚠️ **ENTRA COM UM ARTBOARD A MAIS DO QUE A LISTA DIZ, achado na rodada de correção da
+      47a: `NovoGrifoDesktop.dc.html` desenha o MESMO campo do trecho** que a 47a entregou, e
+      com outras medidas — recuo `24 24 24 48`, mínimo de 168px, aspa de 54px, trecho de 20px,
+      dica de 12,5px, pílulas com recuo lateral de 16px e texto de 13,5px. ⚠️⚠️ **E o filete do
+      papel lá é `--gold-line`, NÃO o par escuro da caneta** — o canvas dá **duas fontes
+      diferentes** para o filete da decisão A, e a do desktop é a **mais fraca**: 1,84:1 contra
+      a página no claro, 1,65:1 no escuro. **Quem implementar não copia aquele valor sem ler a
+      nota 19 da 47a**, que mede o assunto inteiro._
 - [ ] **48** — **Preferências, 404, login, convite, e a passagem final.** Varredura de
       contraste nos dois temas com foco nos pontos de risco (os cinzas de legenda e os fundos
       de grifo), 360 px sem rolagem horizontal, `prefers-reduced-motion`, e o veredito sobre

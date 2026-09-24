@@ -454,13 +454,21 @@ describe('the app CSS sees packages/ui (rule 1)', () => {
 
       As duas sondas abaixo são as que a auditoria mediu como NÃO exclusivas.
       Contado por esta própria função: `rounded-control` em **10** arquivos de
-      `packages/app/src` e `min-h-11` em **5**. (Por `grep` cru dão 10 e 6 — o
-      sexto do `min-h-11` é `chrome.tsx`, que só o cita dentro de um comentário
+      `packages/app/src` e `min-h-11` em **6**. (Por `grep` cru dão 10 e 7 — o
+      sétimo do `min-h-11` é `chrome.tsx`, que só o cita dentro de um comentário
       de bloco, e comentário não pinta nada. É a diferença que o
       `stripComments` existe para fazer.)
+
+      ⚠️ **O SEGUNDO NÚMERO SUBIU DE 5 PARA 6 NA TAREFA 47a, e o vermelho veio
+      daqui** — não de quem escreveu a tela. A pílula de caneta de
+      `highlight-fields.tsx` passou a escrever o piso de toque no próprio
+      arquivo (antes ele só chegava lá pelo `TEXT_INPUT_CLASS`, que mora em
+      `form-styles.ts`). Quem mexer numa tela e vir este número vermelho: some
+      um, não apague a asserção — ela é o que prova que a extração ALCANÇA o
+      `packages/app`, e uma sonda de contagem apagada leva a propriedade junto.
     */
     expect(usagesOutsideUi('rounded-control')).toHaveLength(10);
-    expect(usagesOutsideUi('min-h-11')).toHaveLength(5);
+    expect(usagesOutsideUi('min-h-11')).toHaveLength(6);
     // E que o par de fronteira do regex funciona: `border-leader-future` não é
     // `border-leader`. Sem isto a canária mais frágil acusaria por um vizinho.
     expect(

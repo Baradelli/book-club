@@ -62,7 +62,7 @@ describe('FilterChip', () => {
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the resting chip hollow and muted, the way the canvas draws IT (Tarefa 41a)', () => {
+  it('keeps the resting chip hollow and muted, the tone the canvas gives EVERY unpicked pill (Tarefa 41a)', () => {
     /*
       ⚠️ ESTE TESTE NASCEU MEDINDO O ELEMENTO ERRADO, E A AUDITORIA PEGOU.
 
@@ -72,11 +72,24 @@ describe('FilterChip', () => {
       aplicado, um componente que nem existe em `packages/ui` (quem o cria é a
       Tarefa 46). Não é o `FilterChip`.
 
-      ⚠️ O `FilterChip` DE VERDADE está no canvas duas vezes, e é a paleta de
-      canetas: `CorrigirGrifo.dc.html:59-63` e `NovoGrifo.dc.html:60-64`, dentro
-      do `<fieldset><legend>Cor da caneta</legend>` — que é literalmente o que
-      `highlight-fields.tsx:138` renderiza com este componente. Medido lá, valor
-      a valor:
+      ⚠️⚠️ **E O NOME DESTE TESTE MUDOU NA RODADA DE CORREÇÃO DA 47a, porque o
+      "IT" que ele prometia deixou de existir.** Ele dizia "the way the canvas
+      draws IT", e o "IT" era a paleta de canetas de `NovoGrifo.dc.html`. A
+      Tarefa 47a mediu o custo de pintar o pressionado por `className`, não
+      tomou esse caminho, e a paleta virou uma pílula LOCAL do app — este
+      componente **não implementa mais artboard nenhum**, e a auditoria inteira
+      da 41a estava pendurada num desenho que ele já não desenha.
+
+      ⚠️ E o ponteiro que estava aqui era **por linha**
+      (`highlight-fields.tsx:138`), que é o que o §7.4 proíbe nominalmente:
+      medido na rodada de correção, aquela linha já era outra coisa. Quem quiser
+      ver a pílula de caneta procura por `PenPill`, pelo NOME.
+
+      **O valor medido continua de pé — o que mudou é de onde ele vem.** A
+      paleta de `CorrigirGrifo.dc.html` e `NovoGrifo.dc.html` desenha o repouso
+      de uma pílula não escolhida, e é o mesmo repouso que o canvas dá a toda
+      pílula em repouso; o consumidor real deste componente (o `FilterBar`)
+      herda esse tom. Medido lá, valor a valor:
 
       - repouso: `<button height:44px>` com `background:none`,
         `border:1px solid var(--border)`, `border-radius:999px`, Geist 13px e
@@ -88,11 +101,12 @@ describe('FilterChip', () => {
       **é o do canvas**, e o repinte era opinião de desenho minha contra a
       fonte. Revertido. O canvas manda — é decisão fechada do MVP 3.5.
 
-      ⚠️ E O PRESSIONADO NÃO FOI TOCADO: no canvas ele é a cor da CANETA, que é
-      dado por opção (e `HIGHLIGHT_COLORS` é dado persistido). Pintar isso é da
-      Tarefa 47, pelo `start`/`className` da opção; o `bg-accent` genérico daqui
-      é o que o projeto já tinha e continua sendo o estado "escolhido" das
-      dimensões que não têm cor própria.
+      ⚠️ E O PRESSIONADO NÃO FOI TOCADO — nem pela 41a nem pela 47a. No canvas
+      da paleta ele é a cor da CANETA com filete dourado mais grosso, e a 47a
+      mediu que trazê-lo para cá custaria QUATRO sobreposições num componente
+      que não resolve conflito de utilitário. Ficou local no app. O estado
+      "escolhido" genérico daqui é o que o projeto já tinha e continua sendo o
+      das dimensões que não têm cor própria.
 
       O que este teste guarda é a DIFERENÇA entre os dois estados: um chip que
       pintasse igual solto e pressionado deixaria `aria-pressed` como único

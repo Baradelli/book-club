@@ -998,3 +998,541 @@ describe('the source of the form (rules 20, 21)', () => {
     expect(source).not.toContain('@tiptap');
   });
 });
+
+/**
+ * ============================================================================
+ * O PAPEL GRIFADO (Tarefa 47a) — decisões A a F
+ * ============================================================================
+ *
+ * ⚠️ **A TABELA ABAIXO É UMA CÓPIA DELIBERADA do mapa de produção**, e é o que
+ * torna o mutante da regra 2 vermelho: um teste que lesse o mapa da tela
+ * provaria que a tela concorda consigo mesma, e concordância consigo mesmo é
+ * exatamente o que um mutante de uma linha preserva (§7.8, virada do avesso —
+ * aqui os dois lados NÃO podem ser calculados pelo mesmo código).
+ *
+ * A ordem é a de `HIGHLIGHT_COLORS`: amarelo, verde, laranja, azul, rosa.
+ */
+const PENS = [
+  {
+    dot: 'bg-pen-a-dot',
+    edge: 'border-pen-a-dot',
+    ink: 'text-pen-a-dot',
+    name: COLORS.yellow,
+    paper: 'bg-pen-a',
+  },
+  {
+    dot: 'bg-pen-v-dot',
+    edge: 'border-pen-v-dot',
+    ink: 'text-pen-v-dot',
+    name: COLORS.green,
+    paper: 'bg-pen-v',
+  },
+  {
+    dot: 'bg-pen-l-dot',
+    edge: 'border-pen-l-dot',
+    ink: 'text-pen-l-dot',
+    name: COLORS.orange,
+    paper: 'bg-pen-l',
+  },
+  {
+    dot: 'bg-pen-z-dot',
+    edge: 'border-pen-z-dot',
+    ink: 'text-pen-z-dot',
+    name: COLORS.blue,
+    paper: 'bg-pen-z',
+  },
+  {
+    dot: 'bg-pen-r-dot',
+    edge: 'border-pen-r-dot',
+    ink: 'text-pen-r-dot',
+    name: COLORS.pink,
+    paper: 'bg-pen-r',
+  },
+];
+
+/**
+ * ⚠️ **AS CLASSES SÃO LIDAS POR TOKEN, NUNCA POR `toContain` DE SUBSTRING.**
+ *
+ * A Tarefa 45 mediu que a regex de fronteira acerta 6 de 13 variantes, e a 46
+ * achou a mesma forma frágil copiada para outra tela. Aqui o defeito seria
+ * ainda mais barato: `toContain('border-pen-a-dot')` casa dentro de
+ * `hover:border-pen-a-dot`, e `toContain('bg-pen-a')` casa dentro de
+ * `bg-pen-a-dot` — ou seja, a bolinha passaria por papel.
+ */
+function tokensOf(element: Element): string[] {
+  return (element.getAttribute('class') ?? '')
+    .split(/\s+/u)
+    .filter((token) => token !== '');
+}
+
+/** O papel do trecho e as suas partes, a partir do controle que o rótulo nomeia. */
+function paperParts(): { mark: Element; paper: Element } {
+  const control = screen.getByLabelText(FIELDS.quote);
+  const paper = control.parentElement;
+  if (paper === null) throw new Error('o papel do trecho saiu do DOM');
+  const mark = paper.firstElementChild;
+  if (mark === null) throw new Error('a aspa do papel saiu do DOM');
+  return { mark, paper };
+}
+
+function penButton(name: string): HTMLElement {
+  return screen.getByRole('button', { name });
+}
+
+/** A bolinha de cada pílula — a amostra que o `PenPill` desenha à mão. */
+function penDot(name: string): Element {
+  const dot = penButton(name).firstElementChild;
+  if (dot === null) throw new Error('a bolinha da pílula saiu do DOM');
+  return dot;
+}
+
+/** O `<textarea>` do trecho, que é quem carrega a altura e o degrau de leitura. */
+function quoteControl(): HTMLElement {
+  return screen.getByLabelText(FIELDS.quote);
+}
+
+/**
+ * O número de pixels de um utilitário de valor arbitrário (`pl-[34px]` → 34).
+ *
+ * ⚠️ **LER O NÚMERO É O QUE PERMITE ASSERTAR UMA RELAÇÃO em vez de copiar uma
+ * string.** `toContain('pl-[34px]')` prova que alguém escreveu aquele texto;
+ * `esquerda > direita` prova a propriedade que o desenho quer — que há recuo
+ * para a aspa caber. A segunda continua verdadeira se o canvas mudar de 34
+ * para 36, e continua FALSA no mutante que iguala os dois lados.
+ */
+function pxOf(tokens: readonly string[], prefix: string): number {
+  const token = tokens.find((candidate) => candidate.startsWith(`${prefix}-[`));
+  if (token === undefined) {
+    throw new Error(`o elemento não escreve nenhum "${prefix}" em pixels`);
+  }
+  const digits = /-\[(\d+(?:\.\d+)?)px\]$/u.exec(token)?.[1];
+  if (digits === undefined) throw new Error(`"${token}" não é um valor em px`);
+  return Number(digits);
+}
+
+/** A pintura dos três elementos, numa string só — para comparar cinco delas. */
+function painting(): string {
+  const { mark, paper } = paperParts();
+  return `${tokensOf(paper).join(' ')} || ${tokensOf(mark).join(' ')}`;
+}
+
+describe('⚠️⚠️ THE QUOTE FIELD *IS* THE HIGHLIGHTED PAPER, AND IT REPAINTS (decision A)', () => {
+  it('⚠️ paints the paper, its edge AND the quote mark with the pen that was chosen — all five', async () => {
+    /*
+      ⚠️ **O MUTANTE DESTA FATIA:** fixar a caneta em `a` na tela (fundo, borda
+      e aspa) tem de ficar vermelho aqui. É o mesmo mutante que a Tarefa 44b
+      exigiu para o bloco "Último grifo", e lá ele pegou.
+
+      Os TRÊS elementos entram porque são três lugares onde a cor pode divergir
+      sem que nenhum outro teste veja: a cor do papel vem do par `--pen-x`, a da
+      borda e a da aspa vêm do par `--pen-x-dot`.
+    */
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    for (const pen of PENS) {
+      await press(penButton(pen.name));
+
+      const { mark, paper } = paperParts();
+      expect(tokensOf(paper)).toContain(pen.paper);
+      expect(tokensOf(paper)).toContain(pen.edge);
+      /*
+        ⚠️ **COR SEM LARGURA NÃO É FILETE — e esta linha nasceu de um mutante
+        que sobreviveu a 975 testes** (rodada de correção da 47a). Apagar o
+        utilitário de largura da classe do papel, deixando só o de cor, faz a
+        borda ir a **zero** em produção: some nos dois temas, nas cinco
+        canetas, e o nome deste teste (`its edge`) continuava jurando que ela
+        estava guardada. É o §7.9 literal — o nome do teste é parte da guarda.
+
+        O par negativo fecha a outra ponta: a largura declarada para não ser
+        nenhuma também é filete que não existe.
+      */
+      expect(tokensOf(paper)).toContain('border');
+      expect(tokensOf(paper)).not.toContain('border-0');
+      expect(tokensOf(mark)).toContain(pen.ink);
+      expectNoGuilt();
+    }
+  });
+
+  it('⚠️ gives the five pens FIVE different paintings — the other half of the pair', async () => {
+    /*
+      Sem esta metade, um mapa que devolvesse a mesma classe para as cinco
+      canetas passaria no teste acima em uma delas e seria "verde o bastante".
+
+      ⚠️⚠️ **MAS ESTE TESTE SOZINHO NÃO PEGA ESSE MAPA — e a correção morava só
+      no relatório, que não viaja com o código.** Medido por mutação: com as
+      cinco canetas compartilhando **um** preenchimento, o filete e a aspa
+      continuam divergindo, o conjunto das pinturas continua com cinco
+      elementos e este `it` fica **verde**. Quem o mata é o mutante que fixa os
+      **três** elementos na mesma caneta.
+
+      Ou seja: a "outra metade do par" é do par inteiro, não de cada elemento.
+      Se um dia esta comparação passar a olhar um elemento só, ela deixa de
+      provar o que o nome dela diz.
+    */
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    const paintings: string[] = [];
+    for (const pen of PENS) {
+      await press(penButton(pen.name));
+      paintings.push(painting());
+    }
+
+    expect(new Set(paintings).size).toBe(PENS.length);
+  });
+
+  it('⚠️ leaves the paper NEUTRAL while no pen has been chosen', async () => {
+    /*
+      O registro começa sem cor (a cor é obrigatória, regra 13), e papel
+      grifado de caneta nenhuma seria uma cor inventada. Enquanto não há
+      caneta, o campo é superfície e filete — e NENHUMA classe de caneta.
+    */
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    const { mark, paper } = paperParts();
+    expect(tokensOf(paper)).toContain('bg-surface');
+    expect(tokensOf(paper)).toContain('border-line');
+    // Largura, não só cor — a mesma lição do mutante que sobreviveu acima.
+    expect(tokensOf(paper)).toContain('border');
+    expect(tokensOf(paper)).not.toContain('border-0');
+    for (const token of [...tokensOf(paper), ...tokensOf(mark)]) {
+      expect(token.startsWith('bg-pen-')).toBe(false);
+      expect(token.startsWith('border-pen-')).toBe(false);
+      expect(token.startsWith('text-pen-')).toBe(false);
+    }
+    expectNoGuilt();
+  });
+
+  it('⚠️ repaints the paper on the CORRECTION screen too, from the pen the highlight was saved with', async () => {
+    // A tela de correção chega COM caneta — e o canvas a desenha igual
+    // (`CorrigirGrifo.dc.html:50-52`).
+    await renderForm({ list: { status: 200, body: [aHighlight()] } });
+
+    const yellow = PENS[0];
+    const green = PENS[1];
+    if (yellow === undefined || green === undefined) throw new Error('paleta');
+
+    expect(tokensOf(paperParts().paper)).toContain(yellow.paper);
+
+    await press(penButton(green.name));
+
+    const { mark, paper } = paperParts();
+    expect(tokensOf(paper)).toContain(green.paper);
+    expect(tokensOf(paper)).toContain(green.edge);
+    expect(tokensOf(mark)).toContain(green.ink);
+    expect(tokensOf(paper)).not.toContain(yellow.paper);
+    expectNoGuilt();
+  });
+});
+
+describe('⚠️ THE PAPER KEEPS THE WIRING THAT THE `Field` USED TO DO FOR IT', () => {
+  /*
+    ⚠️ **ESTE BLOCO EXISTE PORQUE A FATIA 47a TIROU O CAMPO DO `Field`** — o
+    canvas quer o rótulo dourado e a dica na MESMA linha, alinhada pela base, e
+    o `Field` não expõe nenhuma das duas coisas por prop. A fiação foi refeita à
+    mão, e fiação de acessibilidade é o que quebra em SILÊNCIO: um
+    `aria-describedby` apontando para um id que não existe não muda um pixel na
+    tela e simplesmente não anuncia nada.
+  */
+  it('points the quote at its hint, and at the error only when there IS one, in that order', async () => {
+    const calls = await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    const control = screen.getByLabelText(FIELDS.quote);
+    const hint = screen.getByText(FIELDS.quoteHint);
+    expect(control.getAttribute('aria-describedby')).toBe(hint.id);
+    // REGRA 13 da Tarefa 13: sem erro NÃO existe o atributo.
+    expect(control.getAttribute('aria-invalid')).toBeNull();
+
+    await pressLabel(pt.pages.highlightForm.create);
+
+    expect(creates(calls)).toHaveLength(0);
+    const described = control.getAttribute('aria-describedby') ?? '';
+    const message = screen.getByText(FIELDS.quoteRequired);
+    // A ordem é a do GOV.UK Design System: a dica é o contexto estável e vem
+    // primeiro, a correção fecha a fala.
+    expect(described.split(' ')).toEqual([hint.id, message.id]);
+    expect(control.getAttribute('aria-invalid')).toBe('true');
+    expectNoGuiltBesidesFormError([FIELDS.quoteRequired, FIELDS.colorRequired]);
+  });
+
+  it('⚠️ keeps the paper painted while the CORRECTION screen shows a validation error', async () => {
+    /*
+      O estado que só existe depois desta fatia: o campo em erro é o PAPEL, e o
+      vermelho do formulário passa a conviver com o fundo da caneta. A varredura
+      estreitada exige que os elementos vermelhos da tela sejam EXATAMENTE a
+      mensagem esperada — um ponto vermelho novo em qualquer outro lugar acusa.
+    */
+    const calls = await renderForm({
+      list: { status: 200, body: [aHighlight()] },
+    });
+
+    await typeInto(FIELDS.quote, '   ');
+    await pressLabel(pt.pages.highlightForm.save);
+
+    expect(patches(calls)).toHaveLength(0);
+    const pen = PENS[0];
+    if (pen === undefined) throw new Error('paleta');
+    expect(tokensOf(paperParts().paper)).toContain(pen.paper);
+    expectNoGuiltBesidesFormError([FIELDS.quoteRequired]);
+  });
+});
+
+describe('⚠️ THE HANGING SERIF QUOTE IS A CHARACTER, AND IT IS DECORATION (decision B)', () => {
+  it('hangs the quote mark as TEXT, never as a drawing, and hides it from the screen reader', async () => {
+    /*
+      ⚠️ O código do caractere é montado POR NÚMERO (`0x201c`,
+      LEFT DOUBLE QUOTATION MARK) e não colado como glifo: um teste que
+      carregasse o próprio glifo casaria também um aspas-reto ou um sósia
+      visualmente idêntico vindo de outro bloco Unicode.
+
+      `<svg>` inline já é proibido em toda tela do app
+      (`adr-0002-iconography.test.ts`); o que esta guarda acrescenta é que a
+      aspa é DECORAÇÃO — o texto ao lado já diz tudo, e um leitor de tela que a
+      anunciasse leria uma aspa antes de cada trecho.
+    */
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    const { mark } = paperParts();
+    expect(mark.textContent).toBe(String.fromCodePoint(0x20_1c));
+    expect(mark.getAttribute('aria-hidden')).toBe('true');
+    expect(tokensOf(mark)).toContain('font-quote');
+    expectNoGuilt();
+  });
+});
+
+describe('⚠️ THE FIELD LABEL IS GOLD AND THE PEN LEGEND IS MUTED — ON PURPOSE (decision D)', () => {
+  /*
+    ⚠️ **ACUSADOR NOS DOIS SENTIDOS.** São duas cores diferentes de propósito, e
+    uniformizar é o erro fácil: o rótulo dourado marca **o campo que é o papel**
+    (`NovoGrifo.dc.html:48`), e a legenda das canetas é neutra como todo rótulo
+    de seção (`:58`). Um mutante em qualquer das duas direções fica vermelho.
+  */
+  it('paints the label of the paper with the gold of "this is the one"', async () => {
+    /*
+      ⚠️ `text-gold-strong` E NÃO `text-gold`, contra o canvas — e a guarda que
+      manda isso já existia: `__tests__/theme-tokens.test.ts › refuses the FIRST
+      USE of text-gold` ficou VERMELHA nesta fatia, com a primeira versão do
+      rótulo. `--gold` dá 4,16 / 4,31 / 3,97 contra as três superfícies no tema
+      claro, e o rótulo tem 10px — piso de 4,5:1, reprovado nas três. Quem
+      carrega a conta é o `Eyebrow`, e é ele que a tela escreve.
+    */
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    const label = screen.getByText(FIELDS.quote);
+    expect(tokensOf(label)).toContain('text-gold-strong');
+    expect(tokensOf(label)).not.toContain('text-muted');
+  });
+
+  it('keeps the legend of the pens NEUTRAL, and it is not the gold one', async () => {
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    const legend = screen.getByText(FIELDS.color);
+    expect(tokensOf(legend)).toContain('text-muted');
+    expect(tokensOf(legend)).not.toContain('text-gold-strong');
+  });
+});
+
+describe('⚠️ THE FIVE PENS ARE 44px PILLS, AND THE CHOSEN ONE IS TELLABLE WITHOUT COLOUR (decision E)', () => {
+  it('gives every pen the 44px touch floor', async () => {
+    // §A.3 do briefing: alvo de 44px com foco sempre visível. `min-h-11` é a
+    // única ponte classe→px do projeto, e ela está ancorada no CSS compilado
+    // por `__tests__/ui-source-scan.test.ts`.
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    for (const pen of PENS) {
+      expect(tokensOf(penButton(pen.name))).toContain('min-h-11');
+    }
+  });
+
+  it('⚠️ tells the chosen pen apart by the WIDTH of its border, not only by colour', async () => {
+    /*
+      ⚠️ A MESMA REGRA QUE O `PresenceMark` CUMPRE NA 44 E O `StreakSeal` NA 45:
+      cor como único portador de informação é o defeito que ninguém vê olhando a
+      tela — e que some inteiro num monitor em escala de cinza.
+
+      A diferença de FORMA é a borda: a escolhida tem uma borda mais grossa que
+      as outras (o canvas desenha 1,5px contra 1px). O `aria-pressed` cobre o
+      leitor de tela; isto cobre quem enxerga sem distinguir cor.
+    */
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    const chosen = PENS[1];
+    if (chosen === undefined) throw new Error('paleta');
+    await press(penButton(chosen.name));
+
+    const thick = 'border-[1.5px]';
+    expect(tokensOf(penButton(chosen.name))).toContain(thick);
+    expect(tokensOf(penButton(chosen.name))).not.toContain('border');
+
+    for (const pen of PENS.filter((candidate) => candidate !== chosen)) {
+      expect(tokensOf(penButton(pen.name))).toContain('border');
+      expect(tokensOf(penButton(pen.name))).not.toContain(thick);
+    }
+    expectNoGuilt();
+  });
+});
+
+/**
+ * ============================================================================
+ * ⚠️⚠️ A PINTURA TEM DE EXISTIR, E NÃO SÓ SER DA CANETA CERTA
+ * ============================================================================
+ *
+ * **Rodada de correção da Tarefa 47a, e o veredito que a abriu:** *"a suíte
+ * guarda COR e não guarda FORMA"*. Os dezesseis mutantes da primeira entrega
+ * atacavam todos o mesmo eixo — **qual caneta pinta o quê** — e a auditoria
+ * achou **seis sobreviventes em oito tentativas** no eixo que faltava: **se a
+ * pintura existe**. Largura do filete, canto da aspa, assimetria do recuo,
+ * bolinha por caneta, altura do papel, degrau do texto.
+ *
+ * É a forma mais barata de falso verde deste arquivo, porque o eixo coberto
+ * **parece** cobrir o vizinho: o teste que afirma a tinta do filete lê como se
+ * guardasse o filete, quando guarda só a cor dele. Cada `it` abaixo nomeia o
+ * mutante que o prova.
+ */
+describe('⚠️ THE PAPER HAS A SHAPE, NOT ONLY A COLOUR (rodada de correção da 47a)', () => {
+  it('⚠️ cuts the recess for the quote mark on the LEFT ONLY — a symmetric padding drops it on the text', async () => {
+    /*
+      **Mutante N3:** o recuo esquerdo do papel vira igual ao direito. A aspa
+      é posicionada em absoluto no canto superior esquerdo e não empurra nada:
+      o recuo é a ÚNICA coisa que impede o trecho de começar debaixo dela.
+      Nenhum dos dezesseis mutantes originais o tocava.
+    */
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    const tokens = tokensOf(paperParts().paper);
+    const left = pxOf(tokens, 'pl');
+    const right = pxOf(tokens, 'pr');
+
+    expect(right).toBe(18);
+    expect(left).toBe(34);
+    // A propriedade, que sobrevive a uma mudança de canvas: há recuo a MAIS do
+    // lado da aspa, e a sobra é maior que a distância dela à borda (10px).
+    expect(left - right).toBeGreaterThan(10);
+  });
+
+  it('⚠️ hangs the quote mark in the TOP LEFT corner, over the recess that was cut for it', async () => {
+    /*
+      **Mutante N1:** a aspa migra para o canto oposto (direita/baixo). Ela
+      continuaria com a tinta da caneta, continuaria escondida do leitor de
+      tela, continuaria sendo o caractere certo — e os três testes da decisão B
+      continuariam verdes, com a aspa cobrindo o FIM do trecho.
+    */
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    const tokens = tokensOf(paperParts().mark);
+    expect(tokens).toContain('absolute');
+    expect(tokens).toContain('left-2.5');
+    expect(tokens).toContain('top-2');
+    // E o canto oposto fica vazio: uma âncora à direita ou embaixo venceria o
+    // par acima sem apagá-lo, porque os quatro lados convivem na mesma classe.
+    for (const token of tokens) {
+      expect(token.startsWith('right-')).toBe(false);
+      expect(token.startsWith('bottom-')).toBe(false);
+    }
+  });
+
+  it('⚠️ gives the paper the height the canvas asks for, and puts it on the TEXTAREA (114 + 18 + 18 = 150)', async () => {
+    /*
+      **Mutante N7:** o campo de texto perde a altura mínima. O docblock do
+      `QuoteField` dedica um parágrafo a esta conta — "escrever os dois números
+      seria dar dois donos à mesma medida" — e a conta não tinha guarda
+      nenhuma: o papel virava uma tira de uma linha e todo teste de cor passava.
+
+      Aritmética declarada sem guarda é a classe que a Tarefa 44 pagou três
+      vezes.
+    */
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    const paperTokens = tokensOf(paperParts().paper);
+    const inner = pxOf(tokensOf(quoteControl()), 'min-h');
+    const vertical = pxOf(paperTokens, 'py');
+
+    expect(inner).toBe(114);
+    expect(vertical).toBe(18);
+    expect(inner + vertical * 2).toBe(150);
+  });
+
+  it('⚠️ sets the quote at the READING step, not at the interface step', async () => {
+    /*
+      **Mutante N8:** o degrau de leitura vira o degrau de interface. O 17 do
+      canvas → 17,5 do degrau de leitura está listado na Definição de pronto
+      como **divergência declarada** — e divergência declarada sem guarda volta
+      sozinha, na primeira vez que alguém "uniformiza os tamanhos da tela".
+
+      A serifa entra junto porque as duas são a mesma decisão: o trecho é
+      texto de LEITURA (Fraunces, no canvas), não rótulo de formulário.
+    */
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    const tokens = tokensOf(quoteControl());
+    expect(tokens).toContain('text-reading');
+    expect(tokens).toContain('font-reading');
+    expect(tokens).not.toContain('text-sm');
+    expect(tokens).not.toContain('text-base');
+  });
+
+  it('⚠️ gives each pen pill ITS OWN dot — five pills, five dots', async () => {
+    /*
+      **Mutante N5, e ele é REGRESSÃO DE COBERTURA:** até esta fatia a amostra
+      de cor era o `ColorSwatch` de `packages/ui`, com guardas próprias no
+      acervo e na busca. A pílula passou a desenhá-la à mão — e nada olhava
+      para ela. Fixar a bolinha das cinco na primeira caneta deixava a paleta
+      com cinco pílulas idênticas e a suíte inteira verde.
+
+      A segunda metade (cinco bolinhas DIFERENTES) é o par do §7.9 que este
+      arquivo já paga em toda propriedade de mapa: sem ela, um mapa que
+      devolvesse a mesma classe para todas passaria pela primeira.
+    */
+    await renderForm({ path: highlightNewPath(BOOK_ID) });
+
+    const dots: string[] = [];
+    for (const pen of PENS) {
+      const tokens = tokensOf(penDot(pen.name));
+      expect(tokens).toContain(pen.dot);
+      dots.push(tokens.join(' '));
+    }
+
+    expect(new Set(dots).size).toBe(PENS.length);
+  });
+
+  it('⚠️ turns the edge of the paper DANGER while the quote is invalid, the way every other field of the app does', async () => {
+    /*
+      **M6 da auditoria:** até a Tarefa 47a o campo do trecho usava o estilo
+      compartilhado de campo de texto, que traz a borda vermelha do erro
+      (`form-styles.ts`). A fatia tirou o campo daquele estilo e **o vermelho
+      foi junto** — sobrava só o parágrafo abaixo, enquanto o campo de PÁGINA
+      da mesma tela continuava acendendo a borda. Um campo em erro que não se
+      distingue de um campo em repouso é metade do erro faltando.
+
+      ⚠️ **AQUI O ESTADO VEM DA PROP, E NÃO DO ATRIBUTO** — e a divergência é
+      declarada. O `form-styles.ts` usa a variante de atributo porque é uma
+      CONSTANTE compartilhada: ela não enxerga estado nenhum, e quem põe o
+      atributo é o `Field`. Este componente já é o dono do `error` e já decide
+      por ele três vezes (a descrição, o atributo e a mensagem), então a quarta
+      sai da mesma fonte — não há como as duas divergirem. E o que se ganha é o
+      que o §7.9 pede: a propriedade vira **decidível em jsdom**, porque é o
+      render que muda, e não uma regra de CSS que o jsdom não avalia.
+    */
+    const calls = await renderForm({
+      list: { status: 200, body: [aHighlight()] },
+    });
+
+    const pen = PENS[0];
+    if (pen === undefined) throw new Error('paleta');
+    expect(tokensOf(paperParts().paper)).toContain(pen.edge);
+    expect(tokensOf(paperParts().paper)).not.toContain('border-danger');
+
+    await typeInto(FIELDS.quote, '   ');
+    await pressLabel(pt.pages.highlightForm.save);
+
+    expect(patches(calls)).toHaveLength(0);
+    const tokens = tokensOf(paperParts().paper);
+    expect(tokens).toContain('border-danger');
+    expect(tokens).toContain('border');
+    // O filete vermelho SUBSTITUI o da caneta: dois utilitários de cor de borda
+    // na mesma classe deixariam a ordem de emissão do CSS decidir qual vence.
+    expect(tokens).not.toContain(pen.edge);
+    // E o papel continua sendo o papel — o erro pinta a fronteira, não o fundo.
+    expect(tokens).toContain(pen.paper);
+    expectNoGuiltBesidesFormError([FIELDS.quoteRequired]);
+  });
+});
