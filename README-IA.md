@@ -37,7 +37,7 @@ Leia sob demanda:
 - **`docs/EDITOR.md`** — antes da Tarefa 14. É a spec do editor, e o motivo deste projeto
   existir. Não improvise em cima dela.
 - **`docs/NOTIFICACOES.md`** — antes do Bloco I (MVP 3).
-- **`docs/new-ui.md`** e **`docs/ui/prints/`** — antes do Bloco J (MVP 3.5). O primeiro é
+- **`docs/new-ui.md`** e **`docs/ui/canvas/`** — antes do Bloco J (MVP 3.5). O primeiro é
   o briefing de reestruturação da UI que originou o MVP 3.5 (é dele que saem as decisões
   fechadas do `docs/BACKLOG.md`); o segundo são os 23 prints das telas **como elas eram**
   antes da reestruturação — o "antes" contra o qual o "depois" se compara.
@@ -75,7 +75,14 @@ Leia sob demanda:
 | `docs/adr/*.md` | uma decisão, com alternativas e consequências | tutorial |
 | `docs/EDITOR.md` | spec de uma peça específica | opcional |
 | `docs/new-ui.md` | o briefing da reestruturação da UI (MVP 3.5) e o link do canvas de design | decisão fechada — quem fecha é o `BACKLOG.md` |
-| `docs/ui/prints/` | os 23 prints das telas ANTES do MVP 3.5 | o alvo visual — esse é o canvas |
+| `docs/ui/canvas/` | os 21 artboards do canvas de design + o `canvas.json` | **o alvo visual**, e é contra eles que as 914 citações `Arquivo.dc.html:NN` deste repositório medem (guarda: `canvas-citations.test.ts`) |
+
+⚠️ **Os 23 prints das telas ANTES do MVP 3.5 não estão versionados, e é decisão do
+dono (2026-09-24).** Eles são fotos do app **real**, com as anotações e os grifos que as
+pessoas do clube escreveram, e este repositório é público. O histórico foi reescrito
+para tirá-los do commit que os trouxe, **antes do primeiro push** — então eles nunca
+chegaram a ser publicados. Quem os tem, tem no disco; o `.gitignore` impede que voltem
+por acidente.
 | `docs/ui/canvas/` | o CANVAS: 21 artboards + `canvas.json` + a paleta `ds/`. O alvo visual do MVP 3.5, e o alvo de 914 citações `.dc.html:NN` | arquivo para formatar ou editar — os números de linha são carga |
 | `docs/ACEITE-MVP.md` | o roteiro e as perguntas de fechamento de cada MVP; as respostas do dono | detalhe de fatia |
 | `docs/PROMPT-MVP-2.md` | o prompt que pôs uma IA orquestradora para executar o MVP 2 inteiro | spec de tarefa |

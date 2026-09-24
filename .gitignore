@@ -13,3 +13,14 @@ packages/app/dev-dist/
 
 .DS_Store
 Thumbs.db
+
+# Os 23 prints do app ANTES do MVP 3.5 ficam FORA do versionamento.
+# Sao fotos do app real, com as anotacoes e os grifos que as pessoas do
+# clube escreveram -- e este repositorio e publico. Decisao do dono,
+# 2026-09-24, tomada ANTES do primeiro push (o historico foi reescrito
+# para tira-los do commit que os trouxe).
+#
+# Eles continuam no disco de quem os tem; o que sai e a publicacao.
+# O canvas de design (docs/ui/canvas/) FICA: sao maquetes com nomes
+# ficticios, e e contra elas que as 914 citacoes do repositorio medem.
+docs/ui/prints/
