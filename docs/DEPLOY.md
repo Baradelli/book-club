@@ -38,7 +38,8 @@ usa `DEFAULT_API_URL = '/api'` (`packages/app/src/env.ts`), então o build **nã
 
 ## `.env` de produção
 
-Mesmas chaves do `.env.example`, com: `PORT=3030`,
+Mesmas chaves do `.env.example`, com: `PORT=3030`, **`HOST=127.0.0.1`** (o servidor não tem firewall — sem isso a API
+fica aberta na internet na 3030),
 `CORS_ORIGIN=https://clubelivro.vitorbaradelli.com`, `JWT_SECRET` e VAPID gerados no
 servidor, e **`NOTIFICATIONS_CRON=on`** — há uma instância só, então o lembrete roda dentro
 da API (`docs/SETUP.md`, seção 3). Com duas instâncias, desligue e use cron externo.

@@ -5,6 +5,9 @@ import { installReminderCron } from '../notifications/install-reminder-cron';
 import { buildServer } from './server';
 
 const port = Number(process.env['PORT'] ?? 3333);
+// Dev: 0.0.0.0, para o celular na mesma rede alcançar a API. Produção:
+// HOST=127.0.0.1 — só o nginx fala com ela (o servidor não tem firewall).
+const host = process.env['HOST'] || '0.0.0.0';
 
 /**
  * ⚠️ **O cliente do processo é UM SÓ, e o servidor e o cron o compartilham.**
@@ -38,7 +41,7 @@ installReminderCron({
 });
 
 buildServer({ prisma })
-  .then((app) => app.listen({ port, host: '0.0.0.0' }))
+  .then((app) => app.listen({ port, host }))
   .catch((error: unknown) => {
     console.error(error);
     process.exit(1);
