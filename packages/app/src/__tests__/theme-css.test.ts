@@ -160,6 +160,10 @@ const TOKENS_WITHOUT_LIGHT_DARK: Record<string, string> = {
   // quatro: nome na lista, motivo escrito, e a FORMA do valor conferida pelo
   // `exemptionProblem` (um `--r-4: #ff0000` não passa).
   '--r-4': 'raio não é cor e não muda com o tema',
+  // Repaginação visual (decisão do dono, 2026-09-24): o cartão arredondado
+  // ganhou raio próprio (20px), entre o `--r-3` e o `--r-4`. Sexto raio isento,
+  // pela mesma porta — nome, motivo e a forma conferida pelo `exemptionProblem`.
+  '--r-card': 'raio não é cor e não muda com o tema',
   '--r-pill': 'raio não é cor e não muda com o tema',
   '--family-reading': 'família tipográfica não é cor',
   '--family-quote': 'família tipográfica não é cor',
@@ -275,6 +279,7 @@ describe('@clube/ui theme.css — a cascata do tema (rules 3 and 4)', () => {
       '--r-2',
       '--r-3',
       '--r-4',
+      '--r-card',
       '--r-pill',
       '--family-reading',
       '--family-quote',

@@ -16,7 +16,7 @@ import {
   ListItem,
   MarginRail,
 } from '@clube/ui';
-import { Plus } from 'lucide-react';
+import { ArrowRight, Plus } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -376,7 +376,7 @@ export function HomePage() {
               usa 10px em cima e 24px embaixo — divergência declarada, do
               tamanho de um recuo).
             */
-            'inline-flex items-center gap-2.25 rounded-control py-1.5 text-muted',
+            'inline-flex min-h-11 items-center gap-2 rounded-full border border-dashed border-line-strong px-4 text-accent transition-colors hover:bg-surface',
             FOCUS_RING,
           )}
           to={bookNewPath(activeClub.id)}
@@ -386,8 +386,10 @@ export function HomePage() {
             o `adr-0002-iconography.test.ts` cobra. Ele troca de lugar com o
             `Flame` que a `StreakBar` deixou de importar nesta mesma fatia.
           */}
-          <Plus aria-hidden="true" className="size-3.5 shrink-0" />
-          <Eyebrow>{t('pages.bookForm.entry.new')}</Eyebrow>
+          <Plus aria-hidden="true" className="size-4 shrink-0" />
+          <span className="text-sm font-semibold">
+            {t('pages.bookForm.entry.new')}
+          </span>
         </Link>
       </div>
     );
@@ -537,24 +539,29 @@ export function HomePage() {
             </div>
             <Link
               className={cx(
-                'flex min-h-14 flex-col justify-center gap-0.5 rounded-control border border-line bg-surface p-4',
-                'transition-colors hover:bg-surface-raised',
+                'group relative flex min-h-14 flex-col justify-center gap-1 overflow-hidden rounded-card bg-accent p-5 text-accent-fg shadow-card',
+                'transition-colors hover:bg-accent-hover',
                 FOCUS_RING,
               )}
               to={dayNotePath(todayBook.id, todayItem.id)}
             >
               {/* Conteúdo do clube, não frase da API: o tema do dia é o que o
                   admin cadastrou, e é ele que dá assunto à anotação. */}
-              <span className="font-medium text-content">
+              <span className="font-reading text-[22px] font-semibold leading-tight tracking-[-0.02em] text-balance">
                 {todayItem.title}
               </span>
               {todayItem.reference !== null ? (
-                <span className="text-sm text-muted">
+                <span className="text-sm opacity-80">
                   {todayItem.reference}
                 </span>
               ) : null}
-              <span className="text-sm text-accent">
+              <span className="mt-3 inline-flex items-center gap-1.5 self-start rounded-full bg-accent-fg/15 px-3.5 py-1.5 text-sm font-semibold">
                 {t('pages.home.today.write')}
+                <ArrowRight
+                  aria-hidden="true"
+                  className="size-4 transition-transform duration-200 group-hover:translate-x-0.5"
+                  focusable="false"
+                />
               </span>
             </Link>
           </section>
@@ -610,7 +617,7 @@ export function HomePage() {
             em jsdom só acontece se o roteador interceptou (uma âncora crua não
             navega).
           */}
-          <List aria-label={t('pages.home.shelf.label')} className="gap-1">
+          <List appearance="grouped" aria-label={t('pages.home.shelf.label')}>
             {shelf.books.map((book) => (
               <ListItem
                 href={bookPath(book.id)}

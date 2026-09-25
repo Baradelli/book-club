@@ -170,6 +170,14 @@ describe('Screen (rule 1)', () => {
    * | `line-height` | 1.14 (×4) · 1.15 (×3) · 1.18 (×3) | **1.14**, a maioria |
    * | `letter-spacing` | −0.02em (×6) · −0.015em (×4) | **−0.02em**, a maioria |
    * | `font-size` | 23 · 25 · 26 (×2) · 27 · 28 (×3) · 30 px | **25px** (`text-title`), com a divergência declarada no docblock |
+   *
+   * ⚠️ **REPAGINAÇÃO VISUAL — decisão do dono de 2026-09-24** ("mais atual,
+   * sofisticado, cara de app de celular", letra maior). A tabela acima é a do
+   * canvas e fica como registro; o título entregue hoje é mais cheio e mais
+   * justo: `font-semibold`, `leading-[1.08]`, `tracking-[-0.03em]`, com o
+   * `text-title` subindo para 32px no `theme.css`. O que NÃO mudou, e é o
+   * que esta guarda existe para segurar: a serifa de leitura (`font-reading`)
+   * e o degrau da escala (`text-title`), nunca um `text-2xl` solto.
    */
   it('⚠️ writes the title in the reading serif of the canvas, not in the UI sans', () => {
     const { container } = render(
@@ -183,14 +191,13 @@ describe('Screen (rule 1)', () => {
     // A serifa de leitura é a propriedade que o mutante pré-42 apagava.
     expect(heading.className).toContain('font-reading');
     expect(heading.className).toContain('text-title');
-    expect(heading.className).toContain('font-medium');
-    // E os dois arbitrários — eles NÃO são degraus de escala, então nada
-    // obrigava o arredondamento que a primeira entrega fez.
-    expect(heading.className).toContain('leading-[1.14]');
-    expect(heading.className).toContain('tracking-[-0.02em]');
+    // O peso e os dois arbitrários da repaginação (2026-09-24) — eles NÃO
+    // são degraus de escala, então ficam pinados aqui.
+    expect(heading.className).toContain('font-semibold');
+    expect(heading.className).toContain('leading-[1.08]');
+    expect(heading.className).toContain('tracking-[-0.03em]');
     // O que a classe pré-42 tinha, e que a decisão da fatia revoga.
     expect(heading.className).not.toContain('text-2xl');
-    expect(heading.className).not.toContain('font-semibold');
   });
 
   it('gives the entry screen the SAME title typography', () => {
@@ -207,7 +214,7 @@ describe('Screen (rule 1)', () => {
 
     expect(container.querySelector('h1')?.className).toContain('font-reading');
     expect(container.querySelector('h1')?.className).toContain(
-      'leading-[1.14]',
+      'leading-[1.08]',
     );
   });
 
@@ -384,11 +391,13 @@ describe('⚠️ the top gutter of the reading screen (task 42, audit A4)', () =
     return section.className;
   }
 
-  it('gives the phone the ~20px of the canvas, and hands the desktop back to the column', () => {
+  it('gives the phone its own top gutter (16px since 2026-09-24), and hands the desktop back to the column', () => {
     const classes = sectionClasses();
 
-    // `Livro.dc.html:41` e `Dia.dc.html:41`: `padding:…20px…` no topo do `main`.
-    expect(classes).toContain('pt-5');
+    // `Livro.dc.html:41` e `Dia.dc.html:41` desenham `padding:…20px…` no
+    // topo do `main`; a repaginação (2026-09-24) trouxe o topo para 16px
+    // (`pt-4`), junto com o cabeçalho fixo e translúcido.
+    expect(classes).toContain('pt-4');
     // E acima do corte quem manda é o `min-[1120px]:pt-10` do `ReadingColumn`:
     // sem este `pt-0` os dois se SOMAM, e o desktop fica com 60px.
     expect(classes).toContain('min-[1120px]:pt-0');

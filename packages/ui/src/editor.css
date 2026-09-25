@@ -248,6 +248,28 @@
   A imagem só entra no documento DEPOIS de o upload resolver (ADR 0001), então
   aqui nunca há `blob:` nem `data:` para estilizar — é sempre a URL final.
 */
+/*
+  SEM CONTORNO DE FOCO NO TEXTO. O `contenteditable` ganha o anel do navegador
+  ao receber foco, e em volta de uma página inteira de texto ele vira uma
+  moldura estranha. Quem escreve já tem o cursor piscando; nas caixas
+  (`.clube-editor-boxed`) o foco aparece na BORDA do cartão, logo abaixo.
+*/
+.ProseMirror:focus,
+.ProseMirror:focus-visible {
+  /* Transparente, e não "none": no alto contraste do sistema (forced-colors)
+     o navegador pinta o contorno com a cor do sistema e o foco volta a
+     aparecer. Na tela normal ele não se vê. */
+  outline: 2px solid transparent;
+}
+
+.clube-editor-boxed {
+  transition: box-shadow 160ms ease-out;
+}
+
+.clube-editor-boxed:focus-within {
+  box-shadow: var(--shadow-field-focus);
+}
+
 .ProseMirror img {
   max-width: 100%;
   height: auto;
@@ -543,4 +565,24 @@
 .clube-editor-pill[data-state='error'] {
   color: var(--danger);
   border-color: var(--danger);
+}
+
+/*
+  O EDITOR EM CAIXA — a anotação livre e o comentário do grifo moram num cartão
+  (borda, fundo, raio), e o texto não pode encostar na parede dele. A anotação
+  do dia continua sem caixa, direto no papel, e sem este recuo.
+
+  Mora aqui, e não num utilitário da tela, porque o `.ProseMirror` acima sai SEM
+  camada e venceria qualquer `px-*` do Tailwind (que sai em `@layer utilities`).
+  Medido: com `[&_.ProseMirror]:px-4` na tela, o recuo computado ficava 0px.
+  O fundo de 7rem se mantém: é o espaço do teclado e da barra fixa.
+*/
+.clube-editor-boxed .ProseMirror {
+  padding: 1rem 1rem 7rem;
+}
+
+/* O comentário do grifo: sem barra fixa, e curto. */
+.clube-editor-boxed.clube-editor-compact .ProseMirror {
+  min-height: 9rem;
+  padding: 0.875rem 1rem 1rem;
 }

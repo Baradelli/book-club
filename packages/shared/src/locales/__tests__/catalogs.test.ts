@@ -304,12 +304,29 @@ describe('catálogos de i18n', () => {
     */
     expect(halves.size).toBeGreaterThanOrEqual(3);
 
+    /*
+      ⚠️ **A EXCEÇÃO NOMEADA DO REDESENHO VISUAL (2026-09-24).** O número de
+      páginas do livro ("1.216 páginas") chega na frase JÁ FORMATADO com o
+      separador de milhar do locale — `{{count}}` cru diria "1216 páginas". A
+      tela (`app/src/pages/book.tsx`) passa os DOIS: `count` (que o i18next usa
+      para escolher `_one`/`_other`) e `formatted` (o mesmo número, via
+      `Intl.NumberFormat`). A propriedade que esta guarda protege — o número
+      não some da frase — continua medida: para estas chaves, o buraco exigido
+      é o `{{formatted}}`. A lista é NOMEADA de propósito: um par novo que
+      esquecer o número continua vermelho, em vez de a regra afrouxar para
+      "qualquer buraco serve".
+    */
+    const NUMBER_HOLE: Record<string, string> = {
+      'pages.book.meta.pages': '{{formatted}}',
+    };
+
     for (const [base, { one, other }] of halves) {
+      const hole = NUMBER_HOLE[base] ?? '{{count}}';
       expect(one, `${base}_one`).toBeTypeOf('string');
       expect(other, `${base}_other`).toBeTypeOf('string');
       expect(one, base).not.toBe(other);
-      expect(one, `${base}_one`).toContain('{{count}}');
-      expect(other, `${base}_other`).toContain('{{count}}');
+      expect(one, `${base}_one`).toContain(hole);
+      expect(other, `${base}_other`).toContain(hole);
     }
   });
 
@@ -360,7 +377,7 @@ describe('catálogos de i18n', () => {
       o `STREAK_KEYS`). A unicidade do `quoteHint` passa a ser guardada pela
       AUSÊNCIA dele no mapa, e um reword que continue único não mexe em nada.
 
-      ⚠️ **27 GRUPOS, E NÃO TODOS SÃO CONTRATO — dois merecem leitura, e estão
+      ⚠️ **29 GRUPOS (eram 27 até o redesenho visual), E NÃO TODOS SÃO CONTRATO — dois merecem leitura, e estão
       aqui porque o mapa tem de ser COMPLETO para ser guarda:**
 
       - ~~**`'Alguém do clube'` (3 caminhos) é DEFEITO, não convenção.** É UM
@@ -390,7 +407,7 @@ describe('catálogos de i18n', () => {
         MESMO destino. Convenção por-tela como o resto do arquivo, mas é o grupo
         que mais se parece com gêmea.
 
-      Os 25 restantes são a convenção que o arquivo aplica desde a Tarefa 15:
+      Os 27 restantes são a convenção que o arquivo aplica desde a Tarefa 15:
       cada tela é dona do próprio `loading`, `retry`, `bookUnavailable`,
       `archive.*` e indicador de salvamento, porque a frase de uma tela muda sem
       arrastar as outras.
@@ -474,6 +491,15 @@ describe('catálogos de i18n', () => {
           'pages.freeNote.archive.close',
         ],
       ],
+      /*
+        ⚠️ **ENTROU NO REDESENHO VISUAL (2026-09-24).** O cabeçalho ganhou a
+        navegação com nome próprio (`nav.home`, o rótulo do link para o
+        início), e o valor coincide com o título da tela que ele abre. São duas
+        coisas: um é o NOME DO CAMINHO (lido pelo leitor de tela no botão), o
+        outro é o título da página — a convenção por-tela, como
+        `'Preferências'` logo abaixo, que tem exatamente o mesmo formato.
+      */
+      ['Início', ['nav.home', 'pages.home.title']],
       ['Nova anotação', ['pages.acervo.newNote', 'pages.freeNote.newTitle']],
       [
         'Novo grifo',
@@ -513,6 +539,15 @@ describe('catálogos de i18n', () => {
           'pages.highlightForm.fields.reference',
         ],
       ],
+      /*
+        ⚠️ **ENTROU NO REDESENHO VISUAL (2026-09-24).** O "Sair" do menu
+        lateral deixou de sair direto: ele abre uma confirmação, e o botão que
+        confirma diz a mesma palavra. É o precedente do `'Fechar'` da Tarefa 46
+        aplicado por-diálogo: um é o gatilho, o outro é a ação dentro do
+        diálogo, e a primeira correção de texto que quiser distinguir os dois
+        (ex.: "Sair agora") não pode ter de desfazer uma fusão antes.
+      */
+      ['Sair', ['nav.signOut', 'nav.signOutConfirm.confirm']],
       [
         'Salvando…',
         ['pages.dayNote.save.saving', 'pages.freeNote.save.saving'],
@@ -564,7 +599,9 @@ describe('catálogos de i18n', () => {
     // ⚠️ **28 → 27 na Tarefa 42 (2026-09-21)**: o grupo `'Alguém do clube'`
     // saiu porque o valor passou a ter um dono só. O número é conferido aqui
     // de propósito — ele é o que impede o mapa de encolher em silêncio.
-    expect(REPEATED_PHRASES).toHaveLength(27);
+    // ⚠️ **27 → 29 no redesenho visual (2026-09-24)**: `'Início'` e
+    // `'Sair'` ganharam gêmeas por-tela/por-diálogo (os comentários nas linhas).
+    expect(REPEATED_PHRASES).toHaveLength(29);
     expect(REPEATED_PHRASES.length).toBeLessThan(entriesOf(pt).length / 4);
 
     expect(groups()).toEqual(REPEATED_PHRASES);

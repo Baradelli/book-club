@@ -107,28 +107,50 @@ describe('ContextBar', () => {
     expect(11 * SPACING_STEP_PX).toBe(MIN_TOUCH_TARGET_PX);
   });
 
-  it('draws the mono label of the canvas, muted and upper case', () => {
+  it('draws the back label in the sans UI step, in the accent of a link (redesign)', () => {
+    /*
+      ⚠️ **O REDESENHO VISUAL (2026-09-24) TROCOU O RÓTULO.** A mono maiúscula
+      de 10px em `--text-muted` do cabeçalho deste arquivo é a medida antiga
+      do canvas. O "voltar" agora é o de app de celular: sans `text-ui`
+      (15px), peso médio, e a TINTA vem do link (`text-accent`), porque é um
+      caminho tocável e deve parecer um.
+    */
     render(<ContextBar backLabel="A Coragem de Ser Imperfeito" href="/l/1" />);
 
     const label = screen.getByText('A Coragem de Ser Imperfeito');
     const classes = label.className.split(/\s+/u);
-    expect(classes).toContain('font-mono');
-    expect(classes).toContain('text-eyebrow');
-    expect(classes).toContain('uppercase');
-    expect(classes).toContain('tracking-[0.1em]');
+    expect(classes).toContain('text-ui');
+    expect(classes).toContain('font-medium');
+    expect(classes).not.toContain('font-mono');
+    expect(classes).not.toContain('uppercase');
+    expect(
+      screen
+        .getByRole('link', { name: 'A Coragem de Ser Imperfeito' })
+        .className.split(/\s+/u),
+    ).toContain('text-accent');
     // O título do livro é longo e a barra é estreita: o canvas corta com
     // reticências (`Dia.dc.html:38`, `text-overflow:ellipsis`).
     expect(classes).toContain('truncate');
   });
 
   it('separates itself from the page with the hairline, never with a shadow', () => {
+    /*
+      ⚠️ O redesenho visual (2026-09-24) fez a barra GRUDAR no topo (`sticky`,
+      abaixo do cabeçalho de 3.5rem) com o fundo da página translúcido e
+      desfocado atrás (`bg-canvas/85` + `backdrop-blur-xl`) — o vidro de app
+      de celular. O que NÃO mudou é a separação: filete hairline, nunca sombra.
+      E no desktop ela volta a ser estática (`min-[1120px]:static`).
+    */
     const { container } = render(<ContextBar backLabel="Início" href="/" />);
 
     const bar = container.firstElementChild as HTMLElement;
     const classes = bar.className.split(/\s+/u);
     expect(classes).toContain('border-b');
     expect(classes).toContain('border-line-soft');
-    expect(classes).toContain('bg-canvas');
+    expect(classes).toContain('bg-canvas/85');
+    expect(classes).toContain('backdrop-blur-xl');
+    expect(classes).toContain('sticky');
+    expect(classes).toContain('min-[1120px]:static');
     expect(classes.some((name) => name.startsWith('shadow'))).toBe(false);
   });
 
@@ -189,7 +211,7 @@ describe('ContextBar', () => {
     ).toContain('min-h-11');
   });
 
-  it('paints the action with the ONE colour of action, filled (canvas)', () => {
+  it('paints the action with the ONE colour of action, filled, as a pill (redesign)', () => {
     render(
       <ContextBar
         actionLabel="Criar anotação"
@@ -204,10 +226,13 @@ describe('ContextBar', () => {
       .className.split(/\s+/u);
     expect(classes).toContain('bg-accent');
     expect(classes).toContain('text-accent-fg');
-    // Mono maiúsculo, como o canvas (`NovaAnotacao.dc.html:41`) — a ação da
-    // barra fala a língua do rótulo, não a do botão de corpo de página.
-    expect(classes).toContain('font-mono');
-    expect(classes).toContain('uppercase');
+    // ⚠️ O canvas (`NovaAnotacao.dc.html:41`) desenhava mono maiúscula com
+    // raio de 3px; o redesenho visual (2026-09-24) fez a ação falar a língua
+    // do `Button` do corpo da página: pílula em sans semibold.
+    expect(classes).toContain('rounded-full');
+    expect(classes).toContain('font-semibold');
+    expect(classes).not.toContain('font-mono');
+    expect(classes).not.toContain('uppercase');
   });
 
   it('⚠️ has a SECOND action paint — the gold outline of "Li hoje" (audit)', () => {
@@ -350,7 +375,16 @@ describe('ContextBar', () => {
     expect(bar().split(/\s+/u)).toContain('min-[1120px]:h-[46px]');
   });
 
-  it('keeps the bar SHORT when there is no action, and taller when there is', () => {
+  it('keeps ONE 48px bar, and only the bar with an action splits into two ends (redesign)', () => {
+    /*
+      ⚠️ **O REDESENHO VISUAL (2026-09-24) ACABOU COM AS DUAS ALTURAS NO
+      CELULAR.** Antes a barra sem ação era "o que o link faz dela" (44px) e a
+      com ação tinha 48px. Agora, grudada no topo, ela tem SEMPRE 48px
+      (`min-h-12` na base): uma faixa que muda de altura de tela para tela
+      faz o conteúdo pular logo abaixo do cabeçalho. O que continua sendo a
+      decisão H é o RECUO e a DIVISÃO: sem ação, recuo simétrico e nada
+      empurrado; com ação, a ação vai para a direita com o recuo do canvas.
+    */
     const { container, rerender } = render(
       <ContextBar backLabel="Início" href="/" />,
     );
@@ -358,8 +392,10 @@ describe('ContextBar', () => {
     const quiet = (container.firstElementChild as HTMLElement).className.split(
       /\s+/u,
     );
+    expect(quiet).toContain('min-h-12');
     expect(quiet).toContain('px-5');
-    expect(quiet).not.toContain('min-h-12');
+    expect(quiet).not.toContain('justify-between');
+    expect(quiet).not.toContain('pr-3');
 
     rerender(
       <ContextBar
@@ -375,6 +411,7 @@ describe('ContextBar', () => {
     );
     // 48px (`NovaAnotacao.dc.html:36`) e `padding:0 12px 0 20px`.
     expect(busy).toContain('min-h-12');
+    expect(busy).toContain('justify-between');
     expect(busy).toContain('pl-5');
     expect(busy).toContain('pr-3');
   });

@@ -5,7 +5,13 @@ import type { ActivityEventResponse, ClubMemberResponse } from '@clube/shared';
 import { localDay, localTimeZone } from '@clube/shared';
 import { TOKEN_STORAGE_KEY } from '@clube/shared/client';
 import { pt } from '@clube/shared/locales';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router-dom';
@@ -573,8 +579,12 @@ describe('the shelf of the active club (rules 13, 14)', () => {
   it('shows the club name in the header even with a single club (decision F)', async () => {
     await renderHome({});
 
+    // No CABEÇALHO: o menu lateral (um `<dialog>` fechado) também escreve o
+    // nome do clube, e ele não é o que a decisão F promete.
     await waitFor(() => {
-      expect(screen.queryByText(CASAL.name)).not.toBeNull();
+      expect(
+        within(screen.getByRole('banner')).queryByText(CASAL.name),
+      ).not.toBeNull();
     });
     // Com um clube só, o seletor é ruído — mas o NOME continua visível.
     expect(screen.queryByLabelText(pt.pages.home.clubLabel)).toBeNull();
@@ -2242,6 +2252,25 @@ describe('the FIRST FRAME of a session never shows the empty state', () => {
  * uma coluna com número convida a comparar. Foi decisão do dono, tomada depois
  * de a objeção ser levantada e medida.
  */
+/**
+ * ⚠️ **DESDE O REDESENHO VISUAL DE 2026-09-24 A CORRENTE NÃO MORA MAIS NO FEED
+ * DA HOME** — ela é o "foguinho" do cabeçalho (`streak-button.tsx`), que
+ * mostra só a MINHA sequência (no rótulo acessível dele) e abre, num toque, a
+ * gaveta com a de cada pessoa do clube — a mesma `StreakBar` que o feed
+ * desenhava. Os testes abaixo continuam entrando pela home, e o caminho até os
+ * selos passou a ser esse toque.
+ */
+async function openStreakDrawer(): Promise<HTMLElement> {
+  const mine = pt.pages.home.streak.mine;
+  const button = await screen.findByRole('button', {
+    name: (name) => name.startsWith(`${mine}:`),
+  });
+  await act(async () => {
+    fireEvent.click(button);
+  });
+  return screen.findByRole('dialog', { name: pt.pages.home.streak.title });
+}
+
 describe('a corrente de leitura (ADR 0010)', () => {
   const MARIA_ID = 'u-maria';
 
@@ -2280,10 +2309,11 @@ describe('a corrente de leitura (ADR 0010)', () => {
       },
     });
 
-    await waitFor(() => {
-      expect(readableText()).toContain(daysPhrase(12));
-    });
-    expect(readableText()).toContain(daysPhrase(30));
+    // O cabeçalho só diz a MINHA; a de cada pessoa está na gaveta.
+    const drawer = await openStreakDrawer();
+    expect(drawer.textContent).toContain(daysPhrase(12));
+    expect(drawer.textContent).toContain(daysPhrase(30));
+    expectNoGuilt();
   });
 
   /**
@@ -2404,7 +2434,9 @@ describe('a corrente de leitura (ADR 0010)', () => {
  * 2. **a corrente é o `StreakSeal`** de `packages/ui` (Tarefa 41b), que até
  *    aqui era o último componente daquela fatia sem consumidor;
  * 3. **corrente e feed vivem na MARGEM** acima de 1120px e **descem para o
- *    fluxo** abaixo dela — media query, nunca condição de render;
+ *    fluxo** abaixo dela — media query, nunca condição de render. (O
+ *    redesenho visual de 2026-09-24 levou a corrente para o foguinho do
+ *    cabeçalho; na margem ficou o feed, e os selos abrem numa gaveta.)
  * 4. **a posição no plano entra** ("Dia 11 de 30"), e os estados que a mostram
  *    varrem com `expectNoGuiltWithPlanPosition()`.
  */
@@ -2533,7 +2565,8 @@ describe('o Início da Tarefa 45', () => {
       },
     });
 
-    const list = await screen.findByRole('list', {
+    const drawer = await openStreakDrawer();
+    const list = within(drawer).getByRole('list', {
       name: pt.pages.home.streak.mine,
     });
     const seals = Array.from(list.querySelectorAll('li'));
@@ -2594,7 +2627,8 @@ describe('o Início da Tarefa 45', () => {
       },
     });
 
-    const list = await screen.findByRole('list', {
+    const drawer = await openStreakDrawer();
+    const list = within(drawer).getByRole('list', {
       name: pt.pages.home.streak.mine,
     });
     const [lit, quiet] = Array.from(list.querySelectorAll('li')).map(
@@ -2656,7 +2690,8 @@ describe('o Início da Tarefa 45', () => {
       },
     });
 
-    const list = await screen.findByRole('list', {
+    const drawer = await openStreakDrawer();
+    const list = within(drawer).getByRole('list', {
       name: pt.pages.home.streak.mine,
     });
     const [mine, hers] = Array.from(list.querySelectorAll('li')).map(
@@ -2722,7 +2757,8 @@ describe('o Início da Tarefa 45', () => {
       },
     });
 
-    const list = await screen.findByRole('list', {
+    const drawer = await openStreakDrawer();
+    const list = within(drawer).getByRole('list', {
       name: pt.pages.home.streak.mine,
     });
     const [mine, hers] = Array.from(list.querySelectorAll('li')).map(
@@ -2772,13 +2808,18 @@ describe('o Início da Tarefa 45', () => {
 
     const label = await screen.findByText(pt.pages.home.feed.heading);
     const classes = label.className.split(/\s+/u);
-    expect(classes).toContain('font-mono');
-    expect(classes).toContain('text-eyebrow');
-    expect(classes).toContain('uppercase');
-    expect(classes).toContain('tracking-[0.12em]');
-    // O desenho anterior, nominalmente recusado.
+    /*
+      A tipografia do `Eyebrow` desde o redesenho visual de 2026-09-24:
+      `text-label` semibold, e não mais a mono maiúscula de 10px do canvas.
+      O pino da classe exata é `ui/…/eyebrow.test.tsx`; aqui o que se prova é
+      que o rótulo É o componente — e não um `text-sm` escrito à mão.
+    */
+    expect(classes).toContain('text-label');
+    expect(classes).toContain('font-semibold');
+    expect(classes).not.toContain('font-mono');
+    expect(classes).not.toContain('uppercase');
+    // O desenho anterior à Tarefa 45, nominalmente recusado.
     expect(classes).not.toContain('text-sm');
-    expect(classes).not.toContain('font-semibold');
 
     /*
       O `Eyebrow` é a TIPOGRAFIA do rótulo, não a semântica: ele é um `<span>`
@@ -2824,7 +2865,7 @@ describe('o Início da Tarefa 45', () => {
    * têm outro utilitário e ficam em paz — que é a razão de a guarda não ser um
    * `toContain('hidden')`, e continua valendo.
    */
-  it('⚠️ põe corrente e feed na MARGEM, e não os esconde no celular', async () => {
+  it('⚠️ põe o feed na MARGEM e a corrente no CABEÇALHO, e não esconde nenhum dos dois no celular', async () => {
     await renderHome({
       streaks: {
         status: 200,
@@ -2836,14 +2877,25 @@ describe('o Início da Tarefa 45', () => {
       },
     });
 
-    const streaks = await screen.findByRole('list', {
-      name: pt.pages.home.streak.mine,
+    const feed = await screen.findByRole('list', {
+      name: pt.pages.home.feed.label,
     });
-    const feed = screen.getByRole('list', { name: pt.pages.home.feed.label });
+    /*
+      A corrente saiu da margem no redesenho visual de 2026-09-24: ela é o
+      foguinho do CABEÇALHO, e a home não a desenha mais. O botão dela é o
+      segundo nó cuja visibilidade esta guarda cobre — no celular ele é o único
+      caminho até as sequências do clube.
+    */
+    const streak = await screen.findByRole('button', {
+      name: (name) => name.startsWith(`${pt.pages.home.streak.mine}:`),
+    });
+    expect(streak.closest('header')).not.toBeNull();
+    expect(
+      screen.queryByRole('list', { name: pt.pages.home.streak.mine }),
+    ).toBeNull();
 
-    const rail = streaks.closest('aside');
+    const rail = feed.closest('aside');
     expect(rail).not.toBeNull();
-    expect(feed.closest('aside')).toBe(rail);
     // A estante continua na COLUNA — a margem é o aparato, não a tela inteira.
     expect(
       screen
@@ -2873,16 +2925,18 @@ describe('o Início da Tarefa 45', () => {
       a ler sabe que a margem some e não sabe onde.
     */
     const hidingClasses: string[] = [];
-    for (
-      let node: HTMLElement | null = streaks;
-      node !== null && node !== document.body;
-      node = node.parentElement
-    ) {
-      hidingClasses.push(
-        ...node.className
-          .split(/\s+/u)
-          .filter((name) => name.split(':').at(-1) === 'hidden'),
-      );
+    for (const start of [feed, streak]) {
+      for (
+        let node: HTMLElement | null = start;
+        node !== null && node !== document.body;
+        node = node.parentElement
+      ) {
+        hidingClasses.push(
+          ...node.className
+            .split(/\s+/u)
+            .filter((name) => name.split(':').at(-1) === 'hidden'),
+        );
+      }
     }
     expect(hidingClasses).toEqual([]);
 
@@ -2910,9 +2964,14 @@ describe('o Início da Tarefa 45', () => {
     await waitFor(() => {
       expect(readableText()).toContain(pt.pages.home.streak.atRisk);
     });
-    // Ele mora na margem, junto da corrente de que fala — não solto no corpo.
-    const warning = screen.getByText(pt.pages.home.streak.atRisk);
-    expect(warning.closest('aside')).not.toBeNull();
+    // Desde o redesenho de 2026-09-24 ele mora na GAVETA do foguinho, junto
+    // dos selos de que fala — não solto no corpo da home.
+    const drawer = await openStreakDrawer();
+    const warning = within(drawer).getByText(pt.pages.home.streak.atRisk);
+    expect(
+      within(drawer).getByRole('list', { name: pt.pages.home.streak.mine })
+        .parentElement,
+    ).toBe(warning.parentElement);
   });
 
   /**
@@ -2951,11 +3010,12 @@ describe('o Início da Tarefa 45', () => {
     await screen.findByRole('link', {
       name: new RegExp(pt.pages.home.today.write, 'u'),
     });
-    await waitFor(() => {
-      expect(
-        screen.queryByRole('list', { name: pt.pages.home.streak.mine }),
-      ).not.toBeNull();
-    });
+    // Os selos entram na tela pela gaveta do foguinho (redesenho de
+    // 2026-09-24) — e a varredura do fim do teste os enxerga lá.
+    const drawer = await openStreakDrawer();
+    expect(
+      within(drawer).queryByRole('list', { name: pt.pages.home.streak.mine }),
+    ).not.toBeNull();
     // O item de hoje é o SEGUNDO de três: a posição é a ORDEM no plano, não um
     // placar de quem leu o quê.
     expect(readableText()).toContain(dayOfPlan(2, 3));

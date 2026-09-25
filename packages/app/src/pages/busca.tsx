@@ -554,7 +554,7 @@ export function BuscaPage() {
 
     return (
       <li className="flex" key={keyOf(entry)}>
-        <div className="flex w-full flex-col gap-2 rounded-control border border-line bg-surface p-3">
+        <div className="flex w-full flex-col gap-2 rounded-card border border-line-soft bg-surface shadow-card p-3">
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
             {/* O LIVRO primeiro — é ele que desambigua o resultado (decisão E). */}
             <span className="font-medium text-content">

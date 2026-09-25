@@ -15,16 +15,32 @@ export const pt = {
   },
   nav: {
     signOut: 'Sair',
+    // A confirmação antes de sair (o botão do fim do menu lateral).
+    signOutConfirm: {
+      title: 'Sair da sua conta?',
+      description:
+        'Você vai precisar entrar de novo com e-mail e senha neste aparelho.',
+      confirm: 'Sair',
+      cancel: 'Cancelar',
+      // O × da gaveta: nome próprio, para não haver dois botões "Cancelar".
+      close: 'Fechar sem sair',
+    },
     // O rótulo acessível da entrada de preferências no cabeçalho (Tarefa 36b,
     // regra 3): o ícone do `lucide-react` é `aria-hidden`, e ícone sozinho não
     // tem nome para quem ouve a tela.
     settings: 'Preferências',
+    back: 'Voltar',
+    home: 'Início',
+    search: 'Buscar',
+    // A barra lateral: o botão do cabeçalho que a abre, o que a fecha, e o
+    // nome dela para o leitor de tela.
+    menu: 'Abrir o menu',
+    closeMenu: 'Fechar o menu',
+    drawer: 'Menu',
   },
   theme: {
-    label: 'Tema',
-    light: 'Claro',
-    dark: 'Escuro',
-    system: 'Do sistema',
+    switchToDark: 'Mudar para o tema escuro',
+    switchToLight: 'Mudar para o tema claro',
   },
   pages: {
     login: {
@@ -130,6 +146,9 @@ export const pt = {
         none: 'Comece a sua sequência hoje',
         atRisk: 'Você vai perder a sua sequência!',
         mine: 'A sua sequência',
+        // A gaveta que o foguinho do cabeçalho abre.
+        title: 'Sequências do clube',
+        close: 'Fechar as sequências',
       },
       title: 'Início',
       /** Rótulo (só para leitor de tela) do seletor de clube no cabeçalho. */
@@ -376,11 +395,20 @@ export const pt = {
         frases abaixo são o que o leitor de tela fala. Quem renderiza é a Tarefa
         44.
       */
+      // A linha de informações do cabeçalho do livro ("setembro de 2026 · 1.216
+      // páginas"). É dado do livro, não placar: não muda com o que ninguém fez.
+      meta: {
+        pages_one: '{{formatted}} página',
+        pages_other: '{{formatted}} páginas',
+      },
       marks: {
         heading: 'As marcas',
         read: 'Leu neste dia',
         wrote: 'Leu e escreveu',
         hint: 'Cheio = escreveu',
+        toggle: 'O que significam as marcas',
+        dismiss: 'Entendi',
+        close: 'Fechar a legenda',
       },
       /*
         ⚠️ **"NESTE LIVRO" — DOIS RÓTULOS, E NENHUM DELES É O NÚMERO.**
@@ -1309,6 +1337,12 @@ export const pt = {
       reminderTimeHint: 'Salva sozinho.',
       reminderEnabled: 'Quero o lembrete da leitura de hoje',
       notifyGroupActivity: 'Quero saber quando alguém do clube lê ou escreve',
+      // A barra de canetas da tela do dia: presa no topo ou parada no começo.
+      writing: {
+        title: 'Ao escrever',
+        stickyPenBar: 'Manter a barra de canetas no topo enquanto rolo o texto',
+        stickyPenBarHint: 'Vale só neste aparelho.',
+      },
       device: {
         title: 'Neste aparelho',
         activate: 'Ativar os avisos neste aparelho',

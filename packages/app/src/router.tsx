@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Route, Routes } from 'react-router-dom';
+import { type Location, Route, Routes } from 'react-router-dom';
 
 import {
   ACCEPT_INVITE_PATH,
@@ -10,9 +10,9 @@ import {
   RequireAuth,
 } from './auth/require-auth';
 import { AcceptInvitePage } from './pages/accept-invite';
-import { AcervoPage } from './pages/acervo';
 import { BookPage } from './pages/book';
 import { BuscaPage } from './pages/busca';
+import { Notice } from './pages/chrome';
 import { DAY_NOTE_PATH, DayNotePage } from './pages/day-note';
 import {
   FREE_NOTE_NEW_PATH,
@@ -33,7 +33,6 @@ import {
   SEARCH_PATH,
   SETTINGS_PATH,
 } from './pages/paths';
-import { PreferenciasPage } from './pages/preferencias';
 
 /**
  * ⚠️ **O FORMULÁRIO DE LIVRO ENTRA POR `React.lazy()`** (Tarefa 44c) — e é o
@@ -166,6 +165,74 @@ function BookFormRoute() {
 }
 
 /**
+ * ⚠️ **O ACERVO TAMBÉM ENTRA POR `React.lazy()` — REPAGINAÇÃO VISUAL, decisão
+ * do dono de 2026-09-24.** A repaginação (cabeçalho novo, menu lateral, botão
+ * da corrente, confirmação de saída, ícones) empurrou o primeiro carregamento
+ * para **460.091 B**, acima do teto de 450.000 da regra 21
+ * (`bundle-guard.test.ts`). O teto não subiu: saiu da entrada a tela que menos
+ * gente abre primeiro. O acervo (`acervo.tsx` + `acervo-filters.tsx`) é o
+ * maior bloco que só uma rota usa, e ninguém chega nele sem passar antes pela
+ * tela do livro.
+ *
+ * ⚠️ **E O CHUNK DO ACERVO É BUSCADO LOGO DEPOIS DA ENTRADA (`acervoChunk`),
+ * não no toque.** O `import()` roda quando este módulo avalia: a primeira
+ * pintura não espera por ele (ele não está no `index.html`, e é isso que a
+ * regra 21 mede), mas quando alguém toca "acervo" ele já chegou e a troca de
+ * tela não mostra o `fallback`. A razão é MEDIDA: com o `lazy()` puro,
+ * `book.test.tsx › navigates by the ROUTER…` e `free-note.test.tsx › …the
+ * note is GONE from the collection` ficavam vermelhos — os dois navegam PARA o
+ * acervo e leem a tela nova em seguida, e a tela ainda era o `fallback`. É o
+ * mesmo que a pessoa veria numa rede lenta; com o chunk já em casa, não vê.
+ *
+ * O `fallback` segue a mesma forma do `BookFormRoute`: visível, e com a MESMA
+ * frase e o mesmo `<p>` que a tela mostra enquanto carrega os dados
+ * (`pages.acervo.loading`), então a troca do fallback pela tela não pisca.
+ *
+ * ⚠️ **E AS PREFERÊNCIAS PELO MESMO MOTIVO, para a folga não ser de 1,5 kB.**
+ * Só com o acervo fora, a entrada ficou em 448.432 B — abaixo do teto, mas a
+ * uma troca de classe de distância dele. `preferencias.tsx` com o
+ * `push-section.tsx` que só ela usa é a segunda tela menos aberta de primeira
+ * (e esta é `lazy()` puro: nenhum teste navega PARA ela e lê a tela em seguida).
+ * Com as duas fora, a entrada fica em ~442,6 kB. O `fallback` é o MESMO `Notice` que a tela mostra
+ * enquanto lê as preferências (`pages.settings.loading`).
+ */
+const acervoChunk = import('./pages/acervo');
+
+const AcervoPage = lazy(async () => {
+  const page = await acervoChunk;
+  return { default: page.AcervoPage };
+});
+
+function AcervoRoute() {
+  const { t } = useTranslation();
+
+  return (
+    <Suspense
+      fallback={
+        <p className="text-sm text-muted">{t('pages.acervo.loading')}</p>
+      }
+    >
+      <AcervoPage />
+    </Suspense>
+  );
+}
+
+const PreferenciasPage = lazy(async () => {
+  const page = await import('./pages/preferencias');
+  return { default: page.PreferenciasPage };
+});
+
+function PreferenciasRoute() {
+  const { t } = useTranslation();
+
+  return (
+    <Suspense fallback={<Notice title={t('pages.settings.loading')} />}>
+      <PreferenciasPage />
+    </Suspense>
+  );
+}
+
+/**
  * URL por página (`CLAUDE.md`). As telas de verdade chegam nas Tarefas 15–21;
  * o que esta fatia entrega é a forma: um grupo protegido por `RequireAuth`,
  * um grupo público, e o `*` que impede a tela branca.
@@ -173,9 +240,18 @@ function BookFormRoute() {
  * É um `<Routes>` e não um `createBrowserRouter` de propósito: assim o teste
  * monta a mesma árvore num `MemoryRouter` e abre qualquer caminho.
  */
-export function AppRoutes() {
+export interface AppRoutesProps {
+  /**
+   * A localização EXIBIDA. O shell a segura um instante atrás da real para a
+   * troca de tela animar (`useViewTransitionLocation` no `App.tsx`); sem
+   * ela, vale a do roteador — é o que os testes montam.
+   */
+  location?: Location;
+}
+
+export function AppRoutes({ location }: AppRoutesProps = {}) {
   return (
-    <Routes>
+    <Routes {...(location === undefined ? {} : { location })}>
       <Route element={<RequireAnonymous />}>
         <Route path={LOGIN_PATH} element={<LoginPage />} />
       </Route>
@@ -257,7 +333,7 @@ export function AppRoutes() {
 
           Protegida pelo `RequireAuth` como todo conteúdo de clube.
         */}
-        <Route path={ACERVO_PATH} element={<AcervoPage />} />
+        <Route path={ACERVO_PATH} element={<AcervoRoute />} />
         {/*
           AS DUAS ROTAS DO MESMO FORMULÁRIO DE GRIFO (Tarefa 25, decisões A e
           B).
@@ -311,7 +387,7 @@ export function AppRoutes() {
           (decisão A da Tarefa 36), então não há `assertMembership` a fazer —
           mas também não há nada a mostrar para quem não tem sessão.
         */}
-        <Route path={SETTINGS_PATH} element={<PreferenciasPage />} />
+        <Route path={SETTINGS_PATH} element={<PreferenciasRoute />} />
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />

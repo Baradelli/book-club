@@ -320,10 +320,17 @@
   /* O bottom sheet do canvas: `border-radius: 10px 10px 0 0`
      (`Avulsa.dc.html:79`). Era `--r-3` (4px) até a Tarefa 41a. */
   --radius-sheet: var(--r-4);
+  --radius-card: var(--r-card);
   --radius-pill: var(--r-pill);
   --shadow-sheet: var(--shadow-sheet);
   /* A sombra que desce, para o que flutua SOBRE a seleção (Tarefa 14). */
   --shadow-popover: var(--shadow-popover);
+  --shadow-card: var(--shadow-card);
+  --shadow-field: var(--shadow-field);
+  --shadow-field-focus: var(--shadow-field-focus);
+  --shadow-field-error: var(--shadow-field-error);
+  --shadow-bar: var(--shadow-bar);
+  --shadow-drawer: var(--shadow-drawer);
 
   /*
     As quatro famílias (Tarefa 39, decisão H). Os papéis, do §A.6 do
@@ -400,6 +407,295 @@ body {
   background-color: var(--bg);
   color: var(--text);
   font-family: var(--family-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
+}
+
+/*
+  Sensação de app nativo: sem "puxar para atualizar" do navegador por cima do
+  app, e toque sem o atraso de zoom duplo.
+*/
+/*
+  A BARRA LATERAL (`Sidebar` no `App.tsx`): um `<dialog>` modal que desliza da
+  direita. `@starting-style` dá o ponto de partida da entrada; o
+  `allow-discrete` em `display`/`overlay` deixa a saída animar também, onde o
+  navegador suporta (onde não, ela só some). Quem pediu menos movimento cai no
+  bloco de movimento reduzido do fim deste arquivo (o `::backdrop` também).
+  A cor do fundo é o `--scrim` do tema, o mesmo da gaveta.
+*/
+.app-drawer {
+  position: fixed;
+  inset: 0 0 0 auto;
+  margin: 0;
+  width: min(20rem, 86vw);
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-4) 0 0 var(--r-4);
+  background-color: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-drawer);
+  transform: translateX(100%);
+  transition:
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    overlay 320ms allow-discrete,
+    display 320ms allow-discrete;
+}
+
+.app-drawer[open] {
+  transform: translateX(0);
+}
+
+@starting-style {
+  .app-drawer[open] {
+    transform: translateX(100%);
+  }
+}
+
+.app-drawer::backdrop {
+  background-color: transparent;
+  backdrop-filter: blur(0);
+  transition:
+    background-color 320ms ease-out,
+    backdrop-filter 320ms ease-out,
+    overlay 320ms allow-discrete,
+    display 320ms allow-discrete;
+}
+
+.app-drawer[open]::backdrop {
+  background-color: var(--scrim);
+  backdrop-filter: blur(3px);
+}
+
+@starting-style {
+  .app-drawer[open]::backdrop {
+    background-color: transparent;
+    backdrop-filter: blur(0);
+  }
+}
+
+/*
+  ============================================================================
+  MOVIMENTO — a cara de app nativo
+  ============================================================================
+
+  Três curvas, as mesmas em todo o app: entra desacelerando (`--ease-out`),
+  sai acelerando (`--ease-in`), e a saída dura ~3/4 da entrada. Nada de mola.
+  Tudo aqui cai no bloco de `prefers-reduced-motion` do fim do arquivo, e a
+  troca de tela nem chama a View Transition quando o movimento está reduzido.
+*/
+:root {
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes sink-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.99);
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes sheet-down {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+}
+
+@keyframes pop-out {
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+@keyframes icon-swap {
+  from {
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.6);
+  }
+}
+
+/*
+  A TROCA DE TELA (`useViewTransitionLocation` no `App.tsx`). Só o `<main>`
+  (`page`) anima: a tela velha some subindo um fio, a nova entra subindo de
+  baixo. O cabeçalho (`app-header`) troca sem animar — ele é o chão fixo do
+  app, e piscar o chão é o que faz uma troca parecer recarga de página.
+*/
+::view-transition-old(root),
+::view-transition-new(root),
+::view-transition-group(page) {
+  animation: none;
+}
+
+::view-transition-old(page) {
+  animation: sink-out 160ms var(--ease-in) both;
+}
+
+::view-transition-new(page) {
+  animation: rise-in 320ms var(--ease-out) both;
+}
+
+::view-transition-old(app-header) {
+  display: none;
+}
+
+::view-transition-new(app-header) {
+  animation: none;
+}
+
+/*
+  AS LISTAS entram em cascata curta: 40ms entre linhas, teto de 8 linhas
+  (320ms) — lista maior não faz ninguém esperar pelo fim dela. Roda só quando
+  a lista MONTA; re-render não repete.
+*/
+.list-enter > li {
+  animation: rise-in 360ms var(--ease-out) both;
+}
+.list-enter > li:nth-child(2) {
+  animation-delay: 40ms;
+}
+.list-enter > li:nth-child(3) {
+  animation-delay: 80ms;
+}
+.list-enter > li:nth-child(4) {
+  animation-delay: 120ms;
+}
+.list-enter > li:nth-child(5) {
+  animation-delay: 160ms;
+}
+.list-enter > li:nth-child(6) {
+  animation-delay: 200ms;
+}
+.list-enter > li:nth-child(7) {
+  animation-delay: 240ms;
+}
+.list-enter > li:nth-child(n + 8) {
+  animation-delay: 280ms;
+}
+
+/*
+  A GAVETA (`Sheet` do `@clube/ui`): no celular sobe de baixo, no desktop
+  (`sm:`, onde ela vira janela centralizada) aparece crescendo um pouco. O
+  fundo acende e apaga junto. A saída é o `data-state="closed"` que o `Sheet`
+  segura por 200ms.
+*/
+.sheet-root [data-sheet-backdrop] {
+  animation: fade-in 260ms var(--ease-out) both;
+}
+.sheet-root .sheet-panel {
+  animation: sheet-up 340ms var(--ease-out) both;
+}
+.sheet-root[data-state='closed'] [data-sheet-backdrop] {
+  animation: fade-out 200ms var(--ease-in) both;
+}
+.sheet-root[data-state='closed'] .sheet-panel {
+  animation: sheet-down 200ms var(--ease-in) both;
+}
+
+@media (min-width: 40rem) {
+  .sheet-root .sheet-panel {
+    animation: pop-in 280ms var(--ease-out) both;
+  }
+  .sheet-root[data-state='closed'] .sheet-panel {
+    animation: pop-out 200ms var(--ease-in) both;
+  }
+}
+
+/* O ícone do tema gira ao trocar de sol para lua. */
+.icon-swap {
+  animation: icon-swap 360ms var(--ease-out) both;
+}
+
+/*
+  O CAMPO NA COR DA CANETA — só o do trecho grifado (`highlight-fields.tsx`).
+  Mesmo desenho do `--shadow-field` do tema (filete de 1px + sombra), mas com
+  o tom em `--field-tone`, que a tela troca pela cor da caneta escolhida.
+
+  ⚠️ Os dois tokens são REDECLARADOS aqui, no próprio elemento, e não só o
+  `--field-tone`: um custom property resolve os `var()` de dentro dele onde é
+  DECLARADO. O `--shadow-field` do `:root` já chega aqui resolvido com o
+  `--accent`, e trocar o tom embaixo não o alcançaria.
+*/
+.field-tone {
+  --shadow-field:
+    0 0 0 1px
+      color-mix(in srgb, var(--field-tone, var(--accent)) 40%, transparent),
+    0 1px 2px
+      color-mix(in srgb, var(--field-tone, var(--accent)) 18%, transparent),
+    0 6px 16px -6px
+      color-mix(in srgb, var(--field-tone, var(--accent)) 38%, transparent);
+  --shadow-field-focus:
+    0 0 0 1px
+      color-mix(in srgb, var(--field-tone, var(--accent)) 75%, transparent),
+    0 6px 18px -6px
+      color-mix(in srgb, var(--field-tone, var(--accent)) 45%, transparent),
+    0 0 0 4px
+      color-mix(in srgb, var(--field-tone, var(--accent)) 22%, transparent);
+}
+
+/* Menu aberto, a página de trás não rola. */
+html:has(.app-drawer[open]) {
+  overflow: hidden;
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--accent);
+}
+
+html {
+  overscroll-behavior-y: none;
+  touch-action: manipulation;
+}
+
+/*
+  Resposta ao toque: o que é tocável afunda um pouco ao pressionar. Só
+  `transform`, e só com o ponteiro grosso (dedo) — no desktop o hover já basta.
+*/
+@media (pointer: coarse) {
+  a:active,
+  button:active:not(:disabled),
+  [role='button']:active {
+    transform: scale(0.97);
+    transition: transform 120ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
 }
 
 /*
@@ -407,17 +703,17 @@ body {
   QUEM PEDIU MENOS MOVIMENTO RECEBE MENOS MOVIMENTO (Tarefa 48, decisão E)
   ============================================================================
 
-  É uma decisão fechada do MVP 3.5, e ela estava sem cumprimento nenhum até
-  aqui: "prefers-reduced-motion desligando transição, e hover/pressionado
-  mudando COR — sem transform, sem escala".
+  Nasceu de uma decisão fechada do MVP 3.5: "prefers-reduced-motion
+  desligando transição, e hover/pressionado mudando COR — sem transform, sem
+  escala". A segunda metade foi REVOGADA pelo dono na repaginação visual de
+  2026-09-24 (troca de tela, gaveta, menu lateral, lista em cascata, ícone do
+  tema e o toque que afunda); a primeira, não — e é este bloco.
 
-  ⚠️ MEDIDO ANTES DE ESCREVER, porque a spec manda não inventar media query sem
-  consumidor: o app anima DUAS coisas, e as duas passam por aqui.
-
-  1. o giro do `Loader2` do `Button` enquanto o envio está em voo — o único
-     `animate-*` do projeto;
-  2. doze `transition-colors`, em NOVE arquivos — cor, e só cor. Não há
-     `transition-all` nem `transition-transform` em lugar nenhum.
+  O que ele desliga hoje: o giro do `Loader2` do `Button`, as `transition-*`
+  das telas, as transições do menu lateral e do `::backdrop` dele, e todas as
+  `@keyframes` do bloco MOVIMENTO acima. A troca de tela nem chega aqui: o
+  `App.tsx` não chama a View Transition quando o movimento está reduzido. A
+  lista fechada do que anima está em `src/__tests__/reduced-motion.test.ts`.
 
   ⚠️ `animation-iteration-count: 1` NÃO É REDUNDANTE com a duração. O
   `animate-spin` é `infinite`; com duração quase zero e repetição infinita ele
@@ -443,7 +739,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
-  *::after {
+  *::after,
+  *::backdrop {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

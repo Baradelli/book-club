@@ -118,29 +118,23 @@ describe('Field', () => {
     (button 10 · list 9 · filter-bar 7 · filter-chip 3 · sheet 11 ·
     person-avatar 17 · styles 3 · avatar-contrast 2).
   */
-  it('writes the label in the mono uppercase of the canvas (decision F)', () => {
+  it('writes the label in the semibold sans of the redesign (supersedes decision F)', () => {
     /*
-      Medido em `Main.dc.html:48` e `Convite.dc.html:45`, valor a valor:
-      `font-family:'Geist Mono'` · `font-size:9.5px` · `letter-spacing:0.12em` ·
-      `text-transform:uppercase` · `color:var(--text-muted)`.
-
-      O rótulo do caderno encadernado é rótulo de seção em monoespaçada
-      maiúscula, não um `text-sm font-medium` de formulário de aplicativo.
-      `text-micro` é o degrau de 9,5px da escala (`--size-micro`), e
-      `text-muted` é o cinza que passa 4,5:1 nas três superfícies (medido na
-      Tarefa 39).
+      ⚠️ **O REDESENHO VISUAL (2026-09-24) DESFEZ A DECISÃO F DA TAREFA 41a.**
+      A monoespaçada maiúscula de 9,5px em `--text-muted` (medida em
+      `Main.dc.html:48` e `Convite.dc.html:45`) virou o rótulo de formulário
+      de app de celular: `text-label` (13px), `font-semibold`, na tinta
+      plena `text-content` — que passa contraste com folga, então a guarda
+      de contraste não perde nada com a troca.
     */
     renderField();
 
-    const label = screen.getByText('E-mail');
-    for (const utility of [
-      'font-mono',
-      'text-micro',
-      'uppercase',
-      'text-muted',
-    ]) {
-      expect(label.className.split(/\s+/u)).toContain(utility);
+    const classes = screen.getByText('E-mail').className.split(/\s+/u);
+    for (const utility of ['text-label', 'font-semibold', 'text-content']) {
+      expect(classes).toContain(utility);
     }
+    expect(classes).not.toContain('font-mono');
+    expect(classes).not.toContain('uppercase');
   });
 
   it('puts the hint BELOW the control, the way the canvas draws it (decision F)', () => {

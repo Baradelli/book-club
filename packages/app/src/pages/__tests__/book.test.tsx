@@ -11,8 +11,14 @@ import type {
 import { localDay, localTimeZone } from '@clube/shared';
 import { TOKEN_STORAGE_KEY } from '@clube/shared/client';
 import { pt } from '@clube/shared/locales';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { App } from '../../App';
 import type { ClubSummary } from '../../club/active-club';
@@ -184,6 +190,15 @@ const MARCOS = 'u-marcos';
  */
 const JOANA = 'u-joana';
 const ZECA = 'u-a-zeca';
+
+/** A chave do aparelho que lembra que a legenda das marcas já foi aberta. */
+const MARKS_LEGEND_SEEN_KEY = 'clube.book.marksLegendSeen';
+
+/** A parte das páginas na meta do cabeçalho, para os 320 do `aBook()`. */
+const PAGES_320 = pt.pages.book.meta.pages_other.replace(
+  '{{formatted}}',
+  '320',
+);
 
 function plan(): PlanItemResponse[] {
   return [
@@ -515,27 +530,50 @@ function classesOf(row: HTMLElement): string {
 }
 
 /**
- * O CONDUTOR pontilhado da linha do sumário (`data-sumario-leader`, nascido na
- * Tarefa 41a). Ele é o único gancho estrutural que o `ListItem` expõe para a
- * meta da direita: o slot `end` é o IRMÃO SEGUINTE dele.
+ * ⚠️ **A LINHA DO PLANO DEIXOU DE SER UM SUMÁRIO** no redesenho visual de
+ * 2026-09-24: saíram o condutor pontilhado (`data-sumario-leader`), o slot
+ * `end` em mono e a coluna de marcas. A linha agora é um link com três partes
+ * — o BLOQUINHO de data (`aria-hidden`: dia da semana curto + número), a
+ * coluna de texto (a data falada num `sr-only` fora de hoje, o título e a
+ * linha de detalhe) e as marcas de quem leu/escreveu.
+ *
+ * O bloquinho: o PRIMEIRO filho do link, e mudo.
  */
-function leaderOf(row: HTMLElement): HTMLElement {
-  const leader = row.querySelector<HTMLElement>('[data-sumario-leader]');
-  if (leader === null) throw new Error('a linha do plano não é um sumário');
-  return leader;
+function tileOf(row: HTMLElement): HTMLElement {
+  const tile = linkIn(row).firstElementChild;
+  if (!(tile instanceof HTMLElement)) {
+    throw new Error('a linha do plano não tem bloquinho de data');
+  }
+  return tile;
+}
+
+/** As classes de um nó, token a token — `toContain` exato, sem substring. */
+function tokensOf(element: Element): string[] {
+  return (element.getAttribute('class') ?? '')
+    .split(/\s+/u)
+    .filter((token) => token !== '');
+}
+
+/** O título do dia — o `line-clamp-2` da coluna de texto. */
+function titleOf(row: HTMLElement): HTMLElement {
+  const title = linkIn(row).querySelector<HTMLElement>('.line-clamp-2');
+  if (title === null) throw new Error('a linha do plano não tem título');
+  return title;
 }
 
 /**
- * O slot `end` — a meta em monoespaçada à direita (`Livro.dc.html:78`).
- *
- * ⚠️ Achado por POSIÇÃO relativa ao condutor, e não por classe: a classe é
- * decisão de `packages/ui` e muda lá; o que esta suíte precisa saber é que a
- * data e a referência estão **depois** do condutor, que é o que a decisão A da
- * Tarefa 44 move. Uma linha sem `end` devolve string vazia, e é isso que o
- * caso `reference: null` exercita.
+ * A LINHA DE DETALHE, logo abaixo do título: a referência do dia, ou
+ * "Hoje · <referência>" no dia de hoje. Uma linha sem detalhe (dia comum sem
+ * `reference`) devolve string vazia, e é isso que o caso `reference: null`
+ * exercita.
  */
-function endOf(row: HTMLElement): string {
-  return leaderOf(row).nextElementSibling?.textContent ?? '';
+function detailOf(row: HTMLElement): string {
+  return titleOf(row).nextElementSibling?.textContent ?? '';
+}
+
+/** A data para quem OUVE (`sr-only`) — `null` quando a linha não a tem. */
+function spokenDateOf(row: HTMLElement): string | null {
+  return linkIn(row).querySelector('.sr-only')?.textContent ?? null;
 }
 
 async function press(element: HTMLElement): Promise<void> {
@@ -769,9 +807,13 @@ describe('⚠️ ONLY TODAY IS HIGHLIGHTED, AND NOTHING ELSE IS (rules 3, 4)', (
       e um filete DOURADO em cima e embaixo (`Livro.dc.html:139`). O par
       negativo continua inteiro — nenhuma outra linha os tem —, e o anel morto
       ganhou asserção própria para não voltar por engano.
+
+      (O redesenho visual de 2026-09-24 tirou o slot `end` e o filete
+      dourado: a palavra está no começo da LINHA DE DETALHE, e o papel de
+      hoje continua sendo a marca visual.)
     */
     const saidToday = planRows().filter((row) =>
-      endOf(row).startsWith(pt.pages.book.plan.today),
+      detailOf(row).startsWith(pt.pages.book.plan.today),
     );
     expect(saidToday).toHaveLength(1);
     expect(saidToday[0]?.textContent).toContain('O carneiro assado');
@@ -882,19 +924,16 @@ describe('⚠️ ONLY TODAY IS HIGHLIGHTED, AND NOTHING ELSE IS (rules 3, 4)', (
   });
 });
 
-describe('⚠️ THE PLAN IS A SUMÁRIO, NOT A LIST OF ROWS (task 44, decisions A, D)', () => {
-  it('⚠️ puts the day and the reference in the END slot, in mono — the subtitle is gone (decision A)', async () => {
-    /*
-      ⚠️ **A NOTA DO `ListItemLook` PREVIU ESTA MIGRAÇÃO POR ESCRITO** (Tarefa
-      41a, `packages/ui/src/components/list.tsx`): o braço `sumario` declara
-      `subtitle?: never`, então o `subtitle={subtitleFor(item, locale)}` que
-      esta tela passava desde a Tarefa 17 **não compila** com `variant="sumario"`.
-
-      A informação não se perde: ela MUDA de lugar. No canvas a data e a
-      referência estão à direita, em monoespaçada, depois do condutor pontilhado
-      (`Livro.dc.html:78`: `8 SET · 9`) — e é isso que este teste fixa, para
-      que "migrar" não vire "apagar" numa fatia futura.
-    */
+/**
+ * ⚠️ **O PLANO ERA UM SUMÁRIO (Tarefa 44, decisões A e D) E VIROU UMA LISTA DE
+ * DIAS** no redesenho visual de 2026-09-24 — um cartão agrupado
+ * (`List appearance="grouped"`) com linhas de link. O que a Tarefa 44 guardava
+ * continua guardado aqui, na forma nova: nada do que o sumário dizia se
+ * perdeu (QUANDO, O QUÊ, e o trecho), e o tom de hoje/futuro/passado continua
+ * o par da decisão D.
+ */
+describe('⚠️ THE PLAN IS A LIST OF DAYS — nothing the sumário said is lost (task 44, decisions A, D)', () => {
+  it('⚠️ says WHEN in a date tile and WHAT in the detail line, and speaks the date the tile hides (decision A)', async () => {
     await renderBook();
 
     await waitFor(() => {
@@ -902,47 +941,64 @@ describe('⚠️ THE PLAN IS A SUMÁRIO, NOT A LIST OF ROWS (task 44, decisions 
     });
 
     for (const row of planRows()) {
-      // A coluna de marcas existe MESMO VAZIA: é ela que alinha os títulos
-      // entre o dia lido e o dia que ainda não chegou (`Livro.dc.html:150`).
-      expect(row.querySelector('[data-sumario-marks]')).not.toBeNull();
-      expect(leaderOf(row).getAttribute('aria-hidden')).toBe('true');
+      // O bloquinho existe em TODA linha e é mudo: o número do dia desenhado
+      // em 17px não é frase para o leitor de tela.
+      expect(tileOf(row).getAttribute('aria-hidden')).toBe('true');
+      expect(tileOf(row).textContent).toMatch(/\d/u);
     }
 
-    // A meta está no `end`, em mono, e traz a referência do dia.
+    // Hoje: a palavra, depois a referência — como `Livro.dc.html:146` desenha.
     const today = rowOf('O carneiro assado');
-    expect(endOf(today)).toContain('p. 31-58');
-    expect(leaderOf(today).nextElementSibling?.className).toContain(
-      'font-mono',
-    );
+    expect(detailOf(today)).toBe(`${pt.pages.book.plan.today} · p. 31-58`);
 
-    // E o dia PASSADO traz a data formatada, não "Hoje".
+    // O dia PASSADO traz a sua referência, não "Hoje".
     const past = rowOf('Zumbis e anões');
-    expect(endOf(past)).not.toContain(pt.pages.book.plan.today);
-    expect(endOf(past)).toMatch(/\d/u);
+    expect(detailOf(past)).toBe('p. 9-30');
 
     /*
-      O par negativo do `reference: null` (§7.4): sem referência o `end` é só a
-      data — nunca "null", nunca um " · " pendurado no fim.
+      ⚠️⚠️ **A DATA PARA QUEM OUVE — e este par nasceu de uma REGRESSÃO de
+      acessibilidade do redesenho.** Até a Tarefa 48 a data estava em texto de
+      verdade no slot `end`; o redesenho a pôs só no bloquinho, que é
+      `aria-hidden`, e o leitor de tela passou a anunciar trinta links sem
+      data nenhuma. A tela ganhou um `sr-only` com a data por extenso.
+
+      A asserção é uma RELAÇÃO, não uma string copiada: o número que o
+      bloquinho desenha tem de estar na frase falada, e a frase tem de estar
+      DENTRO do link (é o nome acessível dele que o leitor de tela lê).
     */
-    const withoutReference = endOf(rowOf('A porta redonda'));
-    expect(withoutReference).not.toContain('null');
-    expect(withoutReference).not.toContain('·');
+    for (const row of [past, rowOf('A porta redonda')]) {
+      const spoken = spokenDateOf(row);
+      expect(spoken).not.toBeNull();
+      const dayNumber = tileOf(row).lastElementChild?.textContent ?? '';
+      expect(dayNumber).toMatch(/^\d+$/u);
+      expect(spoken).toContain(dayNumber);
+      expect(linkIn(row).textContent).toContain(spoken ?? '');
+    }
+    // Hoje não repete a data: a linha de detalhe já diz "Hoje".
+    expect(spokenDateOf(today)).toBeNull();
+
+    /*
+      O par negativo do `reference: null` (§7.4): sem referência não há linha
+      de detalhe — nunca "null", nunca um " · " pendurado.
+    */
+    const withoutReference = detailOf(rowOf('A porta redonda'));
+    expect(withoutReference).toBe('');
+    expect(rowOf('A porta redonda').textContent).not.toContain('null');
 
     expectNoGuiltWithPlanPosition();
   });
 
-  it('⚠️ gives TODAY its own paper and a GOLD fillet, and the future gets text-subtle (decision D)', async () => {
+  it('⚠️ gives TODAY its own paper, mutes the FUTURE with text-subtle, and leaves the PAST alone (decision D)', async () => {
     /*
       ⚠️ **`--text-subtle` NO DIA FUTURO, E NÃO `--text-faint`** — decisão do
       dono de 2026-09-21, registrada na nota nº 5 de `tasks/41a-*.md`. O canvas
       pinta o futuro com `--text-faint` (`Livro.dc.html:149`), que dá 2,45:1 no
-      claro contra 4,5:1 de piso; os três cinzas de legenda não cabem todos
-      acima do piso, e o dono escolheu preservar a INTENÇÃO (o futuro mais
-      apagado que a linha lida) com o cinza que passa.
+      claro contra 4,5:1 de piso; o dono escolheu preservar a INTENÇÃO (o futuro
+      mais apagado que a linha lida) com o cinza que passa.
 
-      A asserção negativa é a que vale: `text-faint` aqui acenderia também a
-      guarda de primeiro uso da Tarefa 39
-      (`theme-tokens.test.ts › refuses the FIRST USE of text-faint`).
+      A asserção negativa é a que vale, e ela agora cobre a LISTA inteira: o
+      redesenho de 2026-09-24 chegou com `text-faint` nas setas das linhas, e
+      a guarda de contraste do app o recusou (corrigido para `text-subtle`).
     */
     await renderBook();
 
@@ -950,32 +1006,34 @@ describe('⚠️ THE PLAN IS A SUMÁRIO, NOT A LIST OF ROWS (task 44, decisions 
       expect(planRows()).toHaveLength(3);
     });
 
-    const today = classesOf(rowOf('O carneiro assado'));
-    expect(today).toContain('bg-surface-today');
-    expect(today).toContain('border-gold-line');
-    expect(today).toContain('border-y-2');
-    expect(leaderOf(rowOf('O carneiro assado')).className).toContain(
-      'border-gold-line',
-    );
+    const today = rowOf('O carneiro assado');
+    expect(classesOf(today)).toContain('bg-surface-today');
+    expect(tokensOf(tileOf(today))).toContain('bg-accent');
 
     const future = rowOf('A porta redonda');
-    expect(classesOf(future)).toContain('text-subtle');
-    expect(classesOf(future)).not.toContain('text-faint');
-    expect(leaderOf(future).className).toContain('border-leader-future');
+    expect(tokensOf(titleOf(future))).toContain('text-subtle');
+    expect(tokensOf(tileOf(future))).toContain('border-dashed');
+    expect(classesOf(future)).not.toContain('bg-surface-today');
 
     /*
       ⚠️ **O PASSADO NÃO É APAGADO NEM DESTACADO** — é o §1 do plano na forma de
       par negativo. Apagar o que já passou é cobrança desenhada; destacá-lo
       seria "você não leu isto". Ele fica exatamente como uma linha comum.
     */
-    const past = classesOf(rowOf('Zumbis e anões'));
-    expect(past).not.toContain('text-subtle');
-    expect(past).not.toContain('text-faint');
-    expect(past).not.toContain('bg-surface-today');
-    expect(past).not.toContain('border-gold-line');
-    expect(leaderOf(rowOf('Zumbis e anões')).className).toContain(
-      'border-leader',
-    );
+    const past = rowOf('Zumbis e anões');
+    expect(tokensOf(titleOf(past))).toContain('text-content');
+    expect(tokensOf(titleOf(past))).not.toContain('text-subtle');
+    expect(classesOf(past)).not.toContain('bg-surface-today');
+    expect(tokensOf(tileOf(past))).not.toContain('bg-accent');
+    expect(tokensOf(tileOf(past))).not.toContain('border-dashed');
+
+    // A seta de cada linha, no cinza que passa — e nenhum `text-faint` na lista.
+    for (const row of planRows()) {
+      const chevron = linkIn(row).lastElementChild;
+      expect(chevron?.getAttribute('class')).toContain('lucide-chevron-right');
+      expect(chevron?.getAttribute('class')).toContain('text-subtle');
+      expect(row.innerHTML).not.toContain('text-faint');
+    }
 
     expectNoGuiltWithPlanPosition();
   });
@@ -1812,18 +1870,22 @@ describe('⚠️ THE POSITION IN THE PLAN, AND THE COUNTER EXEMPTION IT EXERCISE
       de 2024" em qualquer fuso negativo — e é o único jeito de esse bug de um
       dia ficar vermelho.
     */
+    /*
+      E o número de páginas entre os dois (redesenho visual de 2026-09-24,
+      `pages.book.meta.pages`): o `aBook()` tem 320.
+    */
     const meta = screen.getByText(
-      `março de 2024 · ${pt.pages.book.plan.dayOfPlan
+      `março de 2024 · ${PAGES_320} · ${pt.pages.book.plan.dayOfPlan
         .replace('{{number}}', '2')
         .replace('{{total}}', '3')}`,
     );
 
-    // A tipografia do `Eyebrow`, valor a valor — é isto que o mutante M15
-    // apagava sem um vermelho.
-    expect(meta.className).toContain('font-mono');
-    expect(meta.className).toContain('text-eyebrow');
-    expect(meta.className).toContain('uppercase');
-    expect(meta.className).toContain('tracking-[0.12em]');
+    // A tipografia do `Eyebrow` — é isto que o mutante M15 apagava sem um
+    // vermelho. (Desde o redesenho de 2026-09-24 o `Eyebrow` é `text-label`
+    // semibold, e não mais a mono maiúscula; o pino exato é o do componente.)
+    expect(meta.className).toContain('text-label');
+    expect(meta.className).toContain('font-semibold');
+    expect(meta.className).not.toContain('font-mono');
     expect(meta.className).toContain('text-muted');
     // E o tom da HOME não vaza para cá (`Inicio.dc.html:41` é `--gold`).
     expect(meta.className).not.toContain('text-gold');
@@ -1835,7 +1897,28 @@ describe('⚠️ THE POSITION IN THE PLAN, AND THE COUNTER EXEMPTION IT EXERCISE
     */
     const source = stripComments(bookSource());
     expect(source).not.toContain('font-mono text-eyebrow');
+    expect(source).not.toContain('text-label font-semibold tracking-');
 
+    expectNoGuiltWithPlanPosition();
+  });
+
+  it('⚠️ leaves the PAGES out of the meta line when the book has no total — no "·" hanging', async () => {
+    await renderBook({
+      book: [bookReply(aBook({ id: BOOK_ID, totalPages: null }), plan())],
+    });
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    expect(
+      screen.queryByText(
+        `março de 2024 · ${pt.pages.book.plan.dayOfPlan
+          .replace('{{number}}', '2')
+          .replace('{{total}}', '3')}`,
+      ),
+    ).not.toBeNull();
+    expect(readableText()).not.toContain('página');
     expectNoGuiltWithPlanPosition();
   });
 
@@ -1871,8 +1954,8 @@ describe('⚠️ THE POSITION IN THE PLAN, AND THE COUNTER EXEMPTION IT EXERCISE
       separador órfão ("março de 2024 · ") é o tipo de sujeira que nenhuma
       varredura pega e que o olho do dono acha no primeiro scroll.
     */
-    expect(screen.queryByText('março de 2024')).not.toBeNull();
-    expect(readableText()).not.toContain('março de 2024 ·');
+    expect(screen.queryByText(`março de 2024 · ${PAGES_320}`)).not.toBeNull();
+    expect(readableText()).not.toContain(`${PAGES_320} ·`);
 
     /*
       ⚠️ E É AQUI QUE A VARIANTE DE SEMPRE MORDE O DEFEITO INVERSO: se a
@@ -2041,40 +2124,55 @@ describe('⚠️ THE BOOK GETS A SPINE, A SEAL AND A MARGIN (task 44, decisions 
     expectNoGuiltWithPlanPosition();
   });
 
-  it('⚠️ puts the MARKS legend in the margin, and the two samples differ by FILL (decision E)', async () => {
+  it('⚠️ keeps the MARKS legend behind the info button, in a sheet, and the two samples differ by FILL (decision E)', async () => {
     /*
-      `LivroDesktop.dc.html:180-192`: a margem de 320px com o bloco "As marcas"
-      — uma amostra vazada com "Leu neste dia" e uma cheia com "Leu e
-      escreveu". São as três chaves que a Tarefa 40 criou e que ninguém
-      consumia (`pages.book.marks.{heading,read,wrote}`).
+      A legenda "As marcas" — uma amostra vazada com "Leu neste dia" e uma
+      cheia com "Leu e escreveu" (`pages.book.marks.{heading,read,wrote}`).
+      Até a Tarefa 48 ela morava na margem (`LivroDesktop.dc.html:180-192`);
+      o redesenho visual de 2026-09-24 a pôs atrás de um botão de informação
+      ao lado do título do plano, numa gaveta que se aprende uma vez.
 
-      ⚠️ **ABAIXO DE 1120px A MARGEM DESCE PARA O FLUXO** — isso é do
-      `MarginRail` e é media query, não condição de render. A legenda aparece
-      nas duas larguras, e a alternativa (esconder por media query) seria
-      invisível para o teste, que é a armadilha que a Tarefa 43 registrou na
-      nota nº 20.
+      ⚠️ **O BOTÃO NÃO SE ESCONDE EM LARGURA NENHUMA** — é o único caminho até
+      a legenda, e o jsdom não aplica CSS (a armadilha da nota nº 20 da
+      Tarefa 43): a guarda é sobre a CLASSE.
     */
+    window.localStorage.removeItem(MARKS_LEGEND_SEEN_KEY);
+    onTestFinished(() => {
+      window.localStorage.removeItem(MARKS_LEGEND_SEEN_KEY);
+    });
     await renderBook();
 
     await waitFor(() => {
       expect(planRows()).toHaveLength(3);
     });
 
-    const rail = document.querySelector('aside');
-    expect(rail).not.toBeNull();
-    expect(rail?.textContent).toContain(pt.pages.book.marks.heading);
-    expect(rail?.textContent).toContain(pt.pages.book.marks.read);
-    expect(rail?.textContent).toContain(pt.pages.book.marks.wrote);
-    // A divergência declarada da Tarefa 43 (nota 20), com guarda: a seção NÃO
-    // se esconde no celular.
-    expect(rail?.className ?? '').not.toContain('hidden');
+    // Saiu da margem — não há duas legendas.
+    expect(document.querySelector('aside')?.textContent).not.toContain(
+      pt.pages.book.marks.heading,
+    );
+
+    const toggle = screen.getByRole('button', {
+      name: pt.pages.book.marks.toggle,
+    });
+    expect(toggle.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(toggle.className).not.toMatch(/(^|\s)(\S+:)?hidden(\s|$)/u);
+    // O pontinho de "há algo a ler aqui", mudo, até a primeira abertura.
+    expect(toggle.querySelector('span[aria-hidden="true"]')).not.toBeNull();
+
+    await press(toggle);
+
+    const sheet = await screen.findByRole('dialog', {
+      name: pt.pages.book.marks.heading,
+    });
+    expect(sheet.textContent).toContain(pt.pages.book.marks.read);
+    expect(sheet.textContent).toContain(pt.pages.book.marks.wrote);
 
     /*
       ⚠️ **AS DUAS AMOSTRAS SE DISTINGUEM POR PREENCHIMENTO, não por matiz** —
       é a mesma propriedade que a linha do plano carrega, e ela é medida aqui
       também porque a legenda é justamente o que explica a forma a quem vê.
     */
-    const marks = Array.from(rail?.querySelectorAll('[role="img"]') ?? []);
+    const marks = Array.from(sheet.querySelectorAll('[role="img"]'));
     const samples = marks.map((element) => element.className);
     expect(samples).toHaveLength(2);
     const [hollow, filled] = samples;
@@ -2084,21 +2182,9 @@ describe('⚠️ THE BOOK GETS A SPINE, A SEAL AND A MARGIN (task 44, decisions 
     /*
       ⚠️⚠️ **A AMOSTRA NÃO FALA — E ESTA ASSERÇÃO NASCEU DE UM MUTANTE
       SOBREVIVENTE (M7).** Tirar o `aria-hidden="true"` do envoltório do
-      `PresenceMark` passava por **926 testes, com ZERO acusadores**, e o
-      efeito é auditivo: cada linha da legenda passa a anunciar a frase DUAS
-      vezes — uma pelo `role="img"` + `aria-label` da marca, outra pelo texto
-      escrito ao lado. É a lição nº 16 do MVP 2 ("duas coisas que falam a mesma
-      frase"), que o docblock deste `describe` **cita por escrito** e que
-      ninguém tinha transformado em guarda.
-
-      ⚠️ **AS LOMBADAS TÊM A ASSERÇÃO ANÁLOGA** (`draws the typographic SPINE`,
-      que exige `aria-hidden="true"` nas duas); a legenda não tinha. É a mesma
-      classe da nota nº 20 da Tarefa 43: decisão declarada em prosa, sem
-      guarda.
-
-      O `PresenceMark` exige `label` e é certo que exija — na linha do plano
-      ele é a ÚNICA coisa que diz quem passou por ali. Quem o silencia é o
-      CHAMADOR, e só onde a informação já está escrita ao lado.
+      `PresenceMark` fazia cada linha da legenda anunciar a frase DUAS vezes —
+      uma pelo `role="img"` + `aria-label` da marca, outra pelo texto escrito
+      ao lado (a lição nº 16 do MVP 2). Na gaveta vale igual.
     */
     for (const mark of marks) {
       expect(mark.closest('[aria-hidden="true"]')).not.toBeNull();
@@ -2109,11 +2195,43 @@ describe('⚠️ THE BOOK GETS A SPINE, A SEAL AND A MARGIN (task 44, decisions 
       falando. Sem isto, "silenciar tudo" passaria — e aí o dia com leitor
       viraria uma bolinha muda para quem ouve.
     */
-    const spoken = Array.from(document.querySelectorAll('[role="img"]')).filter(
+    const list = screen.getByRole('list', { name: pt.pages.book.plan.label });
+    const spoken = Array.from(list.querySelectorAll('[role="img"]')).filter(
       (mark) => mark.closest('[aria-hidden="true"]') === null,
     );
     expect(spoken.length).toBeGreaterThan(0);
+    expectNoGuiltWithPlanPosition();
 
+    // "Entendi" fecha — e a gaveta sai do DOM depois da animação de saída.
+    await press(
+      within(sheet).getByRole('button', {
+        name: pt.pages.book.marks.dismiss,
+      }),
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    // Aprendida uma vez: o pontinho some, e o aparelho lembra.
+    expect(toggle.querySelector('span[aria-hidden="true"]')).toBeNull();
+    expect(window.localStorage.getItem(MARKS_LEGEND_SEEN_KEY)).toBe('1');
+  });
+
+  it('⚠️ shows no dot to whoever already opened the legend on this device', async () => {
+    // O par negativo do pontinho: sem ele, um pontinho incondicional passaria.
+    window.localStorage.setItem(MARKS_LEGEND_SEEN_KEY, '1');
+    onTestFinished(() => {
+      window.localStorage.removeItem(MARKS_LEGEND_SEEN_KEY);
+    });
+    await renderBook();
+
+    await waitFor(() => {
+      expect(planRows()).toHaveLength(3);
+    });
+
+    const toggle = screen.getByRole('button', {
+      name: pt.pages.book.marks.toggle,
+    });
+    expect(toggle.querySelector('span[aria-hidden="true"]')).toBeNull();
     expectNoGuiltWithPlanPosition();
   });
 
@@ -2195,6 +2313,9 @@ describe('⚠️ THE BOOK GETS A SPINE, A SEAL AND A MARGIN (task 44, decisions 
      * O canvas desenha a coluna de 320px nesta ordem, com um filete de 1px
      * entre cada par de blocos: "As marcas" · filete (`LivroDesktop.dc.html:194`)
      * · "Neste livro" (`:196`) · filete (`:209`) · "Último grifo" (`:211`).
+     * ⚠️ O redesenho visual de 2026-09-24 tirou "As marcas" da margem (ela abre
+     * numa gaveta) e os filetes (os blocos são cartões, separados pelo `gap`):
+     * a forma hoje é "Neste livro" · "Último grifo".
      *
      * Medido na rodada de correção desta fatia, os dois lados estavam soltos:
      * **trocar "Neste livro" e "Último grifo" de lugar passava pelos 931
@@ -2235,81 +2356,65 @@ describe('⚠️ THE BOOK GETS A SPINE, A SEAL AND A MARGIN (task 44, decisions 
       return row;
     }
 
-    it('⚠️ draws the three blocks in the CANVAS ORDER, with a hairline between them', async () => {
+    it('⚠️ draws the two blocks in the CANVAS ORDER, as cards with NO hairline between them', async () => {
       await renderWithMargin();
 
       /*
-        ⚠️ **DOIS MUTANTES SOBREVIVENTES NUMA ASSERÇÃO SÓ.** Trocar as duas
-        seções de lugar dava **0 de 931**, e os dois filetes de
-        `LivroDesktop.dc.html:194` e `:209` simplesmente **não existiam** — a
-        Definição de pronto desta fatia os declarava desenhados. Uma lista de
-        rótulos na ordem do DOM prova a ordem, a presença e a contagem dos
-        separadores de uma vez.
+        ⚠️ **DOIS MUTANTES SOBREVIVENTES NUMA ASSERÇÃO SÓ** (rodada de correção
+        da 44b): trocar as seções de lugar dava **0 de 931**. Uma lista de
+        rótulos na ordem do DOM prova a ordem, a presença e — desde o
+        redesenho — a AUSÊNCIA de separador: um filete que voltasse viraria um
+        'filete' nesta lista.
       */
       expect(railShape()).toEqual([
-        pt.pages.book.marks.heading,
-        'filete',
         pt.pages.book.inBook.heading,
-        'filete',
         pt.pages.book.inBook.lastHighlight,
       ]);
 
-      /*
-        E o filete é o que o canvas desenha: 1px de altura na cor do traço
-        suave (`#e3ddc9` é `--border-soft`, medido em `theme.css`), e MUDO —
-        um `<div>` vazio que o leitor de tela anunciasse seria a lição nº 16
-        do MVP 2 pela porta dos fundos.
-      */
-      const filetes = Array.from(
-        document.querySelector('aside')?.children ?? [],
-      ).filter((child) => child.tagName !== 'SECTION');
-      expect(filetes).toHaveLength(2);
-      for (const filete of filetes) {
-        expect(filete.className).toContain('h-px');
-        expect(filete.className).toContain('bg-line-soft');
-        expect(filete.getAttribute('aria-hidden')).toBe('true');
-      }
-
       expectNoGuiltWithPlanPosition();
     });
 
     /**
-     * ⚠️ **SEM GRIFO, SEM O SEGUNDO FILETE.** Um separador com nada depois
-     * dele é um traço solto no fim da coluna — e é o erro que um filete
-     * escrito como "depois de toda seção" cometeria no livro recém-cadastrado,
-     * que é o estado mais comum de todos.
+     * ⚠️ **SEM GRIFO, SEM O BLOCO DO GRIFO.** Um rótulo "Último grifo" sobre o
+     * vazio seria o vazio anunciado que o §1 proíbe — e o livro
+     * recém-cadastrado é o estado mais comum de todos.
      */
-    it('⚠️ drops the second hairline together with the last-highlight block', async () => {
+    it('⚠️ drops the last-highlight block when there is no highlight', async () => {
       await renderWithMargin(null);
 
-      expect(railShape()).toEqual([
-        pt.pages.book.marks.heading,
-        'filete',
-        pt.pages.book.inBook.heading,
-      ]);
+      expect(railShape()).toEqual([pt.pages.book.inBook.heading]);
 
       expectNoGuiltWithPlanPosition();
     });
 
     /**
-     * ⚠️ **A LINHA DE INVENTÁRIO TEM O FILETE EMBAIXO** — `border-bottom: 1px
-     * solid #e3ddc9` em `LivroDesktop.dc.html:198-205`, que é o que separa
-     * "Anotações do clube" de "Grifos" sem precisar de cor nem de peso.
+     * ⚠️ **AS LINHAS DE INVENTÁRIO DIVIDEM UM CARTÃO, SEPARADAS POR UM FILETE
+     * ENTRE ELAS** — o que separa "Anotações do clube" de "Grifos" sem precisar
+     * de cor nem de peso (`LivroDesktop.dc.html:198-205` desenhava um
+     * `border-bottom` em cada linha; o redesenho visual de 2026-09-24 o pôs
+     * no cartão, entre as linhas: `[&>a+a]:border-t`).
      *
-     * Medido na rodada de correção desta fatia: tirar o
-     * `border-b border-line-soft` das duas linhas dava **0 de 931**. Toda
-     * asserção da margem era sobre TEXTO, e texto não vê traço.
+     * Medido na rodada de correção da 44b: tirar o filete dava **0 de 931**.
+     * Toda asserção da margem era sobre TEXTO, e texto não vê traço.
      */
-    it('⚠️ underlines each inventory row with the canvas hairline', async () => {
+    it('⚠️ separates the inventory rows inside ONE card, with the hairline BETWEEN them', async () => {
       await renderWithMargin();
 
-      for (const label of [
-        pt.pages.book.inBook.notes,
-        pt.pages.book.inBook.highlights,
-      ]) {
-        const row = inventoryRow(label);
-        expect(row.className).toContain('border-b');
-        expect(row.className).toContain('border-line-soft');
+      const notes = inventoryRow(pt.pages.book.inBook.notes);
+      const highlights = inventoryRow(pt.pages.book.inBook.highlights);
+      const card = notes.parentElement;
+      expect(highlights.parentElement).toBe(card);
+
+      const cardTokens = (card?.className ?? '').split(/\s+/u);
+      expect(cardTokens).toContain('rounded-card');
+      expect(cardTokens).toContain('[&>a+a]:border-t');
+      expect(cardTokens).toContain('[&>a+a]:border-line-soft');
+
+      // A seta de cada linha no cinza que passa, nunca `text-faint`.
+      for (const row of [notes, highlights]) {
+        const chevron = row.querySelector('svg');
+        expect(chevron?.getAttribute('class')).toContain('text-subtle');
+        expect(row.innerHTML).not.toContain('text-faint');
       }
 
       expectNoGuiltWithPlanPosition();
@@ -2527,19 +2632,21 @@ describe('⚠️ THE BOOK GETS A SPINE, A SEAL AND A MARGIN (task 44, decisions 
     expectNoGuilt();
   });
 
-  it('⚠️ labels the plan section with the Eyebrow, and hangs the marks hint beside it (decision G)', async () => {
+  it('⚠️ labels the plan section with the Eyebrow, and hangs the marks BUTTON beside it (decision G)', async () => {
     /*
-      `Livro.dc.html:66-68`: o rótulo de seção em mono maiúscula à esquerda e a
-      legenda "Cheio = escreveu" à direita, sobre um filete de 2px em
-      `--accent`. O `Eyebrow` (Tarefa 41b) é essa tipografia — mono 10px,
-      0.12em, maiúscula —, e a Tarefa 43 já o pôs em uso na tela do dia: duas
-      tipografias de rótulo na mesma tela é a "correção incompleta" que este
-      bloco já pagou duas vezes.
+      `Livro.dc.html:66-68`: o rótulo de seção à esquerda e a legenda à
+      direita. O `Eyebrow` (Tarefa 41b) é a tipografia do rótulo, e a Tarefa
+      43 já o pôs em uso na tela do dia: duas tipografias de rótulo na mesma
+      tela é a "correção incompleta" que este bloco já pagou duas vezes.
+
+      ⚠️ **O REDESENHO VISUAL DE 2026-09-24 TROCOU A DICA PELO BOTÃO.** A frase
+      "Cheio = escreveu" (`pages.book.marks.hint`) e o filete de 2px em
+      `--accent` sob a linha saíram; à direita do rótulo fica o botão de
+      informação que abre a legenda inteira numa gaveta.
 
       ⚠️ **DIVERGÊNCIA DECLARADA:** o canvas escreve "Plano de leitura" e a tela
       escreve "Dias do plano de leitura", que é o valor de
-      `pages.book.plan.label` — a chave que já nomeava a lista. Encurtá-la
-      exigiria uma chave NOVA, e a regra 9 não permite nenhuma.
+      `pages.book.plan.label` — a chave que já nomeava a lista.
     */
     await renderBook();
 
@@ -2548,52 +2655,22 @@ describe('⚠️ THE BOOK GETS A SPINE, A SEAL AND A MARGIN (task 44, decisions 
     });
 
     const label = screen.getByText(pt.pages.book.plan.label);
-    expect(label.className).toContain('font-mono');
-    expect(label.className).toContain('text-eyebrow');
-    expect(label.className).toContain('uppercase');
+    expect(label.className).toContain('text-label');
+    expect(label.className).toContain('font-semibold');
     // ⚠️ O `Eyebrow` é um `<span>` por decisão escrita (a tipografia do
     // rótulo, não a semântica dele): quem carrega a seção é o `<h2>` em volta.
     expect(label.tagName).toBe('SPAN');
     expect(label.parentElement?.tagName).toBe('H2');
 
-    // A legenda das marcas, que é a quarta chave órfã da Tarefa 40.
-    const hint = screen.getByText(pt.pages.book.marks.hint);
-    expect(hint).not.toBeNull();
+    // A dica de uma linha saiu — a legenda inteira está atrás do botão.
+    expect(screen.queryByText(pt.pages.book.marks.hint)).toBeNull();
 
-    /*
-      ⚠️⚠️ **ELA APARECE NAS DUAS LARGURAS — E ESTA ASSERÇÃO NASCEU DE UM
-      MUTANTE SOBREVIVENTE (M12).** Pôr `hidden` nesta legenda — escondê-la em
-      TODA largura — passava por **926 testes**. O jsdom não aplica CSS, então
-      um `hidden` (ou um `min-[1120px]:hidden`) some da tela e não some do DOM:
-      é exatamente a armadilha que a nota nº 20 da Tarefa 43 nomeou e que a
-      nota 8.7 da execução desta fatia **escreveu por extenso** — "esconder por
-      media query seria invisível para o teste" — sem escrever a guarda.
-
-      O `<aside>` da margem tem a guarda análoga três `it()` acima
-      (`not.toContain('hidden')`); esta linha faltava. A divergência declarada
-      é que o canvas desenha a frase só no celular (`Livro.dc.html:68`) e a
-      tela a mostra nas duas — declarada É, mas agora com acusador.
-    */
-    expect(hint.className).not.toContain('hidden');
-    expect(hint.parentElement?.className ?? '').not.toContain('hidden');
-
-    /*
-      ⚠️ **O FILETE DE 2px EM `--accent` QUE ABRE A SEÇÃO — E ESTA ASSERÇÃO
-      NASCEU DE UM MUTANTE SOBREVIVENTE.** Apagar o `border-b-2 border-accent`
-      da linha do rótulo passava por **926 testes**, e o que some da tela é o
-      traço que separa o cabeçalho do livro do sumário — `Livro.dc.html:66` e
-      `LivroDesktop.dc.html:65`, os dois com `border-bottom:2px solid
-      var(--accent)`.
-
-      Um filete a menos não muda texto, nem papel, nem foco: é exatamente o
-      tipo de coisa que a Tarefa 42 descobriu que passa despercebida (o
-      `rule="none"` das três telas sem filete de abertura).
-    */
+    // E o rótulo e o botão dividem A MESMA linha — não duas.
     const header = label.parentElement?.parentElement;
-    expect(header?.className).toContain('border-b-2');
-    expect(header?.className).toContain('border-accent');
-    // E o rótulo e a legenda dividem ESSA linha — não duas.
-    expect(header?.contains(hint)).toBe(true);
+    const toggle = screen.getByRole('button', {
+      name: pt.pages.book.marks.toggle,
+    });
+    expect(header?.contains(toggle)).toBe(true);
     expectNoGuiltWithPlanPosition();
   });
 });

@@ -110,18 +110,12 @@ export function Field({
       {/* REGRA 10: `htmlFor` = `id` do controle, então clicar no rótulo foca o
           campo — o alvo de toque do rótulo passa a valer também.
 
-          ⚠️ A PINTURA É DO CANVAS (Tarefa 41a, decisão F), medida em
-          `Main.dc.html:48` e `Convite.dc.html:45`: `font-family:'Geist Mono'` ·
-          `font-size:9.5px` · `letter-spacing:0.12em` ·
-          `text-transform:uppercase` · `color:var(--text-muted)`.
-
-          O `text-sm font-medium text-content` que estava aqui era rótulo de
-          formulário de aplicativo; o caderno encadernado põe rótulo de seção em
-          monoespaçada maiúscula. `text-micro` é o degrau de 9,5px da escala, e
-          `text-muted` é o cinza que passa 4,5:1 nas três superfícies nos dois
-          temas (medido na Tarefa 39). */}
+          ⚠️ REDESENHO VISUAL (2026-09-24): a monoespaçada maiúscula de 9,5px
+          da decisão F da Tarefa 41a (`Main.dc.html:48`, `Convite.dc.html:45`)
+          virou rótulo de formulário de app — `text-label` (13px), semibold,
+          na tinta plena `text-content`. O pino é `__tests__/field.test.tsx`. */}
       <label
-        className="font-mono text-micro uppercase tracking-[0.12em] text-muted"
+        className="text-label font-semibold text-content"
         htmlFor={controlId}
       >
         {label}

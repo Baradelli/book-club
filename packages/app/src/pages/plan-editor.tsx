@@ -204,7 +204,7 @@ function Generator({
   return (
     <div
       aria-label={t('pages.bookForm.plan.generator.label')}
-      className="flex flex-col gap-3 rounded-control border border-line bg-surface p-4 sm:flex-row sm:items-end"
+      className="flex flex-col gap-3 rounded-card border border-line-soft bg-surface shadow-card p-4 sm:flex-row sm:items-end"
       role="group"
     >
       <label className="flex flex-col gap-1.5 text-sm font-medium text-content">
@@ -299,7 +299,7 @@ function Row({
 
   return (
     <li className="flex flex-col gap-1">
-      <div className="flex flex-col gap-2 rounded-control border border-line bg-surface p-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-2 rounded-card border border-line-soft bg-surface shadow-card p-3 sm:flex-row sm:items-center">
         {field({
           name: 'date',
           label: t('pages.bookForm.plan.dateLabel', { number }),

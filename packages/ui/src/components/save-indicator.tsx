@@ -56,12 +56,7 @@ export interface SaveIndicatorProps {
  */
 export function SaveIndicator({ children, className }: SaveIndicatorProps) {
   return (
-    <span
-      className={cx(
-        'font-mono text-micro uppercase tracking-[0.1em] text-subtle',
-        className,
-      )}
-    >
+    <span className={cx('text-label font-medium text-subtle', className)}>
       {children}
     </span>
   );

@@ -98,18 +98,18 @@
 
   /* --- Superfície ------------------------------------------------------- */
   /* O papel. Espelhado no `background_color` e no `theme_color` do manifest. */
-  --bg: light-dark(#f5f1e8, #17181a);
+  --bg: light-dark(#f2f1ec, #0f1011);
   /* A folha: item de lista, campo, bloco de leitura. */
-  --surface: light-dark(#f9f5ec, #1e1f22);
+  --surface: light-dark(#ffffff, #1a1b1d);
   /* O que flutua ACIMA do resto: o sheet, o popover, o cabeçalho de tabela. */
-  --surface-2: light-dark(#f0ece0, #26282b);
+  --surface-2: light-dark(#ebe9e2, #242628);
   /* O dia de HOJE no sumário do plano — a única linha com fundo próprio. */
   --surface-today: light-dark(#faf3e4, #2a2419);
 
   /* --- Filete ----------------------------------------------------------- */
   /* Nada de cartão com sombra: o caderno separa com filete de um pixel. */
-  --border: light-dark(#d8d1bf, #303236);
-  --border-soft: light-dark(#e3ddc9, #26282b);
+  --border: light-dark(#dcd9ce, #2c2e31);
+  --border-soft: light-dark(#ebe8e0, #232527);
   /* Filete que precisa ser visto: campo com foco, divisor de seção. */
   --border-strong: light-dark(#a89e80, #44464a);
   /*
@@ -168,8 +168,15 @@
 
     | lado   | valor     | vs `--bg` | vs `--surface` | vs `--surface-2` |
     |--------|-----------|-----------|----------------|------------------|
-    | claro  | `#686c63` | 4,76:1    | 4,93:1         | 4,54:1           |
-    | escuro | `#95938e` | 5,79:1    | 5,37:1         | 4,82:1           |
+    | claro  | `#646860` | 5,03:1    | 5,69:1         | 4,68:1           |
+    | escuro | `#95938e` | 6,21:1    | 5,62:1         | 4,95:1           |
+
+    ⚠️ REMEDIDO NA REPAGINAÇÃO VISUAL (decisão do dono, 2026-09-24). As três
+    superfícies mudaram (`--bg` #f2f1ec, `--surface` #ffffff, `--surface-2`
+    #ebe9e2 no claro) e o `#686c63` de antes caiu para 4,42:1 contra o novo
+    `--surface-2` — a guarda pegou. O lado claro escureceu para `#646860`; o
+    escuro não precisou mudar, e os números dele acima são os novos, medidos
+    contra as novas superfícies.
 
     ⚠️ CORRIGIDO EM 2026-09-20, por decisão do dono. Os valores do canvas eram
     `#74786e` (claro: 4,00 / 4,15 / 3,82) e `#86847f` (escuro: 4,76 / 4,41 /
@@ -184,7 +191,7 @@
     escuro: escurecer o lado escuro (a leitura apressada de "escurecer o cinza")
     teria PIORADO os três números.
   */
-  --text-subtle: light-dark(#686c63, #95938e);
+  --text-subtle: light-dark(#646860, #95938e);
   /*
     O que quase não se lê: o dia futuro apagado, o "Salvo" do autosave.
 
@@ -425,10 +432,11 @@
     `Acervo.dc.html:51,52`) — e o 3px do `--r-2` foi para o `--radius-callout`,
     que é o raio da caixa de erro do canvas (`Main.dc.html:41`).
   */
-  --r-1: 2px;
-  --r-2: 3px;
-  --r-3: 4px;
-  --r-4: 10px;
+  --r-1: 4px;
+  --r-2: 10px;
+  --r-3: 14px;
+  --r-4: 28px;
+  --r-card: 20px;
   --r-pill: 999px;
 
   /* --- Sombra ----------------------------------------------------------- */
@@ -450,6 +458,77 @@
     light-dark(rgba(20, 30, 20, 0.55), rgba(20, 30, 20, 0.55));
   --shadow-popover: 0 10px 26px -14px
     light-dark(rgba(20, 30, 20, 0.45), rgba(20, 30, 20, 0.45));
+  --shadow-card:
+    0 1px 2px light-dark(rgba(20, 30, 20, 0.05), rgba(0, 0, 0, 0.4)),
+    0 8px 24px -12px light-dark(rgba(20, 30, 20, 0.14), rgba(0, 0, 0, 0.5));
+  /*
+    O CAMPO: um filete fino e uma sombra, OS DOIS NA COR DO APP. Feitos do
+    `--accent`, acompanham o tema sozinhos — verde no claro, dourado no escuro.
+
+    O filete é o primeiro item da sombra (`0 0 0 1px`), não um `border`: pinta
+    igual, não ocupa espaço (nenhum campo muda de tamanho) e vive no mesmo token
+    que todos os campos já usam. No escuro a sombra é mais forte, porque sombra
+    escura some em fundo escuro — ali ela vira um brilho baixo da cor.
+
+    Foco: o filete vira o `--ring` sólido e acende o halo `--accent-soft` em
+    volta. Erro: o mesmo desenho, com o `--danger`.
+
+    ⚠️ O FILETE É A FRONTEIRA DO CAMPO, E A FRONTEIRA TEM PISO DE 3:1 (WCAG
+    1.4.11, decisão do dono da Tarefa 48). O campo não tem mais `border` — o
+    desenho entregue na repaginação pintava o filete com 28% / 32% do
+    `--accent`, o que dá ~1,7:1 contra as superfícies: o campo sumia do papel.
+    As porcentagens de hoje (60% no claro, 66% no escuro; 75% / 65% no erro)
+    fecham 3:1, com alguns pontos de folga, contra as seis superfícies
+    em que um campo cai E contra o próprio preenchimento do campo
+    (`--surface`). O acusador é `app/src/__tests__/theme-tokens.test.ts`,
+    "a fronteira do campo de texto".
+  */
+  --shadow-field:
+    0 0 0 1px
+      light-dark(
+        color-mix(in srgb, var(--accent) 60%, transparent),
+        color-mix(in srgb, var(--accent) 66%, transparent)
+      ),
+    0 1px 2px
+      light-dark(
+        color-mix(in srgb, var(--accent) 16%, transparent),
+        color-mix(in srgb, var(--accent) 18%, transparent)
+      ),
+    0 6px 16px -6px
+      light-dark(
+        color-mix(in srgb, var(--accent) 34%, transparent),
+        color-mix(in srgb, var(--accent) 28%, transparent)
+      );
+  --shadow-field-focus:
+    0 0 0 1px var(--ring),
+    0 6px 18px -6px
+      light-dark(
+        color-mix(in srgb, var(--accent) 40%, transparent),
+        color-mix(in srgb, var(--accent) 36%, transparent)
+      ),
+    0 0 0 4px var(--accent-soft);
+  --shadow-field-error:
+    0 0 0 1px
+      light-dark(
+        color-mix(in srgb, var(--danger) 75%, transparent),
+        color-mix(in srgb, var(--danger) 65%, transparent)
+      ),
+    0 6px 16px -6px
+      light-dark(
+        color-mix(in srgb, var(--danger) 30%, transparent),
+        color-mix(in srgb, var(--danger) 28%, transparent)
+      ),
+    0 0 0 4px
+      light-dark(
+        color-mix(in srgb, var(--danger) 22%, transparent),
+        color-mix(in srgb, var(--danger) 26%, transparent)
+      );
+  /* O menu lateral (`.app-drawer` do app): a sombra cai para a ESQUERDA. */
+  --shadow-drawer: -24px 0 48px -24px
+    light-dark(rgba(20, 30, 20, 0.45), rgba(20, 30, 20, 0.45));
+  --shadow-bar:
+    0 -1px 0 light-dark(rgba(20, 30, 20, 0.06), rgba(255, 255, 255, 0.05)),
+    0 -12px 32px -20px light-dark(rgba(20, 30, 20, 0.25), rgba(0, 0, 0, 0.6));
 
   /* --- Família ---------------------------------------------------------- */
   /*
@@ -481,18 +560,18 @@
     na lista fechada de exceções.
   */
   /* mono: a marca de presença e a nota de margem — o menor que ainda se lê */
-  --size-micro: 9.5px;
+  --size-micro: 11px;
   /* mono: o RÓTULO DE SEÇÃO, que substitui todo h2/h3 (§A.6 do `new-ui.md`) */
-  --size-eyebrow: 10px;
+  --size-eyebrow: 12px;
   /* mono: data, página, número */
-  --size-label: 11px;
+  --size-label: 13px;
   /* Geist: a interface (§A.6 diz 14–15px/1,5) */
-  --size-ui: 14px;
-  --size-body: 15px;
+  --size-ui: 15px;
+  --size-body: 16px;
   /* Fraunces: a coluna de leitura (§A.6 diz 17,5px/1,72 no celular) */
-  --size-reading: 17.5px;
+  --size-reading: 18px;
   /* Fraunces: o h1 no celular (§A.6 diz 25px, crescendo até 38px no desktop) */
-  --size-title: 25px;
+  --size-title: 32px;
 }
 
 /*

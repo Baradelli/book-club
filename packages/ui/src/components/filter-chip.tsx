@@ -109,7 +109,7 @@ export function FilterChip({
         */
         pressed
           ? 'border-accent bg-accent text-accent-fg'
-          : 'border-line bg-transparent text-muted hover:border-line-strong hover:text-content',
+          : 'border-line-soft bg-surface text-muted shadow-card hover:text-content',
         FOCUS_RING,
         className,
       )}

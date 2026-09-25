@@ -826,12 +826,33 @@ describe('a orientação claro/escuro da paleta', () => {
  *
  * | superfície        | claro | escuro |
  * | ----------------- | ----- | ------ |
- * | `--bg`            | 3,63  | 4,01   |
- * | `--surface`       | 3,76  | 3,72   |
- * | `--surface-2`     | 3,47  | 3,33   |
+ * | `--bg`            | 3,62  | 4,30   |
+ * | `--surface`       | 4,09  | 3,89   |
+ * | `--surface-2`     | 3,37  | 3,43   |
  * | `--surface-today` | 3,70  | 3,47   |
  * | `--gold-soft`     | 3,70  | 3,47   |
  * | `--danger-bg`     | 3,12  | 3,44   |
+ *
+ * (Remedidos em 2026-09-24: a repaginação visual trocou `--bg`, `--surface`
+ * e `--surface-2` nos dois temas. A Tarefa 48 publicara 3,63/4,01 · 3,76/3,72
+ * · 3,47/3,33 para as três primeiras; o `--border-field` não mudou, o papel
+ * embaixo dele mudou.)
+ *
+ * ⚠️⚠️ **REPAGINAÇÃO VISUAL — decisão do dono de 2026-09-24: o campo de texto
+ * NÃO TEM MAIS `border`.** A fronteira dele passou a ser um filete fino NA COR
+ * DO APP mais uma sombra, os dois dentro do token `--shadow-field` (o filete é
+ * o primeiro item: `0 0 0 1px color-mix(var(--accent) N%, transparent)`). O
+ * `--border-field` continua na paleta, mas NENHUM campo o pinta mais — então
+ * medir só ele deixaria esta guarda verde protegendo um token que não desenha
+ * nada. A guarda passou a medir TAMBÉM o que desenha: o filete do
+ * `--shadow-field` (e o do `--shadow-field-error`, que o substitui quando o
+ * campo é inválido), composto sobre cada superfície, contra essa superfície E
+ * contra o preenchimento do campo (`--surface`). O piso de 3:1 não mudou.
+ *
+ * ⚠️ MEDIDO na entrega da repaginação: o filete vinha com 28% / 32% do accent,
+ * ~1,7:1 — o campo sumia do papel. Subiu para 60% / 66% (erro: 75% / 65%).
+ * Pior caso de hoje: repouso 3,51 no claro (`--danger-bg`) e 3,40 no escuro
+ * (`--surface-2`); erro 3,91 / 4,95.
  *
  * ⚠️ **CARD E FILETE DECORATIVO NÃO MUDAM, e isso é decisão escrita.** O piso
  * de 3:1 é para **componente de interface**, não para moldura — e o desenho
@@ -890,9 +911,9 @@ describe('a fronteira do campo de texto (decisão do dono, 2026-09-24)', () => {
       token muda os doze aqui, e ao mudá-los passa pelo docblock.
     */
     const PUBLISHED: ReadonlyArray<readonly [string, number, number]> = [
-      ['--bg', 3.63, 4.01],
-      ['--surface', 3.76, 3.72],
-      ['--surface-2', 3.47, 3.33],
+      ['--bg', 3.62, 4.3],
+      ['--surface', 4.09, 3.89],
+      ['--surface-2', 3.37, 3.43],
       ['--surface-today', 3.7, 3.47],
       ['--gold-soft', 3.7, 3.47],
       ['--danger-bg', 3.12, 3.44],
@@ -907,6 +928,113 @@ describe('a fronteira do campo de texto (decisão do dono, 2026-09-24)', () => {
         Number(contrastRatio(edge.dark, paper.dark).toFixed(2)),
       ]).toEqual([surface, light, dark]);
     }
+  });
+
+  /**
+   * A cor do filete de um token de sombra de campo: `0 0 0 1px
+   * light-dark(color-mix(in srgb, var(--X) A%, transparent), …B%…)`. Devolve a
+   * cor-base (lida do próprio token `--X`) e as duas opacidades.
+   *
+   * Lança se a forma mudou — um filete que deixou de ser `color-mix` de um
+   * token (virou hex chapado, por exemplo) tem de passar por aqui de novo, não
+   * escapar da medição por não casar.
+   */
+  function fieldRing(token: string): {
+    base: { light: string; dark: string };
+    alpha: { light: number; dark: number };
+  } {
+    const mix =
+      'color-mix\\(in srgb, var\\((--[\\w-]+)\\) (\\d+)%, transparent\\)';
+    const pattern = new RegExp(
+      `${token}:\\s*0 0 0 1px\\s*light-dark\\(\\s*${mix}\\s*,\\s*${mix}\\s*\\)`,
+      'u',
+    );
+    const match = pattern.exec(stripComments(themeCss));
+    const [, lightBase, lightAlpha, darkBase, darkAlpha] = match ?? [];
+    if (
+      lightBase === undefined ||
+      lightAlpha === undefined ||
+      darkBase === undefined ||
+      darkAlpha === undefined ||
+      lightBase !== darkBase
+    ) {
+      throw new Error(
+        `theme.css não abre ${token} com o filete 0 0 0 1px light-dark(color-mix(var(--x) N%), …)`,
+      );
+    }
+    const base = lightDarkPair(lightBase);
+    return {
+      base,
+      alpha: { light: Number(lightAlpha) / 100, dark: Number(darkAlpha) / 100 },
+    };
+  }
+
+  /** `ink` com opacidade `alpha` sobre `paper` — a composição em sRGB. */
+  function composite(ink: string, paper: string, alpha: number): string {
+    const channel = (hex: string, start: number): number =>
+      Number.parseInt(hex.slice(start, start + 2), 16);
+    return `#${[1, 3, 5]
+      .map((start) =>
+        Math.round(
+          channel(ink, start) * alpha + channel(paper, start) * (1 - alpha),
+        )
+          .toString(16)
+          .padStart(2, '0'),
+      )
+      .join('')}`;
+  }
+
+  /** O pior contraste do filete: contra a superfície de fora e o campo de dentro. */
+  function worstRing(token: string, theme: 'light' | 'dark'): number {
+    const ring = fieldRing(token);
+    const fill = lightDarkPair('--surface')[theme];
+    return Math.min(
+      ...FIELD_SURFACES.map((surface) => {
+        const paper = lightDarkPair(surface)[theme];
+        const drawn = composite(ring.base[theme], paper, ring.alpha[theme]);
+        return Math.min(
+          contrastRatio(drawn, paper),
+          contrastRatio(drawn, fill),
+        );
+      }),
+    );
+  }
+
+  it('⚠️ draws the field boundary it ACTUALLY draws at 3:1 — the accent ring of --shadow-field (repaginação, 2026-09-24)', () => {
+    // O filete é feito do accent (decisão do dono) — a guarda confere isso
+    // também, para ninguém "resolver" o contraste trocando a cor do app por
+    // um cinza chapado dentro da sombra.
+    expect(fieldRing('--shadow-field').base).toEqual(lightDarkPair('--accent'));
+    expect(fieldRing('--shadow-field-error').base).toEqual(
+      lightDarkPair('--danger'),
+    );
+
+    for (const theme of ['light', 'dark'] as const) {
+      expect(worstRing('--shadow-field', theme)).toBeGreaterThanOrEqual(3);
+      expect(worstRing('--shadow-field-error', theme)).toBeGreaterThanOrEqual(
+        3,
+      );
+    }
+  });
+
+  it('⚠️ and the ring numbers PUBLISHED in the docblock are the real ones', () => {
+    // Mesma lição dos doze de cima: número escrito em prosa tem acusador.
+    expect(
+      (['light', 'dark'] as const).map((theme) =>
+        Number(worstRing('--shadow-field', theme).toFixed(2)),
+      ),
+    ).toEqual([3.51, 3.4]);
+    expect(
+      (['light', 'dark'] as const).map((theme) =>
+        Number(worstRing('--shadow-field-error', theme).toFixed(2)),
+      ),
+    ).toEqual([3.91, 4.95]);
+  });
+
+  it('proves the ring measure BITES: the 28% ring of the first delivery fails (par positivo)', () => {
+    const accent = lightDarkPair('--accent').light;
+    const page = lightDarkPair('--bg').light;
+    expect(contrastRatio(composite(accent, page, 0.28), page)).toBeLessThan(3);
   });
 
   it('⚠️ and the ratio itself is checked against an identity, on every colour it measures', () => {

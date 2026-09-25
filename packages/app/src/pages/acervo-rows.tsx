@@ -97,7 +97,7 @@ export function authorLabel(
  * `#d8d1bf`), logo pior de contraste. Registrada na nota 11 da 47b.
  */
 export const ACERVO_PAPER_CLASS =
-  'flex rounded-control border border-line bg-surface p-3';
+  'flex rounded-card border border-line-soft bg-surface shadow-card p-3';
 
 export const ACERVO_CARD_CLASS = `${ACERVO_PAPER_CLASS} w-full flex-col gap-2`;
 

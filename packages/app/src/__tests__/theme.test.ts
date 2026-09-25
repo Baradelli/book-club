@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   applyThemePreference,
+  nextThemePreference,
   readThemePreference,
+  resolveThemePreference,
   THEME_ATTRIBUTE,
   type ThemeTarget,
   writeThemePreference,
@@ -42,10 +44,8 @@ function recordingTarget(): ThemeTarget & { attribute: () => string | null } {
  * decide a cor é a cascata de `@clube/ui/theme.css`, e ela tem acusador
  * próprio em `theme-css.test.ts`.
  *
- * Havia aqui um `resolveTheme(preference, systemPrefersDark)` com quatro
- * testes citando as regras 25 e 26. A função era código morto (nada no app lê
- * `matchMedia`) e os testes dela provavam só a si mesmos, enquanto os mutantes
- * do CSS de verdade passavam ilesos. Foram apagados junto com ela.
+ * `resolveThemePreference`/`nextThemePreference` só decidem o ÍCONE e o
+ * destino do clique do botão sol/lua; a cor na tela segue sendo do CSS.
  */
 describe('tema', () => {
   it('has no preference on the first visit, so the system decides (rule 25)', () => {
@@ -118,4 +118,32 @@ describe('tema', () => {
     // sem renomear lá desliga o tema sem quebrar teste nenhum de renderização.
     expect(THEME_ATTRIBUTE).toBe('data-theme');
   });
+
+  it.each([
+    ['system', false, 'light'],
+    ['system', true, 'dark'],
+    ['light', true, 'light'],
+    ['dark', false, 'dark'],
+  ] as const)(
+    'resolves %s with system dark=%s to %s',
+    (preference, systemPrefersDark, expected) => {
+      expect(resolveThemePreference(preference, systemPrefersDark)).toBe(
+        expected,
+      );
+    },
+  );
+
+  it.each([
+    // Primeiro clique a partir do sistema: vai para o OPOSTO do que a pessoa
+    // está vendo — senão o clique não muda nada na tela.
+    ['system', false, 'dark'],
+    ['system', true, 'light'],
+    ['light', false, 'dark'],
+    ['dark', true, 'light'],
+  ] as const)(
+    'toggles %s (system dark=%s) to %s, never back to system',
+    (preference, systemPrefersDark, expected) => {
+      expect(nextThemePreference(preference, systemPrefersDark)).toBe(expected);
+    },
+  );
 });

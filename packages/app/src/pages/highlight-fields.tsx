@@ -145,12 +145,18 @@ const PEN_FILL_CLASS: Readonly<Record<PenKey, string>> = {
   r: 'bg-pen-r',
 };
 
-const PEN_EDGE_CLASS: Readonly<Record<PenKey, string>> = {
-  a: 'border-pen-a-dot',
-  v: 'border-pen-v-dot',
-  l: 'border-pen-l-dot',
-  z: 'border-pen-z-dot',
-  r: 'border-pen-r-dot',
+/**
+ * O TOM DO FILETE E DA SOMBRA do campo do trecho: a mesma cor da caneta que
+ * tinge o papel dele (o `-dot`, a versão firme do mesmo matiz — o tom do
+ * papel é claro demais para aparecer como filete). Lido pelo `.field-tone`
+ * de `styles.css`; sem caneta, ele cai no `--accent`.
+ */
+const PEN_TONE_CLASS: Readonly<Record<PenKey, string>> = {
+  a: '[--field-tone:var(--pen-a-dot)]',
+  v: '[--field-tone:var(--pen-v-dot)]',
+  l: '[--field-tone:var(--pen-l-dot)]',
+  z: '[--field-tone:var(--pen-z-dot)]',
+  r: '[--field-tone:var(--pen-r-dot)]',
 };
 
 const PEN_INK_CLASS: Readonly<Record<PenKey, string>> = {
@@ -178,37 +184,7 @@ const PEN_INK_CLASS: Readonly<Record<PenKey, string>> = {
  * abrir a porta que ela existe para manter fechada.
  */
 const NO_PEN_FILL_CLASS = 'bg-surface';
-const NO_PEN_EDGE_CLASS = 'border-line';
 const NO_PEN_INK_CLASS = 'text-subtle';
-
-/**
- * ⚠️ **O FILETE VERMELHO DO ERRO — o que a Tarefa 47a tinha PERDIDO.**
- *
- * Até esta fatia o campo do trecho era um `TEXT_INPUT_CLASS`, e aquela
- * constante traz a borda vermelha do campo inválido. Ao virar papel, o campo
- * saiu do estilo compartilhado e o vermelho foi junto: sobrava a mensagem
- * abaixo e mais nada, enquanto o campo de PÁGINA da mesma tela continuava
- * acendendo a borda. Um campo em erro indistinguível de um campo em repouso é
- * metade do erro faltando, e a assimetria dentro da MESMA tela é o que torna
- * isso um defeito e não uma escolha.
- *
- * ⚠️ **E AQUI ELE VEM DA PROP, NÃO DO ATRIBUTO — de propósito.** O
- * `form-styles.ts` acende a borda pela variante de atributo porque é uma
- * CONSTANTE compartilhada: ela não enxerga estado nenhum, e quem põe o
- * atributo no controle é o `Field`. Este componente já é o dono do `error` e
- * já decide por ele três vezes (a descrição, o atributo e a mensagem), então a
- * quarta sai da mesma fonte — duas donas da mesma regra é o que aquele padrão
- * existe para evitar, e aqui só há uma. O que se ganha é o §7.9: a
- * propriedade vira **decidível em jsdom**, porque é o render que muda, e não
- * uma regra de CSS que o jsdom não avalia.
- *
- * ⚠️ **ELE SUBSTITUI o filete da caneta, não se soma a ele.** Dois utilitários
- * de cor de borda na mesma lista deixariam a ORDEM DE EMISSÃO do CSS decidir
- * qual vence — exatamente a invariante que a auditoria da Tarefa 46 teve de
- * pinar à mão. O fundo do papel não muda: o erro pinta a fronteira, não a cor
- * do que a pessoa escreveu.
- */
-const ERROR_EDGE_CLASS = 'border-danger';
 
 /**
  * REGRA 13 — AS CINCO CANETAS, com estado ativo ACESSÍVEL.
@@ -456,58 +432,53 @@ function QuoteField({
         </span>
       </div>
       {/*
-        ⚠️⚠️ **A MOLDURA DE CAMPO — decisão do dono de 2026-09-24 (Tarefa 48).**
+        ⚠️⚠️ **A MOLDURA DE CAMPO — a mesma dos outros campos de texto do app.**
 
-        O papel do grifo ganhou **a mesma borda dos outros campos de texto do
-        app**: `border-line-field`, o filete que a decisão A daquela fatia
-        escureceu até fechar **3,63:1** contra a página no claro e **4,01:1**
-        no escuro. O tom da caneta continua pintando o papel **por dentro** —
-        nenhum valor de canvas mudou e nenhum hex persistido foi tocado.
+        Desde o redesenho visual de 2026-09-24 campo não tem filete: tem
+        SOMBRA (`shadow-field`, um anel de 1px + sombra), e o foco e o erro são
+        variações dela (`shadow-field-focus`, `shadow-field-error`) — o mesmo
+        desenho do `TEXT_INPUT_CLASS` de `form-styles.ts`.
 
-        ⚠️ **POR QUE SÓ AGORA, e a razão é medida:** a nota 19 da Tarefa 47a
-        RECUSOU exatamente isto, com o argumento de que o filete neutro dava
-        **1,35:1** e emoldurar o filete de caneta (2,28 no pior caso) com ele
-        *"não acrescenta fronteira"*. O argumento estava certo **para o filete
-        daquela época**. A decisão A criou um neutro que dá 3,63 / 4,01, e a
-        recusa caiu junto com a premissa em que se apoiava.
+        A diferença deste campo é o TOM do anel: o `.field-tone` de
+        `styles.css` lê `--field-tone`, e a caneta escolhida o troca pelo par
+        firme dela (`PEN_TONE_CLASS`). Sem caneta, ele cai no `--accent`. O
+        papel de dentro continua sendo tingido pela caneta (`PEN_FILL_CLASS`),
+        e a superfície da moldura nunca muda.
 
-        ⚠️⚠️ **E ELA É UM ELEMENTO PRÓPRIO POR NECESSIDADE, não por zelo.**
-        `border-line-field` e `border-pen-a-dot` são o MESMO utilitário
-        (`border-<cor>`), e o `cx` **não resolve conflito de utilitário**:
-        escritos no mesmo elemento, quem vence é a ordem de emissão do CSS —
-        uma invariante que ninguém declara e que já obrigou este bloco a pinar
-        um caso à mão (auditoria da Tarefa 46, B5). Em nós diferentes o
-        conflito não existe.
+        ⚠️ **O ERRO SUBSTITUI a sombra de repouso, não se soma a ela.**
+        `shadow-field` e `shadow-field-error` são o MESMO utilitário
+        (`box-shadow`), e o `cx` não resolve conflito de utilitário: escritos
+        juntos, quem venceria seria a ordem de emissão do CSS — uma invariante
+        que ninguém declara (auditoria da Tarefa 46, B5). O foco é variante
+        (`focus-within:`), e variante sai depois do utilitário base.
 
-        `rounded-control` e não `rounded-callout`: o raio de fora é o de dentro
-        mais a espessura do filete (3 + 1 = 4), senão o canto da moldura corta
-        o canto do papel. E 4px é o raio de todo campo e botão do canvas
-        (`Main.dc.html:57`), que é o que "a mesma borda dos outros campos" quer
-        dizer também de forma.
+        ⚠️ **O FOCO É DESTA MOLDURA.** O `<textarea>` não desenha anel próprio
+        (`outline-none`); quem mostra o foco é o `focus-within:` daqui. Tirar
+        um sem pôr o outro deixa o campo sem indicador de foco (WCAG 2.4.7).
 
         O acusador — e o do ALCANCE, nas duas rotas — é
         `highlight-form.test.tsx › ⚠️⚠️ O PAPEL DENTRO DA MOLDURA DE CAMPO`.
       */}
-      <div className="rounded-control border border-line-field">
+      <div
+        className={cx(
+          'field-tone rounded-control bg-surface transition-shadow focus-within:shadow-field-focus',
+          pen === null ? null : PEN_TONE_CLASS[pen],
+          error === undefined ? 'shadow-field' : 'shadow-field-error',
+        )}
+      >
         <div
           className={cx(
             /*
-            ⚠️ O `border` NU É A LARGURA, e ele não é decoração de escrita: sem
-            ele a borda vai a ZERO e o filete da linha seguinte não pinta nada.
-            Um mutante que o apagou sobreviveu a 975 testes na primeira entrega
-            desta fatia, porque a guarda afirmava a COR e não a largura.
+            ⚠️ SEM BORDA DESDE A REPAGINAÇÃO: campo não tem filete, tem sombra
+            (no invólucro). A caneta escolhida aparece no TINGIMENTO do papel
+            (`PEN_FILL_CLASS`) e na cor da aspa; o erro, no halo do invólucro.
 
-            ⚠️ E O RECUO É ASSIMÉTRICO DE PROPÓSITO: a aspa é posicionada em
+            ⚠️ O RECUO É ASSIMÉTRICO DE PROPÓSITO: a aspa é posicionada em
             absoluto e não empurra o texto, então os 34px da esquerda são a
             única coisa que impede o trecho de começar debaixo dela.
           */
-            'relative rounded-callout border py-[18px] pr-[18px] pl-[34px]',
+            'relative rounded-control py-[18px] pr-[18px] pl-[34px] transition-colors',
             pen === null ? NO_PEN_FILL_CLASS : PEN_FILL_CLASS[pen],
-            error !== undefined
-              ? ERROR_EDGE_CLASS
-              : pen === null
-                ? NO_PEN_EDGE_CLASS
-                : PEN_EDGE_CLASS[pen],
           )}
         >
           <span
@@ -524,10 +495,9 @@ function QuoteField({
               error === undefined ? hintId : `${hintId} ${errorId}`
             }
             aria-invalid={error !== undefined ? true : undefined}
-            className={cx(
-              'min-h-[114px] w-full resize-none bg-transparent font-reading text-reading leading-[1.6] text-content',
-              FOCUS_RING,
-            )}
+            // Sem anel de foco no próprio campo: quem mostra o foco é a sombra
+            // da moldura (`focus-within:` no invólucro de fora, acima).
+            className="min-h-[114px] w-full resize-none bg-transparent font-reading text-reading leading-[1.6] text-content outline-none"
             id={controlId}
             onChange={(event) => onChange(event.target.value)}
             rows={4}
@@ -691,7 +661,9 @@ const RichEditor = lazy(async () => {
  *
  * ⚠️ **E ele foi de 337 para 340 na Tarefa 48**, com as três linhas da moldura
  * de campo que o dono decidiu em 2026-09-24 (o `<div>` com
- * `border-line-field` por fora do papel). Continua 60 abaixo do teto de 400.
+ * `border-line-field` por fora do papel — que o redesenho visual do mesmo dia
+ * trocou pela sombra `shadow-field`, sem somar nem tirar o `<div>`). Continua
+ * 60 abaixo do teto de 400.
  * Some as linhas, não apague o número: foi exatamente por ele não ter sido
  * somado que os docblocks daqui e do formulário carregaram valores velhos
  * desde a Tarefa 38i.
@@ -714,7 +686,7 @@ export function LazyComment({
       }
     >
       <RichEditor
-        className="rounded-control border border-line bg-surface"
+        className="rounded-card bg-surface shadow-field clube-editor-boxed clube-editor-compact"
         doc={doc}
         onChange={onChange}
       />

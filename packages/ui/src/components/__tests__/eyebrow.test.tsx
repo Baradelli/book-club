@@ -22,18 +22,26 @@ import { Eyebrow } from '../eyebrow';
  * | ouro | `Inicio.dc.html:41,50`, `NovaAnotacao.dc.html:46`, `NovoGrifo.dc.html:48` | tudo igual, `color:var(--gold)` |
  */
 describe('Eyebrow', () => {
-  it('draws the section label in the mono eyebrow step, upper case (canvas)', () => {
+  it('draws the section label in the sans label step, semibold, in sentence case (redesign)', () => {
+    /*
+      ⚠️ **O REDESENHO VISUAL (2026-09-24) TROCOU A LETRA DESTE RÓTULO.** A
+      monoespaçada maiúscula de 10px/0,12em do canvas (a tabela do docblock
+      acima é a medida ANTIGA, guardada como histórico) virou o rótulo de app
+      de celular: `text-label` (13px) em `font-semibold`, com o tracking
+      levemente negativo da sans. A regra que continua valendo é a de ser UM
+      rótulo, com UMA letra, dona do componente — as telas não reescrevem.
+    */
     render(<Eyebrow>O que o clube está lendo</Eyebrow>);
 
     const label = screen.getByText('O que o clube está lendo');
     const classes = label.className.split(/\s+/u);
 
-    // `--size-eyebrow` é 10px e o token se chama assim justamente por ser
-    // ESTE rótulo (`theme.css`, "mono: o RÓTULO DE SEÇÃO").
-    expect(classes).toContain('font-mono');
-    expect(classes).toContain('text-eyebrow');
-    expect(classes).toContain('uppercase');
-    expect(classes).toContain('tracking-[0.12em]');
+    expect(classes).toContain('text-label');
+    expect(classes).toContain('font-semibold');
+    expect(classes).toContain('tracking-[-0.005em]');
+    // E a letra antiga saiu inteira — nenhum resto de mono maiúscula.
+    expect(classes).not.toContain('font-mono');
+    expect(classes).not.toContain('uppercase');
   });
 
   it('paints the plain label muted and the one that is TODAY in gold (decision I)', () => {
@@ -86,7 +94,7 @@ describe('Eyebrow', () => {
     ).not.toContain('text-gold');
   });
 
-  it('is a span, not a heading — the mono label REPLACES h2/h3 (§A.6)', () => {
+  it('is a span, not a heading — the section label REPLACES h2/h3 (§A.6)', () => {
     render(<Eyebrow>Plano de leitura</Eyebrow>);
 
     const label = screen.getByText('Plano de leitura');
@@ -110,6 +118,6 @@ describe('Eyebrow', () => {
 
     const classes = screen.getByText('Sua anotação').className.split(/\s+/u);
     expect(classes).toContain('self-start');
-    expect(classes).toContain('font-mono');
+    expect(classes).toContain('text-label');
   });
 });

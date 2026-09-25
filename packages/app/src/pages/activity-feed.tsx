@@ -4,8 +4,6 @@ import {
   type ActivityType,
   type BookResponse,
   clubMembersResponseSchema,
-  type ClubStreaksResponse,
-  clubStreaksResponseSchema,
 } from '@clube/shared';
 import { Eyebrow, List, ListItem } from '@clube/ui';
 import { useEffect, useMemo, useState } from 'react';
@@ -24,7 +22,6 @@ import {
 import { dayNotePath } from './day-note';
 import { freeNotePath } from './free-note';
 import { bookPath, highlightPath } from './paths';
-import { StreakBar } from './streak-bar';
 
 /**
  * O FEED DE ATIVIDADE DA HOME (Tarefa 35) — "o clube está vivo", ~~sem placar~~.
@@ -32,8 +29,9 @@ import { StreakBar } from './streak-bar';
  * ⚠️ **"SEM PLACAR" CAIU NA TAREFA 38c, E ESTE ARQUIVO É O PRIMEIRO A DESMENTIR
  * O QUE ESCREVE.** O dono pediu a corrente de leitura — o foguinho — e reafirmou
  * com a objeção e a medição na mão; está registrado em
- * `docs/adr/0010-corrente-de-leitura-visivel.md`. A `<StreakBar>` importada logo
- * acima e renderizada no TOPO desta tela mostra um **número por pessoa do clube**.
+ * `docs/adr/0010-corrente-de-leitura-visivel.md`. A `<StreakBar>` mostra um
+ * **número por pessoa do clube**; ela morava no TOPO desta tela e hoje abre pelo
+ * foguinho do cabeçalho (`app/src/streak-button.tsx`), fora deste arquivo.
  * ⚠️ **Nada abaixo foi apagado, porque quase tudo continua valendo** — as decisões
  * A, B e D seguem de pé e seguem testadas. O que caiu é a promessa LARGA, e ela
  * está riscada onde aparece. Leia o resto como "o feed em si não conta nada",
@@ -422,38 +420,6 @@ export function ActivityFeed({ books, clubId, me }: ActivityFeedProps) {
     };
   }, [api, clubId]);
 
-  /*
-    ⚠️ **A CORRENTE DE LEITURA (ADR 0010).** Ela mora AQUI, e não num componente
-    próprio que busque sozinho, porque este já carrega `members` — dois
-    componentes buscando os mesmos membros na mesma tela seriam duas
-    requisições para o mesmo dado.
-
-    Falha em silêncio: a corrente é enfeite ao lado do feed, e uma tela que
-    troca a atividade do clube por um erro de foguinho errou a prioridade.
-  */
-  const [streaks, setStreaks] = useState<ClubStreaksResponse>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setStreaks([]);
-
-    void api
-      .get(
-        `/clubs/${encodeURIComponent(clubId)}/streaks`,
-        clubStreaksResponseSchema,
-      )
-      .then((list) => {
-        if (!cancelled) setStreaks(list);
-      })
-      .catch(() => {
-        // Ver o comentário acima: sem corrente, o feed continua inteiro.
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [api, clubId]);
-
   /** `userId` → nome. O dono da regra é o `club-names.ts`. */
   const memberNames = useMemo(() => memberNamesOf(members), [members]);
 
@@ -525,7 +491,7 @@ export function ActivityFeed({ books, clubId, me }: ActivityFeedProps) {
     }
 
     return (
-      <List aria-label={t('pages.home.feed.label')} className="gap-1">
+      <List appearance="grouped" aria-label={t('pages.home.feed.label')}>
         {feed.events.map((event) => (
           <ListItem
             /*
@@ -597,21 +563,10 @@ export function ActivityFeed({ books, clubId, me }: ActivityFeedProps) {
         <Eyebrow>{t('pages.home.feed.heading')}</Eyebrow>
       </h2>
       {/*
-        ⚠️ ACIMA das linhas, e é escolha: o foguinho é o que o dono quer ver
-        primeiro. ⚠️ E ele **contraria o desenho do feed de propósito** (ADR
-        0010) — o feed nasceu sem coluna de pessoa e sem número justamente
-        porque uma coluna com número convida a comparar.
+        O FOGUINHO SAIU DAQUI: ele virou o botão do cabeçalho
+        (`app/src/streak-button.tsx`), à vista em toda tela. O feed volta a ser
+        só a atividade do clube.
       */}
-      <StreakBar
-        me={me}
-        names={memberNames}
-        readToday={
-          me === null
-            ? false
-            : (streaks.find((row) => row.userId === me.id)?.readToday ?? false)
-        }
-        streaks={streaks}
-      />
       {lines()}
     </section>
   );

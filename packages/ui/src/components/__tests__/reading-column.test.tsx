@@ -30,8 +30,9 @@ import { MarginRail, ReadingColumn } from '../reading-column';
  * da margem diverge em três valores; os dois viraram assunto da tela, cada um
  * com o seu `it()` abaixo.
  *
- * Abaixo de 1120px (decisão fechada do MVP 3.5): uma coluna só, 20px de
- * padding (`Livro.dc.html:41`, `Dia.dc.html:41`), e a margem DESCENDO para o
+ * Abaixo de 1120px (decisão fechada do MVP 3.5): uma coluna só, 16px de
+ * padding (o canvas media 20px em `Livro.dc.html:41`, `Dia.dc.html:41`; o
+ * redesenho visual de 2026-09-24 trocou pela calha de 16px), e a margem DESCENDO para o
  * fluxo — sem filete e sem recuo.
  */
 describe('ReadingColumn + MarginRail', () => {
@@ -45,10 +46,11 @@ describe('ReadingColumn + MarginRail', () => {
     const frame = container.firstElementChild as HTMLElement;
     const classes = frame.className.split(/\s+/u);
 
-    // Celular: uma coluna, 20px de recuo.
+    // Celular: uma coluna, 16px de recuo (o redesenho visual de 2026-09-24
+    // trocou os 20px do canvas pela calha de 16px de app de celular).
     expect(classes).toContain('flex');
     expect(classes).toContain('flex-col');
-    expect(classes).toContain('px-5');
+    expect(classes).toContain('px-4');
 
     // Desktop: duas colunas, 56px de vão, 92px de recuo.
     expect(classes).toContain('min-[1120px]:flex-row');

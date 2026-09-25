@@ -22,12 +22,6 @@ export const THEME_ATTRIBUTE = 'data-theme';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 
-export const THEME_PREFERENCES: readonly ThemePreference[] = [
-  'system',
-  'light',
-  'dark',
-];
-
 export function isThemePreference(value: unknown): value is ThemePreference {
   return value === 'light' || value === 'dark' || value === 'system';
 }
@@ -53,18 +47,44 @@ export function writeThemePreference(
   }
 }
 
+export type ResolvedTheme = 'light' | 'dark';
+
 /**
- * ⚠️ **Aqui NÃO existe um `resolveTheme(preference, systemPrefersDark)`, e é
- * de propósito.** Existia, com quatro testes citando as regras 25 e 26, e os
- * únicos chamadores eram os próprios testes: nada neste app lê `matchMedia`,
- * porque quem resolve "sistema escuro" é a cascata de `@clube/ui/theme.css`,
- * em CSS puro. A função só provava a si mesma, e o teste dela dava a impressão
- * de que as regras 25/26 estavam cobertas — enquanto os mutantes do CSS
- * passavam ilesos.
- *
- * As regras 25 e 26 são provadas onde elas moram:
- * `__tests__/theme-css.test.ts`.
+ * O tema que está NA TELA. A cor continua sendo decidida pela cascata de
+ * `@clube/ui/theme.css` (regras 25 e 26, provadas em `theme-css.test.ts`);
+ * esta função existe só para o botão do cabeçalho saber qual ícone mostrar e
+ * para onde alternar. Ela tem chamador: o `ThemeToggle` do `App.tsx`.
  */
+export function resolveThemePreference(
+  preference: ThemePreference,
+  systemPrefersDark: boolean,
+): ResolvedTheme {
+  if (preference === 'system') return systemPrefersDark ? 'dark' : 'light';
+  return preference;
+}
+
+/**
+ * O clique do botão sol/lua. Sai de `'system'` para o OPOSTO do que está na
+ * tela (senão o primeiro clique não muda nada) e daí só alterna entre claro e
+ * escuro — não há clique que volte para `'system'`.
+ */
+export function nextThemePreference(
+  preference: ThemePreference,
+  systemPrefersDark: boolean,
+): ResolvedTheme {
+  return resolveThemePreference(preference, systemPrefersDark) === 'dark'
+    ? 'light'
+    : 'dark';
+}
+
+const DARK_QUERY = '(prefers-color-scheme: dark)';
+
+/** Sem `matchMedia` (jsdom, navegador velho), vale o claro — o padrão do CSS. */
+function systemPrefersDarkNow(): boolean {
+  return typeof window.matchMedia === 'function'
+    ? window.matchMedia(DARK_QUERY).matches
+    : false;
+}
 
 /** O mínimo de elemento que a aplicação do tema usa. */
 export interface ThemeTarget {
@@ -87,7 +107,9 @@ export function applyThemePreference(
 
 export interface ThemeController {
   preference: ThemePreference;
+  resolved: ResolvedTheme;
   setPreference(preference: ThemePreference): void;
+  toggle(): void;
 }
 
 export function useTheme(
@@ -97,9 +119,26 @@ export function useTheme(
     readThemePreference(storage),
   );
 
+  const [systemPrefersDark, setSystemPrefersDark] =
+    useState(systemPrefersDarkNow);
+
   useEffect(() => {
     applyThemePreference(document.documentElement, preference);
   }, [preference]);
+
+  // Acompanha o sistema trocando de tema com o app aberto, para o ícone não
+  // mentir enquanto a preferência for `'system'`.
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return undefined;
+    const query = window.matchMedia(DARK_QUERY);
+    const onChange = (event: MediaQueryListEvent) => {
+      setSystemPrefersDark(event.matches);
+    };
+    query.addEventListener('change', onChange);
+    return () => {
+      query.removeEventListener('change', onChange);
+    };
+  }, []);
 
   const setPreference = useCallback(
     (next: ThemePreference) => {
@@ -109,5 +148,14 @@ export function useTheme(
     [storage],
   );
 
-  return { preference, setPreference };
+  const toggle = useCallback(() => {
+    setPreference(nextThemePreference(preference, systemPrefersDark));
+  }, [preference, systemPrefersDark, setPreference]);
+
+  return {
+    preference,
+    resolved: resolveThemePreference(preference, systemPrefersDark),
+    setPreference,
+    toggle,
+  };
 }

@@ -297,8 +297,17 @@ describe('FilterBar', () => {
       expect(screen.queryByRole('button', { name: 'Minhas' })).toBeNull();
     });
 
-    it('⚠️ keeps the filete on BOTH edges of the collapsed block (decision A)', () => {
+    it('⚠️ never draws HALF a frame around the collapsed block (decision A, redesign)', () => {
       /*
+        ⚠️⚠️ **O REDESENHO VISUAL (2026-09-24) TIROU A MOLDURA INTEIRA.** O
+        bloco recolhido deixou de ser caderno encadernado e passou a flutuar
+        sobre a página, sem filete nenhum. O que esta guarda continua medindo
+        é a propriedade que a motivou — a moldura não pode ficar PELA METADE:
+        um `border-t` ou `border-b` solto seria o desenho de antes quebrado
+        em silêncio. Hoje isso quer dizer "nenhum dos três tokens"; se a
+        moldura voltar, ela volta inteira (`border-y`) e esta asserção se
+        reescreve junto. O histórico abaixo é o motivo original.
+
         ⚠️ **METADE DO DESENHO SUMIA EM SILÊNCIO.** A decisão A da Tarefa 46
         cita `Acervo.dc.html:56` com `border-top` E `border-bottom` de
         `--border-soft` — o bloco é caderno encadernado, e o que o delimita é o
@@ -326,7 +335,11 @@ describe('FilterBar', () => {
       if (block === null) throw new Error('o bloco recolhido não tem moldura');
 
       const tokens = block.className.split(/\s+/u);
-      expect(tokens).toContain('border-y');
+      // O par positivo (§7.4): o elemento medido É o bloco recolhido — o que
+      // alinha resumo e pílula nas duas pontas —, e não um ancestral qualquer
+      // sem moldura por acaso.
+      expect(tokens).toContain('justify-between');
+      expect(tokens).not.toContain('border-y');
       expect(tokens).not.toContain('border-t');
       expect(tokens).not.toContain('border-b');
     });

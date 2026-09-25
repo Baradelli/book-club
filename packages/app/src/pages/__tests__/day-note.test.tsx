@@ -10,7 +10,15 @@ import type {
 import { TOKEN_STORAGE_KEY } from '@clube/shared/client';
 import { pt } from '@clube/shared/locales';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 
 import { App } from '../../App';
 import type { ClubSummary } from '../../club/active-club';
@@ -19,6 +27,7 @@ import {
   createUnavailablePendingNoteStore,
   type PendingNoteStore,
 } from '../../offline/store';
+import { PEN_BAR_STICKY_KEY } from '../../pen-bar-preference';
 import { dayNotePath } from '../day-note';
 import { expectNoGuilt, stripComments } from './anti-guilt-dom';
 import {
@@ -2134,12 +2143,13 @@ describe('⚠️ the editor loses the box and gains the pen bar (decisions B and
     expectNoGuilt();
   });
 
-  it('asks for the FIXED pen bar, and hands over the hint of the /', async () => {
+  it('asks for the STICKY pen bar by default, and hands over the hint of the /', async () => {
     /*
-      A decisão D: `penBar='fixed'` é a forma do canvas do dia — ancorada acima
-      do teclado no celular (`Dia.dc.html:103`, 62px) e devolvida ao rodapé da
-      coluna acima de 1120px (`DiaDesktop.dc.html:72`, 56px). **UMA prop, não
-      duas telas.**
+      A decisão D, revista no redesenho visual de 2026-09-24: a barra de canetas
+      deixou de ser `fixed` no rodapé e virou uma pílula flutuante no TOPO do
+      editor, que acompanha a rolagem (`penBar='sticky'`). **UMA prop, não
+      duas telas** continua valendo — e sem escolha gravada no aparelho, a barra
+      acompanha (`pen-bar-preference.ts`).
 
       E a dica do `/` (`DiaDesktop.dc.html:92`) entra por prop, já traduzida:
       `packages/ui` não chama `t()` (`no-i18n.test.ts`), então toda folha de
@@ -2149,8 +2159,29 @@ describe('⚠️ the editor loses the box and gains the pen bar (decisions B and
     await renderDayNote();
 
     const editor = screen.getByTestId('editor');
-    expect(editor.getAttribute('data-pen-bar')).toBe('fixed');
+    expect(editor.getAttribute('data-pen-bar')).toBe('sticky');
     expect(editor.getAttribute('data-slash-hint')).toBe(pt.editor.slashHint);
+    expectNoGuilt();
+  });
+
+  it('parks the pen bar at the top of the text when THIS device asked it to stop following', async () => {
+    /*
+      A preferência "Manter a barra de canetas no topo enquanto rolo o texto"
+      (`/preferencias`) é do APARELHO, no `localStorage` — não viaja no
+      `Settings` do servidor. Desligada (`'0'`), a barra fica parada no começo
+      do texto (`'top'`) em vez de acompanhar. O par com o `it()` acima: sem
+      este, uma tela que ignorasse a preferência passaria verde.
+    */
+    window.localStorage.setItem(PEN_BAR_STICKY_KEY, '0');
+    onTestFinished(() => {
+      window.localStorage.removeItem(PEN_BAR_STICKY_KEY);
+    });
+
+    await renderDayNote();
+
+    expect(screen.getByTestId('editor').getAttribute('data-pen-bar')).toBe(
+      'top',
+    );
     expectNoGuilt();
   });
 
@@ -2168,13 +2199,14 @@ describe('⚠️ the editor loses the box and gains the pen bar (decisions B and
   });
 });
 
-describe('⚠️ the save notice is a margin note in mono (decisions G and H)', () => {
+describe('⚠️ the save notice is a quiet margin note (decisions G and H)', () => {
   it('writes the state with the SaveIndicator of task 41b — not a second one', async () => {
     /*
-      `Dia.dc.html:56`: mono 9,5px, `uppercase`, `letter-spacing:.1em`,
-      `--text-subtle`. O componente que já entrega exatamente isso nasceu na
-      Tarefa 41b e **nunca teve consumidor** — escrever um segundo aqui seria o
-      defeito que este repositório já pagou três vezes.
+      A roupa da nota de margem é a do `SaveIndicator` da Tarefa 41b — desde o
+      redesenho visual de 2026-09-24, `text-label` (13px) `font-medium` em
+      `--text-subtle`, e não mais a mono maiúscula de 9,5px do canvas
+      (`Dia.dc.html:56`). A tela não reescreve nada disso: escrever um segundo
+      indicador aqui seria o defeito que este repositório já pagou três vezes.
     */
     const calls = await renderDayNote();
 
@@ -2191,10 +2223,12 @@ describe('⚠️ the save notice is a margin note in mono (decisions G and H)', 
     */
     const notice = document.querySelector('[data-testid="save-status"] span');
     expect(notice?.textContent).toBe(pt.pages.dayNote.save.saved);
-    expect(notice?.className).toContain('font-mono');
-    expect(notice?.className).toContain('text-micro');
-    expect(notice?.className).toContain('uppercase');
+    expect(notice?.className).toContain('text-label');
+    expect(notice?.className).toContain('font-medium');
     expect(notice?.className).toContain('text-subtle');
+    // A mono maiúscula do canvas saiu com o redesenho — e não volta por engano.
+    expect(notice?.className).not.toContain('font-mono');
+    expect(notice?.className).not.toContain('uppercase');
     expectNoGuilt();
   });
 
@@ -2396,7 +2430,7 @@ describe('⚠️ the desktop margin gets its content (decision I)', () => {
  * `Eyebrow`: semântica da tela, tipografia do design system.
  */
 describe('⚠️ the section labels use the Eyebrow of task 41b (audit A6)', () => {
-  it('gives the THREE labels the mono type of the canvas, still as headings', async () => {
+  it('gives the THREE labels the type of the Eyebrow, still as headings', async () => {
     await renderDayNote({
       notes: { status: 200, body: [aNote({ id: 'n-maria', userId: MARIA })] },
       highlights: { status: 200, body: [aHighlight({ id: 'h-1' })] },
@@ -2410,11 +2444,13 @@ describe('⚠️ the section labels use the Eyebrow of task 41b (audit A6)', () 
 
     for (const label of labels) {
       const eyebrow = screen.getByText(label);
-      // A tipografia do canvas, pelo componente — nunca reescrita à mão.
-      expect(eyebrow.className).toContain('font-mono');
-      expect(eyebrow.className).toContain('text-eyebrow');
-      expect(eyebrow.className).toContain('uppercase');
-      expect(eyebrow.className).toContain('tracking-[0.12em]');
+      // A tipografia do Eyebrow, pelo componente — nunca reescrita à mão.
+      // (Redesenho de 2026-09-24: a mono maiúscula virou `text-label`
+      // semibold; o pino da classe exata é `ui/…/eyebrow.test.tsx`.)
+      expect(eyebrow.className).toContain('text-label');
+      expect(eyebrow.className).toContain('font-semibold');
+      expect(eyebrow.className).not.toContain('font-mono');
+      expect(eyebrow.className).not.toContain('uppercase');
       // E `text-sm`, que era o default do Tailwind, saiu de vez.
       expect(eyebrow.className).not.toContain('text-sm');
       // A semântica continua sendo da TELA: o rótulo vive dentro de um h2.

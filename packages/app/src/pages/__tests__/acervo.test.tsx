@@ -509,6 +509,18 @@ async function pressLabel(name: string): Promise<void> {
   await press(screen.getByRole('button', { name }));
 }
 
+/**
+ * O sheet SAIU do DOM. Ao fechar, o `Sheet` de `packages/ui` fica montado mais
+ * ~200ms com `data-state="closed"` para a animação de saída descê-lo; só
+ * depois ele desmonta. A asserção de "fechado não está no DOM" (o que impede o
+ * conteúdo de continuar tabulável) continua de pé — ela só espera a saída.
+ */
+async function waitForSheetToLeave(): Promise<void> {
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+}
+
 function rows(): HTMLElement[] {
   const list = screen.getByRole('list', { name: pt.pages.acervo.label });
   return Array.from(list.querySelectorAll('li'));
@@ -1405,7 +1417,7 @@ describe('⚠️ ARCHIVING A HIGHLIGHT ASKS FIRST', () => {
     // ⚠️ NENHUMA requisição — e o sheet saiu do DOM (fechado ele não está lá,
     // que é o que impede o "Cancelar" de continuar tabulável).
     expect(requestsTo(calls, '/highlights/')).toHaveLength(0);
-    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitForSheetToLeave();
     // E o grifo continua na lista, inteiro.
     expect(labelsOnScreen()).toEqual([...ORDERED_LABELS]);
   });
@@ -1435,7 +1447,7 @@ describe('⚠️ ARCHIVING A HIGHLIGHT ASKS FIRST', () => {
       ORDERED_LABELS.filter((label) => label !== NO_COMMENT_QUOTE),
     );
     expect(readableText()).not.toContain(NO_COMMENT_QUOTE);
-    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitForSheetToLeave();
 
     /*
       ⚠️ **E ELE NÃO VOLTA QUANDO O RECORTE MUDA** — a forma decidível de "não
@@ -2897,6 +2909,7 @@ describe('⚠️ THE SIX DIMENSIONS COLLAPSE INTO ONE LINE (task 46)', () => {
     expectNoGuilt();
 
     await pressLabel(FILTERS.close);
+    await waitForSheetToLeave();
     await press(chip(personChip('Maria')));
     expect(chipsInBand()).toEqual([personChip('Maria')]);
     expectNoGuilt();
@@ -2984,7 +2997,7 @@ describe('⚠️ THE SIX DIMENSIONS COLLAPSE INTO ONE LINE (task 46)', () => {
 
     await pressLabel(FILTERS.close);
 
-    expect(screen.queryByRole('dialog')).toBeNull();
+    await waitForSheetToLeave();
     expect(screen.getAllByRole('group')).toHaveLength(3);
     expect(readingSelect().closest('aside')).not.toBeNull();
     expectNoGuilt();

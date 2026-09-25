@@ -66,16 +66,13 @@ export function Eyebrow({ children, className, tone = 'muted' }: EyebrowProps) {
     <span
       className={cx(
         /*
-          Medido no canvas, e os três artboards concordam valor a valor:
-          `Inicio.dc.html:40`, `Livro.dc.html:67`, `Dia.dc.html:44` —
-          `font-family:'Geist Mono'`, `font-size:10px`,
-          `letter-spacing:0.12em`, `text-transform:uppercase`.
-
-          `text-eyebrow` é `--size-eyebrow` (10px), e o token se chama assim
-          por causa DESTE rótulo: o `theme.css` o descreve como "mono: o RÓTULO
-          DE SEÇÃO, que substitui todo h2/h3".
+          ⚠️ REDESENHO VISUAL (2026-09-24): a monoespaçada maiúscula de
+          10px/0,12em que o canvas media (`Inicio.dc.html:40`,
+          `Livro.dc.html:67`, `Dia.dc.html:44`) virou rótulo de app de
+          celular — `text-label` (13px), semibold, tracking levemente negativo.
+          O pino é `__tests__/eyebrow.test.tsx`.
         */
-        'font-mono text-eyebrow uppercase tracking-[0.12em]',
+        'text-label font-semibold tracking-[-0.005em]',
         TONE_CLASS[tone],
         className,
       )}

@@ -39,23 +39,114 @@ import { describe, expect, it } from 'vitest';
  * desligar**. No dia em que o último `animate-*` sair do projeto, a metade de
  * baixo fica vermelha e alguém decide — em vez de a regra sobreviver sozinha,
  * apontando para nada.
+ *
+ * ============================================================================
+ * ⚠️⚠️ REPAGINAÇÃO VISUAL — decisão do dono de 2026-09-24
+ * ============================================================================
+ *
+ * O dono pediu o app "mais atual, sofisticado, cara de app de celular" e pediu
+ * MOVIMENTO por extenso: troca de tela animada (View Transitions), gaveta que
+ * sobe e desce, menu lateral que desliza, lista que entra em cascata, ícone do
+ * tema que gira, e o toque que afunda (`scale(0.97)`) no dedo. Isso **revoga**
+ * a letra do MVP 3.5 citada acima ("hover/pressionado mudando cor — sem
+ * `transform`, sem escala"), e a revogação é do dono, não desta guarda.
+ *
+ * O que NÃO foi revogado, e é o núcleo desta guarda:
+ *
+ * 1. **quem pediu menos movimento ao sistema recebe menos movimento** — o
+ *    bloco `@media (prefers-reduced-motion: reduce)` continua existindo e
+ *    matando animação e transição (agora também no `::backdrop` do menu), e a
+ *    troca de tela nem chama a View Transition nesse caso (`App.tsx`);
+ * 2. **movimento novo não entra calado.** A proibição virou LISTA FECHADA: cada
+ *    transição que não é de cor, cada gesto que responde com geometria, cada
+ *    `transform:` cru e cada `@keyframes` está nomeado abaixo, com igualdade
+ *    exata. Quem acrescentar movimento soma uma linha aqui e diz por quê — a
+ *    mesma forma "soma um, não apague" do `TRANSITION_FILES`.
  */
 
 /**
- * Os NOVE arquivos que escrevem `transition-*` em código, em ordem. Medido
- * nesta rodada; o `chrome.tsx` **não** está aqui, e essa é a correção: a
- * ocorrência dele é um exemplo dentro de um docblock.
+ * Os arquivos que escrevem `transition-*` em código, em ordem. Eram NOVE na
+ * Tarefa 48; a repaginação (2026-09-24) somou `book.tsx`, `form-styles.ts` e
+ * `streak-button.tsx`. O `chrome.tsx` **não** está aqui: a ocorrência dele é
+ * um exemplo dentro de um docblock.
  */
 const TRANSITION_FILES: readonly string[] = [
   'App.tsx',
   'RichEditor.tsx',
+  'book.tsx',
   'button.tsx',
   'context-bar.tsx',
   'filter-bar.tsx',
   'filter-chip.tsx',
+  'form-styles.ts',
   'highlight-fields.tsx',
   'home.tsx',
   'list.tsx',
+  'streak-button.tsx',
+];
+
+/**
+ * ⚠️ AS TRANSIÇÕES QUE NÃO SÃO DE COR — lista fechada da repaginação
+ * (2026-09-24). Todo o resto continua `transition-colors`.
+ */
+const NON_COLOUR_TRANSITIONS: readonly string[] = [
+  // o filete do campo acende no foco (`--shadow-field` → `-focus`)
+  'form-styles.ts: transition-shadow',
+  // a moldura do papel grifado, o mesmo filete
+  'highlight-fields.tsx: transition-shadow',
+  // a seta do cartão "ler hoje" anda meio passo no hover
+  'home.tsx: transition-transform',
+];
+
+/**
+ * ⚠️ OS GESTOS QUE RESPONDEM COM GEOMETRIA — lista fechada da repaginação.
+ * O afundar do toque NÃO está aqui porque não é utilitário: mora no
+ * `styles.css`, só para ponteiro grosso, e está em `RAW_TRANSFORMS`.
+ */
+const GESTURE_GEOMETRY: readonly string[] = [
+  // a mesma seta do cartão "ler hoje" (`group-hover:translate-x-0.5`)
+  'home.tsx: group-hover:translate',
+];
+
+/**
+ * ⚠️ TODO `transform:` CRU DO PROJETO, por arquivo e valor, em ordem.
+ * Era UM (a setinha do menu de bolha); a repaginação trouxe onze, todos no
+ * `styles.css`.
+ */
+const RAW_TRANSFORMS: readonly string[] = [
+  // a ponta do losango do menu de bolha — estática, não anima
+  'editor.css: rotate(45deg)',
+  // o menu lateral (`.app-drawer`): fechado, aberto, e o ponto de partida
+  'styles.css: translateX(100%)',
+  'styles.css: translateX(0)',
+  'styles.css: translateX(100%)',
+  // @keyframes rise-in (tela nova, lista em cascata)
+  'styles.css: translateY(8px)',
+  // @keyframes sink-out (tela velha)
+  'styles.css: translateY(-4px) scale(0.99)',
+  // @keyframes sheet-up / sheet-down (a gaveta no celular)
+  'styles.css: translateY(100%)',
+  'styles.css: translateY(100%)',
+  // @keyframes pop-in / pop-out (a gaveta como janela, no desktop)
+  'styles.css: translateY(8px) scale(0.97)',
+  'styles.css: scale(0.97)',
+  // @keyframes icon-swap (sol ↔ lua)
+  'styles.css: rotate(-90deg) scale(0.6)',
+  // o toque que afunda — só `@media (pointer: coarse)`
+  'styles.css: scale(0.97)',
+];
+
+/** ⚠️ OS `@keyframes` DO PROJETO — lista fechada da repaginação. */
+const KEYFRAMES: readonly string[] = [
+  'fade-in',
+  'fade-out',
+  'icon-swap',
+  'pop-in',
+  'pop-out',
+  'rise-in',
+  'sheet-down',
+  'sheet-up',
+  'sink-out',
 ];
 
 const APP_STYLES = readFileSync(
@@ -118,21 +209,50 @@ function matchesIn(pattern: RegExp, only?: 'utilities'): string[] {
   );
 }
 
-/** O bloco `@media (prefers-reduced-motion: reduce) { … }` do `styles.css`. */
+/**
+ * Utilitários de animação e transição do Tailwind.
+ *
+ * ⚠️ O `(?<![\w-])` é da repaginação: o cabeçalho escreve
+ * `[view-transition-name:app-header]`, e sem ele o `transition-name` de
+ * dentro dessa PROPRIEDADE arbitrária contava como utilitário de transição.
+ */
+const TRANSITION_UTILITY = /(?<![\w-])transition-[a-z][a-z-]*/gu;
+const ANIMATE_UTILITY = /(?<![\w-])animate-[a-z][a-z-]*/gu;
+
+/** `C:\…\home.tsx: group-hover:translate` → `home.tsx: group-hover:translate`. */
+function fileAndMatch(found: string): string {
+  const [where = '', ...rest] = found.split(': ');
+  return `${where.split(/[\\/]/u).at(-1) ?? ''}: ${rest.join(': ')}`;
+}
+
+/**
+ * O bloco `@media (prefers-reduced-motion: reduce) { … }` do `styles.css`.
+ *
+ * ⚠️ Achado pela REGRA `@media (…)`, não pela palavra solta, e sobre o CSS
+ * sem comentário: na repaginação o comentário do `.app-drawer` passou a citar
+ * "prefers-reduced-motion" antes do bloco de verdade, e o localizador antigo
+ * (`indexOf('prefers-reduced-motion')`) devolvia o bloco da GAVETA.
+ */
 function reducedMotionBlock(): string {
-  const at = APP_STYLES.indexOf('prefers-reduced-motion');
+  return blockOf('@media (prefers-reduced-motion: reduce)');
+}
+
+/** O bloco `{ … }` que abre depois de `rule`, no `styles.css` sem comentário. */
+function blockOf(rule: string): string {
+  const styles = withoutComments(APP_STYLES);
+  const at = styles.indexOf(rule);
   expect(at).toBeGreaterThan(-1);
 
-  const open = APP_STYLES.indexOf('{', at);
+  const open = styles.indexOf('{', at);
   let depth = 0;
-  for (let i = open; i < APP_STYLES.length; i += 1) {
-    if (APP_STYLES[i] === '{') depth += 1;
-    if (APP_STYLES[i] === '}') {
+  for (let i = open; i < styles.length; i += 1) {
+    if (styles[i] === '{') depth += 1;
+    if (styles[i] === '}') {
       depth -= 1;
-      if (depth === 0) return APP_STYLES.slice(open, i + 1);
+      if (depth === 0) return styles.slice(open, i + 1);
     }
   }
-  throw new Error('bloco de prefers-reduced-motion sem fechamento');
+  throw new Error(`bloco de ${rule} sem fechamento`);
 }
 
 describe('⚠️ prefers-reduced-motion (decisão E, Tarefa 48)', () => {
@@ -166,6 +286,25 @@ describe('⚠️ prefers-reduced-motion (decisão E, Tarefa 48)', () => {
     expect(block).toContain('*');
     expect(block).toContain('::before');
     expect(block).toContain('::after');
+    // E o `::backdrop` do menu lateral (repaginação): o `*` não o alcança, e
+    // o fundo dele anima cor e desfoque.
+    expect(block).toContain('::backdrop');
+  });
+
+  it('⚠️ skips the page View Transition entirely for whoever asked for less motion', () => {
+    /*
+      O `::view-transition-*` não é casado pelo `*` do bloco acima — então a
+      troca de tela é desligada na origem: o `App.tsx` consulta a preferência
+      ANTES de chamar `startViewTransition`.
+    */
+    const app = withoutComments(
+      readFileSync(resolve(process.cwd(), 'src', 'App.tsx'), 'utf8'),
+    );
+    const query = app.indexOf("matchMedia('(prefers-reduced-motion: reduce)')");
+    const call = app.indexOf('document.startViewTransition(');
+
+    expect(query).toBeGreaterThan(-1);
+    expect(call).toBeGreaterThan(query);
   });
 
   it('⚠️ and there IS motion for it to turn off — the other half of the pair', () => {
@@ -177,8 +316,8 @@ describe('⚠️ prefers-reduced-motion (decisão E, Tarefa 48)', () => {
       pergunta volta para o dono em vez de a regra sobreviver apontando para
       nada.
     */
-    const animations = matchesIn(/\banimate-[a-z][a-z-]*/gu, 'utilities');
-    const transitions = matchesIn(/\btransition-[a-z][a-z-]*/gu, 'utilities');
+    const animations = matchesIn(ANIMATE_UTILITY, 'utilities');
+    const transitions = matchesIn(TRANSITION_UTILITY, 'utilities');
 
     expect(animations.length).toBeGreaterThan(0);
     expect(transitions.length).toBeGreaterThan(0);
@@ -206,22 +345,24 @@ describe('⚠️ prefers-reduced-motion (decisão E, Tarefa 48)', () => {
     expect(files).toEqual([...TRANSITION_FILES]);
   });
 
-  it('⚠️ keeps every transition a COLOUR one — the closed MVP 3.5 decision', () => {
+  it('⚠️ keeps every transition a COLOUR one, except the NAMED ones of the repaginação', () => {
     /*
-      *"hover/pressionado mudando **cor** — sem `transform`, sem escala"*
-      (`docs/BACKLOG.md`, decisões fechadas do MVP 3.5). Era letra sem guarda
-      até esta fatia. Medido: as doze transições do projeto são
-      `transition-colors`, sem exceção.
+      Até a Tarefa 48 isto era *"hover/pressionado mudando **cor** — sem
+      `transform`, sem escala"* (MVP 3.5), e toda transição era
+      `transition-colors`. A repaginação de 2026-09-24 (decisão do dono)
+      acrescentou três, e elas estão nomeadas em `NON_COLOUR_TRANSITIONS`.
 
-      `transition-all` entra na lista porque ele anima a GEOMETRIA junto — é o
-      jeito mais fácil de trazer movimento de volta sem escrever a palavra.
+      `transition-all` continua proibido de fato: ele não está na lista, e é
+      o jeito mais fácil de trazer movimento sem escrever a palavra.
     */
-    const transitions = matchesIn(/\btransition-[a-z][a-z-]*/gu, 'utilities');
+    const transitions = matchesIn(TRANSITION_UTILITY, 'utilities');
 
     expect(transitions.length).toBeGreaterThan(0);
-    for (const found of transitions) {
-      expect(found).toMatch(/transition-colors$/u);
-    }
+    const nonColour = transitions
+      .filter((found) => !found.endsWith('transition-colors'))
+      .map(fileAndMatch)
+      .sort();
+    expect(nonColour).toEqual([...NON_COLOUR_TRANSITIONS].sort());
   });
 
   it('⚠️ never answers a hover or a press with GEOMETRY — only with colour', () => {
@@ -253,11 +394,17 @@ describe('⚠️ prefers-reduced-motion (decisão E, Tarefa 48)', () => {
       `\[transform:` do valor arbitrário, e `data-[…]` entre as variantes de
       gesto. E `translate`/`skew` sem exigir o eixo, porque `translate-4` (sem
       eixo) também move.
+
+      ⚠️ **REPAGINAÇÃO (2026-09-24): era "zero"; hoje é a lista fechada
+      `GESTURE_GEOMETRY`**, com um item — a seta do cartão "ler hoje". Um
+      segundo gesto com geometria fica vermelho até alguém nomeá-lo lá.
     */
     const gesture =
       /\b(?:hover|active|focus|focus-visible|focus-within|group-hover|group-active|group-focus|peer-hover|peer-focus|aria-pressed|aria-expanded|aria-selected|aria-checked|data-\[[^\]]*\]):(?:-?(?:scale|rotate|translate|skew)\b|\[transform:)/gu;
 
-    expect(matchesIn(gesture)).toEqual([]);
+    expect(matchesIn(gesture).map(fileAndMatch).sort()).toEqual(
+      [...GESTURE_GEOMETRY].sort(),
+    );
   });
 
   it('⚠️ and THAT sweep bites all three ways geometry comes back', () => {
@@ -301,18 +448,46 @@ describe('⚠️ prefers-reduced-motion (decisão E, Tarefa 48)', () => {
     }
   });
 
-  it('⚠️ and the only transform in the project is a STATIC one, named here', () => {
+  it('⚠️ and every raw transform in the project is NAMED here', () => {
     /*
-      ⚠️ A outra metade do par acima: a lista de `transform:` crus é fechada e
-      tem UM item. Um `transform:` novo — que é como o movimento entra sem
-      passar por utilitário do Tailwind — deixa isto vermelho, e quem o
-      escrever diz por escrito que está escrevendo.
+      ⚠️ A outra metade do par acima: a lista de `transform:` crus é fechada.
+      Era UM item (a setinha do menu de bolha) até a Tarefa 48; a repaginação
+      de 2026-09-24 trouxe os do menu lateral, das `@keyframes` e do toque que
+      afunda — todos em `RAW_TRANSFORMS`. Um `transform:` novo — que é como o
+      movimento entra sem passar por utilitário do Tailwind — deixa isto
+      vermelho, e quem o escrever diz por escrito que está escrevendo.
     */
-    const transforms = matchesIn(/transform:\s*[^;]+/gu);
+    const transforms = matchesIn(/(?<![\w-])transform:\s*[^;]+/gu).map(
+      (found) => {
+        const [where = '', what = ''] = found.split(/: transform:\s*/u);
+        return `${where.split(/[\\/]/u).at(-1) ?? ''}: ${what.trim()}`;
+      },
+    );
 
-    expect(transforms).toHaveLength(1);
-    expect(transforms[0]).toContain('editor.css');
-    // A setinha do menu de bolha. Ela não anima: é a ponta de um losango.
-    expect(transforms[0]).toContain('rotate(45deg)');
+    expect(transforms.sort()).toEqual([...RAW_TRANSFORMS].sort());
+  });
+
+  it('⚠️ keeps the press-and-sink ONLY for the finger (pointer: coarse)', () => {
+    /*
+      O toque que afunda foi pedido "cara de app de celular": no desktop o
+      hover já responde. A regra `:active` com `scale` tem de morar DENTRO do
+      `@media (pointer: coarse)` — solta, ela afundaria todo clique de mouse.
+    */
+    const styles = withoutComments(APP_STYLES);
+    const block = blockOf('@media (pointer: coarse)');
+
+    expect(block).toContain(':active');
+    expect(block).toContain('transform: scale(0.97)');
+    // E fora dele, nenhum `:active` mexe em geometria.
+    const outside = styles.replace(block, '');
+    expect(outside).not.toMatch(/:active[^{]*\{[^}]*transform/u);
+  });
+
+  it('⚠️ declares only the NAMED @keyframes', () => {
+    const declared = [
+      ...withoutComments(APP_STYLES).matchAll(/@keyframes\s+([\w-]+)/gu),
+    ].map((match) => match[1] ?? '');
+
+    expect(declared.sort()).toEqual([...KEYFRAMES].sort());
   });
 });

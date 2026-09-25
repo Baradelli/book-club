@@ -25,6 +25,12 @@ import { utilitiesIn } from './harness';
  * pela metade). Aqui se prova o outro lado: **as nove telas com campo de texto
  * desenham a borda do MESMO lugar**, e esse lugar é o `TEXT_INPUT_CLASS`.
  *
+ * ⚠️ **REPAGINAÇÃO VISUAL — decisão do dono de 2026-09-24: o campo de texto
+ * não tem mais `border`; a fronteira é o filete na cor do app dentro do token
+ * `--shadow-field`.** O número (3:1) segue medido no `theme-tokens.test.ts`,
+ * agora sobre esse filete; aqui segue o alcance — o mesmo lugar desenha a
+ * fronteira das nove telas, e nenhuma tela pinta borda ao lado.
+ *
  * As nove, medidas (`grep -l TEXT_INPUT_CLASS pages/*.tsx`): `accept-invite`,
  * `acervo-filters`, `book-form`, `busca`, `free-note-fields`,
  * `highlight-fields`, `login`, `plan-editor`, `preferencias`.
@@ -156,7 +162,7 @@ const SCREENS_WITH_TEXT_FIELDS: readonly string[] = [
 ];
 
 describe('⚠️ a borda de campo de texto tem tom PRÓPRIO (decisão A, Tarefa 48)', () => {
-  it('⚠️ draws the field edge with the FIELD tone, never with the decorative fillet', () => {
+  it('⚠️ draws the field edge with the FIELD ring (shadow-field), never with the decorative fillet', () => {
     /*
       ⚠️ **POR TOKEN, NUNCA POR `includes`, E A FUNÇÃO VEM DO HARNESS** (regra
       9: a forma certa tem um dono, e quem precisa dela IMPORTA, não copia).
@@ -168,7 +174,16 @@ describe('⚠️ a borda de campo de texto tem tom PRÓPRIO (decisão A, Tarefa 
     */
     const written = utilitiesIn(TEXT_INPUT_CLASS);
 
-    expect(written).toContain('border-line-field');
+    // A fronteira do campo e os seus dois estados, cada um do seu token — o
+    // filete de repouso, o de foco e o de erro (repaginação, 2026-09-24).
+    // (`utilitiesIn` tira a variante; o par variante+utilitário se lê cru.)
+    const raw = TEXT_INPUT_CLASS.split(/\s+/u);
+    expect(written).toContain('shadow-field');
+    expect(raw).toContain('focus:shadow-field-focus');
+    expect(raw).toContain('aria-invalid:shadow-field-error');
+    // Sem borda NENHUMA: o filete mora na sombra. Uma `border` de volta ao
+    // lado dele desenharia duas fronteiras, e a de baixo seria a decorativa.
+    expect(written.filter((name) => /^border(?:-|$)/u.test(name))).toEqual([]);
     /*
       ⚠️ A metade negativa, e ela não é redundância: sem ela o mutante que
       ACRESCENTA `border-line` ao lado do novo passa — e no CSS emitido quem

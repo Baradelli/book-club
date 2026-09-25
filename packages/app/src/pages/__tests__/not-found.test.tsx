@@ -108,7 +108,8 @@ describe('a tela de endereço errado (decisão B, Tarefa 48)', () => {
       de 20px de altura numa tela que só aparece depois de um erro é o pior
       alvo do app.
     */
-    expect(tokensOf(back, 'rounded-control')).toHaveLength(1);
+    // Repaginação visual (decisão do dono, 2026-09-24): a caixa virou pílula.
+    expect(tokensOf(back, 'rounded-full')).toHaveLength(1);
     expect(tokensOf(back, 'border')).toHaveLength(1);
     expect(tokensOf(back, 'min-h-12')).toHaveLength(1);
     // E deixou de ser sublinhado: a caixa é que diz que dá para tocar.

@@ -5,7 +5,6 @@ import {
   isCalendarDay,
   localDay,
   localTimeZone,
-  type PlanItemResponse,
 } from '@clube/shared';
 import { ApiError } from '@clube/shared/client';
 import {
@@ -15,17 +14,18 @@ import {
   Eyebrow,
   FOCUS_RING,
   List,
-  ListItem,
   MarginRail,
   PresenceMark,
+  Sheet,
 } from '@clube/ui';
+import { ChevronRight, Info } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { useAuth } from '../auth/auth-context';
 import { useActiveClub } from '../club/active-club';
-import { listItemRouterLink } from '../router-link';
+import { browserStorage } from '../env';
 import { Notice, Screen, TEXT_LINK_CLASS } from './chrome';
 import { formatClubMonth } from './club-month';
 import {
@@ -231,19 +231,46 @@ type BookState =
 const LOADING: BookState = { status: 'loading' };
 
 /**
- * `"2026-09-05"` → "sex., 5 de set.", no idioma da tela.
+ * O BLOQUINHO DE DATA da linha do plano: dia da semana curto e o número do dia.
  *
  * `isCalendarDay` antes de formatar, e não é zelo: o `planItemResponseSchema`
- * declara `date: z.string()` (não o dia refinado), então uma linha malformada
- * chegaria aqui, faria um `Invalid Date` e o `Intl` **lançaria** — apagando a
- * tela inteira por causa de um dia do plano. Sem formato canônico, mostra o
- * valor cru: feio é melhor que branco.
+ * declara `date: z.string()`, então uma linha malformada faria um
+ * `Invalid Date` e o `Intl` **lançaria** — apagando a tela inteira por causa
+ * de um dia do plano. Sem formato canônico, a linha mostra o valor cru.
  *
  * `timeZone: 'UTC'` porque o instante montado é meia-noite UTC do próprio dia:
- * formatar no fuso local devolveria o dia ANTERIOR em qualquer fuso negativo —
- * o bug de um dia que o `localDay` existe para não cometer.
+ * no fuso local sairia o dia ANTERIOR em qualquer fuso negativo.
  */
-function formatPlanDay(date: string, locale: string): string {
+function dayTileParts(
+  date: string,
+  locale: string,
+): { weekday: string; day: string } | null {
+  if (!isCalendarDay(date)) return null;
+  const instant = new Date(`${date}T00:00:00.000Z`);
+  const weekday = new Intl.DateTimeFormat(locale, {
+    weekday: 'short',
+    timeZone: 'UTC',
+  })
+    .format(instant)
+    .replace('.', '');
+  const day = new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(instant);
+  return { weekday, day };
+}
+
+/**
+ * `"2026-09-05"` → "sex., 5 de set.", no idioma da tela — a data da linha
+ * para quem OUVE.
+ *
+ * ⚠️ **O BLOQUINHO É `aria-hidden`**, e até o redesenho de 2026-09-24 a data
+ * da linha estava em texto de verdade (o slot `end` do sumário). Sem esta
+ * frase num `sr-only`, o leitor de tela anunciava o título e o trecho de
+ * cada dia e nunca QUANDO — trinta links sem data. Mesmos cuidados do
+ * bloquinho: `isCalendarDay` antes, `timeZone: 'UTC'`.
+ */
+function spokenPlanDay(date: string, locale: string): string {
   if (!isCalendarDay(date)) return date;
   return new Intl.DateTimeFormat(locale, {
     weekday: 'short',
@@ -254,30 +281,64 @@ function formatPlanDay(date: string, locale: string): string {
 }
 
 /**
- * A META DA DIREITA — o dia e o trecho, em monoespaçada, depois do condutor
- * (`Livro.dc.html:78`: `8 SET · 9`; `:146`: `Hoje · 161`).
- *
- * ⚠️ **ELA SE CHAMAVA `subtitleFor` ATÉ A TAREFA 44, e o nome deixou de ser
- * verdade junto com o slot.** A nota do `ListItemLook`
- * (`packages/ui/src/components/list.tsx`) previu a migração por escrito: o
- * braço `sumario` declara `subtitle?: never`, e o compilador a cobrou —
- * `TS2322: Type '"sumario"' is not assignable to type '"row"'`, porque o
- * `subtitle: string` já tinha estreitado a união para o outro braço. Manter o
- * nome antigo apontando para o slot `end` seria a classe de defeito que o
- * `dayRange` do `CLAUDE.md` registra: um nome que manda o próximo leitor
- * procurar a coisa errada.
- *
- * ⚠️ **E O DIA DE HOJE TROCA A DATA PELA PALAVRA, não a acrescenta.** É o que
- * o canvas desenha, e é o que impede a linha de hoje de dizer duas vezes a
- * mesma coisa. `todayLabel` é `null` em todo dia que não é hoje.
+ * A LEGENDA DAS MARCAS se aprende uma vez. Ela mora atrás do ícone de
+ * informação ao lado do título do plano e abre numa gaveta (o `Sheet`), nunca
+ * empurrando a lista para baixo. Até a primeira abertura, um pontinho no ícone
+ * avisa que há algo a ler ali; depois ele some.
  */
-function endFor(
-  item: PlanItemResponse,
-  locale: string,
-  todayLabel: string | null,
-): string {
-  const head = todayLabel ?? formatPlanDay(item.date, locale);
-  return item.reference === null ? head : `${head} · ${item.reference}`;
+const MARKS_LEGEND_SEEN_KEY = 'clube.book.marksLegendSeen';
+
+function readLegendSeen(): boolean {
+  try {
+    return browserStorage.getItem(MARKS_LEGEND_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeLegendSeen(): void {
+  try {
+    browserStorage.setItem(MARKS_LEGEND_SEEN_KEY, '1');
+  } catch {
+    // Aba privada: a legenda volta na próxima visita, e tudo bem.
+  }
+}
+
+/**
+ * A CAPA DO LIVRO quando o admin cadastrou uma (`coverUrl`), e a LOMBADA
+ * desenhada quando não — ou quando a imagem não carrega (link quebrado,
+ * offline): uma capa quebrada no topo da tela é pior que a lombada.
+ *
+ * O `alt` é vazio de propósito: o título do livro já é o `h1` logo acima, e
+ * o leitor de tela diria o mesmo nome duas vezes.
+ */
+function BookCover({ title, url }: { title: string; url: string | null }) {
+  const [failed, setFailed] = useState(false);
+
+  if (url === null || url === '' || failed) {
+    return (
+      <>
+        <BookSpine className="min-[1120px]:hidden" size="md" title={title} />
+        <BookSpine
+          className="hidden min-[1120px]:flex"
+          size="lg"
+          title={title}
+        />
+      </>
+    );
+  }
+
+  return (
+    <img
+      alt=""
+      className="h-36 w-24 shrink-0 rounded-[3px_10px_10px_3px] bg-surface-raised object-cover shadow-card min-[1120px]:h-48 min-[1120px]:w-32"
+      decoding="async"
+      onError={() => {
+        setFailed(true);
+      }}
+      src={url}
+    />
+  );
 }
 
 /** O endereço do livro — UM, para a carga e para a releitura (decisão F). */
@@ -327,6 +388,8 @@ export function BookPage() {
 
   const [state, setState] = useState<BookState>(LOADING);
   const [attempt, setAttempt] = useState(0);
+  const [legendOpen, setLegendOpen] = useState(false);
+  const [legendSeen, setLegendSeen] = useState(readLegendSeen);
   const [members, setMembers] = useState<MembersState>(MEMBERS_UNKNOWN);
 
   /*
@@ -524,16 +587,7 @@ export function BookPage() {
           a lombada abre o corpo, com o autor e a posição ao lado dela.
         */}
         <div className="flex items-center gap-4 min-[1120px]:gap-[26px]">
-          <BookSpine
-            className="min-[1120px]:hidden"
-            size="md"
-            title={book.title}
-          />
-          <BookSpine
-            className="hidden min-[1120px]:flex"
-            size="lg"
-            title={book.title}
-          />
+          <BookCover title={book.title} url={book.coverUrl} />
           <div className="flex min-w-0 flex-col gap-1.5 min-[1120px]:gap-2">
             {/*
               ⚠️ O autor em Instrument Serif itálico (`Livro.dc.html:49`:
@@ -562,9 +616,9 @@ export function BookPage() {
               `Intl` desde a Tarefa 16), e `book.month` já vem no
               `bookResponseSchema` que esta tela carrega. **Zero chave nova.**
 
-              O "288 p." continua fora: esse **seria** chave nova de verdade —
-              o `pt.ts` só tem `totalPages = 'Total de páginas'`, que é rótulo
-              de campo de formulário, não legenda de cabeçalho.
+              O número de páginas entrou no redesenho visual de 2026-09-24,
+              com a chave própria `pages.book.meta.pages` (plural, e o número
+              formatado pelo `Intl`) — e só quando `totalPages` existe.
 
               ⚠️ **"Dia 11 de 30" É A ÚNICA FRASE DO APP ISENTA DA VARREDURA
               DE PLACAR.** Ela diz ONDE a leitura de hoje está no mês; o número
@@ -599,16 +653,26 @@ export function BookPage() {
               cópia à mão que saiu daqui já tinha esses valores — a divergência
               é antiga, não é efeito deste conserto.
             */}
-            <Eyebrow className="truncate">
-              {todayItem === undefined
-                ? formatClubMonth(book.month, locale)
-                : `${formatClubMonth(book.month, locale)} · ${t(
-                    'pages.book.plan.dayOfPlan',
-                    {
+            <Eyebrow className="text-pretty">
+              {[
+                formatClubMonth(book.month, locale),
+                book.totalPages === null
+                  ? null
+                  : t('pages.book.meta.pages', {
+                      count: book.totalPages,
+                      formatted: new Intl.NumberFormat(locale).format(
+                        book.totalPages,
+                      ),
+                    }),
+                todayItem === undefined
+                  ? null
+                  : t('pages.book.plan.dayOfPlan', {
                       number: planItems.indexOf(todayItem) + 1,
                       total: planItems.length,
-                    },
-                  )}`}
+                    }),
+              ]
+                .filter((part): part is string => part !== null)
+                .join(' · ')}
             </Eyebrow>
           </div>
         </div>
@@ -719,83 +783,159 @@ export function BookPage() {
               ouve. Encurtá-la seria chave NOVA, e a regra 9 não permite
               nenhuma.
 
-              A legenda da direita é `pages.book.marks.hint` ("Cheio =
-              escreveu"), uma das quatro chaves que a Tarefa 40 deixou sem
-              consumidor. Ela é mono 9,5px / 0.08em / `--text-subtle`
-              (`Livro.dc.html:68`) — e **não** é um `Eyebrow`: ela não nomeia
-              seção nenhuma, ela explica a forma do glifo.
+              ⚠️ **À DIREITA, O BOTÃO DA LEGENDA** (redesenho visual de
+              2026-09-24): a dica "Cheio = escreveu" e o bloco "As marcas" da
+              margem saíram da tela, e a legenda com as duas amostras abre numa
+              gaveta atrás do ícone de informação. O pontinho dourado no ícone
+              some depois da primeira abertura (`MARKS_LEGEND_SEEN_KEY`).
             */}
-            <div className="flex items-baseline justify-between gap-3 border-b-2 border-accent pb-[7px]">
+            <div className="flex items-center justify-between gap-3">
               <h2>
                 <Eyebrow>{t('pages.book.plan.label')}</Eyebrow>
               </h2>
-              <span className="shrink-0 font-mono text-micro uppercase tracking-[0.08em] text-subtle">
-                {t('pages.book.marks.hint')}
-              </span>
+              <button
+                aria-haspopup="dialog"
+                aria-label={t('pages.book.marks.toggle')}
+                className={cx(
+                  'relative -mr-2 inline-flex size-11 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-raised hover:text-content',
+                  FOCUS_RING,
+                )}
+                onClick={() => {
+                  setLegendOpen(true);
+                  if (!legendSeen) {
+                    writeLegendSeen();
+                    setLegendSeen(true);
+                  }
+                }}
+                type="button"
+              >
+                <Info
+                  aria-hidden="true"
+                  className="size-[18px]"
+                  focusable="false"
+                />
+                {legendSeen ? null : (
+                  <span
+                    aria-hidden="true"
+                    className="absolute right-2.5 top-2.5 size-2 rounded-full bg-gold ring-2 ring-canvas"
+                  />
+                )}
+              </button>
             </div>
-            <List aria-label={t('pages.book.plan.label')} className="gap-1">
-              {/*
-              REGRA 2: a ordem é a que a API devolveu (o `getBookWithPlan`
-              ordena por `order`). A tela NÃO reordena — duas ordens seriam duas
-              verdades, e a que a pessoa vê mudaria com a tela.
-            */}
+            <Sheet
+              closeLabel={t('pages.book.marks.close')}
+              onClose={() => {
+                setLegendOpen(false);
+              }}
+              open={legendOpen}
+              title={t('pages.book.marks.heading')}
+            >
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-col gap-3.5">
+                  {(
+                    [
+                      ['read', t('pages.book.marks.read')],
+                      ['wrote', t('pages.book.marks.wrote')],
+                    ] as const
+                  ).map(([state_, phrase]) => (
+                    <div className="flex items-center gap-3" key={state_}>
+                      <span aria-hidden="true" className="flex">
+                        <PresenceMark
+                          label={phrase}
+                          name={me?.name ?? null}
+                          state={state_}
+                        />
+                      </span>
+                      <span className="text-base text-content">{phrase}</span>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  onClick={() => {
+                    setLegendOpen(false);
+                  }}
+                >
+                  {t('pages.book.marks.dismiss')}
+                </Button>
+              </div>
+            </Sheet>
+            <List appearance="grouped" aria-label={t('pages.book.plan.label')}>
               {planItems.map((item) => {
                 const authors = writers.get(item.id) ?? [];
                 const whoRead = readers.get(item.id) ?? [];
-                // REGRAS 3 e 4: comparação de STRING contra o `localDay`, nunca
-                // `new Date()`. E é a ÚNICA marca da lista: nada distingue passado
-                // de futuro.
                 const isToday = item.date === today;
+                const isFuture = item.date > today;
+                const tile = dayTileParts(item.date, locale);
+                const detail = isToday
+                  ? item.reference === null
+                    ? todayLabel
+                    : `${todayLabel} · ${item.reference}`
+                  : item.reference;
 
                 return (
-                  <ListItem
-                    /*
-                    ⚠️ **A META DA DIREITA, NO SLOT `end` (decisão A da Tarefa
-                    44).** Ela era `subtitle` desde a Tarefa 17; o canvas a
-                    desenha em monoespaçada depois do condutor pontilhado, e o
-                    `ListItem variant="sumario"` (Tarefa 41a) recusa `subtitle`
-                    pelo tipo para que a migração não pudesse ser esquecida.
-                  */
-                    end={endFor(item, locale, isToday ? todayLabel : null)}
-                    // REGRA 8: `/books/:bookId/days/:planItemId`, nessa ordem, e o
-                    // livro é o que ESTA tela carregou.
-                    href={dayNotePath(book.id, item.id)}
-                    key={item.id}
-                    renderLink={listItemRouterLink}
-                    /*
-                    REGRAS 6 e 7 — UM AVATAR POR PESSOA, E NADA QUANDO NINGUÉM
-                    ESCREVEU.
-
-                    Sem número em lugar nenhum: nem "+2" de estouro, nem
-                    contagem ao lado. E dia sem autoria não ganha "ninguém
-                    escreveu" — a ausência é silenciosa, que é o anti-culpa
-                    aplicado ao espaço vazio.
-
-                    ⚠️ **E DESDE A TAREFA 32b AS DUAS SOBREPOSIÇÕES DIVIDEM
-                    ESTE ESPAÇO** (decisão B): quem LEU e quem ESCREVEU, na
-                    mesma linha. Uma segunda lista ("quem leu") duplicaria o
-                    plano e obrigaria o olho a cruzar duas colunas. As duas são
-                    distinguíveis sem cor — forma e `aria-label` diferentes —,
-                    e o dono desse contrato é o `reading-marks.tsx`.
-
-                    ⚠️ **E DESDE A TAREFA 44 AS DUAS SÃO O MESMO DESENHO EM DOIS
-                    ESTADOS** (decisão B): o `PersonAvatar` saiu daqui e entrou
-                    o `PresenceMark`, que é o círculo de 18×18 com a inicial
-                    que o canvas desenha — CHEIO para quem escreveu
-                    (`Livro.dc.html:73`), VAZADO para quem leu (`:83`). O
-                    portador deixou de ser glifo × letra e passou a ser
-                    preenchimento × contorno; a regra ("distinguível sem cor")
-                    é a mesma, e o acusador continua sendo o mesmo `it()`.
-
-                    ⚠️ E o `size="sm"` do `PersonAvatar` (32px) morreu com ele:
-                    o `PresenceMark` tem UM tamanho, porque o canvas desenha um
-                    só. O alvo de toque não regride — a marca nunca foi alvo
-                    (decisão I da 32b), o alvo é a linha inteira.
-                  */
-                    start={
-                      authors.length === 0 &&
-                      whoRead.length === 0 ? undefined : (
-                        <span className="flex items-center gap-1">
+                  <li className="flex" key={item.id}>
+                    <Link
+                      className={cx(
+                        'flex min-h-16 w-full items-center gap-3.5 px-4 py-3 text-left transition-colors',
+                        isToday
+                          ? 'bg-surface-today hover:bg-gold-soft'
+                          : 'hover:bg-surface-raised',
+                        FOCUS_RING,
+                      )}
+                      to={dayNotePath(book.id, item.id)}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={cx(
+                          'flex w-11 shrink-0 flex-col items-center justify-center rounded-control py-1.5 leading-none',
+                          isToday
+                            ? 'bg-accent text-accent-fg'
+                            : isFuture
+                              ? 'border border-dashed border-line text-subtle'
+                              : 'bg-surface-raised text-content',
+                        )}
+                      >
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.04em] opacity-80">
+                          {tile?.weekday ?? ''}
+                        </span>
+                        <span className="mt-1 text-[17px] font-semibold tabular-nums">
+                          {tile?.day ?? item.date}
+                        </span>
+                      </span>
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        {/*
+                          A data para quem OUVE (o bloquinho é `aria-hidden`).
+                          O dia de hoje não a repete: a linha de detalhe dele
+                          já diz "Hoje".
+                        */}
+                        {isToday ? null : (
+                          <span className="sr-only">
+                            {spokenPlanDay(item.date, locale)}
+                          </span>
+                        )}
+                        <span
+                          className={cx(
+                            'line-clamp-2 font-reading text-[16px] font-medium leading-snug tracking-[-0.01em] text-pretty',
+                            isFuture ? 'text-subtle' : 'text-content',
+                          )}
+                        >
+                          {item.title}
+                        </span>
+                        {detail === null ? null : (
+                          <span
+                            className={cx(
+                              'truncate text-label',
+                              isToday
+                                ? 'font-semibold text-gold-strong'
+                                : 'text-muted',
+                            )}
+                          >
+                            {detail}
+                          </span>
+                        )}
+                      </span>
+                      {authors.length === 0 && whoRead.length === 0 ? null : (
+                        <span className="flex shrink-0 items-center gap-1">
                           <ReadMarks
                             me={me}
                             names={memberNames}
@@ -811,30 +951,6 @@ export function BookPage() {
                             return (
                               <PresenceMark
                                 key={userId}
-                                /*
-                                ⚠️ **REGRA 15 DA TAREFA 28: ISTO CONTINUA
-                                DIZENDO O NOME.**
-
-                                A primeira versão da Tarefa 27 deu nome ao
-                                ACERVO e deixou esta sobreposição — dois dedos
-                                acima, na mesma tela — com o glifo neutro e a
-                                frase genérica: a mesma pessoa aparecia como
-                                "Maria" embaixo e como "alguém" em cima,
-                                visível ao dono no primeiro scroll. A Tarefa 28
-                                tirou o acervo daqui e **não** pode desfazer a
-                                correção — é por isso que o
-                                `GET /clubs/:clubId/members` ficou nesta tela.
-
-                                A razão de a chave ser INTERPOLADA (e não o nome
-                                cru) é a metade FALADA: "escreveu neste dia" é o
-                                que dá sentido ao avatar sozinho para quem ouve
-                                a tela.
-
-                                O fallback é a frase genérica, e ele é o estado
-                                real de quem não conhece as pessoas (o
-                                `GET /members` que falhou, ou o autor que não
-                                está na lista).
-                              */
                                 label={
                                   authorName === null
                                     ? t('pages.book.plan.writer')
@@ -848,28 +964,14 @@ export function BookPage() {
                             );
                           })}
                         </span>
-                      )
-                    }
-                    title={item.title}
-                    /*
-                    ⚠️ **O TOM É O ÚNICO LUGAR ONDE HOJE E O FUTURO SE
-                    DISTINGUEM** (decisão D). O `today` traz o papel
-                    `--surface-today` e o filete dourado em cima e embaixo
-                    (`Livro.dc.html:139`); o `future` traz `--text-subtle`.
-
-                    ⚠️ **O PASSADO FICA SEM TOM, e isso é o §1 do plano.**
-                    Apagar o dia que já passou é cobrança desenhada, e
-                    destacá-lo é "você não leu isto". Ele é uma linha comum.
-                  */
-                    tone={
-                      isToday
-                        ? 'today'
-                        : item.date > today
-                          ? 'future'
-                          : undefined
-                    }
-                    variant="sumario"
-                  />
+                      )}
+                      <ChevronRight
+                        aria-hidden="true"
+                        className="size-4 shrink-0 text-subtle"
+                        focusable="false"
+                      />
+                    </Link>
+                  </li>
                 );
               })}
             </List>
@@ -880,7 +982,13 @@ export function BookPage() {
   }
 
   /**
-   * ⚠️ **A MARGEM DO DESKTOP — A LEGENDA DAS MARCAS** (decisão E da Tarefa 44).
+   * ⚠️ **A MARGEM DO DESKTOP.** Desde o redesenho visual de 2026-09-24 ela
+   * tem DOIS blocos — "Neste livro" e "Último grifo", em cartões, sem filete
+   * entre eles. O bloco "As marcas" descrito logo abaixo SAIU daqui: a legenda
+   * abre numa gaveta atrás do ícone de informação ao lado do título do plano.
+   * O texto abaixo fica como histórico da decisão E da Tarefa 44.
+   *
+   * ~~A LEGENDA DAS MARCAS~~ (decisão E da Tarefa 44).
    *
    * `LivroDesktop.dc.html:180-192`: 320px com `border-left` e
    * `padding-left:40px`, e o bloco "As marcas" — uma amostra VAZADA com "Leu
@@ -962,76 +1070,46 @@ export function BookPage() {
     ];
 
     return (
-      <MarginRail className="gap-[26px] pt-4 min-[1120px]:pt-0">
-        <section className="flex flex-col gap-3">
-          <h2>
-            <Eyebrow>{t('pages.book.marks.heading')}</Eyebrow>
-          </h2>
-          {(
-            [
-              ['read', t('pages.book.marks.read')],
-              ['wrote', t('pages.book.marks.wrote')],
-            ] as const
-          ).map(([state_, phrase]) => (
-            <div className="flex items-center gap-2.5" key={state_}>
-              <span aria-hidden="true" className="flex">
-                <PresenceMark
-                  label={phrase}
-                  name={me?.name ?? null}
-                  state={state_}
-                />
-              </span>
-              <span className="text-ui text-content">{phrase}</span>
-            </div>
-          ))}
-        </section>
-
-        {/*
-          ⚠️ **O FILETE DE 1px ENTRE BLOCOS** (`LivroDesktop.dc.html:194` e
-          `:209`: `height: 1px; background: #e3ddc9`, que é `--border-soft`).
-          Ele é o que separa três assuntos numa coluna de 320px sem precisar
-          de peso nem de cor — o mesmo papel que o `border-b` faz dentro das
-          linhas de inventário.
-
-          ⚠️ **`aria-hidden`, e não é zelo:** um `<div>` vazio anunciado no
-          meio da margem é a lição nº 16 do MVP 2 pela porta dos fundos. A
-          separação já está dita pelo `<h2>` de cada seção.
-
-          ⚠️ **E ELE NÃO EXISTIA até a rodada de correção da Tarefa 44b**,
-          embora a Definição de pronto daquela fatia o declarasse desenhado:
-          os três `<section>` eram separados só pelo `gap-[26px]`. O acusador
-          é `draws the three blocks in the CANVAS ORDER, with a hairline
-          between them`.
-        */}
-        <div aria-hidden="true" className="h-px bg-line-soft" />
-
+      <MarginRail className="gap-8 pb-10 pt-2 min-[1120px]:gap-[26px] min-[1120px]:pb-0 min-[1120px]:pt-0">
         <section className="flex flex-col gap-3">
           <h2>
             <Eyebrow>{t('pages.book.inBook.heading')}</Eyebrow>
           </h2>
-          {inBook.map(({ count, label }) => (
-            /*
-              `justify-between` com o filete embaixo (`:198-205`), e o número em
-              MONOESPAÇADA: é o mesmo tratamento que o canvas dá a todo número
-              de aparato, e é o que o separa do rótulo sem precisar de cor.
+          <div className="overflow-hidden rounded-card border border-line-soft bg-surface shadow-card [&>a+a]:border-t [&>a+a]:border-line-soft">
+            {inBook.map(({ count, label }) => (
+              /*
+              `justify-between` (`:198-205`), com o número numa pílula
+              (redesenho visual de 2026-09-24): é o que o separa do rótulo sem
+              precisar de cor. O filete entre as linhas é do cartão
+              (`[&>a+a]:border-t`), não de cada linha.
 
               A linha inteira é o alvo, e ela leva ao acervo do livro — o
               `Link` do roteador, nunca âncora crua: num PWA `<a href>` é
               navegação de DOCUMENTO e recarrega o shell inteiro (a lição
               medida da Tarefa 16).
             */
-            <Link
-              className={cx(
-                'flex items-baseline justify-between gap-3 border-b border-line-soft py-[7px] text-ui',
-                FOCUS_RING,
-              )}
-              key={label}
-              to={acervoPath(book.id)}
-            >
-              <span>{label}</span>
-              <span className="font-mono text-ui text-muted">{count}</span>
-            </Link>
-          ))}
+              <Link
+                className={cx(
+                  'flex min-h-12 items-center justify-between gap-3 px-4 py-3 text-ui transition-colors hover:bg-surface-raised',
+                  FOCUS_RING,
+                )}
+                key={label}
+                to={acervoPath(book.id)}
+              >
+                <span>{label}</span>
+                <span className="flex items-center gap-2">
+                  <span className="rounded-full bg-surface-raised px-2.5 py-0.5 text-label font-semibold tabular-nums text-muted">
+                    {count}
+                  </span>
+                  <ChevronRight
+                    aria-hidden="true"
+                    className="size-4 text-subtle"
+                    focusable="false"
+                  />
+                </span>
+              </Link>
+            ))}
+          </div>
           {/*
             ⚠️ **O TERCEIRO LINK É O MESMO `pages.book.acervoLink` DO CORPO, e
             os dois nunca aparecem juntos.** A spec desta fatia previa uma chave
@@ -1064,26 +1142,37 @@ export function BookPage() {
         </section>
 
         {/*
-          ⚠️ **O SEGUNDO FILETE VIVE DENTRO DO MESMO `null` DO BLOCO DO
-          GRIFO** (`LivroDesktop.dc.html:209`). Um separador escrito "depois
-          de toda seção" deixaria um traço solto no fim da coluna em todo
-          livro recém-cadastrado — que é o estado mais comum de todos, e é o
-          que o acusador `drops the second hairline together with the
-          last-highlight block` guarda.
+          ⚠️ **O BLOCO DO GRIFO SÓ EXISTE QUANDO HÁ GRIFO.** Desde o
+          redesenho visual de 2026-09-24 a margem não tem filete entre os
+          blocos (o `gap` separa); o que continua valendo é que um livro
+          recém-cadastrado — o estado mais comum de todos — não ganha um
+          rótulo "Último grifo" sobre o vazio. O acusador é `drops the
+          last-highlight block when there is no highlight`.
         */}
         {lastHighlight === null ? null : (
           <>
-            <div aria-hidden="true" className="h-px bg-line-soft" />
-            <section className="flex flex-col gap-2.5">
+            <section className="flex flex-col gap-3">
               <h2>
                 <Eyebrow>{t('pages.book.inBook.lastHighlight')}</Eyebrow>
               </h2>
-              <MarginHighlight
-                authorName={nameOfWriter(lastHighlight.userId, me, memberNames)}
-                color={lastHighlight.color}
-                page={lastHighlight.page}
-                quote={lastHighlight.quote}
-              />
+              <Link
+                className={cx(
+                  'rounded-card border border-line-soft bg-surface p-4 shadow-card transition-colors hover:bg-surface-raised',
+                  FOCUS_RING,
+                )}
+                to={acervoPath(book.id)}
+              >
+                <MarginHighlight
+                  authorName={nameOfWriter(
+                    lastHighlight.userId,
+                    me,
+                    memberNames,
+                  )}
+                  color={lastHighlight.color}
+                  page={lastHighlight.page}
+                  quote={lastHighlight.quote}
+                />
+              </Link>
             </section>
           </>
         )}

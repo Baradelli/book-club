@@ -117,13 +117,22 @@ describe('FilterChip', () => {
       <FilterChip label="Amarelo" onPress={vi.fn()} pressed={false} />,
     );
 
+    /*
+      ⚠️ **O REDESENHO VISUAL (2026-09-24) TROCOU O REPOUSO OCO.** O
+      `background:none` do canvas descrito acima virou a pílula de app de
+      celular: superfície (`bg-surface`) com a sombra de cartão
+      (`shadow-card`) e o filete mais leve (`border-line-soft`). O que
+      continua valendo é o TOM baixo do repouso (`text-muted`) e — o que este
+      teste guarda — a diferença visível entre solto e pressionado.
+    */
     const resting = screen
       .getByRole('button', { name: 'Amarelo' })
       .className.split(/\s+/u);
     expect(resting).toContain('rounded-full');
-    expect(resting).toContain('bg-transparent');
+    expect(resting).toContain('bg-surface');
+    expect(resting).toContain('shadow-card');
     expect(resting).toContain('text-muted');
-    expect(resting).toContain('border-line');
+    expect(resting).toContain('border-line-soft');
     expect(resting).not.toContain('bg-surface-raised');
 
     rerender(<FilterChip label="Amarelo" onPress={vi.fn()} pressed />);
@@ -133,7 +142,7 @@ describe('FilterChip', () => {
       .className.split(/\s+/u);
     expect(pressed).toContain('bg-accent');
     expect(pressed).toContain('text-accent-fg');
-    expect(pressed).not.toContain('bg-transparent');
+    expect(pressed).not.toContain('bg-surface');
     expect(pressed).not.toContain('text-muted');
   });
 });

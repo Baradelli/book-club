@@ -238,9 +238,17 @@ export const FORMAT_CONTROLS: readonly FormatControl[] = [
  *   dia, que ocupa a altura toda;
  * - `footer`: a MESMA barra, sem a âncora — para um editor que vive dentro de
  *   um formulário que rola;
+ * - `sticky`: uma pílula flutuante NO TOPO do texto que acompanha a rolagem,
+ *   presa logo abaixo do cabeçalho. É a forma da anotação do dia;
+ * - `top`: a mesma pílula no topo, parada — para quem desligou o
+ *   acompanhamento nas Preferências;
  * - `none` (o padrão): sem barra. É o comentário do grifo e o modo leitura.
+ *
+ * ⚠️ `top` e `sticky` sobem com `order-first` (o container é `flex-col`),
+ * e não mudando a posição do nó no JSX: a invariante de montagem abaixo proíbe
+ * irmão que troca de lugar.
  */
-export type PenBarPlacement = 'fixed' | 'footer' | 'none';
+export type PenBarPlacement = 'fixed' | 'footer' | 'none' | 'top' | 'sticky';
 
 export interface RichEditorProps {
   /** ProseMirror JSON (ADR 0001), nunca HTML. */
@@ -648,11 +656,19 @@ function PenBar({
   const [formatOpen, setFormatOpen] = useState(false);
 
   const active = editable && placement !== 'none';
+  const floating = placement === 'top' || placement === 'sticky';
 
   return (
     <div
       className={cx(
         active &&
+          floating &&
+          'relative z-20 order-first mb-5 flex h-14 w-fit max-w-[calc(100vw-1rem)] shrink-0 items-center gap-0.5 self-center rounded-full border border-line-soft bg-surface/90 px-2 shadow-popover backdrop-blur-xl backdrop-saturate-150',
+        active &&
+          placement === 'sticky' &&
+          'sticky top-[calc(3.5rem+env(safe-area-inset-top)+0.5rem)]',
+        active &&
+          !floating &&
           'relative z-20 flex h-[62px] shrink-0 items-center gap-0.5 border-t border-line bg-surface px-3 min-[1120px]:h-14 min-[1120px]:px-2',
         /*
           `fixed` ancora a barra acima do teclado no celular — é o que o canvas
@@ -704,7 +720,10 @@ function PenBar({
           )}
           {formatOpen ? (
             <div
-              className="clube-editor-popover clube-editor-row absolute bottom-full right-2 mb-2 flex items-center overflow-hidden"
+              className={cx(
+                'clube-editor-popover clube-editor-row absolute right-2 flex items-center overflow-hidden',
+                floating ? 'top-full mt-2' : 'bottom-full mb-2',
+              )}
               data-editor-format=""
             >
               <FormatControls editor={editor} />

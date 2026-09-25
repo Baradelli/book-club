@@ -178,19 +178,21 @@ export function FilterBar({
   if (collapsed && onRefine !== undefined && refineLabel !== undefined) {
     return (
       /*
-        O BLOCO RECOLHIDO — `Acervo.dc.html:57`: filete em cima e embaixo,
-        `padding:12px 0`, o resumo à esquerda e a pílula à direita. Não é
-        cartão: o desenho é caderno encadernado, e o que delimita é o filete.
+        O BLOCO RECOLHIDO — o resumo à esquerda e a pílula à direita.
+        ⚠️ `Acervo.dc.html:57` desenhava filete em cima e embaixo; o redesenho
+        visual (2026-09-24) tirou a moldura inteira — a linha flutua sobre a
+        página, como o resto das barras de app.
       */
       <div
         className={cx(
-          'flex items-center justify-between gap-3 border-y border-line-soft py-3',
+          'flex items-center justify-between gap-3 py-1',
           className,
         )}
       >
-        {/* Rótulo de seção em monoespaçada maiúscula (§A.6), medido em
-            `Acervo.dc.html:58`: 10px, `letter-spacing:0.08em`, `--text-muted`. */}
-        <span className="font-mono text-eyebrow uppercase tracking-[0.08em] text-muted">
+        {/* O resumo: `text-label` sans em `--text-muted` (o canvas,
+            `Acervo.dc.html:58`, media mono maiúscula de 10px; o redesenho
+            visual de 2026-09-24 trocou). */}
+        <span className="text-label font-medium text-muted">
           {summaryOf(groups)}
         </span>
         <button

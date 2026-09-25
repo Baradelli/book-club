@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { ChevronRight } from 'lucide-react';
+import { createContext, type ReactNode, useContext } from 'react';
 
 import { cx } from '../cx';
 import { FOCUS_RING, SPACING_STEP_PX } from './styles';
@@ -8,7 +9,16 @@ export interface ListProps {
   /** Já traduzido. Nomeia a lista para o leitor de tela. */
   'aria-label'?: string;
   className?: string;
+  /**
+   * `grouped`: as linhas moram num cartão só, separadas por filete — a lista
+   * agrupada de app de celular. `plain` (padrão): cada linha é o seu cartão.
+   */
+  appearance?: ListAppearance;
 }
+
+export type ListAppearance = 'plain' | 'grouped';
+
+const ListAppearanceContext = createContext<ListAppearance>('plain');
 
 /**
  * A lista de livros (Tarefa 16), de anotações (19) e o plano de leitura (17).
@@ -17,17 +27,29 @@ export interface ListProps {
  * de tela anunciar "lista, 12 itens" — a informação que diz se vale a pena
  * continuar tabulando.
  */
-export function List({ children, className, ...rest }: ListProps) {
+export function List({
+  appearance = 'plain',
+  children,
+  className,
+  ...rest
+}: ListProps) {
   return (
     // `role="list"` EXPLÍCITO com `list-none`: o Safari remove a semântica de
     // lista de um `<ul>` com `list-style: none` — o marcador some e a fala
     // "lista, 12 itens" some com ele. É o par que se esquece.
     <ul
-      className={cx('flex list-none flex-col', className)}
+      className={cx(
+        'list-enter flex list-none flex-col',
+        appearance === 'grouped' &&
+          'overflow-hidden rounded-card border border-line-soft bg-surface shadow-card [&>li+li]:border-t [&>li+li]:border-line-soft',
+        className,
+      )}
       role="list"
       {...rest}
     >
-      {children}
+      <ListAppearanceContext.Provider value={appearance}>
+        {children}
+      </ListAppearanceContext.Provider>
     </ul>
   );
 }
@@ -207,6 +229,7 @@ export function ListItem({
   tone,
   variant = 'row',
 }: ListItemProps) {
+  const appearance = useContext(ListAppearanceContext);
   /*
     REGRA 22: o item INTEIRO é o alvo — um `button`/`a` só, ocupando a linha.
 
@@ -225,17 +248,18 @@ export function ListItem({
             que separa uma linha da outra é um filete hairline
             (`border-bottom:1px solid var(--border-soft)`), não sombra.
 
-            ⚠️ O dia de HOJE troca o filete de baixo por um filete DOURADO em
-            cima e embaixo, e ganha papel próprio (`--surface-today`). Ele
-            também respira mais (`padding:12px 10px` contra `9px 0`), e é por
-            isso que ele leva `px-2.5` — a linha de hoje é a única do sumário
-            que avança sobre a margem.
+            ⚠️ O dia de HOJE troca o filete de baixo por um contorno DOURADO
+            fino (`ring-1`; o canvas desenhava filete de 2px em cima e embaixo,
+            e o redesenho visual de 2026-09-24 trocou) num papel próprio de
+            cantos arredondados (`--surface-today`). Ele também respira mais,
+            e é por isso que ele leva `px-3` — a linha de hoje é a única do
+            sumário que avança sobre a margem.
           */
           'flex w-full items-center gap-2.5 text-left transition-colors',
           SUMARIO_ITEM_HEIGHT_CLASS,
           tone === 'today'
-            ? 'border-y-2 border-gold-line bg-surface-today px-2.5 py-3'
-            : 'border-b border-line-soft py-2 hover:bg-surface',
+            ? 'my-1 rounded-control bg-surface-today px-3 py-3 ring-1 ring-gold-line'
+            : 'border-b border-line-soft py-2.5 hover:bg-surface',
           // A divergência do `--text-faint` está escrita no teste
           // `fades the future with a grey that still passes contrast`.
           tone === 'future' && 'text-subtle',
@@ -243,8 +267,10 @@ export function ListItem({
           className,
         )
       : cx(
-          'flex w-full items-center gap-3 rounded-control p-3 text-left transition-colors',
-          'hover:bg-surface',
+          'flex w-full items-center gap-3 px-4 py-3 text-left transition-colors',
+          appearance === 'grouped'
+            ? 'hover:bg-surface-raised active:bg-surface-raised'
+            : 'rounded-card border border-line-soft bg-surface shadow-card hover:bg-surface-raised',
           LIST_ITEM_HEIGHT_CLASS,
           FOCUS_RING,
           className,
@@ -292,8 +318,8 @@ export function ListItem({
         {end !== undefined ? (
           <span
             className={cx(
-              'shrink-0 whitespace-nowrap font-mono text-micro tracking-[0.06em]',
-              tone === 'today' && 'uppercase tracking-[0.1em] text-gold-strong',
+              'shrink-0 whitespace-nowrap text-label tabular-nums',
+              tone === 'today' && 'font-semibold text-gold-strong',
               // No dia futuro a data HERDA o cinza da linha, como no canvas.
               tone === undefined && 'text-muted',
             )}
@@ -315,6 +341,13 @@ export function ListItem({
         </span>
         {end !== undefined ? (
           <span className="shrink-0 text-sm text-muted">{end}</span>
+        ) : null}
+        {href !== undefined ? (
+          <ChevronRight
+            aria-hidden="true"
+            className="size-4 shrink-0 text-subtle"
+            focusable="false"
+          />
         ) : null}
       </>
     );

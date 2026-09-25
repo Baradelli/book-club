@@ -1,8 +1,15 @@
 import { type StorageLike, TOKEN_STORAGE_KEY } from '@clube/shared/client';
-import { act, render, screen } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../App';
 import { AuthProvider } from '../auth/auth-context';
@@ -20,6 +27,15 @@ import { createI18n } from '../i18n';
  *
  * Este arquivo é o teste de fumaça do shell: os rótulos vêm do catálogo, a
  * falha de rede NÃO limpa o token, e o 401 limpa.
+ *
+ * ⚠️ **REPAGINAÇÃO VISUAL — decisão do dono de 2026-09-24.** O cabeçalho
+ * deixou de ter os ícones de preferências e de sair: hoje ele tem o VOLTAR
+ * (fora das telas-raiz), o nome do app, o `ClubPicker`, o foguinho da
+ * corrente, o botão sol/lua e o ☰ que abre o MENU LATERAL — um `<dialog
+ * class="app-drawer">` com Início, Buscar, Preferências e o "Sair". E sair
+ * passou a PEDIR CONFIRMAÇÃO (uma gaveta "Sair da sua conta?"). Os testes de
+ * sessão abaixo continuam medindo a mesma decisão B; o que mudou é ONDE o
+ * "Sair" mora — então eles abrem o menu para achá-lo.
  */
 
 /** Fixture é factory (§7.7). */
@@ -86,7 +102,7 @@ function failWithNetworkError(): void {
   );
 }
 
-async function renderApp(storage: StorageLike): Promise<void> {
+async function renderApp(storage: StorageLike, path = '/'): Promise<void> {
   await act(async () => {
     render(
       // ⚠️ Até a Tarefa 38d o idioma era PINADO aqui (o `navigator.language`
@@ -101,7 +117,7 @@ async function renderApp(storage: StorageLike): Promise<void> {
             `isAuthenticated`) e acima do roteador (o cabeçalho não é rota).
           */}
           <ActiveClubProvider storage={storage}>
-            <MemoryRouter initialEntries={['/']}>
+            <MemoryRouter initialEntries={[path]}>
               <App />
             </MemoryRouter>
           </ActiveClubProvider>
@@ -113,9 +129,63 @@ async function renderApp(storage: StorageLike): Promise<void> {
   });
 }
 
+/**
+ * O jsdom não implementa `showModal`/`close` do `<dialog>` — e o `Sidebar`
+ * se protege disso (sem eles o menu só não abre). Para medir o menu aberto, o
+ * par é plantado aqui com o comportamento que importa: `open` liga e desliga,
+ * e o `close` dispara o evento que o `Sidebar` escuta.
+ */
+const dialogProto = HTMLDialogElement.prototype as {
+  showModal?: () => void;
+  close?: () => void;
+};
+const nativeShowModal = dialogProto.showModal;
+const nativeClose = dialogProto.close;
+
+beforeEach(() => {
+  dialogProto.showModal = function showModal(this: HTMLDialogElement) {
+    this.setAttribute('open', '');
+  };
+  dialogProto.close = function close(this: HTMLDialogElement) {
+    this.removeAttribute('open');
+    this.dispatchEvent(new Event('close'));
+  };
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  dialogProto.showModal = nativeShowModal;
+  dialogProto.close = nativeClose;
 });
+
+/** O cabeçalho do shell — as consultas do cabeçalho ficam DENTRO dele. */
+function header(): HTMLElement {
+  const found = document.querySelector('header');
+  // Sem esta precondição as asserções seriam vazias (§7.4).
+  if (found === null) throw new Error('o shell não tem `<header>`');
+  return found;
+}
+
+/** O menu lateral — o `<dialog class="app-drawer">`. */
+function drawer(): HTMLDialogElement {
+  const found = document.querySelector('dialog.app-drawer');
+  if (!(found instanceof HTMLDialogElement)) {
+    throw new Error('o shell não tem o `<dialog class="app-drawer">`');
+  }
+  return found;
+}
+
+/** Toca o ☰ do cabeçalho e devolve o menu aberto. */
+async function openMenu(): Promise<HTMLDialogElement> {
+  await act(async () => {
+    fireEvent.click(
+      within(header()).getByRole('button', { name: 'Abrir o menu' }),
+    );
+    await Promise.resolve();
+  });
+  expect(drawer().open).toBe(true);
+  return drawer();
+}
 
 describe('App', () => {
   it('takes every label of the shell from the catalog, never from loose text', async () => {
@@ -128,19 +198,140 @@ describe('App', () => {
     // `queryBy*` + `not.toBeNull` e nao `getBy*` + `toBeDefined` (§7.4): o
     // `getBy*` LANCA quando nao acha, entao o `toBeDefined` nao assertava
     // nada — o teste dizia so "a query nao explodiu".
-    expect(screen.queryByText('Clube do Livro')).not.toBeNull();
-    expect(screen.queryByText('Tema')).not.toBeNull();
+    expect(within(header()).queryByText('Clube do Livro')).not.toBeNull();
+    // O tema é um botão sol/lua: sem `matchMedia` no jsdom o sistema é claro,
+    // então o botão oferece o escuro.
+    expect(
+      screen.queryByRole('button', { name: 'Mudar para o tema escuro' }),
+    ).not.toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Tema' })).toBeNull();
     // ⚠️ "Idioma" saiu da lista na Tarefa 38d: o seletor de idioma não existe
     // mais, e a chave `language.*` saiu do catálogo junto com ele.
     expect(screen.queryByText('Idioma')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Sair' })).not.toBeNull();
+    expect(
+      within(header()).queryByRole('button', { name: 'Abrir o menu' }),
+    ).not.toBeNull();
+
+    // O menu: as três entradas e o "Sair", todos do catálogo.
+    const menu = await openMenu();
+    expect(menu.getAttribute('aria-label')).toBe('Menu');
+    for (const name of ['Início', 'Buscar', 'Preferências']) {
+      expect(within(menu).queryByRole('link', { name })).not.toBeNull();
+    }
+    expect(within(menu).queryByRole('button', { name: 'Sair' })).not.toBeNull();
+    expect(
+      within(menu).queryByRole('button', { name: 'Fechar o menu' }),
+    ).not.toBeNull();
   });
 
-  it('hides the sign-out button when there is no session', async () => {
+  it('keeps the old header icons OUT of the header — settings and sign-out live in the menu now', async () => {
+    respondWith(200, { token: 'token-renovado' });
+    await renderApp(memoryStorage({ [TOKEN_STORAGE_KEY]: 'token-da-sessao' }));
+
+    // A repaginação tirou os dois ícones do cabeçalho; eles não podem voltar
+    // em dobro com o menu.
+    expect(
+      within(header()).queryByRole('link', { name: 'Preferências' }),
+    ).toBeNull();
+    expect(within(header()).queryByRole('button', { name: 'Sair' })).toBeNull();
+  });
+
+  it('shows the back button on an inner page, and not on a root one', async () => {
+    respondWith(200, { token: 'token-renovado' });
+    await renderApp(memoryStorage({ [TOKEN_STORAGE_KEY]: 'token-da-sessao' }));
+    // Início é tela-raiz: lá só o menu.
+    expect(
+      within(header()).queryByRole('button', { name: 'Voltar' }),
+    ).toBeNull();
+
+    cleanup();
+    // Dentro de um livro: o voltar aparece.
+    await renderApp(
+      memoryStorage({ [TOKEN_STORAGE_KEY]: 'token-da-sessao' }),
+      '/books/b-1',
+    );
+    expect(
+      within(header()).queryByRole('button', { name: 'Voltar' }),
+    ).not.toBeNull();
+  });
+
+  it('asks before signing out — Cancel keeps the session, Sair ends it', async () => {
+    respondWith(200, { token: 'token-renovado' });
+    const storage = memoryStorage({ [TOKEN_STORAGE_KEY]: 'token-da-sessao' });
+    await renderApp(storage);
+
+    // Tocar "Sair" no menu NÃO sai: fecha o menu e abre a confirmação.
+    let menu = await openMenu();
+    await act(async () => {
+      fireEvent.click(within(menu).getByRole('button', { name: 'Sair' }));
+      await Promise.resolve();
+    });
+    expect(storage.getItem(TOKEN_STORAGE_KEY)).toBe('token-renovado');
+    expect(drawer().open).toBe(false);
+    let confirm = screen.getByRole('dialog', { name: 'Sair da sua conta?' });
+
+    // "Cancelar" deixa a sessão onde estava.
+    await act(async () => {
+      // Dois 'Cancelar' na gaveta: o X do Sheet (closeLabel) e o botão escrito.
+      // Qualquer um cancela; este é o escrito.
+      const cancel = within(confirm)
+        .getAllByRole('button', { name: 'Cancelar' })
+        .find((button) => button.textContent === 'Cancelar');
+      if (cancel === undefined) throw new Error('sem o botão Cancelar escrito');
+      fireEvent.click(cancel);
+      await Promise.resolve();
+    });
+    expect(storage.getItem(TOKEN_STORAGE_KEY)).toBe('token-renovado');
+
+    // "Sair" na confirmação é que apaga a sessão.
+    menu = await openMenu();
+    await act(async () => {
+      fireEvent.click(within(menu).getByRole('button', { name: 'Sair' }));
+      await Promise.resolve();
+    });
+    confirm = screen.getByRole('dialog', { name: 'Sair da sua conta?' });
+    await act(async () => {
+      fireEvent.click(within(confirm).getByRole('button', { name: 'Sair' }));
+      await Promise.resolve();
+    });
+    expect(storage.getItem(TOKEN_STORAGE_KEY)).toBeNull();
+    expect(
+      within(header()).queryByRole('button', { name: 'Abrir o menu' }),
+    ).toBeNull();
+  });
+
+  it('toggles between dark and light with the sun/moon button, starting from the system', async () => {
+    respondWith(200, { token: 'token-renovado' });
+    await renderApp(memoryStorage());
+    const root = document.documentElement;
+    // Primeira visita: nada gravado, o sistema decide (sem atributo).
+    expect(root.getAttribute('data-theme')).toBeNull();
+
+    try {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Mudar para o tema escuro' }),
+      );
+      expect(root.getAttribute('data-theme')).toBe('dark');
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Mudar para o tema claro' }),
+      );
+      expect(root.getAttribute('data-theme')).toBe('light');
+    } finally {
+      window.localStorage.removeItem('clube.theme');
+      root.removeAttribute('data-theme');
+    }
+  });
+
+  it('hides the menu — and the sign-out inside it — when there is no session', async () => {
     respondWith(200, { token: 'token-renovado' });
 
     await renderApp(memoryStorage());
 
+    expect(
+      within(header()).queryByRole('button', { name: 'Abrir o menu' }),
+    ).toBeNull();
+    expect(document.querySelector('dialog.app-drawer')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Sair' })).toBeNull();
   });
 
@@ -163,7 +354,9 @@ describe('App', () => {
     // — "melhorar" este `catch` para deslogar é a regressão que este teste
     // existe para impedir.
     expect(storage.getItem(TOKEN_STORAGE_KEY)).toBe('token-da-sessao');
-    expect(screen.queryByRole('button', { name: 'Sair' })).not.toBeNull();
+    // Ainda dentro: o menu (e o "Sair" nele) continua lá.
+    const menu = await openMenu();
+    expect(within(menu).queryByRole('button', { name: 'Sair' })).not.toBeNull();
   });
 
   it('DOES sign out when the refresh comes back 401 (decision B)', async () => {
@@ -175,6 +368,9 @@ describe('App', () => {
     // A outra metade, e é ela que faz a de cima não ser "nunca desloga": a
     // sessão morta sai, pelo `onUnauthorized` do cliente.
     expect(storage.getItem(TOKEN_STORAGE_KEY)).toBeNull();
+    expect(
+      within(header()).queryByRole('button', { name: 'Abrir o menu' }),
+    ).toBeNull();
     expect(screen.queryByRole('button', { name: 'Sair' })).toBeNull();
   });
 });
@@ -206,6 +402,16 @@ describe('App', () => {
  * O que se assere é a CLASSE, e não o pixel: o jsdom não tem layout, então
  * "tem 52px de altura" não é medível aqui — é a mesma escolha, com a mesma
  * razão, do `chrome.test.tsx` para as larguras.
+ *
+ * ⚠️⚠️ **REPAGINAÇÃO VISUAL — decisão do dono de 2026-09-24: a tabela acima é
+ * o REGISTRO do canvas, não o que está entregue.** O cabeçalho virou barra de
+ * app de celular: **56px nos dois cortes** (`h-14`, na linha interna — o
+ * `<header>` ganhou o recuo do entalhe, `pt-[env(safe-area-inset-top)]`),
+ * recuo `pl-4 pr-2` no celular (o ☰ encosta na borda, como em app nativo) e
+ * `px-10` acima do corte, e **fixo e translúcido**: `sticky top-0`, a cor da
+ * PÁGINA a 80% com desfoque atrás (`bg-canvas/80 backdrop-blur-xl`) em vez do
+ * papel de cartão, e o filete suave embaixo. O nome do app subiu para Fraunces
+ * 19/600.
  */
 describe('the header of the canvas (decision H)', () => {
   function headerOf(container: HTMLElement): HTMLElement {
@@ -217,38 +423,49 @@ describe('the header of the canvas (decision H)', () => {
     return header;
   }
 
-  it('is 52px tall on the phone and 56px above the 1120px cut', async () => {
+  it('is 56px tall on both sides of the 1120px cut (repaginação, 2026-09-24)', async () => {
     respondWith(200, { token: 'token-renovado' });
     await renderApp(memoryStorage({ [TOKEN_STORAGE_KEY]: 'token-da-sessao' }));
 
-    const className = headerOf(document.body).className;
+    const bar = headerOf(document.body).firstElementChild;
+    if (bar === null) throw new Error('o `<header>` não tem a linha interna');
+    const classes = bar.className.split(/\s+/u);
 
-    // `h-13` = 52px e `h-14` = 56px (passo de 4px do Tailwind).
-    expect(className).toContain('h-13');
-    expect(className).toContain('min-[1120px]:h-14');
-    // Recuo: 20px no celular, 40px acima do corte.
-    expect(className).toContain('px-5');
-    expect(className).toContain('min-[1120px]:px-10');
+    // `h-14` = 56px (passo de 4px do Tailwind), sem variante: vale nos dois.
+    expect(classes).toContain('h-14');
+    expect(classes).not.toContain('h-13');
+    // Recuo: o ☰ perto da borda no celular, 40px acima do corte.
+    expect(classes).toContain('pl-4');
+    expect(classes).toContain('pr-2');
+    expect(classes).toContain('min-[1120px]:px-10');
+    // E o entalhe do celular fica POR CIMA da linha, não dentro dela.
+    expect(headerOf(document.body).className).toContain(
+      'pt-[env(safe-area-inset-top)]',
+    );
   });
 
-  it('paints the header with the CARD colour, not the page colour', async () => {
+  it('sticks the header to the top, translucent over the PAGE colour, with a soft fillet', async () => {
     respondWith(200, { token: 'token-renovado' });
     await renderApp(memoryStorage({ [TOKEN_STORAGE_KEY]: 'token-da-sessao' }));
 
-    const className = headerOf(document.body).className;
+    const classes = headerOf(document.body).className.split(/\s+/u);
 
     /*
-      ⚠️ O canvas dá ao cabeçalho `background:var(--surface)` enquanto a página
-      é `--bg` — são DUAS superfícies, e é exatamente por isso que a regra 9
-      desta fatia manda ler o `theme-tokens.test.ts` antes de mexer. Ele mede o
-      `<div>` de `min-h-dvh` (a PÁGINA), não este elemento: as duas guardas
-      falam de elementos diferentes e nenhuma precisou afrouxar.
+      ⚠️ O canvas pintava o cabeçalho com `--surface` (papel de cartão); a
+      repaginação o pinta com a cor da PÁGINA a 80% e desfoca o que rola por
+      baixo — é o cabeçalho de app de celular. Continua sendo um elemento
+      DIFERENTE do `<div>` de `min-h-dvh` que o `theme-tokens.test.ts` mede
+      (a página tem UM fundo; este é outro elemento), então aquela guarda não
+      precisou afrouxar.
     */
-    expect(className).toContain('bg-surface');
-    expect(className).not.toContain('bg-canvas');
-    // O filete hairline embaixo, nunca sombra: o desenho é caderno.
-    expect(className).toContain('border-b');
-    expect(className).toContain('border-line');
+    expect(classes).toContain('sticky');
+    expect(classes).toContain('top-0');
+    expect(classes).toContain('bg-canvas/80');
+    expect(classes).toContain('backdrop-blur-xl');
+    expect(classes).not.toContain('bg-surface');
+    // O filete hairline embaixo, nunca sombra.
+    expect(classes).toContain('border-b');
+    expect(classes).toContain('border-line-soft');
   });
 
   /**
@@ -274,7 +491,9 @@ describe('the header of the canvas (decision H)', () => {
     respondWithOneClub();
     await renderApp(memoryStorage({ [TOKEN_STORAGE_KEY]: 'token-da-sessao' }));
 
-    const name = screen.queryByText('Clube do Casal');
+    // No cabeçalho — o menu lateral também escreve o nome, mas é o do
+    // cabeçalho que está sempre à vista.
+    const name = within(headerOf(document.body)).queryByText('Clube do Casal');
     // Sem esta precondição a asserção abaixo é vazia (§7.4): um `null` não tem
     // classe nenhuma, e "não contém `hidden`" passaria com o nome ausente.
     expect(name).not.toBeNull();
@@ -284,12 +503,13 @@ describe('the header of the canvas (decision H)', () => {
     }
   });
 
-  it('writes the name of the app in the reading serif (Fraunces 16/600)', async () => {
+  it('writes the name of the app in the reading serif (Fraunces 19/600 since the repaginação)', async () => {
     respondWith(200, { token: 'token-renovado' });
     await renderApp(memoryStorage({ [TOKEN_STORAGE_KEY]: 'token-da-sessao' }));
 
-    // `Inicio.dc.html:27`: `font-family:Fraunces;font-size:16px;font-weight:600`.
-    const name = screen.queryByText('Clube do Livro');
+    // `Inicio.dc.html:27` desenhava Fraunces 16/600; a repaginação
+    // (2026-09-24) subiu o corpo para 19px. A família e o peso ficaram.
+    const name = within(headerOf(document.body)).queryByText('Clube do Livro');
     expect(name).not.toBeNull();
     expect(name?.className).toContain('font-reading');
     expect(name?.className).toContain('font-semibold');

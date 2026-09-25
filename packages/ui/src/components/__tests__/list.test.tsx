@@ -246,12 +246,17 @@ describe('ListItem', () => {
       expect(row.querySelector('[data-sumario-leader]')).toBeNull();
     });
 
-    it('draws the dotted leader and the mono meta of the printed sumario', () => {
+    it('draws the dotted leader and the tabular meta of the printed sumario', () => {
       /*
         Medido em `Livro.dc.html:77,78`:
         `border-bottom:1px dotted var(--leader)` no condutor (que cresce até
         encostar no número) e `'Geist Mono' 9.5px letter-spacing:0.06em
         color:var(--text-muted)` na data/página à direita.
+
+        ⚠️ O redesenho visual (2026-09-24) tirou a mono da data/página: ela
+        agora é `text-label` sans com algarismos TABULARES (`tabular-nums`),
+        que é o que a mono garantia de verdade — os números de página
+        alinhados coluna abaixo. O cinza `text-muted` ficou.
 
         O condutor é DECORAÇÃO: ele sai do caminho do leitor de tela, senão a
         fala do plano fica cheia de pontos.
@@ -275,9 +280,10 @@ describe('ListItem', () => {
       expect(leader?.className).toContain('border-leader');
 
       const meta = screen.getByText('8 SET · 9');
-      for (const utility of ['font-mono', 'text-micro', 'text-muted']) {
+      for (const utility of ['text-label', 'tabular-nums', 'text-muted']) {
         expect(meta.className.split(/\s+/u)).toContain(utility);
       }
+      expect(meta.className.split(/\s+/u)).not.toContain('font-mono');
 
       // O título continua em serifa de leitura, que é o que faz o sumário
       // parecer sumário de livro e não tabela.
@@ -297,6 +303,11 @@ describe('ListItem', () => {
 
         ⚠️ E O OURO É FILETE, NÃO PREENCHIMENTO DE AÇÃO: o dia de hoje não é um
         botão primário no meio da lista. `--surface-today` é papel.
+
+        ⚠️ O redesenho visual (2026-09-24) trocou os dois filetes de 2px
+        (`border-y`) por um contorno fino em volta (`ring-1 ring-gold-line`)
+        num papel de cantos arredondados (`rounded-control`). A propriedade é
+        a mesma: o ouro contorna, nunca preenche.
       */
       render(
         <List>
@@ -311,8 +322,12 @@ describe('ListItem', () => {
       );
 
       const row = screen.getByRole('button');
-      expect(row.className).toContain('bg-surface-today');
-      expect(row.className).toContain('border-gold-line');
+      const rowTokens = row.className.split(/\s+/u);
+      expect(rowTokens).toContain('bg-surface-today');
+      expect(rowTokens).toContain('ring-gold-line');
+      expect(rowTokens).toContain('rounded-control');
+      // O ouro não vira preenchimento de ação.
+      expect(rowTokens.some((name) => name.startsWith('bg-gold'))).toBe(false);
       expect(row.querySelector('[data-sumario-leader]')?.className).toContain(
         'border-gold-line',
       );

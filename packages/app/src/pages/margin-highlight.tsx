@@ -78,7 +78,7 @@ export function MarginHighlight({
             PEN_DOT_CLASS[COLOR_PEN_KEYS[color]],
           )}
         />
-        <span className="font-mono text-micro uppercase tracking-[0.1em] text-muted">
+        <span className="text-label font-medium text-muted">
           {page === null
             ? who
             : `${t('pages.acervo.item.page', { number: page })} · ${who}`}

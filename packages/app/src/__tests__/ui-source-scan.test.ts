@@ -377,7 +377,11 @@ function classesUsedByUi(): string[] {
  * contendo a classe.
  */
 function escapedSelector(className: string): string {
-  return `.${className.replace(/[:/[\].%#,()]/gu, (character) => `\\${character}`)}`;
+  // `&`, `>` e `+` entraram com a repaginação (2026-09-24): a variante
+  // arbitrária `[&>li+li]:` e o `calc(3.5rem+env(…))` do cabeçalho fixo. O
+  // Tailwind escapa os três no seletor; sem escapá-los aqui a classe EMITIDA
+  // parecia faltando.
+  return `.${className.replace(/[:/[\].%#,()&>+]/gu, (character) => `\\${character}`)}`;
 }
 
 /** O build de verdade, num diretório temporário fora do repositório. */
@@ -495,10 +499,17 @@ describe('the app CSS sees packages/ui (rule 1)', () => {
       arquivo que nunca o escreveu. Nenhum outro arquivo deixou de escrevê-lo:
       o saldo da fatia é exatamente +1.
 
+      ⚠️ **E CAIU PARA 5 NA REPAGINAÇÃO VISUAL (decisão do dono, 2026-09-24).**
+      A repaginação trocou o raio de cartão, aviso e pílula por `rounded-card`
+      e `rounded-full` em várias telas; contado por esta função, sobram
+      `App.tsx`, `book.tsx`, `chrome.tsx`, `form-styles.ts` e
+      `highlight-fields.tsx`. E o `min-h-11` caiu de 6 para 5 no mesmo
+      movimento: o `form-styles.ts` subiu o campo para `min-h-12`.
+
       Mesmo recado de sempre: some um (ou tira um), não apague.
     */
-    expect(usagesOutsideUi('rounded-control')).toHaveLength(11);
-    expect(usagesOutsideUi('min-h-11')).toHaveLength(6);
+    expect(usagesOutsideUi('rounded-control')).toHaveLength(5);
+    expect(usagesOutsideUi('min-h-11')).toHaveLength(5);
     // E que o par de fronteira do regex funciona: `border-leader-future` não é
     // `border-leader`. Sem isto a canária mais frágil acusaria por um vizinho.
     expect(
@@ -804,7 +815,9 @@ describe('the 44px floor, measured against the compiled CSS (rule 9)', () => {
   it('gives the button and the list row a real height above the floor', () => {
     // A conta refeita do lado do CSS: a classe que o componente escreve, o
     // passo que o Tailwind declara, e o piso que a decisão F fixa.
-    for (const utility of ['min-h-11', 'min-h-13', 'min-h-14']) {
+    // (Repaginação, 2026-09-24: o `Button` passou a `min-h-12`/`min-h-14` e
+    // o `min-h-13` deixou de existir no CSS — a lista é a das alturas vivas.)
+    for (const utility of ['min-h-11', 'min-h-12', 'min-h-14']) {
       expect(spacingStepsOf(utility) * SPACING_STEP_PX).toBeGreaterThanOrEqual(
         MIN_TOUCH_TARGET_PX,
       );

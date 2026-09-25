@@ -240,7 +240,7 @@ function LazyEditor({
       }
     >
       <RichEditor
-        className="rounded-control border border-line bg-surface"
+        className="rounded-card bg-surface shadow-field clube-editor-boxed"
         doc={doc}
         editable={editable}
         onChange={onChange}

@@ -115,8 +115,9 @@ export function ReadingColumn({
     <div
       className={cx(
         /*
-          Celular: uma coluna, 20px de recuo (`Livro.dc.html:41`,
-          `Dia.dc.html:41`: `padding:…20px…`). Sem `gap` vertical: o canvas não
+          Celular: uma coluna, 16px de recuo (o canvas media 20px em
+          `Livro.dc.html:41`/`Dia.dc.html:41`; o redesenho visual de 2026-09-24
+          trocou pela calha de 16px de app de celular). Sem `gap` vertical: o canvas não
           desenha nenhuma tela de celular com a margem descida, então não há
           número para copiar — quem der o ar entre o texto e o aparato é a
           tela, com o número dela.
@@ -126,7 +127,7 @@ export function ReadingColumn({
           o docblock. `justify-center` porque a soma
           680+56+320 = 1056px é menor que a janela e o conjunto fica centrado.
         */
-        'flex w-full flex-col px-5',
+        'flex w-full flex-col px-4',
         'min-[1120px]:flex-row min-[1120px]:justify-center min-[1120px]:gap-14 min-[1120px]:px-23 min-[1120px]:pt-10',
         className,
       )}

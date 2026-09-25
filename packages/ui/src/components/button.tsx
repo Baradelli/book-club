@@ -62,8 +62,10 @@ export type ButtonSize = 'md' | 'lg';
  * COR, sem `transform` — e a borda é a cor que sobrou.
  */
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
-  primary: 'bg-accent text-accent-fg hover:bg-accent-hover',
-  ghost: 'border border-line bg-transparent text-content hover:bg-surface',
+  primary:
+    'bg-accent text-accent-fg shadow-[0_1px_2px_rgba(0,0,0,0.12),0_4px_12px_-6px_var(--accent)] hover:bg-accent-hover',
+  ghost:
+    'border border-line bg-surface text-content shadow-card hover:bg-surface-raised',
   seal: 'border border-gold-line bg-gold-soft text-gold-strong hover:border-gold',
 };
 
@@ -87,8 +89,8 @@ export const BUTTON_VARIANTS = VARIANT_CLASS;
  * Quem baixar o tamanho para caber mais botão na tela quebra o teste.
  */
 const SIZE: Record<ButtonSize, { heightClass: string; heightPx: number }> = {
-  md: { heightClass: 'min-h-11', heightPx: 11 * SPACING_STEP_PX },
-  lg: { heightClass: 'min-h-13', heightPx: 13 * SPACING_STEP_PX },
+  md: { heightClass: 'min-h-12', heightPx: 12 * SPACING_STEP_PX },
+  lg: { heightClass: 'min-h-14', heightPx: 14 * SPACING_STEP_PX },
 };
 
 /** Exportado só para o teste da regra 9 — a tela usa `size`. */
@@ -154,11 +156,11 @@ export function Button({
       // parado é ruído no DOM.
       aria-busy={loading || undefined}
       className={cx(
-        'relative inline-flex items-center justify-center gap-2 rounded-control font-medium transition-colors',
+        'relative inline-flex items-center justify-center gap-2 rounded-full font-semibold tracking-[-0.01em] transition-colors',
         'disabled:cursor-not-allowed disabled:opacity-60',
         FOCUS_RING,
         SIZE[size].heightClass,
-        size === 'lg' ? 'px-5 text-lg' : 'px-4 text-base',
+        size === 'lg' ? 'px-7 text-lg' : 'px-6 text-base',
         VARIANT_CLASS[variant],
         className,
       )}

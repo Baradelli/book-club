@@ -90,7 +90,7 @@ export function NotFoundPage() {
       <div aria-hidden className="h-px w-18 bg-line" />
       <Link
         className={cx(
-          'flex min-h-12 items-center rounded-control border border-line px-6 text-sm text-content',
+          'flex min-h-12 items-center rounded-full border border-line bg-surface px-6 text-sm font-medium text-content shadow-card',
           FOCUS_RING,
         )}
         to={HOME_PATH}

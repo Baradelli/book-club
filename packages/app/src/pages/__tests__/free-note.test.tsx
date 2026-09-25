@@ -345,6 +345,9 @@ async function renderFreeNote(
   return calls;
 }
 
+/** Quanto a saída animada do `Sheet` de `packages/ui` dura (com folga). */
+const SHEET_EXIT_MS = 250;
+
 async function advance(ms: number): Promise<void> {
   await act(async () => {
     vi.advanceTimersByTime(ms);
@@ -1042,7 +1045,11 @@ describe('⚠️ ARCHIVING ASKS FIRST (rules 18, 19, 20)', () => {
     // ⚠️ NENHUMA requisição — e o sheet saiu do DOM (fechado ele não está lá,
     // que é o que impede o "Cancelar" de continuar tabulável).
     expect(writes(calls)).toHaveLength(0);
+    // O `Sheet` fica montado mais ~200ms com `data-state="closed"` para a
+    // animação de saída; com os timers falsos desta suíte, a saída se anda à mão.
+    await advance(SHEET_EXIT_MS);
     expect(screen.queryByRole('dialog')).toBeNull();
+    expect(writes(calls)).toHaveLength(0);
     // E a anotação continua na tela, inteira.
     expect(editorText()).toBe('a ideia que veio no meio da noite');
   });

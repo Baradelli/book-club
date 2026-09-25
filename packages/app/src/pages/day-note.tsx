@@ -32,6 +32,7 @@ import { useAuth } from '../auth/auth-context';
 import { useActiveClub } from '../club/active-club';
 import { useOfflineNotes } from '../offline/offline-notes';
 import type { WriteResult } from '../offline/queue';
+import { readPenBarSticky } from '../pen-bar-preference';
 import { Notice, Screen } from './chrome';
 import {
   memberNamesOf,
@@ -279,6 +280,7 @@ export function DayNotePage() {
 
   const [state, setState] = useState<DayState>(LOADING);
   const [attempt, setAttempt] = useState(0);
+  const [penBarSticky] = useState(readPenBarSticky);
   const [members, setMembers] = useState<MembersState>(MEMBERS_UNKNOWN);
   const [save, setSave] = useState<SaveState>(SAVE_IDLE);
   /**
@@ -845,7 +847,7 @@ export function DayNotePage() {
             */}
             {/*
               ⚠️ **A CAIXA MORREU AQUI (decisão B da Tarefa 43).** Esta linha
-              era `className="rounded-control border border-line bg-surface"`, e
+              era `className="rounded-card border border-line-soft bg-surface shadow-card"`, e
               era ela que fazia o editor parecer um cartão dentro da página. O
               canvas põe o texto direto no papel (`Dia.dc.html:59`: nenhum
               `background`, nenhuma `border`, nenhum `border-radius` no bloco do
@@ -869,7 +871,7 @@ export function DayNotePage() {
               // entre renders — o eco descrito na §7 do `docs/EDITOR.md`.
               doc={state.draft ?? state.mine?.doc}
               onChange={handleChange}
-              penBar="fixed"
+              penBar={penBarSticky ? 'sticky' : 'top'}
               placeholder={t('pages.dayNote.placeholder')}
               slashHintLabel={t('editor.slashHint')}
               uploadFailedLabel={t('editor.image.uploadFailed')}
@@ -960,7 +962,7 @@ export function DayNotePage() {
 
                 return (
                   <article
-                    className="flex flex-col gap-2 rounded-control border border-line bg-surface p-4"
+                    className="flex flex-col gap-2 rounded-card border border-line-soft bg-surface shadow-card p-4"
                     key={note.id}
                   >
                     <header className="flex flex-wrap items-center gap-2">

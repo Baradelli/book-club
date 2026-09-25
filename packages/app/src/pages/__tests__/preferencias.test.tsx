@@ -15,7 +15,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { App } from '../../App';
 import type { ClubSummary } from '../../club/active-club';
@@ -340,7 +340,37 @@ function patches(calls: readonly RecordedRequest[]): RecordedRequest[] {
 
 describe('a rota e a entrada no cabeçalho (regras 2 e 3)', () => {
   it('opens from the header, with a link that the screen reader can name', async () => {
+    /*
+      A entrada mora no MENU LATERAL do cabeçalho (um `<dialog>` nativo aberto
+      por `showModal()`, em `App.tsx`). O jsdom não implementa `showModal` nem
+      `close`, e fechado o `<dialog>` é invisível para a árvore de
+      acessibilidade — então o dublê abaixo só faz o que o navegador faz: põe e
+      tira o `open`. Sem ele o link nunca teria nome acessível, e a busca por
+      papel (que é o que prova o "nomeável pelo leitor de tela") não acharia nada.
+    */
+    const proto = HTMLDialogElement.prototype;
+    proto.showModal = function showModal(this: HTMLDialogElement) {
+      this.setAttribute('open', '');
+    };
+    proto.close = function close(this: HTMLDialogElement) {
+      this.removeAttribute('open');
+      this.dispatchEvent(new Event('close'));
+    };
+    onTestFinished(() => {
+      // O jsdom não tem os dois: apagá-los devolve o protótipo ao que era.
+      Reflect.deleteProperty(proto, 'showModal');
+      Reflect.deleteProperty(proto, 'close');
+    });
+
     await renderSettings({ path: '/' });
+
+    // Fechado, o menu não oferece o link a ninguém.
+    expect(screen.queryByRole('link', { name: pt.nav.settings })).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: pt.nav.menu }));
+      await Promise.resolve();
+    });
 
     const entry = screen.getByRole('link', { name: pt.nav.settings });
     await act(async () => {

@@ -132,6 +132,15 @@ const BOOK_FORM_CHUNK_FLOOR_BYTES = 5_000;
  * mesmo de antes, e continua com folga de ~92 kB para as telas que faltam.
  * Estourou? A primeira coisa a olhar é o que entrou no grafo da entrada — não
  * este número.
+ *
+ * ⚠️ **E ESTOUROU NA REPAGINAÇÃO VISUAL (decisão do dono, 2026-09-24): 460.087
+ * B.** O que entrou: o cabeçalho novo do `App.tsx` (menu lateral, botão de
+ * voltar, troca de tema, confirmação de saída), o `streak-button.tsx`, os
+ * ícones novos do `lucide-react` e a tela do livro redesenhada. O teto NÃO
+ * subiu: o acervo e as preferências passaram a entrar por `React.lazy()` no
+ * `router.tsx` (o docblock do `AcervoRoute` diz por que essas duas, e por que
+ * o chunk do acervo é buscado logo depois da entrada), e a entrada voltou para
+ * ~442,6 kB.
  */
 const ENTRY_CEILING_BYTES = 450_000;
 

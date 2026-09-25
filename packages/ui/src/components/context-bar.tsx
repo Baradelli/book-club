@@ -148,7 +148,7 @@ export function ContextBar({
         para os lados sem deslocar o rótulo: o dedo acerta um pouco antes do
         chevron e um pouco depois da palavra.
       */
-      'flex min-h-11 min-w-0 items-center gap-2 -mx-2 px-2 text-muted transition-colors hover:text-content',
+      'flex min-h-11 min-w-0 items-center gap-1 -ml-2 pl-1 pr-2 text-accent transition-colors hover:text-accent-hover',
       FOCUS_RING,
     ),
     href,
@@ -162,10 +162,12 @@ export function ContextBar({
           tem 14px (`Livro.dc.html:37`) e 15px no desktop
           (`DiaDesktop.dc.html:37`).
         */}
-        <ChevronLeft aria-hidden="true" className="size-3.5 shrink-0" />
-        <span className="truncate font-mono text-eyebrow uppercase tracking-[0.1em]">
-          {backLabel}
-        </span>
+        <ChevronLeft
+          aria-hidden="true"
+          className="size-6 shrink-0"
+          strokeWidth={2.25}
+        />
+        <span className="truncate text-ui font-medium">{backLabel}</span>
       </>
     ),
   });
@@ -174,7 +176,7 @@ export function ContextBar({
     <div
       className={cx(
         // O filete hairline, nunca sombra: o desenho é caderno encadernado.
-        'flex w-full items-center border-b border-line-soft bg-canvas',
+        'sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-20 flex min-h-12 w-full items-center border-b border-line-soft bg-canvas/85 backdrop-blur-xl backdrop-saturate-150 min-[1120px]:static',
         actionLabel === undefined
           ? // `Livro.dc.html:36`: `padding:0 20px`. Sem `min-h` próprio — quem
             // define a altura é o alvo de 44px do link (veja o docblock).
@@ -205,19 +207,17 @@ export function ContextBar({
         <button
           className={cx(
             /*
-              `NovaAnotacao.dc.html:41`: `height:34px`, `padding:0 16px`,
-              `background:var(--accent)`, `color:var(--accent-fg)`,
-              `border-radius:3px`, `'Geist Mono'` 10px `0.1em` maiúsculo.
+              `NovaAnotacao.dc.html:41` desenhava 34px, raio de 3px e mono
+              maiúscula; o redesenho visual (2026-09-24) trocou por pílula
+              (`rounded-full`) em sans semibold.
 
-              ⚠️ Os 34px viraram `min-h-11` (44px) pela regra 7 — e aqui isso
-              custa zero ao desenho, porque a faixa com ação já tem 48px no
-              canvas e o alvo cabe inteiro dentro dela.
-
-              `rounded-callout` é o `--r-2` (3px), que é exatamente o raio que
-              o canvas dá a este botão nas DUAS pinturas. Ele nasceu sem
-              consumidor na Tarefa 41a, com prazo para a 47; este é o primeiro.
+              ⚠️ A ALTURA É `min-h-11` (44px), o piso da regra 7 — e não o
+              altura de 40px com que o redesenho chegou: 40px reprovava o
+              alvo de toque, e o acusador é
+              `context-bar.test.tsx › gives the action a 44px target`. Custa
+              zero ao desenho: a faixa tem 48px e o alvo cabe inteiro nela.
             */
-            'inline-flex min-h-11 shrink-0 items-center justify-center rounded-callout px-4 font-mono text-eyebrow uppercase tracking-[0.1em] transition-colors',
+            'inline-flex min-h-11 shrink-0 items-center justify-center rounded-full px-5 text-ui font-semibold transition-colors',
             ACTION_CLASS[actionVariant],
             FOCUS_RING,
           )}

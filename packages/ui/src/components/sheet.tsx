@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
-import { type ReactNode, useEffect, useId, useRef } from 'react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { cx } from '../cx';
 import { FOCUS_RING } from './styles';
@@ -60,19 +61,57 @@ export function Sheet({
   open,
   title,
 }: SheetProps) {
-  if (!open) return null;
+  /*
+    A SAÍDA ANIMADA: ao fechar, o painel fica montado mais 200ms com
+    `data-state="closed"` para o CSS (`.sheet-root` em `styles.css`) descê-lo
+    e apagar o fundo. O conteúdo desses 200ms é o ÚLTIMO que esteve aberto —
+    a tela costuma zerar o estado que o alimentava no mesmo clique.
+  */
+  const [present, setPresent] = useState(open);
+  const last = useRef({ children, className, closeLabel, onClose, title });
+  if (open) last.current = { children, className, closeLabel, onClose, title };
 
-  return (
+  useEffect(() => {
+    if (open) {
+      setPresent(true);
+      return undefined;
+    }
+    if (!present) return undefined;
+    const id = window.setTimeout(() => {
+      setPresent(false);
+    }, SHEET_EXIT_MS);
+    return () => {
+      window.clearTimeout(id);
+    };
+  }, [open, present]);
+
+  if (!open && !present) return null;
+  const shown = last.current;
+
+  /*
+    PORTAL PARA O <body>: o painel é `position: fixed`, e `fixed` só é relativo
+    à JANELA quando nenhum ancestral tem `backdrop-filter`, `transform` ou
+    `filter` — qualquer um deles vira o bloco de contenção. O cabeçalho do app
+    tem `backdrop-blur`: o foguinho abria a gaveta DENTRO do cabeçalho, presa
+    nos 56px dele e vazando para fora da tela. Montada no `<body>`, a gaveta
+    cobre a janela de qualquer lugar de onde for aberta.
+  */
+  return createPortal(
     <SheetPanel
-      className={className}
-      closeLabel={closeLabel}
-      onClose={onClose}
-      title={title}
+      className={shown.className}
+      closeLabel={shown.closeLabel}
+      closing={!open}
+      onClose={shown.onClose}
+      title={shown.title}
     >
-      {children}
-    </SheetPanel>
+      {shown.children}
+    </SheetPanel>,
+    document.body,
   );
 }
+
+/** Quanto a saída dura — espelha o `.sheet-root[data-state='closed']` do CSS. */
+const SHEET_EXIT_MS = 200;
 
 /**
  * O painel vive num componente próprio para que MONTAR seja o evento de
@@ -85,10 +124,34 @@ function SheetPanel({
   children,
   className,
   closeLabel,
+  closing,
   onClose,
   title,
-}: Omit<SheetProps, 'open'>) {
+}: Omit<SheetProps, 'open'> & { closing: boolean }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  /*
+    INERTE NA SAÍDA: nos 200ms em que a gaveta desce, ela ainda está no DOM com
+    o conteúdo antigo — e a tela, por baixo, já pode ter voltado a mostrar os
+    mesmos controles (o acervo repete os filtros na margem, com os mesmos
+    `id`s). `inert` tira o painel do Tab e do leitor de tela nesse intervalo;
+    `pointer-events-none` sozinho só barrava o mouse. Por atributo, e não por
+    prop, porque o React 18 não conhece `inert`.
+  */
+  useEffect(() => {
+    const root = rootRef.current;
+    if (root === null) return;
+    // E DESFAZ ao reabrir no meio da saída: o mesmo nó volta a ser a gaveta
+    // aberta, e um `inert` esquecido deixaria todos os botões dela mortos.
+    if (closing) {
+      root.setAttribute('inert', '');
+      root.setAttribute('aria-hidden', 'true');
+    } else {
+      root.removeAttribute('inert');
+      root.removeAttribute('aria-hidden');
+    }
+  }, [closing]);
   const generatedId = useId();
   const titleId = `${generatedId}-title`;
 
@@ -185,7 +248,14 @@ function SheetPanel({
 
   return (
     // `items-end` no celular (sobe de baixo) e `sm:items-center` no desktop.
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+    <div
+      ref={rootRef}
+      className={cx(
+        'sheet-root fixed inset-0 z-50 flex items-end justify-center sm:items-center',
+        closing && 'pointer-events-none',
+      )}
+      data-state={closing ? 'closed' : 'open'}
+    >
       {/*
         O backdrop é IRMÃO do painel, não pai: assim o clique dentro do painel
         nunca borbulha até aqui, e a regra 17 ("clique dentro NÃO fecha") não
@@ -225,7 +295,7 @@ function SheetPanel({
             scrim, a sombra que sobe (`--shadow-sheet`, negativa no Y) e o
             filete de topo.
           */
-          'relative flex max-h-[90dvh] w-full flex-col overflow-y-auto border-t border-line bg-surface text-content shadow-sheet',
+          'sheet-panel relative flex max-h-[90dvh] w-full flex-col overflow-y-auto bg-surface pb-[env(safe-area-inset-bottom)] text-content shadow-sheet',
           /*
             ⚠️ `--radius-sheet` VALE 10px DESDE A TAREFA 41a (decisão I), e até
             então valia 4px: a escala de quatro raios não tinha o 10px que o
@@ -264,14 +334,14 @@ function SheetPanel({
           className="mx-auto mt-3 h-1 w-9 shrink-0 rounded-pill bg-line-strong sm:hidden"
           data-sheet-handle=""
         />
-        <header className="flex items-start justify-between gap-3 border-b border-line p-4">
+        <header className="flex items-center justify-between gap-3 px-5 pb-2 pt-4">
           <h2 className="text-lg font-semibold" id={titleId}>
             {title}
           </h2>
           <button
             aria-label={closeLabel}
             className={cx(
-              'flex size-11 shrink-0 items-center justify-center rounded-control text-muted hover:bg-surface hover:text-content',
+              'flex size-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface-raised hover:text-content',
               FOCUS_RING,
             )}
             onClick={onClose}
@@ -284,7 +354,7 @@ function SheetPanel({
             <X aria-hidden="true" className="size-5" focusable="false" />
           </button>
         </header>
-        <div className="p-4">{children}</div>
+        <div className="px-5 pb-5 pt-2">{children}</div>
       </div>
     </div>
   );

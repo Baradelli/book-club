@@ -1047,35 +1047,35 @@ describe('the source of the form (rules 20, 21)', () => {
 const PENS = [
   {
     dot: 'bg-pen-a-dot',
-    edge: 'border-pen-a-dot',
+    tone: '[--field-tone:var(--pen-a-dot)]',
     ink: 'text-pen-a-dot',
     name: COLORS.yellow,
     paper: 'bg-pen-a',
   },
   {
     dot: 'bg-pen-v-dot',
-    edge: 'border-pen-v-dot',
+    tone: '[--field-tone:var(--pen-v-dot)]',
     ink: 'text-pen-v-dot',
     name: COLORS.green,
     paper: 'bg-pen-v',
   },
   {
     dot: 'bg-pen-l-dot',
-    edge: 'border-pen-l-dot',
+    tone: '[--field-tone:var(--pen-l-dot)]',
     ink: 'text-pen-l-dot',
     name: COLORS.orange,
     paper: 'bg-pen-l',
   },
   {
     dot: 'bg-pen-z-dot',
-    edge: 'border-pen-z-dot',
+    tone: '[--field-tone:var(--pen-z-dot)]',
     ink: 'text-pen-z-dot',
     name: COLORS.blue,
     paper: 'bg-pen-z',
   },
   {
     dot: 'bg-pen-r-dot',
-    edge: 'border-pen-r-dot',
+    tone: '[--field-tone:var(--pen-r-dot)]',
     ink: 'text-pen-r-dot',
     name: COLORS.pink,
     paper: 'bg-pen-r',
@@ -1105,6 +1105,16 @@ function paperParts(): { mark: Element; paper: Element } {
   const mark = paper.firstElementChild;
   if (mark === null) throw new Error('a aspa do papel saiu do DOM');
   return { mark, paper };
+}
+
+/**
+ * A MOLDURA do papel — o pai dele, que carrega o anel do campo (`shadow-field`)
+ * e, desde o redesenho visual de 2026-09-24, o TOM da caneta nesse anel.
+ */
+function frame(): Element {
+  const outer = paperParts().paper.parentElement;
+  if (outer === null) throw new Error('a moldura do papel saiu do DOM');
+  return outer;
 }
 
 function penButton(name: string): HTMLElement {
@@ -1145,19 +1155,26 @@ function pxOf(tokens: readonly string[], prefix: string): number {
 /** A pintura dos três elementos, numa string só — para comparar cinco delas. */
 function painting(): string {
   const { mark, paper } = paperParts();
-  return `${tokensOf(paper).join(' ')} || ${tokensOf(mark).join(' ')}`;
+  return [frame(), paper, mark]
+    .map((element) => tokensOf(element).join(' '))
+    .join(' || ');
 }
 
 describe('⚠️⚠️ THE QUOTE FIELD *IS* THE HIGHLIGHTED PAPER, AND IT REPAINTS (decision A)', () => {
   it('⚠️ paints the paper, its edge AND the quote mark with the pen that was chosen — all five', async () => {
     /*
-      ⚠️ **O MUTANTE DESTA FATIA:** fixar a caneta em `a` na tela (fundo, borda
+      ⚠️ **O MUTANTE DESTA FATIA:** fixar a caneta em `a` na tela (fundo, anel
       e aspa) tem de ficar vermelho aqui. É o mesmo mutante que a Tarefa 44b
       exigiu para o bloco "Último grifo", e lá ele pegou.
 
       Os TRÊS elementos entram porque são três lugares onde a cor pode divergir
-      sem que nenhum outro teste veja: a cor do papel vem do par `--pen-x`, a da
-      borda e a da aspa vêm do par `--pen-x-dot`.
+      sem que nenhum outro teste veja: a cor do papel vem do par `--pen-x`, a
+      do anel da moldura e a da aspa vêm do par `--pen-x-dot`.
+
+      ⚠️ **O REDESENHO VISUAL DE 2026-09-24 TIROU O FILETE DO PAPEL.** Campo não
+      tem mais borda, tem sombra — e a borda da caneta virou o TOM do anel da
+      moldura (`[--field-tone:var(--pen-x-dot)]`, lido pelo `.field-tone` de
+      `styles.css`). É por isso que "its edge" agora se lê na moldura.
     */
     await renderForm({ path: highlightNewPath(BOOK_ID) });
 
@@ -1166,20 +1183,17 @@ describe('⚠️⚠️ THE QUOTE FIELD *IS* THE HIGHLIGHTED PAPER, AND IT REPAIN
 
       const { mark, paper } = paperParts();
       expect(tokensOf(paper)).toContain(pen.paper);
-      expect(tokensOf(paper)).toContain(pen.edge);
+      expect(tokensOf(frame())).toContain(pen.tone);
       /*
         ⚠️ **COR SEM LARGURA NÃO É FILETE — e esta linha nasceu de um mutante
-        que sobreviveu a 975 testes** (rodada de correção da 47a). Apagar o
-        utilitário de largura da classe do papel, deixando só o de cor, faz a
-        borda ir a **zero** em produção: some nos dois temas, nas cinco
-        canetas, e o nome deste teste (`its edge`) continuava jurando que ela
-        estava guardada. É o §7.9 literal — o nome do teste é parte da guarda.
-
-        O par negativo fecha a outra ponta: a largura declarada para não ser
-        nenhuma também é filete que não existe.
+        que sobreviveu a 975 testes** (rodada de correção da 47a). A lição vale
+        igual para o anel: o tom sozinho não desenha nada. Sem o `field-tone`
+        (quem lê `--field-tone`) e sem o `shadow-field` (quem desenha o anel),
+        a variável é trocada e nenhum pixel muda, nas cinco canetas — e o nome
+        deste teste (`its edge`) continuaria jurando que ele está guardado.
       */
-      expect(tokensOf(paper)).toContain('border');
-      expect(tokensOf(paper)).not.toContain('border-0');
+      expect(tokensOf(frame())).toContain('field-tone');
+      expect(tokensOf(frame())).toContain('shadow-field');
       expect(tokensOf(mark)).toContain(pen.ink);
       expectNoGuilt();
     }
@@ -1216,20 +1230,23 @@ describe('⚠️⚠️ THE QUOTE FIELD *IS* THE HIGHLIGHTED PAPER, AND IT REPAIN
     /*
       O registro começa sem cor (a cor é obrigatória, regra 13), e papel
       grifado de caneta nenhuma seria uma cor inventada. Enquanto não há
-      caneta, o campo é superfície e filete — e NENHUMA classe de caneta.
+      caneta, o campo é superfície e o anel neutro do campo — e NENHUMA classe
+      de caneta, nem o tom dela no anel.
     */
     await renderForm({ path: highlightNewPath(BOOK_ID) });
 
     const { mark, paper } = paperParts();
     expect(tokensOf(paper)).toContain('bg-surface');
-    expect(tokensOf(paper)).toContain('border-line');
-    // Largura, não só cor — a mesma lição do mutante que sobreviveu acima.
-    expect(tokensOf(paper)).toContain('border');
-    expect(tokensOf(paper)).not.toContain('border-0');
-    for (const token of [...tokensOf(paper), ...tokensOf(mark)]) {
+    // O anel continua lá — neutro, não ausente.
+    expect(tokensOf(frame())).toContain('shadow-field');
+    for (const token of [
+      ...tokensOf(frame()),
+      ...tokensOf(paper),
+      ...tokensOf(mark),
+    ]) {
       expect(token.startsWith('bg-pen-')).toBe(false);
-      expect(token.startsWith('border-pen-')).toBe(false);
       expect(token.startsWith('text-pen-')).toBe(false);
+      expect(token.startsWith('[--field-tone:')).toBe(false);
     }
     expectNoGuilt();
   });
@@ -1249,94 +1266,70 @@ describe('⚠️⚠️ THE QUOTE FIELD *IS* THE HIGHLIGHTED PAPER, AND IT REPAIN
 
     const { mark, paper } = paperParts();
     expect(tokensOf(paper)).toContain(green.paper);
-    expect(tokensOf(paper)).toContain(green.edge);
+    expect(tokensOf(frame())).toContain(green.tone);
     expect(tokensOf(mark)).toContain(green.ink);
     expect(tokensOf(paper)).not.toContain(yellow.paper);
+    expect(tokensOf(frame())).not.toContain(yellow.tone);
     expectNoGuilt();
   });
 });
 
 /**
  * ============================================================================
- * ⚠️⚠️ O PAPEL GANHOU A MESMA BORDA DOS OUTROS CAMPOS — decisão do dono de
- * 2026-09-24 (Tarefa 48, item C1)
+ * ⚠️⚠️ O PAPEL DENTRO DA MOLDURA DE CAMPO — decisão do dono de 2026-09-24
+ * (Tarefa 48, item C1), redesenhada no mesmo dia
  * ============================================================================
  *
- * **A história importa, porque a decisão só pôde ser tomada agora.** A nota 19
- * da Tarefa 47a recusou "filete neutro por fora" com um argumento **medido**:
- * o filete neutro daquela época dava **1,35:1** contra a página, e o filete de
- * caneta dava **2,28** no pior caso (o amarelo) — pôr o neutro por fora seria
- * emoldurar o melhor com o pior, e a nota disse, com essas palavras, que ele
- * *"não acrescenta fronteira"*.
+ * **A história importa.** A Tarefa 48 deu ao papel do grifo uma moldura com a
+ * MESMA borda dos outros campos de texto (`border-line-field`, 3,63:1 no
+ * claro e 4,01:1 no escuro contra a página), num nó PRÓPRIO por fora do papel
+ * — porque duas cores de borda no mesmo elemento deixariam a ordem de emissão
+ * do CSS decidir qual vence (auditoria da Tarefa 46, B5).
  *
- * **A decisão A desta fatia derrubou a premissa.** O `--border-field` nasceu
- * escurecido até fechar 3:1, e hoje o filete neutro do campo dá **3,63:1** no
- * claro e **4,01:1** no escuro contra a página. A recusa caiu junto com o
- * número em que ela se apoiava.
+ * **O redesenho visual de 2026-09-24 tirou o filete de todo campo.** Campo
+ * agora é superfície + ANEL (`shadow-field`: 1px + sombra), com o foco e o
+ * erro como variações do mesmo anel — o `TEXT_INPUT_CLASS` de
+ * `form-styles.ts`. A moldura do papel acompanhou: ela desenha o mesmo anel, e
+ * a caneta, em vez de um filete no papel, passou a dar o TOM desse anel
+ * (`[--field-tone:var(--pen-x-dot)]`, lido pelo `.field-tone` de
+ * `styles.css`). O papel de dentro continua sendo tingido pela caneta.
  *
- * **Os dez números, medidos nesta rodada** (o filete externo contra a página,
- * as cinco canetas × dois temas). Eles são iguais **de propósito**: o filete
- * externo não depende da caneta — é essa a diferença entre uma moldura de
- * campo e a pintura do papel:
- *
- * | caneta | claro | escuro |
- * | --- | --- | --- |
- * | a · amarelo | **3,63** | **4,01** |
- * | v · verde | **3,63** | **4,01** |
- * | l · laranja | **3,63** | **4,01** |
- * | z · azul | **3,63** | **4,01** |
- * | r · rosa | **3,63** | **4,01** |
- *
- * ⚠️ **NENHUM VALOR DE CANVAS MUDOU E NENHUM HEX PERSISTIDO FOI TOCADO.** O
- * tom da caneta continua pintando o papel **por dentro** — o preenchimento e o
- * filete de caneta seguem exatamente onde estavam, com os mesmos utilitários.
- * O que entrou foi uma moldura **por fora**, num elemento PRÓPRIO.
- *
- * ⚠️⚠️ **E O ELEMENTO PRÓPRIO NÃO É ZELO — É A ÚNICA FORMA CORRETA.** As duas
- * classes são do mesmo utilitário (`border-<cor>`), e o `cx` **não resolve
- * conflito de utilitário**: escritas no mesmo elemento, quem venceria seria a
- * ordem de emissão do CSS, que ninguém declara e que já obrigou este bloco a
- * pinar uma invariante à mão (auditoria da Tarefa 46, B5). Em elementos
- * diferentes não há conflito possível — a pergunta deixa de existir em vez de
- * ser respondida por sorte.
- *
- * ⚠️ **CONSEQUÊNCIA BOA, E MEDIDA: as guardas da 47a não mudaram de
- * significado.** O `paperParts()` acha o papel por `control.parentElement`, e
- * a moldura entrou **acima** dele — o papel continua sendo o mesmo nó, com as
- * mesmas classes. `toContain('border')`, o `border-danger` do erro e o
- * repintar dos três elementos continuam provando exatamente o que provavam.
+ * ⚠️ **O NÓ PRÓPRIO CONTINUA NECESSÁRIO**, agora por outro motivo: o tingimento
+ * (`bg-pen-x`) é do papel e a superfície neutra (`bg-surface`) é da moldura.
+ * No mesmo elemento seriam dois `bg-*` em conflito — a mesma pergunta que a
+ * Tarefa 48 tornou impossível em vez de respondida por sorte.
  */
 describe('⚠️⚠️ O PAPEL DENTRO DA MOLDURA DE CAMPO (decisão do dono, 2026-09-24)', () => {
-  /** A moldura: o pai do papel, que é quem carrega o filete de campo. */
-  function frame(): Element {
-    const outer = paperParts().paper.parentElement;
-    if (outer === null) throw new Error('a moldura do papel saiu do DOM');
-    return outer;
+  /**
+   * O anel do campo, lido da CONSTANTE compartilhada: `shadow-field` (o
+   * repouso) e o raio. Comparar com a constante é o que faz um rename do
+   * utilitário quebrar **aqui**, em vez de deixar esta tela para trás em
+   * silêncio — uma string copiada seria a cópia à mão que o mutante M28 da 47b
+   * existe para impedir.
+   */
+  function sharedFieldEdge(): string[] {
+    const edge = utilitiesIn(TEXT_INPUT_CLASS).filter(
+      (name) => name === 'shadow-field' || name.startsWith('rounded-'),
+    );
+    expect(edge).toHaveLength(2);
+    return edge;
   }
 
   it('⚠️ wraps the paper in the SAME field edge every other text field draws', async () => {
     await renderForm({ path: highlightNewPath(BOOK_ID) });
 
     const tokens = tokensOf(frame());
-
+    for (const utility of sharedFieldEdge()) {
+      expect(tokens).toContain(utility);
+    }
     /*
-      ⚠️ **A CLASSE VEM DA CONSTANTE COMPARTILHADA, NÃO DE UMA STRING COPIADA.**
-      `TEXT_INPUT_CLASS` é o que as nove telas com campo de texto escrevem, e a
-      decisão do dono é literal — "a MESMA borda dos outros campos". Comparar
-      com a constante é o que faz um rename do utilitário quebrar **aqui**, em
-      vez de deixar esta tela para trás em silêncio. Uma string copiada seria a
-      cópia à mão que o mutante M28 da 47b existe para impedir.
+      ⚠️ **E O FOCO É DA MOLDURA.** O `<textarea>` do trecho não desenha anel
+      de foco próprio (`outline-none`): quem acende é o `focus-within:` daqui.
+      Sem esta asserção, apagar o `focus-within:` deixaria o campo sem
+      indicador de foco nenhum (WCAG 2.4.7) e a suíte inteira verde — o jsdom
+      não pinta foco.
     */
-    const fieldEdge = utilitiesIn(TEXT_INPUT_CLASS).filter((name) =>
-      name.startsWith('border-line'),
-    );
-    expect(fieldEdge).toHaveLength(1);
-
-    expect(tokens).toContain(fieldEdge[0]);
-    // A largura, e não só a cor: sem o `border` nu ela vai a zero e o filete
-    // não pinta nada — é o mutante A1 da 47a, na moldura desta vez.
-    expect(tokens).toContain('border');
-    expect(tokens).not.toContain('border-0');
+    expect(tokens).toContain('focus-within:shadow-field-focus');
   });
 
   it('⚠️ wraps it on the CORRECTION screen too — not only on the one that creates', async () => {
@@ -1350,26 +1343,23 @@ describe('⚠️⚠️ O PAPEL DENTRO DA MOLDURA DE CAMPO (decisão do dono, 202
     await renderForm({ list: { status: 200, body: [aHighlight()] } });
 
     const tokens = tokensOf(frame());
-    const fieldEdge = utilitiesIn(TEXT_INPUT_CLASS).filter((name) =>
-      name.startsWith('border-line'),
-    );
-
-    expect(tokens).toContain(fieldEdge[0]);
-    expect(tokens).toContain('border');
+    for (const utility of sharedFieldEdge()) {
+      expect(tokens).toContain(utility);
+    }
+    expect(tokens).toContain('focus-within:shadow-field-focus');
   });
 
-  it('⚠️ keeps the pen INSIDE the frame — the frame never repaints, the paper always does', async () => {
+  it('⚠️ keeps the pen’s FILL inside the frame — the frame only takes the pen’s TONE for its ring', async () => {
     /*
-      ⚠️ **O PAR GUARDADO NOS DOIS SENTIDOS, e é ele que separa esta entrega de
-      "trocar o filete de caneta pelo neutro"** — que é exatamente o que a nota
-      19 da 47a mediu como PIORA (2,28 → 1,35 no amarelo). Aqui:
+      ⚠️ **O PAR GUARDADO NOS DOIS SENTIDOS**, nas cinco canetas:
 
-      - a moldura é neutra nas CINCO canetas (não repinta);
-      - o papel repinta nas cinco (o filete de caneta continua lá).
+      - a SUPERFÍCIE da moldura nunca repinta (sempre `bg-surface`, nunca
+        `bg-pen-*`) — só o tom do anel dela segue a caneta;
+      - o papel repinta o fundo, e não carrega o tom (o anel não é dele).
 
-      Sem a segunda metade, um mutante que apagasse o filete de caneta passaria
-      com a moldura no lugar. Sem a primeira, um que pintasse a moldura de
-      caneta passaria também.
+      Sem a primeira metade, um mutante que tingisse a moldura inteira passaria;
+      sem a segunda, um que movesse o tingimento para a moldura (e deixasse o
+      papel neutro) também.
     */
     await renderForm({ path: highlightNewPath(BOOK_ID) });
 
@@ -1379,22 +1369,24 @@ describe('⚠️⚠️ O PAPEL DENTRO DA MOLDURA DE CAMPO (decisão do dono, 202
       const outside = tokensOf(frame());
       const inside = tokensOf(paperParts().paper);
 
-      // A moldura NUNCA carrega caneta…
+      // A moldura NUNCA carrega o fundo da caneta, só o tom do anel…
+      expect(outside).toContain('bg-surface');
+      expect(outside).toContain(pen.tone);
       for (const token of outside) {
-        expect(token.startsWith('border-pen-')).toBe(false);
         expect(token.startsWith('bg-pen-')).toBe(false);
       }
-      // …e o papel SEMPRE carrega.
-      expect(inside).toContain(pen.edge);
+      // …e o papel SEMPRE carrega o fundo, nunca o anel.
       expect(inside).toContain(pen.paper);
+      expect(inside).not.toContain(pen.tone);
+      expect(inside).not.toContain('shadow-field');
     }
   });
 
-  it('⚠️ and the frame is a node of its OWN — the two edges never share an element', async () => {
+  it('⚠️ and the frame is a node of its OWN — the two fills never share an element', async () => {
     /*
-      ⚠️ Se as duas classes caíssem no mesmo elemento, `border-line-field` e
-      `border-pen-a-dot` seriam o MESMO utilitário em conflito, e quem venceria
-      é a ordem de emissão do CSS — uma invariante que ninguém declara. Esta
+      ⚠️ Se as duas pinturas caíssem no mesmo elemento, `bg-surface` e
+      `bg-pen-a` seriam o MESMO utilitário em conflito, e quem venceria é a
+      ordem de emissão do CSS — uma invariante que ninguém declara. Esta
       asserção é a que torna a pergunta impossível em vez de respondida por
       sorte.
     */
@@ -1405,8 +1397,8 @@ describe('⚠️⚠️ O PAPEL DENTRO DA MOLDURA DE CAMPO (decisão do dono, 202
     await press(penButton(pen.name));
 
     expect(frame()).not.toBe(paperParts().paper);
-    expect(tokensOf(frame())).not.toContain(pen.edge);
-    expect(tokensOf(paperParts().paper)).not.toContain('border-line-field');
+    expect(tokensOf(frame())).not.toContain(pen.paper);
+    expect(tokensOf(paperParts().paper)).not.toContain('bg-surface');
   });
 });
 
@@ -1680,37 +1672,25 @@ describe('⚠️ THE PAPER HAS A SHAPE, NOT ONLY A COLOUR (rodada de correção 
     expect(new Set(dots).size).toBe(PENS.length);
   });
 
-  it('⚠️ turns the INNER edge of the paper DANGER while the quote is invalid', async () => {
-    /*
-      ⚠️ **O NOME PERDEU A CLÁUSULA DE PARIDADE — *"the way every other field of
-      the app does"* —, e a asserção NÃO mudou.** A rodada de correção da
-      Tarefa 48 mediu a assimetria: nos outros campos a borda ÚNICA fica
-      vermelha; aqui a borda INTERNA (a da caneta) fica vermelha e a MOLDURA
-      `border-line-field` continua neutra, porque a moldura é um nó de fora que
-      a decisão do dono de 2026-09-24 acrescentou por cima.
-
-      Duas saídas foram pesadas, e a escolha é a conservadora: mover o vermelho
-      para a moldura seria **comportamento novo** decidido por auditoria, numa
-      passagem final; estreitar o nome descreve o que a asserção realmente
-      prova. A assimetria (duas arestas em erro, uma vermelha) fica registrada
-      como divergência declarada, não como conserto pendente disfarçado.
-    */
+  it('⚠️ turns the RING of the field DANGER while the quote is invalid', async () => {
     /*
       **M6 da auditoria:** até a Tarefa 47a o campo do trecho usava o estilo
-      compartilhado de campo de texto, que traz a borda vermelha do erro
+      compartilhado de campo de texto, que traz o vermelho do erro
       (`form-styles.ts`). A fatia tirou o campo daquele estilo e **o vermelho
       foi junto** — sobrava só o parágrafo abaixo, enquanto o campo de PÁGINA
-      da mesma tela continuava acendendo a borda. Um campo em erro que não se
+      da mesma tela continuava acendendo. Um campo em erro que não se
       distingue de um campo em repouso é metade do erro faltando.
+
+      ⚠️ **O REDESENHO DE 2026-09-24 RESOLVEU A ASSIMETRIA que a Tarefa 48
+      tinha registrado como divergência** (a borda interna vermelha e a moldura
+      neutra): campo não tem mais filete, e o erro acende o ANEL da moldura
+      (`shadow-field-error`) — o mesmo lugar onde os outros campos acendem.
 
       ⚠️ **AQUI O ESTADO VEM DA PROP, E NÃO DO ATRIBUTO** — e a divergência é
       declarada. O `form-styles.ts` usa a variante de atributo porque é uma
-      CONSTANTE compartilhada: ela não enxerga estado nenhum, e quem põe o
-      atributo é o `Field`. Este componente já é o dono do `error` e já decide
-      por ele três vezes (a descrição, o atributo e a mensagem), então a quarta
-      sai da mesma fonte — não há como as duas divergirem. E o que se ganha é o
-      que o §7.9 pede: a propriedade vira **decidível em jsdom**, porque é o
-      render que muda, e não uma regra de CSS que o jsdom não avalia.
+      CONSTANTE compartilhada: ela não enxerga estado nenhum. Este componente
+      já é o dono do `error`, então a classe sai da mesma fonte — e a
+      propriedade vira **decidível em jsdom**, porque é o render que muda.
     */
     const calls = await renderForm({
       list: { status: 200, body: [aHighlight()] },
@@ -1718,21 +1698,20 @@ describe('⚠️ THE PAPER HAS A SHAPE, NOT ONLY A COLOUR (rodada de correção 
 
     const pen = PENS[0];
     if (pen === undefined) throw new Error('paleta');
-    expect(tokensOf(paperParts().paper)).toContain(pen.edge);
-    expect(tokensOf(paperParts().paper)).not.toContain('border-danger');
+    expect(tokensOf(frame())).toContain('shadow-field');
+    expect(tokensOf(frame())).not.toContain('shadow-field-error');
 
     await typeInto(FIELDS.quote, '   ');
     await pressLabel(pt.pages.highlightForm.save);
 
     expect(patches(calls)).toHaveLength(0);
-    const tokens = tokensOf(paperParts().paper);
-    expect(tokens).toContain('border-danger');
-    expect(tokens).toContain('border');
-    // O filete vermelho SUBSTITUI o da caneta: dois utilitários de cor de borda
-    // na mesma classe deixariam a ordem de emissão do CSS decidir qual vence.
-    expect(tokens).not.toContain(pen.edge);
+    const tokens = tokensOf(frame());
+    expect(tokens).toContain('shadow-field-error');
+    // O anel vermelho SUBSTITUI o de repouso: dois `shadow-*` na mesma classe
+    // deixariam a ordem de emissão do CSS decidir qual vence.
+    expect(tokens).not.toContain('shadow-field');
     // E o papel continua sendo o papel — o erro pinta a fronteira, não o fundo.
-    expect(tokens).toContain(pen.paper);
+    expect(tokensOf(paperParts().paper)).toContain(pen.paper);
     expectNoGuiltBesidesFormError([FIELDS.quoteRequired]);
   });
 });
@@ -2018,12 +1997,14 @@ describe('⚠️ THE EDGE OF THE PAPER IS THE PEN’S, never the canvas gold (de
     for (const pen of PENS) {
       await press(screen.getByRole('button', { name: pen.name }));
       const { paper } = paperParts();
-      const classes = paper.getAttribute('class') ?? '';
+      // O papel e a moldura: desde o redesenho de 2026-09-24 a fronteira é o
+      // anel da moldura, e o dourado não pode entrar em nenhum dos dois.
+      const classes = `${paper.getAttribute('class') ?? ''} ${frame().getAttribute('class') ?? ''}`;
 
       // O que o artboard de desktop pede, e que reprova 1.4.11 (1,84:1).
-      expect(classes).not.toContain('border-gold');
-      // O que a tela pinta: o par ESCURO da caneta escolhida.
-      expect(classes).toContain(pen.edge);
+      expect(classes).not.toContain('gold');
+      // O que a tela pinta: o par ESCURO da caneta escolhida, como tom do anel.
+      expect(tokensOf(frame())).toContain(pen.tone);
     }
     expectNoGuilt();
   });

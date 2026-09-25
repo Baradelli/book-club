@@ -1,6 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { type ReactNode, useState } from 'react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SCROLL_LOCK_CLASS, Sheet } from '../sheet';
 
@@ -37,6 +37,24 @@ function Harness({ children }: { children?: ReactNode }) {
   );
 }
 
+/**
+ * ⚠️ A SAÍDA ANIMADA DO REDESENHO VISUAL (2026-09-24). Ao fechar, o painel
+ * fica montado mais 200ms com `data-state="closed"` para o CSS descê-lo
+ * (`SHEET_EXIT_MS` em `sheet.tsx`, espelho do `.sheet-root` do CSS). As
+ * regras 15, 19 e 20 continuam valendo — só passam a valer QUANDO A SAÍDA
+ * TERMINA. Os testes que fecham usam relógio falso e andam exatamente esses
+ * 200ms: um `waitFor` com folga passaria igual se a saída durasse 900ms, e
+ * um sheet que demora quase um segundo para devolver o foco é outro defeito.
+ */
+const SHEET_EXIT_MS = 200;
+
+/** Termina a animação de saída — o ponto em que o painel desmonta. */
+function finishExit(): void {
+  act(() => {
+    vi.advanceTimersByTime(SHEET_EXIT_MS);
+  });
+}
+
 /** Abre pelo botão, com o foco NELE — é o que a regra 19 vai cobrar de volta. */
 function openSheet(): HTMLElement {
   const opener = screen.getByRole('button', { name: 'Abrir' });
@@ -46,6 +64,10 @@ function openSheet(): HTMLElement {
 }
 
 describe('Sheet', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('is absent from the DOM while closed, not merely hidden (rule 15)', () => {
     render(<Harness>Conteúdo do sheet</Harness>);
 
@@ -57,24 +79,84 @@ describe('Sheet', () => {
   });
 
   it('closes on Escape (rule 16)', () => {
+    vi.useFakeTimers();
     render(<Harness>Conteúdo do sheet</Harness>);
     openSheet();
-    expect(screen.getByRole('dialog')).not.toBeNull();
+    // Pelo nó, e não pelo papel: na saída o painel fica `aria-hidden` e sai
+    // da árvore de acessibilidade — é justamente o que este teste mede.
+    const root = () => document.querySelector('.sheet-root');
+    expect(root()?.getAttribute('data-state')).toBe('open');
 
     fireEvent.keyDown(document, { key: 'Escape' });
 
+    // A saída começa JÁ: o painel entra em `closed` e para de receber
+    // clique (o que está descendo não pode ser tocado por engano)…
+    expect(root()?.getAttribute('data-state')).toBe('closed');
+    expect(root()?.className).toContain('pointer-events-none');
+    // …nem Tab, nem leitor de tela: o que desce é inerte, e a tela por baixo
+    // pode já estar mostrando os mesmos controles.
+    expect(root()?.hasAttribute('inert')).toBe(true);
+    expect(root()?.getAttribute('aria-hidden')).toBe('true');
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    // …e sai do DOM quando a animação termina (regra 15).
+    finishExit();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('closes on a click in the backdrop (rule 17)', () => {
-    const { container } = render(<Harness>Conteúdo do sheet</Harness>);
+  it('comes back ALIVE when reopened in the middle of its exit', () => {
+    vi.useFakeTimers();
+    render(<Harness>Conteúdo do sheet</Harness>);
     openSheet();
 
-    const backdrop = container.querySelector('[data-sheet-backdrop]');
+    // Fecha e, antes dos 200ms da saída, abre de novo: é o MESMO nó que volta.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(document.querySelector('.sheet-root')?.hasAttribute('inert')).toBe(
+      true,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir' }));
+
+    // Medido: sem desfazer o `inert`, a gaveta reaberta ficava com todos os
+    // botões mortos — foi o teste de "Sair" do shell que pegou.
+    const root = document.querySelector('.sheet-root');
+    expect(root?.getAttribute('data-state')).toBe('open');
+    expect(root?.hasAttribute('inert')).toBe(false);
+    expect(root?.hasAttribute('aria-hidden')).toBe(false);
+    expect(screen.getByRole('dialog')).not.toBeNull();
+  });
+
+  it('closes on a click in the backdrop (rule 17)', () => {
+    vi.useFakeTimers();
+    render(<Harness>Conteúdo do sheet</Harness>);
+    openSheet();
+
+    // `document`, não `container`: o sheet é montado por PORTAL no `<body>`.
+    const backdrop = document.querySelector('[data-sheet-backdrop]');
     expect(backdrop).not.toBeNull();
     fireEvent.click(backdrop as Element);
 
+    expect(
+      document.querySelector('.sheet-root')?.getAttribute('data-state'),
+    ).toBe('closed');
+    finishExit();
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('renders through a portal into <body>, out of any containing block', () => {
+    /*
+      ⚠️ O PORTAL É DO REDESENHO VISUAL (2026-09-24), e o motivo está no
+      `sheet.tsx`: `position: fixed` só é relativo à janela quando nenhum
+      ancestral tem `backdrop-filter`/`transform`/`filter`, e o cabeçalho
+      do app ganhou `backdrop-blur` — a gaveta aberta dali ficava presa nos
+      56px dele. O pino é que a raiz do sheet é filha direta do `<body>` e
+      NÃO está dentro da árvore de quem o renderizou.
+    */
+    const { container } = render(<Harness>Conteúdo do sheet</Harness>);
+    openSheet();
+
+    const root = screen.getByRole('dialog').closest('.sheet-root');
+    expect(root?.parentElement).toBe(document.body);
+    expect(container.contains(root ?? null)).toBe(false);
   });
 
   it('stays open on a click INSIDE the panel (rule 17)', () => {
@@ -143,10 +225,13 @@ describe('Sheet', () => {
   });
 
   it('gives the focus back to whoever opened it (rule 19)', () => {
+    vi.useFakeTimers();
     render(<Harness>Conteúdo do sheet</Harness>);
     const opener = openSheet();
+    expect(document.activeElement).not.toBe(opener);
 
     fireEvent.keyDown(document, { key: 'Escape' });
+    finishExit();
 
     // Sem isto o foco cai no `<body>` e quem usa teclado recomeça a tabular da
     // barra do navegador — perdendo o lugar onde estava na lista.
@@ -154,6 +239,7 @@ describe('Sheet', () => {
   });
 
   it('locks the background scroll while open and unlocks on close (rule 20)', () => {
+    vi.useFakeTimers();
     render(<Harness>Conteúdo do sheet</Harness>);
 
     expect(document.body.classList.contains(SCROLL_LOCK_CLASS)).toBe(false);
@@ -162,6 +248,7 @@ describe('Sheet', () => {
     expect(document.body.classList.contains(SCROLL_LOCK_CLASS)).toBe(true);
 
     fireEvent.keyDown(document, { key: 'Escape' });
+    finishExit();
     // O destravamento é a metade que some: um sheet que trava e não destrava
     // deixa a página inteira sem rolagem, e o sintoma aparece na tela SEGUINTE.
     expect(document.body.classList.contains(SCROLL_LOCK_CLASS)).toBe(false);
@@ -257,10 +344,11 @@ describe('Sheet', () => {
       no ciclo de Tab (regra 18) — se fosse, o primeiro Tab dentro do sheet
       cairia num elemento que não faz nada.
     */
-    const { container } = render(<Harness>Conteúdo do sheet</Harness>);
+    render(<Harness>Conteúdo do sheet</Harness>);
     openSheet();
 
-    const handle = container.querySelector('[data-sheet-handle]');
+    // `document`: o sheet vive num portal no `<body>`, fora do `container`.
+    const handle = document.querySelector('[data-sheet-handle]');
     expect(handle).not.toBeNull();
     expect(handle?.getAttribute('aria-hidden')).toBe('true');
     expect(handle?.tagName).toBe('DIV');

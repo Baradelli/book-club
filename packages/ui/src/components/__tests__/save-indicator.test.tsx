@@ -24,17 +24,22 @@ import { SaveIndicator } from '../save-indicator';
  * | dia, desktop | `DiaDesktop.dc.html:52` | idem, com 10px |
  */
 describe('SaveIndicator', () => {
-  it('draws the quiet mono note of the canvas', () => {
+  it('draws the quiet sans note of the redesign', () => {
+    /*
+      ⚠️ **O REDESENHO VISUAL (2026-09-24) TIROU A MONO MAIÚSCULA DAQUI.** A
+      tabela do docblock acima é a medida antiga do canvas, guardada como
+      histórico. O aviso agora é a nota discreta de app: `text-label` (13px)
+      em `font-medium`. O que continua sendo a propriedade é o tom BAIXO —
+      peso médio, nunca semibold, para não competir com o rótulo da seção.
+    */
     render(<SaveIndicator>Salvo 21:04</SaveIndicator>);
 
     const classes = screen.getByText('Salvo 21:04').className.split(/\s+/u);
-    expect(classes).toContain('font-mono');
-    // `text-micro` é `--size-micro` (9,5px), o degrau que o `theme.css`
-    // descreve como "a marca de presença e a nota de margem — o menor que
-    // ainda se lê". Três dos quatro artboards usam exatamente 9,5px.
-    expect(classes).toContain('text-micro');
-    expect(classes).toContain('uppercase');
-    expect(classes).toContain('tracking-[0.1em]');
+    expect(classes).toContain('text-label');
+    expect(classes).toContain('font-medium');
+    expect(classes).not.toContain('font-semibold');
+    expect(classes).not.toContain('font-mono');
+    expect(classes).not.toContain('uppercase');
   });
 
   it('uses the faded grey that STILL passes contrast', () => {
@@ -107,6 +112,6 @@ describe('SaveIndicator', () => {
 
     const classes = screen.getByText('Salvo 21:04').className.split(/\s+/u);
     expect(classes).toContain('ml-auto');
-    expect(classes).toContain('font-mono');
+    expect(classes).toContain('text-label');
   });
 });

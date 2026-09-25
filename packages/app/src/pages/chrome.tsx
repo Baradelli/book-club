@@ -102,7 +102,7 @@ import { listItemRouterLink } from '../router-link';
  * `Button`), então quem decide o visual do link é o app — num lugar só.
  */
 export const TEXT_LINK_CLASS = cx(
-  'rounded-control text-sm font-medium text-accent underline-offset-2 hover:underline',
+  'rounded-control text-sm font-semibold text-accent underline-offset-4 hover:underline',
   FOCUS_RING,
 );
 
@@ -125,7 +125,7 @@ export interface NoticeProps {
 /** O estado vazio e o de erro têm a MESMA forma; só o conteúdo muda. */
 export function Notice({ action, description, title }: NoticeProps) {
   return (
-    <div className="flex flex-col items-start gap-3 rounded-control border border-line bg-surface p-4">
+    <div className="flex flex-col items-start gap-3 rounded-card border border-line-soft bg-surface shadow-card p-4">
       <p className="font-medium text-content">{title}</p>
       {description !== undefined ? (
         <p className="text-sm text-muted">{description}</p>
@@ -237,9 +237,15 @@ const SCREEN_SPACING_CLASS: Readonly<Record<ScreenSpacing, string>> = {
  * quando há mais de uma linha —, e as quatro telas em que o canvas o usa são
  * exatamente as de título longo e vindo do conteúdo (o tema do dia, o nome do
  * livro). Aplicá-lo às dez não muda nada em "Acervo" e melhora o que quebra.
+ *
+ * ⚠️ **REPAGINAÇÃO VISUAL — decisão do dono de 2026-09-24.** A tabela e a
+ * "maioria" acima são o registro do canvas; o título entregue hoje é mais cheio
+ * e mais justo — `font-semibold`, `leading-[1.08]`, `tracking-[-0.03em]` —,
+ * e o `--size-title` subiu para 32px. A serifa de leitura e o degrau
+ * `text-title` ficaram; é isso que o `chrome.test.tsx` segura.
  */
 export const SCREEN_TITLE_CLASS =
-  'font-reading text-title font-medium leading-[1.14] tracking-[-0.02em] text-balance';
+  'font-reading text-title font-semibold leading-[1.08] tracking-[-0.03em] text-balance';
 
 export interface ScreenProps {
   /** Já traduzido, ou o título do conteúdo quando ele é a informação principal. */
@@ -317,7 +323,10 @@ export function Screen({
     filete de abertura" — e `Main.dc.html:35` e `Convite.dc.html:37` **têm**,
     na forma `top`, que é a mesma das outras sete.
   */
-  const fillet = rule === 'none' ? null : <RuleDouble accent={rule} />;
+  const fillet =
+    rule === 'none' ? null : (
+      <RuleDouble accent={rule} className="max-[1119px]:hidden" />
+    );
 
   if (width === 'entry') {
     /*
@@ -354,6 +363,10 @@ export function Screen({
       usam 18px (`Dia`, `DiaEscuro`) e os três restantes são telas de entrada e
       404 (48 · 56 · 120px).
 
+      ⚠️ Hoje é `pt-4` (16px): a repaginação visual de 2026-09-24 (decisão do
+      dono, com o cabeçalho fixo e translúcido) apertou o topo. A medição acima
+      fica como registro do canvas.
+
       `min-[1120px]:pt-0` devolve o comando ao `min-[1120px]:pt-10` do
       `ReadingColumn` acima do corte — os dois são do mesmo elemento, e é a
       ordem de emissão do Tailwind (variante de mídia depois do utilitário cru)
@@ -376,7 +389,7 @@ export function Screen({
     <ReadingColumn rail={rail}>
       <section
         className={cx(
-          'flex w-full flex-col pb-7 pt-5 min-[1120px]:pt-0',
+          'flex w-full flex-col pb-8 pt-4 min-[1120px]:pt-0',
           SCREEN_SPACING_CLASS[spacing],
         )}
       >
