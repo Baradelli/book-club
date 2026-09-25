@@ -1,0 +1,88 @@
+name: Deploy produção
+
+# Publica em https://clubelivro.vitorbaradelli.com (servidor `devocional`).
+# Roda a cada push na main e também pelo botão "Run workflow" na aba Actions.
+# Typecheck + testes unitários são o portão: vermelho não publica.
+# Ver docs/DEPLOY.md.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-producao
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Sem 'version': o pnpm/action-setup lê o packageManager do package.json
+      # (pnpm@9.0.0). Definir os dois causa ERR_PNPM_BAD_PM_VERSION.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Gerar cliente Prisma
+        run: pnpm --filter @clube/backend prisma:generate
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Testes
+        run: pnpm test
+
+      # Sem VITE_API_URL: o front cai no DEFAULT_API_URL = '/api' (mesma
+      # origem), que o nginx repassa para a API.
+      - name: Build do PWA
+        run: pnpm --filter @clube/app build
+
+      - name: Configurar SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # A API sobe ANTES do front: um front novo falando com uma API velha é o
+      # pior dos dois mundos.
+      - name: Atualizar e reiniciar a API
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 24 >/dev/null
+          export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+          cd /var/www/vitor/clube-do-livro
+          git fetch origin main
+          git reset --hard origin/main
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm --filter @clube/backend prisma:generate
+          corepack pnpm --filter @clube/backend exec prisma migrate deploy
+          pm2 startOrReload ecosystem.config.cjs --update-env
+          pm2 save
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:3030/health && exit 0
+            sleep 1
+          done
+          echo "API não respondeu /health em 30s" >&2
+          pm2 logs clube-api --lines 50 --nostream
+          exit 1
+          REMOTE
+
+      - name: Publicar o PWA (rsync)
+        run: |
+          RSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes"
+          rsync -az --delete -e "$RSH" packages/app/dist/ \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/var/www/vitor/clube-do-livro-web/"
+
+      - name: Conferir produção
+        run: curl -fsS https://clubelivro.vitorbaradelli.com/api/health
