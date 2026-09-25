@@ -24,6 +24,7 @@ ed25519 **dedicada** a este repo, comentário `github-actions-book-club-deploy` 
 |---|---|
 | Código (clone público, atualizado pelo workflow) | `/var/www/vitor/clube-do-livro` |
 | PWA buildado (servido pelo nginx) | `/var/www/vitor/clube-do-livro-web` |
+| Capas dos livros (`/covers/*`, fora do `rsync --delete`) | `/var/www/vitor/clube-do-livro-covers` |
 | API (Fastify, Node 24 via nvm, `tsx`) | pm2 `clube-api` → `127.0.0.1:3030` · `ecosystem.config.cjs` |
 | `.env` da API (**só no servidor**, 600) | `packages/backend/.env` |
 | Postgres 16 (docker, projeto `clube`) | container `clube_db_prod` → `127.0.0.1:5436` · `docker-compose.prod.yml` |
