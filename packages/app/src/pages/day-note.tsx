@@ -32,7 +32,6 @@ import { useAuth } from '../auth/auth-context';
 import { useActiveClub } from '../club/active-club';
 import { useOfflineNotes } from '../offline/offline-notes';
 import type { WriteResult } from '../offline/queue';
-import { readPenBarSticky } from '../pen-bar-preference';
 import { Notice, Screen } from './chrome';
 import {
   memberNamesOf,
@@ -280,7 +279,6 @@ export function DayNotePage() {
 
   const [state, setState] = useState<DayState>(LOADING);
   const [attempt, setAttempt] = useState(0);
-  const [penBarSticky] = useState(readPenBarSticky);
   const [members, setMembers] = useState<MembersState>(MEMBERS_UNKNOWN);
   const [save, setSave] = useState<SaveState>(SAVE_IDLE);
   /**
@@ -855,11 +853,14 @@ export function DayNotePage() {
               formulário.
 
               ⚠️ **E A BARRA DE CANETAS ENTRA POR UMA PROP DE POSIÇÃO** (decisão
-              D): `'fixed'` é ancorada acima do teclado no celular
-              (`Dia.dc.html:103`, 62px) e devolvida ao rodapé da coluna acima de
-              1120px (`DiaDesktop.dc.html:72`, 56px). **Uma prop, não duas
-              telas** — e nenhuma ref imperativa, que é o que o §3 do
-              `docs/EDITOR.md` proíbe.
+              D): `'floating'` é a pílula presa ao rodapé do texto, que sobe
+              para logo acima do teclado quando ele abre (pedido do dono,
+              2026-10-06 — antes era ~~`'sticky'`/`'top'`~~, no topo, escolhido
+              nas Preferências). **Uma prop, não duas telas** — e nenhuma ref
+              imperativa, que é o que o §3 do `docs/EDITOR.md` proíbe.
+
+              ⚠️ Os rótulos de ↶ e ↷ entram traduzidos daqui, pelo mesmo
+              motivo da dica do `/` logo abaixo.
 
               ⚠️ A dica do `/` (`DiaDesktop.dc.html:92`) entra traduzida daqui,
               como as duas do upload: `packages/ui` não chama `t()`, então toda
@@ -871,9 +872,11 @@ export function DayNotePage() {
               // entre renders — o eco descrito na §7 do `docs/EDITOR.md`.
               doc={state.draft ?? state.mine?.doc}
               onChange={handleChange}
-              penBar={penBarSticky ? 'sticky' : 'top'}
+              penBar="floating"
               placeholder={t('pages.dayNote.placeholder')}
+              redoLabel={t('editor.redo')}
               slashHintLabel={t('editor.slashHint')}
+              undoLabel={t('editor.undo')}
               uploadFailedLabel={t('editor.image.uploadFailed')}
               uploadingLabel={t('editor.image.uploading')}
             />

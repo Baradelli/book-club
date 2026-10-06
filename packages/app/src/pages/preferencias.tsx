@@ -10,7 +10,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../auth/auth-context';
-import { readPenBarSticky, writePenBarSticky } from '../pen-bar-preference';
 import { Notice, Screen } from './chrome';
 import { TEXT_INPUT_CLASS } from './form-styles';
 import { PushSection } from './push-section';
@@ -91,7 +90,6 @@ export function PreferenciasPage() {
   /** O que está na tela. Diverge do `saved` enquanto uma escrita está em voo. */
   const [draft, setDraft] = useState<SettingsResponse | null>(null);
   const [saveFailed, setSaveFailed] = useState(false);
-  const [penBarSticky, setPenBarSticky] = useState(readPenBarSticky);
 
   useEffect(() => {
     let cancelled = false;
@@ -245,25 +243,9 @@ export function PreferenciasPage() {
           configFailed={state.configFailed}
           vapidPublicKey={state.vapidPublicKey}
         />
-        <section className="flex flex-col gap-2">
-          <h2 className="text-base font-semibold text-content">
-            {t('pages.settings.writing.title')}
-          </h2>
-          <Switch
-            checked={penBarSticky}
-            label={t('pages.settings.writing.stickyPenBar')}
-            onChange={(next) => {
-              writePenBarSticky(next);
-              setPenBarSticky(next);
-            }}
-          />
-          <p className="text-label text-muted">
-            {t('pages.settings.writing.stickyPenBarHint')}
-          </p>
-        </section>
       </div>
     );
-  }, [draft, penBarSticky, save, saveFailed, state, t]);
+  }, [draft, save, saveFailed, state, t]);
 
   return <Screen title={t('pages.settings.title')}>{body}</Screen>;
 }

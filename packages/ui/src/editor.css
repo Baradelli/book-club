@@ -550,6 +550,25 @@
 }
 
 /*
+  A PÍLULA DE CANETAS PRESA AO RODAPÉ — e logo acima do teclado quando ele abre.
+
+  `--keyboard-inset` é escrito no próprio nó pelo `useKeyboardInset`
+  (`RichEditor.tsx`): é quanto do fundo da janela o teclado cobre, e zero sem
+  teclado. O `max()` com a área segura é porque as duas nunca somam: com o
+  teclado aberto, o filete do "home" do iPhone está atrás dele; fechado, é ele
+  que a pílula precisa evitar.
+
+  Sem transição: quem anima a subida é o teclado do sistema, e o
+  `visualViewport` avisa durante a animação. Uma transição aqui atrasaria a
+  barra em relação ao teclado — ela ficaria um instante atrás dele.
+*/
+.clube-editor-dock {
+  bottom: calc(
+    max(var(--keyboard-inset, 0px), env(safe-area-inset-bottom, 0px)) + 0.75rem
+  );
+}
+
+/*
   A pílula de estado do upload (§8.4). O wrapper dela fica SEMPRE montado e é o
   último filho do editor — a razão está em `RichEditor.tsx`, e ela é de
   montagem, não de estilo.

@@ -67,7 +67,7 @@ function labelsIn(root: Element): (string | null)[] {
 describe('the pen bar exists in THREE forms, and none is a second screen', () => {
   it('draws the five pens, the Aa and the / when the screen asks for it', () => {
     render(
-      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="fixed" />,
+      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="floating" />,
     );
 
     expect(labelsIn(penBarNode())).toEqual([
@@ -79,12 +79,12 @@ describe('the pen bar exists in THREE forms, and none is a second screen', () =>
     expect(HIGHLIGHT_COLORS).toHaveLength(5);
   });
 
-  it('⚠️ is the SAME bar in the two widths — media query, never a branch', () => {
+  it('⚠️ is the SAME bar in every width — media query, never a branch', () => {
     /*
       ⚠️ A decisão D, e ela é a regra do `docs/EDITOR.md` §4.4 aplicada de novo:
-      **nenhuma ramificação por dispositivo**. As duas alturas do canvas (62px
-      no celular, 56px acima de 1120px) e os dois tamanhos de caneta (22px e
-      20px) entram como VARIANTE DE MÍDIA na mesma classe.
+      **nenhuma ramificação por dispositivo**. O que muda entre celular estreito,
+      celular e desktop (a largura das canetas, o `/` que dá lugar à dica
+      escrita) entra como VARIANTE DE MÍDIA na mesma classe.
 
       Um `useMediaQuery` aqui mentiria no primeiro frame, quebraria no
       redimensionamento — e nada disso apareceria neste teste, que é o que o
@@ -92,60 +92,39 @@ describe('the pen bar exists in THREE forms, and none is a second screen', () =>
       decidível no jsdom (ele resolve cascata, não layout).
     */
     render(
-      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="fixed" />,
+      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="floating" />,
     );
 
     const bar = penBarNode();
-    expect(bar.className).toContain('h-[62px]');
-    expect(bar.className).toContain('min-[1120px]:h-14');
-    expect(bar.className).toContain('border-t');
+    // A pílula compacta: 48px de altura, arredondada, centrada na coluna.
+    expect(bar.className).toContain('h-12');
+    expect(bar.className).toContain('rounded-full');
+    expect(bar.className).toContain('self-center');
 
-    const swatch = bar.querySelector('[data-editor-pen]');
-    expect(swatch?.className).toContain('size-[22px]');
-    expect(swatch?.className).toContain('min-[1120px]:size-5');
-
-    /*
-      ⚠️ **O `ml-auto` DO SEPARADOR, e ele é a única peça que faz as duas
-      larguras caberem numa ordem de DOM só** — sobrevivia sem acusador até a
-      auditoria.
-
-      No celular o canvas põe as canetas à esquerda e o `Aa`+`/` na **borda
-      direita** (`Dia.dc.html:104` e `:121` são dois grupos com
-      `justify-content:space-between` entre eles); acima de 1120px o
-      `DiaDesktop.dc.html:89` põe o separador **encostado nas canetas**, com a
-      dica escrita ocupando a direita. Apagar o `ml-auto` empurra `Aa`+`/` para
-      junto das canetas no celular, e nada via.
-    */
-    const separator = bar.querySelector('[data-editor-separator]');
-    expect(separator?.className).toContain('ml-auto');
-    expect(separator?.className).toContain('min-[1120px]:ml-2');
+    // Num celular de 320px as canetas estreitam para a pílula caber.
+    const pen = screen.getByLabelText('Caneta amarela');
+    expect(pen.className).toContain('max-[359px]:w-7');
   });
 
-  it('⚠️ pins the bar to the viewport only in the FIXED form', () => {
+  it('⚠️ docks the bar at the BOTTOM of the text, lifted above the keyboard', () => {
     /*
-      `fixed` é a forma do canvas do dia: no celular ela fica ancorada acima do
-      teclado, e acima de 1120px ela volta a ser o rodapé da coluna
-      (`min-[1120px]:static`). `footer` é a mesma barra SEM a âncora — para uma
-      tela que não ocupa a altura toda.
+      **Pedido do dono, 2026-10-06:** a pílula que acompanhava a rolagem NO
+      TOPO desceu para o rodapé, como um rodapé flutuante — e, com o teclado
+      aberto, ela fica logo ACIMA dele, onde o polegar está.
+
+      `sticky` e não `fixed`: presa no fundo da janela enquanto há texto
+      abaixo, e pousada no fim da anotação quando a pessoa chega lá. É a mesma
+      classe nas duas larguras — no desktop ela fica centrada na coluna, não na
+      janela. A altura do teclado entra pela variável que `clube-editor-dock`
+      soma ao `bottom` (o `it()` do teclado, mais abaixo).
     */
-    const { rerender } = render(
-      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="fixed" />,
+    render(
+      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="floating" />,
     );
 
-    expect(penBarNode().className).toContain('fixed');
-    expect(penBarNode().className).toContain('min-[1120px]:static');
-
-    rerender(
-      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="footer" />,
-    );
-
-    expect(penBarNode().className).not.toContain('fixed');
-    // E os controles são os MESMOS: `footer` muda onde, nunca o quê.
-    expect(labelsIn(penBarNode())).toEqual([
-      ...HIGHLIGHT_COLORS.map((pen) => pen.label),
-      'Formatar o texto',
-      'Abrir o menu de blocos',
-    ]);
+    expect(penBarNode().className).toContain('sticky');
+    expect(penBarNode().className).toContain('clube-editor-dock');
+    expect(penBarNode().className).not.toContain('order-first');
   });
 
   it('⚠️ draws NO control in the none form — the default, and the highlight comment', () => {
@@ -171,7 +150,7 @@ describe('the pen bar exists in THREE forms, and none is a second screen', () =>
         doc={aDoc()}
         editable={false}
         onChange={() => undefined}
-        penBar="fixed"
+        penBar="floating"
       />,
     );
 
@@ -206,7 +185,7 @@ describe('⚠️ the fixed toolbar is DEAD (decision A)', () => {
     expect(document.querySelectorAll('button')).toHaveLength(0);
 
     rerender(
-      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="fixed" />,
+      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="floating" />,
     );
 
     expect(document.querySelectorAll('button')).toHaveLength(7);
@@ -237,6 +216,198 @@ describe('⚠️ the fixed toolbar is DEAD (decision A)', () => {
   });
 });
 
+describe('undo and redo — the two arrows at the start of the bar', () => {
+  function renderWithHistory(
+    onChange: (doc: Record<string, unknown>) => void = () => undefined,
+  ) {
+    return render(
+      <RichEditor
+        doc={aDoc()}
+        onChange={onChange}
+        penBar="floating"
+        redoLabel="Refazer"
+        undoLabel="Desfazer"
+      />,
+    );
+  }
+
+  it('puts ↶ and ↷ FIRST, before the pens, when the screen gives their labels', () => {
+    /*
+      Os rótulos entram por PROP, como a dica do `/`: `packages/ui` não chama
+      `t()` (`no-i18n.test.ts`) e o teto de texto cravado do
+      `no-hardcoded-ui-text.test.ts` só pode cair. Sem rótulo, sem botão —
+      ausente ≠ vazio, a mesma regra do `slashHintLabel`.
+    */
+    renderWithHistory();
+
+    expect(labelsIn(penBarNode())).toEqual([
+      'Desfazer',
+      'Refazer',
+      ...HIGHLIGHT_COLORS.map((pen) => pen.label),
+      'Formatar o texto',
+      'Abrir o menu de blocos',
+    ]);
+  });
+
+  it('undoes what was done, and redoes it', () => {
+    const emitted: string[] = [];
+    renderWithHistory((doc) => emitted.push(JSON.stringify(doc)));
+
+    // O `/` digita um caractere: uma mudança no histórico. (A caneta com o
+    // cursor colapsado não serviria — ela só guarda a marca, o doc não muda.)
+    fireEvent.mouseDown(screen.getByLabelText('Abrir o menu de blocos'));
+    expect(emitted.at(-1)).toContain('/');
+
+    fireEvent.mouseDown(screen.getByLabelText('Desfazer'));
+    expect(emitted.at(-1)).not.toContain('/');
+
+    fireEvent.mouseDown(screen.getByLabelText('Refazer'));
+    expect(emitted.at(-1)).toContain('/');
+  });
+
+  it('says when there is nothing to undo or redo — without leaving the text', () => {
+    /*
+      `aria-disabled`, e NÃO `disabled`: um botão `disabled` não recebe o
+      `mousedown`, então o `preventDefault` da §4.4 não roda, o toque cai no
+      que está atrás, o foco sai do ProseMirror e o TECLADO FECHA. Apertar um
+      desfazer apagado não pode custar o teclado.
+    */
+    renderWithHistory();
+
+    const undo = screen.getByLabelText('Desfazer');
+    const redo = screen.getByLabelText('Refazer');
+    expect(undo.getAttribute('aria-disabled')).toBe('true');
+    expect(redo.getAttribute('aria-disabled')).toBe('true');
+    expect(fireEvent.mouseDown(undo)).toBe(false);
+    expect(fireEvent.touchEnd(redo)).toBe(false);
+
+    fireEvent.mouseDown(screen.getByLabelText('Abrir o menu de blocos'));
+    expect(undo.getAttribute('aria-disabled')).toBe('false');
+
+    fireEvent.mouseDown(undo);
+    expect(redo.getAttribute('aria-disabled')).toBe('false');
+  });
+
+  it('⚠️ never undoes the LOADING of the note — only what the person did', () => {
+    /*
+      ⚠️ O bug que um botão de desfazer à vista tornaria fácil de achar: a tela
+      carrega o rascunho ou a nota do servidor DEPOIS de montar o editor, e o
+      `setContent` do sincronismo entrava no histórico. Um toque em ↶ logo
+      depois de abrir a anotação APAGAVA a nota carregada — e o autosave
+      gravava o vazio.
+    */
+    const emitted: string[] = [];
+    const { rerender } = render(
+      <RichEditor
+        doc={aDoc('')}
+        onChange={(doc) => emitted.push(JSON.stringify(doc))}
+        penBar="floating"
+        redoLabel="Refazer"
+        undoLabel="Desfazer"
+      />,
+    );
+
+    rerender(
+      <RichEditor
+        doc={aDoc('anotação que veio do servidor')}
+        onChange={(doc) => emitted.push(JSON.stringify(doc))}
+        penBar="floating"
+        redoLabel="Refazer"
+        undoLabel="Desfazer"
+      />,
+    );
+
+    const undo = screen.getByLabelText('Desfazer');
+    expect(undo.getAttribute('aria-disabled')).toBe('true');
+
+    fireEvent.mouseDown(undo);
+    expect(emitted).toEqual([]);
+    expect(document.querySelector('.ProseMirror')?.textContent).toBe(
+      'anotação que veio do servidor',
+    );
+  });
+});
+
+describe('the bar rides ABOVE the on-screen keyboard', () => {
+  /*
+    O teclado do celular não encolhe a janela de layout (iOS sempre; Chrome do
+    Android desde a 108, `interactive-widget=resizes-visual`): ele só encolhe a
+    janela VISUAL. Um `bottom: 0` fica escondido atrás dele. Quem sabe quanto o
+    teclado cobre é o `visualViewport` — e CSS nenhum lê isso no Safari.
+
+    jsdom não tem `visualViewport`; o fake abaixo é o mínimo que o código lê.
+  */
+  class FakeVisualViewport extends EventTarget {
+    height = 768;
+    offsetTop = 0;
+    scale = 1;
+  }
+
+  function installViewport(): FakeVisualViewport {
+    const viewport = new FakeVisualViewport();
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: viewport,
+    });
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 768,
+    });
+    return viewport;
+  }
+
+  function inset(): string {
+    return (penBarNode() as HTMLElement).style.getPropertyValue(
+      '--keyboard-inset',
+    );
+  }
+
+  it('lifts the bar by exactly what the keyboard covers, and drops it when it closes', () => {
+    const viewport = installViewport();
+    render(
+      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="floating" />,
+    );
+
+    expect(inset()).toBe('0px');
+
+    // O teclado abre: a janela visual encolhe 300px.
+    viewport.height = 468;
+    viewport.dispatchEvent(new Event('resize'));
+    expect(inset()).toBe('300px');
+
+    // O iOS rola a janela visual dentro da de layout: o que fica coberto é o
+    // que sobra ABAIXO dela.
+    viewport.offsetTop = 100;
+    viewport.dispatchEvent(new Event('scroll'));
+    expect(inset()).toBe('200px');
+
+    viewport.height = 768;
+    viewport.offsetTop = 0;
+    viewport.dispatchEvent(new Event('resize'));
+    expect(inset()).toBe('0px');
+  });
+
+  it('does not mistake a pinch-zoom for a keyboard', () => {
+    const viewport = installViewport();
+    render(
+      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="floating" />,
+    );
+
+    viewport.scale = 2;
+    viewport.height = 384;
+    viewport.dispatchEvent(new Event('resize'));
+
+    expect(inset()).toBe('0px');
+  });
+
+  it('measures nothing when there is no bar', () => {
+    installViewport();
+    render(<RichEditor doc={aDoc()} onChange={() => undefined} />);
+
+    expect(inset()).toBe('');
+  });
+});
+
 describe('⚠️ the Aa opens the SAME controls as the bubble menu (decision E)', () => {
   it('renders, under the Aa, exactly the shared list — not a copy', () => {
     /*
@@ -254,7 +425,7 @@ describe('⚠️ the Aa opens the SAME controls as the bubble menu (decision E)'
       identidade tem duas metades, e a segunda (o `it` abaixo) é estrutural.
     */
     render(
-      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="fixed" />,
+      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="floating" />,
     );
 
     fireEvent.mouseDown(screen.getByLabelText('Formatar o texto'));
@@ -339,7 +510,7 @@ describe('⚠️ every new button answers to mousedown and touchend (§4.4, rule
       `fireEvent` devolve `false` quando o handler chamou `preventDefault`.
     */
     render(
-      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="fixed" />,
+      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="floating" />,
     );
 
     for (const label of [
@@ -364,7 +535,7 @@ describe('⚠️ every new button answers to mousedown and touchend (§4.4, rule
       tira o grifo) parece não fazer nada.
     */
     render(
-      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="fixed" />,
+      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="floating" />,
     );
 
     const yellow = screen.getByLabelText('Caneta amarela');
@@ -394,7 +565,7 @@ describe('⚠️ the / button inserts the character and opens the menu that exis
       <RichEditor
         doc={aDoc()}
         onChange={(doc) => emitted.push(doc)}
-        penBar="fixed"
+        penBar="floating"
       />,
     );
 
@@ -420,7 +591,7 @@ describe('the hint of the / — the third leaf of editor.* to get a consumer', (
       <RichEditor
         doc={aDoc()}
         onChange={() => undefined}
-        penBar="fixed"
+        penBar="floating"
         slashHintLabel="Digite / para inserir um bloco"
       />,
     );
@@ -431,7 +602,7 @@ describe('the hint of the / — the third leaf of editor.* to get a consumer', (
     expect(hint?.className).toContain('min-[1120px]:block');
 
     rerender(
-      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="fixed" />,
+      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="floating" />,
     );
 
     // Ausente ≠ vazio: sem a frase não nasce elemento nenhum.

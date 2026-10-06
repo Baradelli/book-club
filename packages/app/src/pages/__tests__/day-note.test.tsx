@@ -10,15 +10,7 @@ import type {
 import { TOKEN_STORAGE_KEY } from '@clube/shared/client';
 import { pt } from '@clube/shared/locales';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  onTestFinished,
-  vi,
-} from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../App';
 import type { ClubSummary } from '../../club/active-club';
@@ -27,7 +19,6 @@ import {
   createUnavailablePendingNoteStore,
   type PendingNoteStore,
 } from '../../offline/store';
-import { PEN_BAR_STICKY_KEY } from '../../pen-bar-preference';
 import { dayNotePath } from '../day-note';
 import { expectNoGuilt, stripComments } from './anti-guilt-dom';
 import {
@@ -145,7 +136,9 @@ vi.mock('@clube/ui/editor', async () => {
     onChange,
     penBar = 'none',
     placeholder,
+    redoLabel,
     slashHintLabel,
+    undoLabel,
   }: {
     doc?: Record<string, unknown>;
     editable?: boolean;
@@ -153,6 +146,8 @@ vi.mock('@clube/ui/editor', async () => {
     penBar?: string;
     placeholder?: string;
     slashHintLabel?: string;
+    undoLabel?: string;
+    redoLabel?: string;
     className?: string;
     uploadingLabel?: string;
     uploadFailedLabel?: string;
@@ -169,8 +164,10 @@ vi.mock('@clube/ui/editor', async () => {
         data-class={className ?? ''}
         data-editable={String(editable)}
         data-pen-bar={penBar}
+        data-redo={redoLabel ?? ''}
         data-slash-hint={slashHintLabel ?? ''}
         data-testid={editable ? 'editor' : 'reader'}
+        data-undo={undoLabel ?? ''}
       >
         <p data-testid={editable ? 'editor-text' : 'reader-text'}>
           {textOf(doc)}
@@ -2143,13 +2140,14 @@ describe('⚠️ the editor loses the box and gains the pen bar (decisions B and
     expectNoGuilt();
   });
 
-  it('asks for the STICKY pen bar by default, and hands over the hint of the /', async () => {
+  it('asks for the FLOATING pen bar, and hands over the hint of the / and the arrows', async () => {
     /*
-      A decisão D, revista no redesenho visual de 2026-09-24: a barra de canetas
-      deixou de ser `fixed` no rodapé e virou uma pílula flutuante no TOPO do
-      editor, que acompanha a rolagem (`penBar='sticky'`). **UMA prop, não
-      duas telas** continua valendo — e sem escolha gravada no aparelho, a barra
-      acompanha (`pen-bar-preference.ts`).
+      A decisão D, revista duas vezes: em 2026-09-24 a barra virou uma pílula no
+      TOPO que acompanhava a rolagem (`'sticky'`, ou `'top'` por preferência
+      do aparelho); em 2026-10-06 o dono a pediu no RODAPÉ, logo acima do
+      teclado, com desfazer e refazer (`penBar='floating'`). A preferência
+      morreu junto: não há mais duas formas para escolher. **UMA prop, não
+      duas telas** continua valendo.
 
       E a dica do `/` (`DiaDesktop.dc.html:92`) entra por prop, já traduzida:
       `packages/ui` não chama `t()` (`no-i18n.test.ts`), então toda folha de
@@ -2159,29 +2157,10 @@ describe('⚠️ the editor loses the box and gains the pen bar (decisions B and
     await renderDayNote();
 
     const editor = screen.getByTestId('editor');
-    expect(editor.getAttribute('data-pen-bar')).toBe('sticky');
+    expect(editor.getAttribute('data-pen-bar')).toBe('floating');
     expect(editor.getAttribute('data-slash-hint')).toBe(pt.editor.slashHint);
-    expectNoGuilt();
-  });
-
-  it('parks the pen bar at the top of the text when THIS device asked it to stop following', async () => {
-    /*
-      A preferência "Manter a barra de canetas no topo enquanto rolo o texto"
-      (`/preferencias`) é do APARELHO, no `localStorage` — não viaja no
-      `Settings` do servidor. Desligada (`'0'`), a barra fica parada no começo
-      do texto (`'top'`) em vez de acompanhar. O par com o `it()` acima: sem
-      este, uma tela que ignorasse a preferência passaria verde.
-    */
-    window.localStorage.setItem(PEN_BAR_STICKY_KEY, '0');
-    onTestFinished(() => {
-      window.localStorage.removeItem(PEN_BAR_STICKY_KEY);
-    });
-
-    await renderDayNote();
-
-    expect(screen.getByTestId('editor').getAttribute('data-pen-bar')).toBe(
-      'top',
-    );
+    expect(editor.getAttribute('data-undo')).toBe(pt.editor.undo);
+    expect(editor.getAttribute('data-redo')).toBe(pt.editor.redo);
     expectNoGuilt();
   });
 

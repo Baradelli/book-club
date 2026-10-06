@@ -259,9 +259,11 @@ function LazyEditor({
           leitura (regra 17): uma barra ali ofereceria escrita sobre o texto
           que só a autora edita.
         */
-        penBar={editable === false ? 'none' : 'fixed'}
+        penBar={editable === false ? 'none' : 'floating'}
         placeholder={placeholder}
+        redoLabel={t('editor.redo')}
         slashHintLabel={t('editor.slashHint')}
+        undoLabel={t('editor.undo')}
       />
     </Suspense>
   );

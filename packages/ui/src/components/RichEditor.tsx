@@ -21,9 +21,11 @@ import {
   useEditor,
 } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { Redo2, Undo2 } from 'lucide-react';
 import {
   type CSSProperties,
   type ReactNode,
+  type RefObject,
   useCallback,
   useEffect,
   useMemo,
@@ -233,22 +235,20 @@ export const FORMAT_CONTROLS: readonly FormatControl[] = [
 /**
  * ONDE A BARRA DE CANETAS FICA — e é a tela que decide, não o dispositivo.
  *
- * - `fixed`: ancorada acima do teclado no celular e devolvida ao rodapé da
- *   coluna acima de 1120px (`min-[1120px]:static`). É a forma da anotação do
- *   dia, que ocupa a altura toda;
- * - `footer`: a MESMA barra, sem a âncora — para um editor que vive dentro de
- *   um formulário que rola;
- * - `sticky`: uma pílula flutuante NO TOPO do texto que acompanha a rolagem,
- *   presa logo abaixo do cabeçalho. É a forma da anotação do dia;
- * - `top`: a mesma pílula no topo, parada — para quem desligou o
- *   acompanhamento nas Preferências;
+ * - `floating`: uma pílula compacta presa no RODAPÉ do texto (`sticky`), que
+ *   flutua no fundo da janela enquanto há texto abaixo e pousa no fim da
+ *   anotação quando a pessoa chega lá. Com o teclado do celular aberto, ela
+ *   sobe e fica logo acima dele (`useKeyboardInset`). É a forma das duas telas
+ *   de escrita — a anotação do dia e a avulsa;
  * - `none` (o padrão): sem barra. É o comentário do grifo e o modo leitura.
  *
- * ⚠️ `top` e `sticky` sobem com `order-first` (o container é `flex-col`),
- * e não mudando a posição do nó no JSX: a invariante de montagem abaixo proíbe
- * irmão que troca de lugar.
+ * ⚠️ **HISTÓRICO, 2026-10-06 (pedido do dono):** havia ~~`fixed`~~ (faixa
+ * opaca no rodapé), ~~`footer`~~ (a mesma, sem âncora), ~~`sticky`~~ (pílula
+ * no TOPO que acompanhava a rolagem) e ~~`top`~~ (a mesma, parada, escolhida
+ * nas Preferências). Morreram juntas: a pílula desceu para o rodapé, perto do
+ * polegar, e a preferência que alternava as duas do topo perdeu o objeto.
  */
-export type PenBarPlacement = 'fixed' | 'footer' | 'none' | 'top' | 'sticky';
+export type PenBarPlacement = 'floating' | 'none';
 
 export interface RichEditorProps {
   /** ProseMirror JSON (ADR 0001), nunca HTML. */
@@ -328,6 +328,17 @@ export interface RichEditorProps {
    * Ausente ≠ vazio: sem a frase não nasce elemento nenhum.
    */
   slashHintLabel?: string;
+  /**
+   * As duas setas do começo da barra — ↶ desfaz, ↷ refaz —, com os rótulos JÁ
+   * TRADUZIDOS pela tela (`t('editor.undo')`, `t('editor.redo')`).
+   *
+   * Entram por prop pela mesma razão da dica do `/`: `packages/ui` não chama
+   * `t()`, e o teto de texto cravado (`no-hardcoded-ui-text.test.ts`) só pode
+   * cair. E pela mesma regra: **ausente ≠ vazio** — sem o rótulo, o botão não
+   * nasce (um botão sem nome é um botão que o leitor de tela não anuncia).
+   */
+  undoLabel?: string;
+  redoLabel?: string;
 }
 
 export interface EditorExtensionOptions {
@@ -442,7 +453,31 @@ interface ToolButtonProps {
    * dois seria dizer a mesma coisa duas vezes, com duas cores diferentes.
    */
   plain?: boolean;
+  /**
+   * `aria-disabled`, nunca `disabled`: o botão `disabled` não recebe o
+   * `mousedown`, o `preventDefault` abaixo não roda, o foco sai do ProseMirror
+   * e o teclado do celular fecha. O handler continua lá; quem desiste é o
+   * `onPress` da tela de cima, que sabe que não há o que fazer.
+   */
+  disabled?: boolean;
+  /**
+   * - `square` (o padrão): 44×44, o botão das fileiras de formatação;
+   * - `bar`: 44 de altura e 36 de largura, o botão da pílula de rodapé;
+   * - `pen`: 44 de altura e 32 de largura, a caneta da pílula.
+   *
+   * A largura menor da pílula é o que faz nove controles caberem num celular
+   * de 360px sem rolar de lado; a ALTURA continua nos 44px do toque. Abaixo de
+   * 360px (o iPhone SE de 320px) os dois estreitam mais um degrau — media
+   * query, nunca um ramo.
+   */
+  shape?: 'square' | 'bar' | 'pen';
 }
+
+const TOOL_SHAPE = {
+  square: 'size-11 rounded-control',
+  bar: 'h-11 w-9 rounded-full max-[359px]:w-8',
+  pen: 'h-11 w-8 rounded-full max-[359px]:w-7',
+} as const;
 
 /**
  * ⚠️ A REGRA QUE FAZ O EDITOR FUNCIONAR NO CELULAR (§4.4), e ela é a diferença
@@ -474,24 +509,26 @@ interface ToolButtonProps {
 function ToolButton({
   active = false,
   children,
+  disabled,
   label,
   onPress,
   plain = false,
+  shape = 'square',
 }: ToolButtonProps) {
   return (
     <button
+      aria-disabled={disabled}
       aria-label={label}
       aria-pressed={active}
       className={cx(
-        'flex size-11 shrink-0 items-center justify-center transition-colors',
+        'flex shrink-0 items-center justify-center transition-colors',
+        TOOL_SHAPE[shape],
         plain
           ? 'text-content'
-          : cx(
-              'rounded-control',
-              active
-                ? 'bg-accent-soft text-accent'
-                : 'text-content hover:bg-surface-raised',
-            ),
+          : active
+            ? 'bg-accent-soft text-accent'
+            : 'text-content hover:bg-surface-raised',
+        'aria-disabled:cursor-default aria-disabled:text-subtle aria-disabled:hover:bg-transparent',
         FOCUS_RING,
       )}
       onMouseDown={(event) => {
@@ -511,29 +548,80 @@ function ToolButton({
 }
 
 /**
- * O filete vertical que separa as canetas do `Aa` (`Dia.dc.html:122`: 1px ×
- * 22px, `--border`, `margin: 0 8px`).
+ * O filete vertical que separa os três grupos da pílula: ↶ ↷ · canetas · `Aa /`.
  *
- * ⚠️ O `ml-auto` é o que põe o `Aa` e o `/` na BORDA DIREITA no celular, como o
- * canvas desenha, e o `min-[1120px]:ml-2` os traz de volta para junto das
- * canetas acima de 1120px, que é o que o `DiaDesktop.dc.html:89` desenha. Uma
- * classe, duas larguras — nenhuma ramificação.
- *
- * ⚠️ **DIVERGÊNCIA DECLARADA, de dois pixels:** acima de 1120px o canvas desenha
- * o filete com **20px** de altura e **10px** de margem lateral
- * (`DiaDesktop.dc.html:89`); ele sai com os **22px/8px** do celular
- * (`Dia.dc.html:122`) nas duas larguras. Um par de variantes de mídia para 2px
- * de altura e 2px de margem custa mais em classe do que resolve em desenho — é
- * a mesma conta do 1px do nome do app que a Tarefa 42 registrou.
+ * ⚠️ **ERA UM SÓ, COM `ml-auto`, até 2026-10-06**: a faixa opaca ocupava a
+ * largura toda e o `ml-auto` empurrava o `Aa` para a borda direita. A pílula
+ * tem a largura do conteúdo (`w-fit`), então não há borda para onde empurrar —
+ * o filete só separa.
  */
 function ToolSeparator() {
   return (
     <span
       aria-hidden="true"
-      className="ml-auto mr-2 h-[22px] w-px shrink-0 bg-line min-[1120px]:ml-2"
+      className="mx-1 h-5 w-px shrink-0 bg-line max-[359px]:mx-0.5"
       data-editor-separator=""
     />
   );
+}
+
+/**
+ * QUANTO DO FUNDO DA JANELA O TECLADO COBRE — escrito como `--keyboard-inset`
+ * no próprio nó da barra, que o `.clube-editor-dock` soma ao `bottom`.
+ *
+ * ⚠️ **É O ÚNICO JAVASCRIPT QUE MEDE JANELA NO EDITOR, e não é ramificação por
+ * dispositivo:** o mesmo código roda em todo lugar, e no desktop (sem teclado
+ * na tela) a conta dá zero. Ele existe porque CSS nenhum sabe a altura do
+ * teclado no Safari: o teclado do celular encolhe só a janela VISUAL — a de
+ * layout, onde `bottom` se mede, continua do tamanho da tela (iOS sempre;
+ * Chrome do Android desde a 108, `interactive-widget=resizes-visual`). O
+ * `env(keyboard-inset-height)` só existe no Chromium, e só com a VirtualKeyboard
+ * API ligada.
+ *
+ * A conta: o que fica ABAIXO da janela visual — a altura da de layout menos a
+ * altura da visual menos o quanto ela está rolada para baixo (`offsetTop`: o
+ * iOS rola a visual dentro da de layout para mostrar o cursor).
+ *
+ * ⚠️ **ZOOM NÃO É TECLADO.** Com o dedo em pinça a janela visual também
+ * encolhe, e a barra subiria até o meio da tela. `scale > 1` é zoom; o teclado
+ * nunca muda a escala.
+ *
+ * ⚠️ `style.setProperty` no nó, e não `style={…}` no JSX: não é estilo que o
+ * React desenha — é uma medição que muda a cada quadro da rolagem do iOS, e
+ * passar por estado re-renderizaria o editor inteiro a cada evento.
+ */
+function useKeyboardInset(
+  target: RefObject<HTMLElement | null>,
+  enabled: boolean,
+): void {
+  useEffect(() => {
+    const node = target.current;
+    // `in` antes de ler: navegador antigo (e o jsdom) nem tem a propriedade, e
+    // aí a barra só fica no rodapé — que é o que ela fazia antes.
+    if (!enabled || node === null || !('visualViewport' in window)) return;
+    const viewport = window.visualViewport;
+    if (viewport === null) return;
+
+    const update = (): void => {
+      const covered =
+        viewport.scale > 1
+          ? 0
+          : window.innerHeight - viewport.height - viewport.offsetTop;
+      node.style.setProperty(
+        '--keyboard-inset',
+        `${Math.max(0, Math.round(covered))}px`,
+      );
+    };
+
+    update();
+    viewport.addEventListener('resize', update);
+    viewport.addEventListener('scroll', update);
+    return () => {
+      viewport.removeEventListener('resize', update);
+      viewport.removeEventListener('scroll', update);
+      node.style.removeProperty('--keyboard-inset');
+    };
+  }, [enabled, target]);
 }
 
 /**
@@ -611,10 +699,11 @@ function PenControls({ editor }: { editor: Editor }) {
             editor.chain().focus().toggleHighlight({ color }).run()
           }
           plain
+          shape="pen"
         >
           <span
             aria-hidden="true"
-            className="clube-editor-swatch size-[22px] rounded-full min-[1120px]:size-5"
+            className="clube-editor-swatch size-[18px] rounded-full"
             data-editor-pen=""
             style={swatchStyle(color)}
           />
@@ -626,93 +715,130 @@ function PenControls({ editor }: { editor: Editor }) {
 
 /**
  * ============================================================================
- * A BARRA DE CANETAS (decisões D, E e F da Tarefa 43)
+ * A BARRA DE CANETAS — a pílula do rodapé (pedido do dono, 2026-10-06)
  * ============================================================================
  *
- * `Dia.dc.html:103` (62px, `--surface`, `border-top`, recuo 12px) e
- * `DiaDesktop.dc.html:72` (56px, `border-top`, recuo 8px, canetas de 20px e a
- * dica do `/` à direita, `:92`).
+ * Três grupos numa pílula só, da esquerda para a direita:
+ *
+ *   ↶ ↷  ·  cinco canetas  ·  Aa  /
+ *
+ * ⚠️ **ELA NASCEU NA TAREFA 43 COMO FAIXA OPACA** (`Dia.dc.html:103`: 62px,
+ * `border-top`, a largura toda) e passou por uma pílula NO TOPO que
+ * acompanhava a rolagem. O dono pediu o rodapé — perto do polegar, logo acima
+ * do teclado —, mais compacta, e as duas setas de desfazer e refazer. O que os
+ * artboards desenhavam da faixa (a altura de 62/56px, o `ml-auto` que jogava o
+ * `Aa` para a borda) morreu com ela.
+ *
+ * ⚠️ **`sticky` E NÃO `fixed`, e é isso que a faz servir às duas larguras sem
+ * ramo:** presa ao fundo da janela enquanto há texto abaixo, pousada no fim da
+ * anotação quando a pessoa chega lá, e sempre centrada na COLUNA do texto — no
+ * desktop, com a margem de 320px à direita, um `fixed` centraria na janela e
+ * ficaria torto em relação ao texto.
  *
  * ⚠️ **O NÓ FICA SEMPRE MONTADO — é a invariante da §11**, e a barra entra
- * nessa conta desde o dia em que nasceu. O que é condicional é o CONTEÚDO.
- * Explicação inteira no `return` do `RichEditor`.
+ * nessa conta desde o dia em que nasceu. O que é condicional é o CONTEÚDO (e as
+ * classes). Explicação inteira no `return` do `RichEditor`.
  *
  * ⚠️ **E O `/` NÃO REIMPLEMENTA O MENU `/`** (decisão F): ele insere o
- * caractere, e a extensão `Suggestion` de `slash-command.ts` — que esta fatia
- * não toca — faz o resto. O botão existe para quem está com o teclado do
- * celular aberto e não quer procurar a tecla.
+ * caractere, e a extensão `Suggestion` de `slash-command.ts` faz o resto. O
+ * botão existe para quem está com o teclado do celular aberto e não quer
+ * procurar a tecla.
  */
 function PenBar({
   editable,
   editor,
   placement,
+  redoLabel,
   slashHintLabel,
+  undoLabel,
 }: {
   editable: boolean;
   editor: Editor;
   placement: PenBarPlacement;
+  redoLabel?: string;
   slashHintLabel?: string;
+  undoLabel?: string;
 }) {
   const [formatOpen, setFormatOpen] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
 
   const active = editable && placement !== 'none';
-  const floating = placement === 'top' || placement === 'sticky';
+  useKeyboardInset(barRef, active);
+
+  const canUndo = active && editor.can().undo();
+  const canRedo = active && editor.can().redo();
 
   return (
     <div
       className={cx(
         active &&
-          floating &&
-          'relative z-20 order-first mb-5 flex h-14 w-fit max-w-[calc(100vw-1rem)] shrink-0 items-center gap-0.5 self-center rounded-full border border-line-soft bg-surface/90 px-2 shadow-popover backdrop-blur-xl backdrop-saturate-150',
-        active &&
-          placement === 'sticky' &&
-          'sticky top-[calc(3.5rem+env(safe-area-inset-top)+0.5rem)]',
-        active &&
-          !floating &&
-          'relative z-20 flex h-[62px] shrink-0 items-center gap-0.5 border-t border-line bg-surface px-3 min-[1120px]:h-14 min-[1120px]:px-2',
-        /*
-          `fixed` ancora a barra acima do teclado no celular — é o que o canvas
-          desenha —, e `min-[1120px]:static` a devolve ao rodapé da coluna,
-          onde o `DiaDesktop` a põe. Media query e só (decisão D).
-        */
-        active &&
-          placement === 'fixed' &&
-          'fixed inset-x-0 bottom-0 min-[1120px]:static',
+          'clube-editor-dock sticky z-20 mt-3 flex h-12 w-fit max-w-[calc(100vw-1rem)] shrink-0 items-center self-center rounded-full border border-line-soft bg-surface/90 px-1 shadow-popover backdrop-blur-xl backdrop-saturate-150',
       )}
       data-editor-pen-bar=""
+      ref={barRef}
     >
       {active ? (
         <>
+          {undoLabel === undefined && redoLabel === undefined ? null : (
+            <>
+              {undoLabel === undefined ? null : (
+                <ToolButton
+                  disabled={!canUndo}
+                  label={undoLabel}
+                  onPress={() => {
+                    if (canUndo) editor.chain().focus().undo().run();
+                  }}
+                  shape="bar"
+                >
+                  <Undo2 aria-hidden="true" className="size-[18px]" />
+                </ToolButton>
+              )}
+              {redoLabel === undefined ? null : (
+                <ToolButton
+                  disabled={!canRedo}
+                  label={redoLabel}
+                  onPress={() => {
+                    if (canRedo) editor.chain().focus().redo().run();
+                  }}
+                  shape="bar"
+                >
+                  <Redo2 aria-hidden="true" className="size-[18px]" />
+                </ToolButton>
+              )}
+              <ToolSeparator />
+            </>
+          )}
           <PenControls editor={editor} />
           <ToolSeparator />
           <ToolButton
             active={formatOpen}
             label="Formatar o texto"
             onPress={() => setFormatOpen((open) => !open)}
-            plain
+            shape="bar"
           >
-            <span aria-hidden="true" className="font-reading text-reading">
+            <span aria-hidden="true" className="font-reading text-base">
               Aa
             </span>
           </ToolButton>
           {/*
-            O canvas do desktop NÃO desenha este botão: lá a dica escrita ocupa
-            o lugar dele (`DiaDesktop.dc.html:92`). Media query, nunca um ramo.
+            No desktop a dica escrita ocupa o lugar deste botão
+            (`DiaDesktop.dc.html:92`): lá há teclado físico. Media query, nunca
+            um ramo.
           */}
           <span className="flex min-[1120px]:hidden">
             <ToolButton
               label="Abrir o menu de blocos"
               onPress={() => editor.chain().focus().insertContent('/').run()}
-              plain
+              shape="bar"
             >
-              <span aria-hidden="true" className="font-mono text-reading">
+              <span aria-hidden="true" className="font-mono text-base">
                 /
               </span>
             </ToolButton>
           </span>
           {slashHintLabel === undefined ? null : (
             <span
-              className="hidden font-mono text-eyebrow tracking-[0.08em] text-subtle min-[1120px]:block"
+              className="hidden whitespace-nowrap pl-1 pr-3 font-mono text-eyebrow tracking-[0.08em] text-subtle min-[1120px]:block"
               data-editor-slash-hint=""
             >
               {slashHintLabel}
@@ -720,10 +846,7 @@ function PenBar({
           )}
           {formatOpen ? (
             <div
-              className={cx(
-                'clube-editor-popover clube-editor-row absolute right-2 flex items-center overflow-hidden',
-                floating ? 'top-full mt-2' : 'bottom-full mb-2',
-              )}
+              className="clube-editor-popover clube-editor-row absolute bottom-full right-0 mb-2 flex items-center overflow-hidden"
               data-editor-format=""
             >
               <FormatControls editor={editor} />
@@ -745,7 +868,9 @@ export function RichEditor({
   onUploadImage,
   penBar = 'none',
   placeholder,
+  redoLabel,
   slashHintLabel,
+  undoLabel,
   uploadFailedLabel = 'Falha ao enviar',
   uploadingLabel = 'Enviando imagem…',
 }: RichEditorProps) {
@@ -889,11 +1014,19 @@ export function RichEditor({
         // O `false` é `emitUpdate`: sem ele, mandar conteúdo para o editor
         // dispara `onUpdate` → `onChange` → a tela re-renderiza → e o laço
         // fecha (acusador: `emits nothing when the screen loads a doc by
-        // prop`). Ele também evita uma entrada no histórico para algo que a
-        // pessoa não digitou — com `true`, o `Ctrl+Z` DESFAZ o carregamento da
-        // anotação.
+        // prop`). ~~Ele também evita uma entrada no histórico~~ — não evitava.
+        //
+        // ⚠️ POR ISSO O `addToHistory: false` (2026-10-06): o `emitUpdate` NÃO tira o
+        // carregamento do histórico — medido, ele entrava. Com o ↶ à vista na
+        // barra, um toque logo depois de abrir a anotação apagava a nota
+        // carregada, e o autosave gravava o vazio. Acusador: `pen-bar.test.tsx
+        // › never undoes the LOADING of the note`.
         replaceContent: (incoming) =>
-          editor.commands.setContent(incoming, false),
+          editor
+            .chain()
+            .setMeta('addToHistory', false)
+            .setContent(incoming, false)
+            .run(),
       },
       doc,
     );
@@ -982,6 +1115,8 @@ export function RichEditor({
         editor={editor}
         placement={penBar}
         {...(slashHintLabel === undefined ? {} : { slashHintLabel })}
+        {...(undoLabel === undefined ? {} : { undoLabel })}
+        {...(redoLabel === undefined ? {} : { redoLabel })}
       />
 
       <div

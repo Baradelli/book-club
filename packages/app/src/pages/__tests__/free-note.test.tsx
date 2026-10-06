@@ -93,7 +93,9 @@ vi.mock('@clube/ui/editor', async () => {
     onChange,
     penBar = 'none',
     placeholder,
+    redoLabel = '',
     slashHintLabel = '',
+    undoLabel = '',
   }: {
     doc?: Record<string, unknown>;
     editable?: boolean;
@@ -101,6 +103,8 @@ vi.mock('@clube/ui/editor', async () => {
     penBar?: string;
     placeholder?: string;
     slashHintLabel?: string;
+    undoLabel?: string;
+    redoLabel?: string;
     className?: string;
   }) {
     return (
@@ -109,14 +113,16 @@ vi.mock('@clube/ui/editor', async () => {
           ⚠️ **A PARTIÇÃO DA §7.9, APLICADA À BARRA DE CANETAS.** O que a TELA
           decide é ONDE a barra fica — uma palavra, a prop `penBar` —, e é só
           isso que este dublê expõe. Quem desenha a barra, e quem prova que
-          `'fixed'` vira `fixed inset-x-0 bottom-0` no celular e volta a ser
-          estática acima de 1120px, é o `RichEditor` de verdade, guardado em
+          `'floating'` vira a pílula presa ao rodapé e acima do teclado, é o
+          `RichEditor` de verdade, guardado em
           `packages/ui/src/components/__tests__/pen-bar.test.tsx`.
         */
         data-editable={String(editable)}
         data-pen-bar={penBar}
+        data-redo={redoLabel}
         data-slash-hint={slashHintLabel}
         data-testid={editable ? 'editor' : 'reader'}
+        data-undo={undoLabel}
       >
         <p data-testid={editable ? 'editor-text' : 'reader-text'}>
           {textOf(doc)}
@@ -1532,7 +1538,8 @@ describe('⚠️ ONLY THE AUTHOR ARCHIVES (decision H)', () => {
  * diferentes — `NovaAnotacao.dc.html:72-85` ancorada no fim da janela e
  * `NovaAnotacaoDesktop:77-88` como rodapé da coluna de 680px — e escolher
  * entre eles era decisão de desenho. **O dono escolheu: as duas, que é o que
- * a prop `penBar="fixed"` já significa.**
+ * a prop ~~`penBar="fixed"`~~ significava — e desde 2026-10-06 é a
+ * `penBar="floating"`, a pílula de rodapé que sobe acima do teclado.**
  *
  * ⚠️⚠️ **O PAR, DOS DOIS LADOS, e este bloco já pagou CINCO vezes por metade
  * de par.** A forma `fixed` não é "só no celular": ela ancora a barra acima
@@ -1552,10 +1559,10 @@ describe('⚠️ THE PENS REACH THE STANDALONE NOTE (owner’s decision)', () =>
     return screen.getByTestId(testId).getAttribute('data-pen-bar');
   }
 
-  it('asks for the FIXED bar — the one form that carries both widths', async () => {
+  it('asks for the FLOATING bar — the one form that carries both widths', async () => {
     await renderFreeNote({ path: freeNoteNewPath(BOOK_ID) });
 
-    expect(penBarOf('editor')).toBe('fixed');
+    expect(penBarOf('editor')).toBe('floating');
     /*
       A dica do `/` é a terceira folha de `editor.*` lida pela TELA (o
       `packages/ui` não chama `t()` nenhuma vez). Sem ela o desktop perde a
@@ -1563,6 +1570,12 @@ describe('⚠️ THE PENS REACH THE STANDALONE NOTE (owner’s decision)', () =>
     */
     expect(screen.getByTestId('editor').getAttribute('data-slash-hint')).toBe(
       pt.editor.slashHint,
+    );
+    expect(screen.getByTestId('editor').getAttribute('data-undo')).toBe(
+      pt.editor.undo,
+    );
+    expect(screen.getByTestId('editor').getAttribute('data-redo')).toBe(
+      pt.editor.redo,
     );
     expectNoGuilt();
   });
@@ -1578,7 +1591,7 @@ describe('⚠️ THE PENS REACH THE STANDALONE NOTE (owner’s decision)', () =>
       sobre o texto que ninguém além da autora pode editar (regra 17).
     */
     await renderFreeNote();
-    expect(penBarOf('editor')).toBe('fixed');
+    expect(penBarOf('editor')).toBe('floating');
 
     cleanup();
 

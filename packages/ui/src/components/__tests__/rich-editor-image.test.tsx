@@ -330,8 +330,8 @@ describe('the mount trap of §11 (rule 4)', () => {
     );
     expect(siblings()).toEqual(baseline);
 
-    // E nas TRÊS formas da barra de canetas, nas duas direções de `editable`.
-    for (const penBar of ['fixed', 'footer', 'none'] as const) {
+    // E nas DUAS formas da barra de canetas, nas duas direções de `editable`.
+    for (const penBar of ['floating', 'none'] as const) {
       for (const editable of [true, false]) {
         rerender(
           <RichEditor

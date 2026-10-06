@@ -294,7 +294,11 @@ describe('the format controls (rules 8 and 9)', () => {
     // mesma variável), mas quem usa leitor de tela ouve "não pressionado" com
     // o negrito ligado — e não tem como saber o estado de outro jeito.
     render(
-      <RichEditor doc={aDoc('')} onChange={() => undefined} penBar="fixed" />,
+      <RichEditor
+        doc={aDoc('')}
+        onChange={() => undefined}
+        penBar="floating"
+      />,
     );
     openFormatControls();
 
@@ -315,7 +319,11 @@ describe('the format controls (rules 8 and 9)', () => {
       `fireEvent` devolve `false` quando o handler chamou `preventDefault`.
     */
     render(
-      <RichEditor doc={aDoc('')} onChange={() => undefined} penBar="fixed" />,
+      <RichEditor
+        doc={aDoc('')}
+        onChange={() => undefined}
+        penBar="floating"
+      />,
     );
     openFormatControls();
 
@@ -347,7 +355,7 @@ describe('the format controls (rules 8 and 9)', () => {
       <RichEditor
         doc={aDoc('trecho')}
         onChange={() => undefined}
-        penBar="fixed"
+        penBar="floating"
       />,
     );
 
@@ -378,7 +386,7 @@ describe('the format controls (rules 8 and 9)', () => {
         doc={aDoc('')}
         editable={false}
         onChange={() => undefined}
-        penBar="fixed"
+        penBar="floating"
       />,
     );
 
@@ -413,7 +421,7 @@ describe('the format controls (rules 8 and 9)', () => {
       <RichEditor
         doc={aDoc('trecho')}
         onChange={() => undefined}
-        penBar="fixed"
+        penBar="floating"
       />,
     );
 
@@ -424,7 +432,7 @@ describe('the format controls (rules 8 and 9)', () => {
         doc={aDoc('trecho')}
         editable={false}
         onChange={() => undefined}
-        penBar="fixed"
+        penBar="floating"
       />,
     );
 
@@ -437,7 +445,7 @@ describe('the format controls (rules 8 and 9)', () => {
       <RichEditor
         doc={aDoc('trecho')}
         onChange={() => undefined}
-        penBar="fixed"
+        penBar="floating"
       />,
     );
 

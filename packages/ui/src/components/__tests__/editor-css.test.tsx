@@ -109,7 +109,9 @@ function mountEditor(): Element {
  * `mountEditor` devolve o `.ProseMirror`, e aqui o que interessa é a bolinha.
  */
 function mountPenBar(): Element {
-  render(<RichEditor doc={aDoc()} onChange={() => undefined} penBar="fixed" />);
+  render(
+    <RichEditor doc={aDoc()} onChange={() => undefined} penBar="floating" />,
+  );
 
   const swatch = document.querySelector('[data-editor-pen]');
   if (swatch === null)

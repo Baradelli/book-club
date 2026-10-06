@@ -35,7 +35,7 @@ import { RichEditor } from '../RichEditor';
  * ⚠️ **NA TAREFA 43 AS CINCO AMOSTRAS MUDARAM DE LUGAR E DE NOME, e o pino
  * acompanhou.** Elas saíram da barra fixa do topo — que morreu (decisão A) —
  * para a BARRA DE CANETAS do rodapé, e por isso todo render aqui passa a pedir
- * `penBar="fixed"`: sem a barra não há amostra nenhuma, e o teste falharia por
+ * `penBar="floating"`: sem a barra não há amostra nenhuma, e o teste falharia por
  * ausência em vez de por cor. Os rótulos viraram `Caneta …`, que é como o
  * canvas os nomeia (`Dia.dc.html:105,108,111,114,117`).
  *
@@ -92,7 +92,7 @@ function swatchColorOf(label: string): string {
 describe('⚠️ the highlight palette of the editor (ADR 0004, task 25 decision G)', () => {
   it.each(EXPECTED_PALETTE)('paints %s with %s', (label, color) => {
     render(
-      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="fixed" />,
+      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="floating" />,
     );
 
     expect(swatchColorOf(label)).toBe(color);
@@ -108,7 +108,7 @@ describe('⚠️ the highlight palette of the editor (ADR 0004, task 25 decision
       `shared`) ficaria com uma cor a menos que a barra do editor.
     */
     render(
-      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="fixed" />,
+      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="floating" />,
     );
 
     const swatches = Array.from(
@@ -137,7 +137,7 @@ describe('⚠️ the highlight palette of the editor (ADR 0004, task 25 decision
       regex sobre o que o componente de fato pinta.
     */
     render(
-      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="fixed" />,
+      <RichEditor doc={aDoc()} onChange={() => undefined} penBar="floating" />,
     );
 
     const painted = Array.from(

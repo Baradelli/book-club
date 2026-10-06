@@ -1337,12 +1337,6 @@ export const pt = {
       reminderTimeHint: 'Salva sozinho.',
       reminderEnabled: 'Quero o lembrete da leitura de hoje',
       notifyGroupActivity: 'Quero saber quando alguém do clube lê ou escreve',
-      // A barra de canetas da tela do dia: presa no topo ou parada no começo.
-      writing: {
-        title: 'Ao escrever',
-        stickyPenBar: 'Manter a barra de canetas no topo enquanto rolo o texto',
-        stickyPenBarHint: 'Vale só neste aparelho.',
-      },
       device: {
         title: 'Neste aparelho',
         activate: 'Ativar os avisos neste aparelho',
@@ -1547,6 +1541,10 @@ export const pt = {
       (decisão C ao contrário).
     */
     slashHint: 'Digite / para inserir um bloco',
+    // As duas setas do começo da barra de canetas — entram por prop, como a
+    // dica acima: quem chama o `t()` é a tela.
+    undo: 'Desfazer',
+    redo: 'Refazer',
     image: {
       uploading: 'Enviando imagem…',
       uploadFailed: 'Falha ao enviar',
