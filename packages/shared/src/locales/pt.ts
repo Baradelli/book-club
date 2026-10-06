@@ -1337,6 +1337,12 @@ export const pt = {
       reminderTimeHint: 'Salva sozinho.',
       reminderEnabled: 'Quero o lembrete da leitura de hoje',
       notifyGroupActivity: 'Quero saber quando alguém do clube lê ou escreve',
+      // O botão que busca a versão nova do PWA e recarrega (2026-10-06).
+      app: {
+        title: 'Aplicativo',
+        update: 'Atualizar o app',
+        updateHint: 'Busca a versão mais recente e recarrega a tela.',
+      },
       device: {
         title: 'Neste aparelho',
         activate: 'Ativar os avisos neste aparelho',

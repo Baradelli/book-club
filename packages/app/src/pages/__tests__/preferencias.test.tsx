@@ -87,9 +87,31 @@ vi.mock('../push-device', async (importOriginal) => {
   };
 });
 
+/**
+ * O "Atualizar o app" recarrega a página — no jsdom isso seria navegação de
+ * verdade. O dublê só conta os reloads; a lógica (esperar a versão nova, cair
+ * no reload em qualquer caminho) é provada em `app-update.test.ts`.
+ */
+const appUpdate = vi.hoisted(() => ({ reloads: 0 }));
+
+vi.mock('../app-update', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../app-update')>();
+  return {
+    ...actual,
+    browserAppUpdateDevice: () => ({
+      getRegistration: () => Promise.resolve(undefined),
+      waitForNewVersion: () => Promise.resolve(),
+      reload: () => {
+        appUpdate.reloads += 1;
+      },
+    }),
+  };
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
   push.device = null;
+  appUpdate.reloads = 0;
 });
 
 const CASAL: ClubSummary = {
@@ -1327,5 +1349,37 @@ describe('⚠️ a varredura anti-culpa nas preferências (regra 8, Tarefa 48)',
       });
       expectNoGuilt();
     }
+  });
+});
+
+describe('o botão de atualizar o app (2026-10-06)', () => {
+  it('reloads the app when tapped', async () => {
+    await renderSettings();
+
+    const button = await screen.findByRole('button', {
+      name: pt.pages.settings.app.update,
+    });
+    await act(async () => {
+      fireEvent.click(button);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(appUpdate.reloads).toBe(1);
+    });
+  });
+
+  it('⚠️ is there even when the preferences could not be opened', async () => {
+    // Uma versão velha presa no aparelho pode ser justamente o motivo da falha.
+    await renderSettings({
+      settings: { status: 500, body: { error: 'boom' } },
+    });
+
+    await waitFor(() => {
+      expect(readableText()).toContain(pt.pages.settings.failed);
+    });
+    expect(
+      screen.getByRole('button', { name: pt.pages.settings.app.update }),
+    ).not.toBeNull();
   });
 });

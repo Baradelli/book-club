@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../auth/auth-context';
+import { browserAppUpdateDevice, updateApp } from './app-update';
 import { Notice, Screen } from './chrome';
 import { TEXT_INPUT_CLASS } from './form-styles';
 import { PushSection } from './push-section';
@@ -247,7 +248,43 @@ export function PreferenciasPage() {
     );
   }, [draft, save, saveFailed, state, t]);
 
-  return <Screen title={t('pages.settings.title')}>{body}</Screen>;
+  return (
+    <Screen title={t('pages.settings.title')}>
+      {body}
+      <AppUpdateSection />
+    </Screen>
+  );
+}
+
+/**
+ * "ATUALIZAR O APP" — FORA do `body`, de propósito: ele aparece também quando
+ * as preferências não carregam, que é justamente quando uma versão velha presa
+ * no aparelho pode ser a causa. A lógica e o porquê estão em `app-update.ts`.
+ */
+function AppUpdateSection() {
+  const { t } = useTranslation();
+  const [updating, setUpdating] = useState(false);
+
+  return (
+    <section className="mt-8 flex flex-col gap-2">
+      <h2 className="text-base font-semibold text-content">
+        {t('pages.settings.app.title')}
+      </h2>
+      <Button
+        loading={updating}
+        onClick={() => {
+          setUpdating(true);
+          void updateApp(browserAppUpdateDevice());
+        }}
+        variant="ghost"
+      >
+        {t('pages.settings.app.update')}
+      </Button>
+      <p className="text-label text-muted">
+        {t('pages.settings.app.updateHint')}
+      </p>
+    </section>
+  );
 }
 
 interface SwitchProps {
