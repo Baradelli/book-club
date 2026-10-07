@@ -16,7 +16,8 @@ import {
   type HighlightColor,
   PEN_DOT_CLASS,
 } from './highlight-colors';
-import { type LabelledPlanDay, planDayLabel } from './plan-day-label';
+import { type LabelledPlanDay } from './plan-day-label';
+import { PlanDaySelect } from './plan-day-select';
 
 /**
  * OS CAMPOS DO GRIFO — o que os dois modos do formulário dividem.
@@ -624,7 +625,9 @@ export function HighlightFields({
         trinta dias num celular, e `packages/ui` não tem `Select`). "Sem dia
         do plano" no topo, depois TODOS os dias — inclusive os futuros — na
         ordem do plano, como `DD/MM · tema` (`planDayLabel`, dono único).
-        Sem plano carregado, o campo NÃO aparece (decisão I).
+        Sem plano carregado, o campo NÃO aparece (decisão I). Fechado, ele
+        se veste com o bloquinho de data da lista do plano: →
+        `plan-day-select.tsx`.
       */}
       {days === null ? null : (
         <Field
@@ -632,21 +635,12 @@ export function HighlightFields({
           label={t('pages.highlightForm.fields.reference')}
         >
           {(control) => (
-            <select
-              {...control}
-              className={TEXT_INPUT_CLASS}
-              onChange={(event) => onField('planItemId', event.target.value)}
+            <PlanDaySelect
+              control={control}
+              days={days}
+              onChange={(next) => onField('planItemId', next)}
               value={draft.planItemId}
-            >
-              <option value="">
-                {t('pages.highlightForm.fields.noPlanDay')}
-              </option>
-              {days.map((day) => (
-                <option data-plan-day-label="" key={day.id} value={day.id}>
-                  {planDayLabel(day)}
-                </option>
-              ))}
-            </select>
+            />
           )}
         </Field>
       )}

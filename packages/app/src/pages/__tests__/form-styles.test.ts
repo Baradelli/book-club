@@ -128,7 +128,16 @@ const DECORATIVE_EDGES = [
  * própria. No dia em que alguém lhe der uma, a asserção de baixo fica vermelha
  * em vez de a isenção o esconder.
  */
-const FRAMED_BY_AN_ANCESTOR = 'highlight-fields.tsx: textarea';
+const FRAMED_BY_AN_ANCESTOR: readonly string[] = [
+  'highlight-fields.tsx: textarea',
+  /*
+    A SEGUNDA, e com a mesma forma: o `<select>` do dia do plano no grifo é
+    INVISÍVEL (`opacity-0`) por cima da face que ele veste — o bloquinho de
+    data da lista do plano. Quem desenha a aresta e o foco é a moldura um nó
+    acima (`shadow-field` + `focus-within:shadow-field-focus`).
+  */
+  'plan-day-select.tsx: select',
+];
 
 /** As telas de `pages/`, sem comentário — prosa cita classe, e não é código. */
 function pages(): Page[] {
@@ -236,7 +245,7 @@ describe('⚠️ a borda de campo de texto tem tom PRÓPRIO (decisão A, Tarefa 
 
         const written = utilitiesWrittenIn(tag);
 
-        if (`${file}: ${kind}` === FRAMED_BY_AN_ANCESTOR) {
+        if (FRAMED_BY_AN_ANCESTOR.includes(`${file}: ${kind}`)) {
           expect(written.filter((name) => name.startsWith('border'))).toEqual(
             [],
           );
@@ -264,7 +273,7 @@ describe('⚠️ a borda de campo de texto tem tom PRÓPRIO (decisão A, Tarefa 
 
     // ⚠️ As duas isenções, pinadas. Uma terceira entra com a razão escrita.
     expect(nativeBox).toBe(1);
-    expect(framed).toBe(1);
+    expect(framed).toBe(FRAMED_BY_AN_ANCESTOR.length);
 
     /*
       ⚠️ O pino de que a varredura VARREU — a lição do `pageSource` do

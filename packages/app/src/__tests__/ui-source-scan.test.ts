@@ -506,9 +506,15 @@ describe('the app CSS sees packages/ui (rule 1)', () => {
       `highlight-fields.tsx`. E o `min-h-11` caiu de 6 para 5 no mesmo
       movimento: o `form-styles.ts` subiu o campo para `min-h-12`.
 
+      ⚠️ **E SUBIU PARA 6 no seletor do dia do plano do grifo (2026-10-07):**
+      o `plan-day-select.tsx` veste o `<select>` com o bloquinho de data da
+      lista do plano, e moldura, bloquinho e `<select>` invisível usam o raio
+      de controle — o mesmo de todo campo. Saldo exato +1: o
+      `highlight-fields.tsx` continua escrevendo o raio no papel do trecho.
+
       Mesmo recado de sempre: some um (ou tira um), não apague.
     */
-    expect(usagesOutsideUi('rounded-control')).toHaveLength(5);
+    expect(usagesOutsideUi('rounded-control')).toHaveLength(6);
     expect(usagesOutsideUi('min-h-11')).toHaveLength(5);
     // E que o par de fronteira do regex funciona: `border-leader-future` não é
     // `border-leader`. Sem isto a canária mais frágil acusaria por um vizinho.

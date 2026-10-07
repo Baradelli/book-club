@@ -82,6 +82,7 @@ const TRANSITION_FILES: readonly string[] = [
   'highlight-fields.tsx',
   'home.tsx',
   'list.tsx',
+  'plan-day-select.tsx',
   'streak-button.tsx',
 ];
 
@@ -96,6 +97,8 @@ const NON_COLOUR_TRANSITIONS: readonly string[] = [
   'highlight-fields.tsx: transition-shadow',
   // a seta do cartão "ler hoje" anda meio passo no hover
   'home.tsx: transition-transform',
+  // a moldura do seletor do dia do plano no grifo, o mesmo filete de foco
+  'plan-day-select.tsx: transition-shadow',
 ];
 
 /**
