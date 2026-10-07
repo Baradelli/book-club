@@ -1,4 +1,9 @@
-import { HIGHLIGHT_PAGE_MAX, type HighlightResponse } from '@clube/shared';
+import {
+  HIGHLIGHT_PAGE_MAX,
+  type HighlightResponse,
+  localDay,
+  localTimeZone,
+} from '@clube/shared';
 import { cx, Eyebrow, Field, FOCUS_RING, type PenKey } from '@clube/ui';
 import { lazy, Suspense, useId } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +16,7 @@ import {
   type HighlightColor,
   PEN_DOT_CLASS,
 } from './highlight-colors';
+import { type LabelledPlanDay, planDayLabel } from './plan-day-label';
 
 /**
  * OS CAMPOS DO GRIFO — o que os dois modos do formulário dividem.
@@ -34,6 +40,11 @@ import {
  * registrado aqui, no arquivo que recebeu, e não só no relatório — é a lição
  * medida da Tarefa 46, onde uma tela encolheu 33 e a vizinha absorveu 208 sem
  * uma linha de comentário em lugar nenhum.
+ *
+ * ⚠️ **A TAREFA 48a O LEVOU DE 336 PARA 362 (+26)**: o select da "Referência"
+ * (que substituiu o `<input>` de texto livre), o `planItemIdOf` e o
+ * `todayDayIdOf`. Continua 38 abaixo do teto. O formulário vizinho foi de 407
+ * para 449, e a conta está no docblock dele.
  *
  * O que fica no `highlight-form.tsx`: as duas TELAS (registrar e corrigir), o
  * editor `lazy` e os corpos das requisições — ou seja, tudo o que fala com a
@@ -69,22 +80,50 @@ export function commentOf(
   return JSON.stringify(doc) === EMPTY_DOC_JSON ? null : doc;
 }
 
-/** O que a pessoa digitou — tudo `string`, porque é o que um `<input>` entrega. */
+/**
+ * O que a pessoa digitou — tudo `string`, porque é o que um `<input>` (e um
+ * `<select>`) entrega.
+ *
+ * ⚠️ **`planItemId` ENTROU NO LUGAR DA `reference` na Tarefa 48a** (decisão
+ * A): a "Referência" virou o select dos dias do plano. `''` é a opção "Sem
+ * dia do plano" — e vai ao servidor como `null`, nunca como `''`
+ * (`planItemIdOf`). O texto antigo de `reference` fica no banco, só leitura
+ * (decisão C), e o formulário deixou de mandá-lo (decisão P).
+ */
 export interface Draft {
   quote: string;
   page: string;
-  reference: string;
+  planItemId: string;
 }
 
-export const EMPTY_DRAFT: Draft = { quote: '', page: '', reference: '' };
+export const EMPTY_DRAFT: Draft = { quote: '', page: '', planItemId: '' };
 
 export function draftOf(highlight: HighlightResponse): Draft {
   return {
     quote: highlight.quote,
     // `null` é campo em BRANCO, nunca a palavra "null" no `<input>`.
     page: highlight.page === null ? '' : String(highlight.page),
-    reference: highlight.reference ?? '',
+    planItemId: highlight.planItemId ?? '',
   };
+}
+
+/** O valor do select como o CORPO o quer: "Sem dia do plano" é `null`. */
+export function planItemIdOf(draft: Draft): string | null {
+  return draft.planItemId === '' ? null : draft.planItemId;
+}
+
+/**
+ * ⚠️ **O PADRÃO DA CRIAÇÃO É O DIA DE HOJE** (decisão B), e "hoje" é a conta
+ * da tela do livro (`book.tsx`): `localDay` no fuso do navegador (decisão
+ * N). Hoje sem leitura no plano → `''`, "Sem dia do plano". O select só
+ * SUGERE: o valor que vale é o que a pessoa envia.
+ *
+ * Acusador do mutante "o padrão vira o primeiro dia": `highlight-form.test.tsx
+ * › starts on the day of TODAY, which is not the first day of the plan`.
+ */
+export function todayDayIdOf(days: readonly LabelledPlanDay[]): string {
+  const today = localDay(new Date(), localTimeZone());
+  return days.find((day) => day.date === today)?.id ?? '';
 }
 
 /**
@@ -518,6 +557,7 @@ function QuoteField({
 export function HighlightFields({
   color,
   colorError,
+  days,
   draft,
   onColor,
   onField,
@@ -525,6 +565,8 @@ export function HighlightFields({
   quoteError,
 }: {
   draft: Draft;
+  /** Os dias do plano, na ordem do plano. `null` = não carregou (decisão I). */
+  days: readonly LabelledPlanDay[] | null;
   color: HighlightColor | null;
   quoteError: string | undefined;
   pageError: string | undefined;
@@ -576,20 +618,38 @@ export function HighlightFields({
         )}
       </Field>
 
-      <Field
-        hint={t('pages.highlightForm.fields.referenceHint')}
-        label={t('pages.highlightForm.fields.reference')}
-      >
-        {(control) => (
-          <input
-            {...control}
-            className={TEXT_INPUT_CLASS}
-            onChange={(event) => onField('reference', event.target.value)}
-            type="text"
-            value={draft.reference}
-          />
-        )}
-      </Field>
+      {/*
+        ⚠️ **TAREFA 48a — A "REFERÊNCIA" É O DIA DO PLANO, num `<select>`
+        NATIVO** (decisões A e E; o precedente é o `ReadingSelect` do acervo:
+        trinta dias num celular, e `packages/ui` não tem `Select`). "Sem dia
+        do plano" no topo, depois TODOS os dias — inclusive os futuros — na
+        ordem do plano, como `DD/MM · tema` (`planDayLabel`, dono único).
+        Sem plano carregado, o campo NÃO aparece (decisão I).
+      */}
+      {days === null ? null : (
+        <Field
+          hint={t('pages.highlightForm.fields.referenceHint')}
+          label={t('pages.highlightForm.fields.reference')}
+        >
+          {(control) => (
+            <select
+              {...control}
+              className={TEXT_INPUT_CLASS}
+              onChange={(event) => onField('planItemId', event.target.value)}
+              value={draft.planItemId}
+            >
+              <option value="">
+                {t('pages.highlightForm.fields.noPlanDay')}
+              </option>
+              {days.map((day) => (
+                <option data-plan-day-label="" key={day.id} value={day.id}>
+                  {planDayLabel(day)}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+      )}
     </>
   );
 }
@@ -664,6 +724,10 @@ const RichEditor = lazy(async () => {
  * `border-line-field` por fora do papel — que o redesenho visual do mesmo dia
  * trocou pela sombra `shadow-field`, sem somar nem tirar o `<div>`). Continua
  * 60 abaixo do teto de 400.
+ *
+ * ⚠️ **E O 340 NÃO BATIA: medido no início da Tarefa 48a, o arquivo tinha
+ * 336**, pelo contador canônico. A diferença de 4 não foi rastreada (não é
+ * desta fatia); o número de partida da 48a é o medido, **336 → 362**.
  * Some as linhas, não apague o número: foi exatamente por ele não ter sido
  * somado que os docblocks daqui e do formulário carregaram valores velhos
  * desde a Tarefa 38i.

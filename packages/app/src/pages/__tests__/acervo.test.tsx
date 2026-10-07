@@ -1156,6 +1156,46 @@ describe('⚠️ EVERY ROW OPENS THE RIGHT SCREEN (rule 4)', () => {
 });
 
 describe('the highlight row draws quote, colour, page and comment (rules 2, 3)', () => {
+  /**
+   * ⚠️ **TAREFA 48a, decisão F — e o MUTANTE 6 da spec.** A linha mostra o
+   * dia do plano (`DD/MM · tema`) no lugar da referência; o texto antigo só
+   * quando NÃO há dia. O grifo daqui tem OS DOIS, que é o único fixture em que
+   * "o dia antes" e "o texto antes" dão resultados diferentes. O par sem dia é
+   * o teste de baixo (`Cap. 1`, grifo sem `planItemId`).
+   */
+  it('⚠️ shows DD/MM · theme of the plan day, and not the old reference, when the highlight has both', async () => {
+    await renderAcervo({
+      book: bookReply([
+        aPlanItem({
+          id: 'p-dia',
+          order: 1,
+          date: '2026-10-07',
+          title: 'O dia do anel',
+        }),
+      ]),
+      list: {
+        status: 200,
+        body: [
+          aHighlight({
+            id: 'h-dia',
+            planItemId: 'p-dia',
+            reference: 'Cap. antigo',
+            quote: 'o trecho que tem dia',
+          }),
+        ],
+      },
+      notes: NOTHING,
+    });
+    await waitForRows(1);
+
+    const row = rowOf('o trecho que tem dia');
+    expect(row.textContent).toContain('07/10 · O dia do anel');
+    expect(row.textContent).not.toContain('Cap. antigo');
+    // A linha do acervo é um dos três lugares da isenção do dono
+    // (2026-10-07, `PLAN_DAY_LABEL_SHAPE` em `anti-guilt-dom.ts`).
+    expectNoGuilt();
+  });
+
   it('shows the colour NAME, the page and the reference', async () => {
     await renderAcervo();
     await waitForRows(10);

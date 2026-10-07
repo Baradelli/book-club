@@ -121,12 +121,20 @@ import { highlightNewPath } from './paths';
  * 247). Hoje:
  *
  * ```
- * acervo.tsx          478   a tela: estado de requisição, linhas, orquestração
- * acervo-filters.tsx  465   o vocabulário, a marcação e as DUAS casas dos SEIS
- * acervo-rows.tsx      88   o card de grifo e o "Você × o nome"
+ * acervo.tsx          480   a tela: estado de requisição, linhas, orquestração
+ * acervo-filters.tsx  466   o vocabulário, a marcação e as DUAS casas dos SEIS
+ * acervo-rows.tsx     100   o card de grifo e o "Você × o nome"
  * acervo-entries.ts   169   o modelo: entrada, ordem, o que cada dimensão exclui
  * club-names.ts        23   `userId` → nome, dividido com o `book.tsx`
  * ```
+ *
+ * ⚠️ **REMEDIDOS NA TAREFA 48a.** Antes dela: `acervo.tsx` 478,
+ * `acervo-filters.tsx` 465 e `acervo-rows.tsx` **93** — a tabela dizia 88,
+ * e a diferença é anterior a esta fatia. A 48a somou +2 aqui (a `date` do
+ * plano e a prop `days` da linha de grifo), +1 no `acervo-filters.tsx` (a
+ * `date` do `PlanDay`) e +7 no `acervo-rows.tsx` (o `DD/MM · tema` no
+ * lugar da referência, com a marca `data-plan-day-label` da isenção
+ * anti-culpa que o dono decidiu em 2026-10-07).
  *
  * ⚠️ **OS NÚMEROS ACIMA FORAM REMEDIDOS NA TAREFA 46, E DOIS ESTAVAM ERRADOS
  * ANTES DELA** — pelo comando desta mesma docblock, não por estimativa:
@@ -394,6 +402,7 @@ export function AcervoPage() {
           // `order`). A tela NÃO reordena — duas ordens seriam duas verdades.
           planItems: data.planItems.map((item) => ({
             id: item.id,
+            date: item.date,
             title: item.title,
           })),
         });
@@ -622,6 +631,7 @@ export function AcervoPage() {
     return (
       <HighlightRow
         bookId={bookIdOfPath}
+        days={readings}
         highlight={highlight}
         key={keyOf(entry)}
         mine={highlight.userId === myId}

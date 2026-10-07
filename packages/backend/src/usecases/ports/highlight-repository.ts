@@ -150,6 +150,13 @@ export interface HighlightFilter {
  * `createdAt` fica fora — nada reescreve quando o grifo nasceu — e `updatedAt`
  * entra, porque o domínio é o dono dele (ADR 0008: sem `@updatedAt` no schema).
  *
+ * ⚠️ **`planItemId` ENTROU na Tarefa 48a** (decisão K). Até ali ele ficava fora,
+ * "como o `createdAt`": o dia do plano era write-once no nascimento (ADR 0004,
+ * emenda de 2026-09-18). O dono reabriu isso em 2026-10-07 — o dia se troca e
+ * se limpa pelo `editHighlight`, que confere antes que o dia é do MESMO livro
+ * (decisão J). Entrou nas DUAS implementações na mesma unidade (§6.9), e as
+ * duas copiam a chave campo a campo como as outras.
+ *
  * ⚠️ O tipo estreito **não fecha o buraco sozinho**: a checagem de propriedade
  * em excesso do TypeScript só vale para literal FRESCO, e um patch montado por
  * variável atravessa. Quem fecha o resto é o `HighlightRepositoryFake.update`,
@@ -165,6 +172,7 @@ export type HighlightPatch = Partial<
     | 'reference'
     | 'commentDoc'
     | 'commentText'
+    | 'planItemId'
     | 'status'
     | 'archivedAt'
     | 'updatedAt'

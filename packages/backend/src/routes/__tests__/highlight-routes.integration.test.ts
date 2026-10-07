@@ -71,6 +71,13 @@ const DAY_BOOK_ID = prefixedId('t38i', 'daybook');
 /** O par da decisão F: livro do mesmo clube, sem plano nenhum. */
 const NO_PLAN_BOOK_ID = prefixedId('t38i', 'noplanbook');
 
+/**
+ * Tarefa 48a — um livro IRMÃO, do mesmo clube, COM um dia de plano. É o caso
+ * que separa "o dia existe" de "o dia é deste livro" (decisão J): o id existe
+ * no banco, e só a conferência de livro o recusa.
+ */
+const SIBLING_BOOK_ID = prefixedId('t48a', 'siblingbook');
+
 const bookIds = [
   BOOK_ID,
   FILTER_BOOK_ID,
@@ -79,6 +86,7 @@ const bookIds = [
   OTHER_CLUB_BOOK_ID,
   DAY_BOOK_ID,
   NO_PLAN_BOOK_ID,
+  SIBLING_BOOK_ID,
 ];
 
 /** Os dias do plano e as preferências do bloco da Tarefa 38i. */
@@ -1064,8 +1072,9 @@ describe('highlight routes', () => {
    *
    * O que ESTE bloco prova é o que o unitário não pode: que a rota entrega o
    * `ReadingPlanItemRepository` e o `SettingsRepository` ao UseCase, que a
-   * coluna nova atravessa o `response` schema, e que o `.strict()` do corpo
-   * barra o contrabando.
+   * coluna nova atravessa o `response` schema e — desde a Tarefa 48a, que
+   * trocou a recusa do `.strict()` pelo dia ESCOLHIDO — que o dia do corpo é
+   * gravado, limpo e conferido contra o livro (decisão J) ponta a ponta.
    */
   describe('the reading day of the plan', () => {
     /** O dia de HOJE, derivado — nunca uma data escrita à mão (§7.8). */
@@ -1076,6 +1085,7 @@ describe('highlight routes', () => {
     beforeAll(async () => {
       await seedBook(DAY_BOOK_ID, CLUB_ID, MARIA_ID, 'O Dia do Plano');
       await seedBook(NO_PLAN_BOOK_ID, CLUB_ID, MARIA_ID, 'Livro sem Plano');
+      await seedBook(SIBLING_BOOK_ID, CLUB_ID, MARIA_ID, 'O Livro Irmão');
 
       const settingsId = prefixedId('t38i', 'settings-maria');
       settingsIds.push(settingsId);
@@ -1107,7 +1117,38 @@ describe('highlight routes', () => {
           },
         });
       }
+
+      // Tarefa 48a — o dia do livro irmão, no MESMO dia de hoje.
+      // Tarefa 48a (revisão) — um dia de plano de um livro de OUTRO CLUBE, no
+      // mesmo dia de hoje: o terceiro caso da decisão J.
+      const otherClubDayId = prefixedId('t48a', 'pi-outroclube');
+      planItemIds.push(otherClubDayId);
+      await prisma.readingPlanItem.create({
+        data: {
+          id: otherClubDayId,
+          bookId: OTHER_CLUB_BOOK_ID,
+          order: 0,
+          date: new Date(`${today}T00:00:00.000Z`),
+          title: 'Cap. do outro clube',
+        },
+      });
+
+      const siblingDayId = prefixedId('t48a', 'pi-irmao');
+      planItemIds.push(siblingDayId);
+      await prisma.readingPlanItem.create({
+        data: {
+          id: siblingDayId,
+          bookId: SIBLING_BOOK_ID,
+          order: 0,
+          date: new Date(`${today}T00:00:00.000Z`),
+          title: 'Cap. do irmão',
+        },
+      });
     });
+
+    function dayOf(prefix: string): string {
+      return required(planItemIds.find((id) => id.includes(prefix)));
+    }
 
     /** O id do item do plano de hoje, lido do banco — não deduzido. */
     async function planDayOfToday(): Promise<string> {
@@ -1164,57 +1205,253 @@ describe('highlight routes', () => {
     });
 
     /**
-     * ⚠️ **DECISÃO E / §7.5 — CONTRABANDO, COM O ATOR LEGÍTIMO.** A Maria é
-     * membro do clube e dona do livro: se a requisição morresse no corte de
-     * tenant, o teste morreria igual com o contrabando funcionando.
-     *
-     * A chave proibida é **400** pelo `.strict()` do `createHighlightSchema`, e
-     * **nada é escrito** — mais forte que "foi ignorada". Aceitá-la deixaria
-     * qualquer um apontar o grifo para o dia que quisesse.
+     * ⚠️ **TAREFA 48a — O DIA ESCOLHIDO.** Este teste SUBSTITUI o antigo
+     * `never lets a planItemId in the body choose the day, for the legitimate
+     * actor` da 38i, que pinava um 400: o dono reabriu a decisão E daquela
+     * fatia (a pessoa escolhe o dia num select). Com o ator legítimo e a LINHA
+     * assertada (§7.5).
      */
-    it('never lets a planItemId in the body choose the day, for the legitimate actor', async () => {
-      const otherDay = required(
-        planItemIds.find((id) => id.includes('pi-ontem')),
-      );
+    it('writes the day the person chose in the body, instead of today', async () => {
+      const yesterday = dayOf('pi-ontem');
 
       const response = await postHighlight(
         {
           quote: 'o dia que eu escolhi',
           color: '#facc15',
-          planItemId: otherDay,
+          planItemId: yesterday,
         },
         mariaToken,
         DAY_BOOK_ID,
       );
 
-      expect(response.statusCode).toBe(400);
+      expect(response.statusCode).toBe(201);
+      const body = response.json<HighlightBody>();
+      expect(body.planItemId).toBe(yesterday);
       await expect(
         prisma.highlight.count({
-          where: { quote: 'o dia que eu escolhi' },
+          where: { id: body.id, planItemId: yesterday },
         }),
-      ).resolves.toBe(0);
-      // E o dia de ONTEM continua sem nenhum grifo: o contrabando não pegou por
-      // nenhum outro caminho.
-      await expect(
-        prisma.highlight.count({ where: { planItemId: otherDay } }),
-      ).resolves.toBe(0);
+      ).resolves.toBe(1);
     });
 
-    // O PATCH também recusa: o dia é do NASCIMENTO do grifo, como o
-    // `createdAt`, e nem está no `HighlightPatch` do port.
-    it('never lets a planItemId in the patch move the day', async () => {
-      const created = await postHighlight(
-        { quote: 'o trecho que vai ser corrigido', color: '#facc15' },
+    /**
+     * ⚠️ Mutante 1 da spec, ponta a ponta: `null` num livro que TEM plano
+     * hoje grava `null`, e não o dia de hoje.
+     */
+    it('writes null when the body says null, on a book that has a plan today', async () => {
+      const response = await postHighlight(
+        { quote: 'sem dia nenhum', color: '#facc15', planItemId: null },
         mariaToken,
         DAY_BOOK_ID,
       );
-      const { id, planItemId } = created.json<HighlightBody>();
 
-      const patched = await patchHighlight(id, { planItemId: null });
-
-      expect(patched.statusCode).toBe(400);
+      expect(response.statusCode).toBe(201);
+      const body = response.json<HighlightBody>();
+      expect(body.planItemId).toBeNull();
       await expect(
-        prisma.highlight.count({ where: { id, planItemId } }),
+        prisma.highlight.count({ where: { id: body.id, planItemId: null } }),
+      ).resolves.toBe(1);
+    });
+
+    /**
+     * ⚠️ **DECISÃO J — o dia tem de ser DESTE livro.** O dia do livro irmão
+     * (mesmo clube, existe no banco) e um id inventado recebem a MESMA
+     * resposta: 400, e nada escrito. Sem a conferência, o id inventado seria
+     * 500 (um `TypeError` ao ler `bookId` de `null`, não a FK) e o do irmão
+     * seria gravado em silêncio.
+     */
+    it.each([
+      ['a day of another book of the same club', () => dayOf('pi-irmao')],
+      ['a day of a book of ANOTHER CLUB', () => dayOf('pi-outroclube')],
+      ['a day that does not exist', () => 'dia-que-nao-existe'],
+    ])('answers 400 and writes nothing for %s', async (label, dayId) => {
+      const quote = `dia recusado: ${label}`;
+
+      const response = await postHighlight(
+        { quote, color: '#facc15', planItemId: dayId() },
+        mariaToken,
+        DAY_BOOK_ID,
+      );
+
+      expect(response.statusCode).toBe(400);
+      await expect(prisma.highlight.count({ where: { quote } })).resolves.toBe(
+        0,
+      );
+    });
+
+    /**
+     * O PATCH, com o mesmo par: troca e limpa. SUBSTITUI o antigo
+     * `never lets a planItemId in the patch move the day` da 38i (o dia era
+     * write-once no nascimento; o dono reabriu).
+     */
+    it('moves the day with a patch, and clears it with null', async () => {
+      const created = await createHighlight(
+        { quote: 'o trecho que vai ser corrigido' },
+        mariaToken,
+        DAY_BOOK_ID,
+      );
+      const yesterday = dayOf('pi-ontem');
+
+      const moved = await patchHighlight(created.id, { planItemId: yesterday });
+
+      expect(moved.statusCode).toBe(200);
+      expect(moved.json<HighlightBody>().planItemId).toBe(yesterday);
+      await expect(
+        prisma.highlight.count({
+          where: { id: created.id, planItemId: yesterday },
+        }),
+      ).resolves.toBe(1);
+
+      const cleared = await patchHighlight(created.id, { planItemId: null });
+
+      expect(cleared.statusCode).toBe(200);
+      expect(cleared.json<HighlightBody>().planItemId).toBeNull();
+      await expect(
+        prisma.highlight.count({ where: { id: created.id, planItemId: null } }),
+      ).resolves.toBe(1);
+    });
+
+    /**
+     * ⚠️ **A MESMA RESPOSTA para os três** (decisão J): mesmo status e corpo
+     * BYTE A BYTE igual, no POST e no PATCH. Distinguir "não existe" de
+     * "existe em outro clube" seria o vazamento que o 404 de tenant evita.
+     */
+    it('answers the three refused days with the same status and an identical body', async () => {
+      const refused = [
+        dayOf('pi-irmao'),
+        dayOf('pi-outroclube'),
+        'dia-que-nao-existe',
+      ];
+      const created = await createHighlight(
+        { quote: 'o grifo das três recusas' },
+        mariaToken,
+        DAY_BOOK_ID,
+      );
+
+      const posts = [];
+      const patchesOut = [];
+      for (const planItemId of refused) {
+        posts.push(
+          await postHighlight(
+            { quote: 'recusa comparada', color: '#facc15', planItemId },
+            mariaToken,
+            DAY_BOOK_ID,
+          ),
+        );
+        patchesOut.push(await patchHighlight(created.id, { planItemId }));
+      }
+
+      for (const response of [...posts, ...patchesOut]) {
+        expect(response.statusCode).toBe(400);
+      }
+      const postBodies = new Set(posts.map((response) => response.body));
+      const patchBodies = new Set(patchesOut.map((response) => response.body));
+      expect(postBodies.size).toBe(1);
+      expect(patchBodies.size).toBe(1);
+      // E o corpo não cita id nenhum dos três — nada a vazar.
+      for (const planItemId of refused) {
+        expect([...postBodies, ...patchBodies].join('')).not.toContain(
+          planItemId,
+        );
+      }
+      await expect(
+        prisma.highlight.count({ where: { quote: 'recusa comparada' } }),
+      ).resolves.toBe(0);
+    });
+
+    it('answers 400 to a patch that moves the day to a book of ANOTHER CLUB', async () => {
+      const created = await createHighlight(
+        { quote: 'o trecho que não muda de clube' },
+        mariaToken,
+        DAY_BOOK_ID,
+      );
+
+      const response = await patchHighlight(created.id, {
+        planItemId: dayOf('pi-outroclube'),
+      });
+
+      expect(response.statusCode).toBe(400);
+      await expect(
+        prisma.highlight.count({
+          where: { id: created.id, planItemId: created.planItemId },
+        }),
+      ).resolves.toBe(1);
+    });
+
+    it('answers 400 to a patch that moves the day to another book', async () => {
+      const created = await createHighlight(
+        { quote: 'o trecho que não muda de livro' },
+        mariaToken,
+        DAY_BOOK_ID,
+      );
+
+      const response = await patchHighlight(created.id, {
+        planItemId: dayOf('pi-irmao'),
+      });
+
+      expect(response.statusCode).toBe(400);
+      await expect(
+        prisma.highlight.count({
+          where: { id: created.id, planItemId: created.planItemId },
+        }),
+      ).resolves.toBe(1);
+    });
+
+    /**
+     * ⚠️ **O corte de tenant continua 404**, com o dia VÁLIDO no corpo — e com
+     * a precondição de que o MESMO corpo funciona para a Maria (sem ela, o 404
+     * poderia vir de a rota não existir).
+     */
+    it('still answers 404 to an outsider who sends a valid day of the book', async () => {
+      const payload = {
+        quote: 'o forasteiro e o dia',
+        color: '#facc15',
+        planItemId: dayOf('pi-ontem'),
+      };
+
+      const legit = await postHighlight(payload, mariaToken, DAY_BOOK_ID);
+      const outsider = await postHighlight(payload, outsiderToken, DAY_BOOK_ID);
+
+      expect(legit.statusCode).toBe(201);
+      expect(outsider.statusCode).toBe(404);
+      await expect(
+        prisma.highlight.count({ where: { quote: payload.quote } }),
+      ).resolves.toBe(1);
+
+      const legitId = legit.json<HighlightBody>().id;
+      const patchByOutsider = await patchHighlight(
+        legitId,
+        { planItemId: null },
+        outsiderToken,
+      );
+
+      expect(patchByOutsider.statusCode).toBe(404);
+      await expect(
+        prisma.highlight.count({
+          where: { id: legitId, planItemId: payload.planItemId },
+        }),
+      ).resolves.toBe(1);
+    });
+
+    /** E quem não é o autor recebe o 403 de sempre, com o dia intocado. */
+    it('answers 403 to a fellow member who tries to move the day', async () => {
+      const created = await createHighlight(
+        { quote: 'o dia da maria' },
+        mariaToken,
+        DAY_BOOK_ID,
+      );
+
+      const response = await patchHighlight(
+        created.id,
+        { planItemId: null },
+        marcosToken,
+      );
+
+      expect(response.statusCode).toBe(403);
+      await expect(
+        prisma.highlight.count({
+          where: { id: created.id, planItemId: created.planItemId },
+        }),
       ).resolves.toBe(1);
     });
   });
@@ -1825,8 +2062,8 @@ describe('highlight routes', () => {
       'id',
       'page',
       // ⚠️ Tarefa 38i — o dia do plano SAI na resposta (é o que o acervo usa
-      // para recortar por dia de leitura) e não entra em input nenhum, como o
-      // `commentText`.
+      // para recortar por dia de leitura). Desde a 48a ele também entra nos
+      // dois corpos, conferido contra o livro (decisão J).
       'planItemId',
       'quote',
       'reference',

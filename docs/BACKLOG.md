@@ -5266,6 +5266,17 @@ o que a outra pessoa escreveu logo abaixo. Abro o mesmo endereço no desktop e a
 em coluna de leitura e margem, sem que ninguém tenha escrito uma segunda aplicação. Os dois
 temas passam no contraste, nada cobra, e nenhuma guarda foi enfraquecida para isso acontecer.
 
+### Fatia inserida depois do Bloco J (pedido do dono, 2026-10-07)
+
+- [x] **48a** — **A "Referência" do grifo vira o dia do plano, escolhido num select.** O
+      campo de texto livre dá lugar a um `<select>` dos dias do plano (`DD/MM · tema`), que
+      grava `planItemId`; o padrão ao criar é o dia de hoje; a correção troca e limpa o dia;
+      a página continua livre. Reabre, por decisão explícita do dono, o *"write-once no
+      nascimento"* da emenda de 2026-09-18 ao ADR 0004 e as decisões C e E da 38i — e a
+      guarda que torna o campo seguro é o dia ter de ser **deste livro** (400 se não for).
+      Sem migration. → `tasks/48a-dia-do-plano-escolhido-no-grifo.md`
+      _Entregue (2026-10-07): shared 614 · ui 314 · backend 2008 · app 1115 · integração 653. O `DD/MM · tema` fica por decisão do dono, com isenção POR ELEMENTO na guarda anti-culpa. ⚠️ `highlight-form.tsx` em 449 linhas (teto 400), declarado._
+
 ---
 
 # MVP 4 — Administração

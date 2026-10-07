@@ -15,12 +15,17 @@ import { TEXT_INPUT_CLASS } from '../form-styles';
 import { acervoPath, highlightNewPath, highlightPath } from '../paths';
 import { expectNoPrivacyTalk } from './adr-0002-dom';
 import {
+  COUNTER_SHAPE,
   expectNoGuilt,
   expectNoGuiltBesidesFormError,
+  PLAN_DAY_LABEL_ATTRIBUTE,
+  PLAN_DAY_LABEL_SHAPE,
   stripComments,
 } from './anti-guilt-dom';
 import {
   aBook,
+  aPlanItem,
+  bookWithPlanReply,
   hidingOf,
   memoryStorage,
   meReply,
@@ -584,10 +589,18 @@ describe('⚠️ THE CREATION SENDS ONLY THE FIELDS THAT WERE FILLED (rules 15, 
       `userId`/`clubId` vêm do JWT e da rota (§6.3). Qualquer chave a mais é
       **400** — e um 400 aqui é a pessoa perdendo o que escreveu.
 
-      REGRAS 15 e 16: página em branco, referência em branco e comentário
-      intocado são AUSÊNCIA DE CHAVE, nunca `''` nem `null`.
+      REGRAS 15 e 16: página em branco e comentário intocado são AUSÊNCIA DE
+      CHAVE, nunca `''` nem `null`.
+
+      ⚠️ **Tarefa 48a: o `planItemId` ENTROU nesta lista, e é `null`.** O
+      plano do fixture padrão é VAZIO, então o select da "Referência" está em
+      "Sem dia do plano" — e isso é uma ESCOLHA que a tela mostra, não um
+      campo em branco: vai como `null` (decisão G). Até a 48a esta lista era
+      `['color', 'quote']`; quem omite a chave é só a tela cujo plano NÃO
+      carregou (decisão I), testada no bloco da 48a.
     */
-    expect(bodyKeys(write)).toEqual(['color', 'quote']);
+    expect(bodyKeys(write)).toEqual(['color', 'planItemId', 'quote']);
+    expect(write.body).toMatchObject({ planItemId: null });
     expect(JSON.stringify(write.body)).toContain(
       '"quote":"a porta redonda e verde"',
     );
@@ -605,13 +618,19 @@ describe('⚠️ THE CREATION SENDS ONLY THE FIELDS THAT WERE FILLED (rules 15, 
     expectNoPrivacyTalk();
   });
 
-  it('sends the page as a NUMBER, the reference trimmed, and the comment', async () => {
+  /*
+    ⚠️ Tarefa 48a — este teste se chamava `sends the page as a NUMBER, the
+    reference trimmed, and the comment`: a "Referência" era texto livre e ia
+    no corpo. Ela virou o select do dia (decisão A) e o formulário DEIXOU de
+    mandar `reference` (decisão P). O que sobra daqui é a página e o
+    comentário; o dia tem bloco próprio no fim do arquivo.
+  */
+  it('sends the page as a NUMBER and the comment, and never a reference', async () => {
     const calls = await renderForm({ path: highlightNewPath(BOOK_ID) });
 
     await typeInto(FIELDS.quote, 'a porta redonda e verde');
     await press(screen.getByRole('button', { name: COLORS.green }));
     await typeInto(FIELDS.page, '112');
-    await typeInto(FIELDS.reference, '  Cap. 12  ');
     await pressTestId('type');
     await pressLabel(pt.pages.highlightForm.create);
 
@@ -620,13 +639,12 @@ describe('⚠️ THE CREATION SENDS ONLY THE FIELDS THAT WERE FILLED (rules 15, 
       'color',
       'commentDoc',
       'page',
+      'planItemId',
       'quote',
-      'reference',
     ]);
     // NÚMERO, não a string do `<input>`: o corpo é JSON e o
     // `createHighlightSchema` é `z.number()` SEM `coerce` — `"112"` seria 400.
     expect(write.body).toMatchObject({ page: 112, color: GREEN });
-    expect(JSON.stringify(write.body)).toContain('"reference":"Cap. 12"');
     expect(JSON.stringify(write.body)).toContain('"type":"doc"');
   });
 
@@ -644,7 +662,13 @@ describe('⚠️ THE CREATION SENDS ONLY THE FIELDS THAT WERE FILLED (rules 15, 
     await press(screen.getByRole('button', { name: COLORS.yellow }));
     await pressLabel(pt.pages.highlightForm.create);
 
-    expect(bodyKeys(requestAt(creates(calls), 0))).toEqual(['color', 'quote']);
+    // `planItemId` é o select da 48a (plano vazio → `null`); o que este
+    // teste prova é a AUSÊNCIA de `commentDoc`.
+    expect(bodyKeys(requestAt(creates(calls), 0))).toEqual([
+      'color',
+      'planItemId',
+      'quote',
+    ]);
   });
 
   it('⚠️ sends NO commentDoc when the editor was touched and left EMPTY (rule 16)', async () => {
@@ -661,7 +685,11 @@ describe('⚠️ THE CREATION SENDS ONLY THE FIELDS THAT WERE FILLED (rules 15, 
     await pressTestId('erase');
     await pressLabel(pt.pages.highlightForm.create);
 
-    expect(bodyKeys(requestAt(creates(calls), 0))).toEqual(['color', 'quote']);
+    expect(bodyKeys(requestAt(creates(calls), 0))).toEqual([
+      'color',
+      'planItemId',
+      'quote',
+    ]);
   });
 
   it('keeps the words of the API off the screen when the creation fails (rule 22)', async () => {
@@ -698,10 +726,10 @@ describe('⚠️ OPENING THE CORRECTION AND CHANGING NOTHING SENDS NO PATCH (rul
       'a porta redonda e verde no meio da colina',
     );
     expect(screen.getByLabelText(FIELDS.page)).toHaveProperty('value', '9');
-    expect(screen.getByLabelText(FIELDS.reference)).toHaveProperty(
-      'value',
-      'Cap. 1',
-    );
+    // Tarefa 48a: a "Referência" é o select do dia, e o grifo do fixture não
+    // tem dia — o select está em "Sem dia do plano" (`''`). O texto antigo
+    // (`'Cap. 1'`) fica no banco, só leitura (decisão C).
+    expect(screen.getByLabelText(FIELDS.reference)).toHaveProperty('value', '');
     expect(
       screen
         .getByRole('button', { name: COLORS.yellow })
@@ -791,22 +819,44 @@ describe('the correction sends ONLY what changed (rule 18)', () => {
     expect(requestAt(patches(calls), 0).body).toEqual({ page: null });
   });
 
-  it('sends reference: null when the reference is CLEARED', async () => {
-    const calls = await renderForm();
+  /*
+    ⚠️ Tarefa 48a — este teste se chamava `sends reference: null when the
+    reference is CLEARED`. O formulário não tem mais o campo de texto (decisão
+    A); o "limpar" da Referência agora é escolher "Sem dia do plano", e vai
+    como `planItemId: null` (mutante 5 da spec, que tem acusador próprio no
+    bloco da 48a).
+  */
+  it('sends planItemId: null when the day is CLEARED', async () => {
+    const calls = await renderForm({
+      book: bookWithPlanReply(aBook({ id: BOOK_ID, clubId: CLUB_ID }), [
+        aPlanItem({ id: 'p-1', bookId: BOOK_ID, date: '2026-10-06' }),
+      ]),
+      list: { status: 200, body: [aHighlight({ planItemId: 'p-1' })] },
+    });
 
-    await typeInto(FIELDS.reference, '   ');
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(FIELDS.reference), {
+        target: { value: '' },
+      });
+    });
+    await settle();
     await pressLabel(pt.pages.highlightForm.save);
 
-    expect(requestAt(patches(calls), 0).body).toEqual({ reference: null });
+    expect(requestAt(patches(calls), 0).body).toEqual({ planItemId: null });
   });
 
-  it('sends the four fields together when the four changed', async () => {
-    const calls = await renderForm();
+  it('sends the five fields together when the five changed', async () => {
+    // Tarefa 48a: a quinta chave é o dia do plano, não mais a `reference`.
+    const calls = await renderForm({
+      book: bookWithPlanReply(aBook({ id: BOOK_ID, clubId: CLUB_ID }), [
+        aPlanItem({ id: 'p-5', bookId: BOOK_ID, date: '2026-10-06' }),
+      ]),
+    });
 
     await typeInto(FIELDS.quote, 'outro trecho');
     await press(screen.getByRole('button', { name: COLORS.green }));
     await typeInto(FIELDS.page, '58');
-    await typeInto(FIELDS.reference, 'Cap. 5');
+    await typeInto(FIELDS.reference, 'p-5');
     await pressTestId('type');
     await pressLabel(pt.pages.highlightForm.save);
 
@@ -816,8 +866,8 @@ describe('the correction sends ONLY what changed (rule 18)', () => {
       'color',
       'commentDoc',
       'page',
+      'planItemId',
       'quote',
-      'reference',
     ]);
   });
 });
@@ -1796,9 +1846,9 @@ describe('⚠️ THE DESKTOP MARGIN OF THE HIGHLIGHT (task 47b, decisions A and 
     expect(previewText()).toContain('a porta amarela no fim do corredor');
     expect(previewText()).not.toContain('a porta redonda e verde');
 
-    await typeInto(FIELDS.reference, 'Cap. 7');
-    expect(previewText()).toContain('Cap. 7');
-    expect(previewText()).not.toContain('Cap. 1');
+    // Tarefa 48a: a referência deixou de ser campo de texto. O `'Cap. 1'`
+    // acima é o texto ANTIGO do grifo (decisão F: sem dia, a prévia mostra
+    // o que o acervo mostra). Seguir o SELECT é do bloco da 48a.
 
     await typeInto(FIELDS.page, '138');
     expect(previewText()).toContain(
@@ -1834,7 +1884,7 @@ describe('⚠️ THE DESKTOP MARGIN OF THE HIGHLIGHT (task 47b, decisions A and 
     expectNoGuilt();
   });
 
-  it('follows the PEN, the page and the reference as they are filled in', async () => {
+  it('follows the PEN and the page as they are filled in', async () => {
     await renderForm({ path: highlightNewPath(BOOK_ID) });
 
     // Sem caneta escolhida, a prévia não inventa uma cor.
@@ -1850,8 +1900,8 @@ describe('⚠️ THE DESKTOP MARGIN OF THE HIGHLIGHT (task 47b, decisions A and 
       pt.pages.acervo.item.page.replace('{{number}}', '138'),
     );
 
-    await typeInto(FIELDS.reference, 'Cap. 4');
-    expect(previewText()).toContain('Cap. 4');
+    // (A "Referência" virou o select do dia na Tarefa 48a — a prévia que
+    // segue o select é testada no bloco da 48a, no fim do arquivo.)
 
     // E as palavras são as DO ACERVO — é o que a prévia promete.
     expect(previewText()).toContain(pt.pages.acervo.kind.highlight);
@@ -2007,5 +2057,326 @@ describe('⚠️ THE EDGE OF THE PAPER IS THE PEN’S, never the canvas gold (de
       expect(tokensOf(frame())).toContain(pen.tone);
     }
     expectNoGuilt();
+  });
+});
+
+/**
+ * ============================================================================
+ * TAREFA 48a — A "REFERÊNCIA" VIROU O DIA DO PLANO, ESCOLHIDO NUM SELECT
+ * ============================================================================
+ *
+ * O rótulo continua "Referência" (decisão A); o controle é um `<select>`
+ * nativo dos dias do plano, com "Sem dia do plano" no topo (decisão E), que
+ * começa no dia de HOJE (decisão B) e grava `planItemId`.
+ *
+ * ⚠️ **O RELÓGIO É FIXADO NUM INSTANTE QUE SEPARA OS FUSOS.** A suíte roda em
+ * `America/Sao_Paulo` (`vitest.config.ts`). `2026-10-08T01:00Z` é **07/10**
+ * lá e **08/10** em UTC — então o padrão "hoje" só cai no dia certo se a tela
+ * usar o fuso LOCAL (decisão N). E hoje é o SEGUNDO dia do plano, nunca o
+ * primeiro: é o que deixa vermelho o mutante 4 ("o padrão vira o primeiro dia").
+ */
+describe('⚠️ THE REFERENCE IS THE DAY OF THE PLAN, CHOSEN IN A SELECT (task 48a)', () => {
+  const NIGHT = new Date('2026-10-08T01:00:00Z');
+
+  /** Fábrica (§7.7). Hoje (07/10) é o SEGUNDO dia, nunca o primeiro. */
+  function plan() {
+    return [
+      aPlanItem({
+        id: 'p-1',
+        bookId: BOOK_ID,
+        order: 0,
+        date: '2026-10-06',
+        title: 'Cap. 1',
+      }),
+      aPlanItem({
+        id: 'p-2',
+        bookId: BOOK_ID,
+        order: 1,
+        date: '2026-10-07',
+        title: 'Cap. 2',
+      }),
+      aPlanItem({
+        id: 'p-3',
+        bookId: BOOK_ID,
+        order: 2,
+        date: '2026-10-08',
+        title: 'Cap. 3',
+      }),
+    ];
+  }
+
+  function planReply(items = plan()): Reply {
+    return bookWithPlanReply(aBook({ id: BOOK_ID, clubId: CLUB_ID }), items);
+  }
+
+  function select(): HTMLSelectElement {
+    const node = screen.getByLabelText(FIELDS.reference);
+    if (!(node instanceof HTMLSelectElement)) {
+      throw new Error('a Referência deveria ser um <select>');
+    }
+    return node;
+  }
+
+  function optionTexts(): string[] {
+    return [...select().options].map((option) => option.textContent ?? '');
+  }
+
+  async function choose(value: string): Promise<void> {
+    await act(async () => {
+      fireEvent.change(select(), { target: { value } });
+    });
+    await settle();
+  }
+
+  async function fillAndCreate(): Promise<void> {
+    await typeInto(FIELDS.quote, 'a porta redonda e verde');
+    await press(screen.getByRole('button', { name: COLORS.yellow }));
+    await pressLabel(pt.pages.highlightForm.create);
+  }
+
+  function previewText(): string {
+    return screen.getByTestId('highlight-preview').textContent ?? '';
+  }
+
+  beforeEach(() => {
+    vi.setSystemTime(NIGHT);
+  });
+
+  describe('registering', () => {
+    it('offers "no plan day" first, then EVERY day of the plan in plan order, as DD/MM · theme', async () => {
+      await renderForm({ path: highlightNewPath(BOOK_ID), book: planReply() });
+
+      expect(optionTexts()).toEqual([
+        FIELDS.noPlanDay,
+        '06/10 · Cap. 1',
+        '07/10 · Cap. 2',
+        '08/10 · Cap. 3',
+      ]);
+      // O rótulo VISÍVEL continua "Referência" (decisão A), e a dica é nova.
+      expect(readableText()).toContain(FIELDS.referenceHint);
+      /*
+        ⚠️ O `DD/MM · tema` tem a forma do `COUNTER_SHAPE` ("06/10" parece
+        "3/30"), e passa pela varredura pela ISENÇÃO NOMEADA que o dono
+        decidiu em 2026-10-07 (`PLAN_DAY_LABEL_SHAPE`, em
+        `anti-guilt-dom.ts`): forma exata e só em elemento marcado.
+      */
+      expectNoGuilt();
+      expectNoPrivacyTalk();
+    });
+
+    /*
+      ⚠️ Até a decisão do dono este teste PINAVA um conflito em aberto. Agora
+      ele prova que a isenção está LIGADA nesta tela: cada opção de dia
+      carrega a marca, e tem a forma exata — tirar a marca do `<option>`
+      deixa o `expectNoGuilt()` acima vermelho, e este diz por quê.
+    */
+    it('⚠️ marks every day option for the owner’s exemption, in the exact shape', async () => {
+      await renderForm({ path: highlightNewPath(BOOK_ID), book: planReply() });
+
+      const days = [...select().options].filter(
+        (option) => option.value !== '',
+      );
+      expect(days).toHaveLength(3);
+      for (const option of days) {
+        expect(option.hasAttribute(PLAN_DAY_LABEL_ATTRIBUTE)).toBe(true);
+        expect(option.textContent ?? '').toMatch(COUNTER_SHAPE);
+        expect(option.textContent ?? '').toMatch(PLAN_DAY_LABEL_SHAPE);
+      }
+      // "Sem dia do plano" não é rótulo de dia, e não leva a marca.
+      expect(select().options[0]?.hasAttribute(PLAN_DAY_LABEL_ATTRIBUTE)).toBe(
+        false,
+      );
+    });
+
+    /**
+     * ⚠️ **MUTANTE 4 DA SPEC.** Hoje é o SEGUNDO dia: trocar o padrão por "o
+     * primeiro dia" daria `p-1`, e por `''` daria "Sem dia". E o corpo
+     * leva o dia — o padrão não é só pintura do select.
+     */
+    it('⚠️ starts on the day of TODAY, which is not the first day of the plan, and sends it', async () => {
+      const calls = await renderForm({
+        path: highlightNewPath(BOOK_ID),
+        book: planReply(),
+      });
+
+      expect(select().value).toBe('p-2');
+
+      await fillAndCreate();
+
+      expect(requestAt(creates(calls), 0).body).toMatchObject({
+        planItemId: 'p-2',
+      });
+    });
+
+    it('starts on "no plan day" when today has no reading in the plan', async () => {
+      const calls = await renderForm({
+        path: highlightNewPath(BOOK_ID),
+        book: planReply(plan().filter((day) => day.id !== 'p-2')),
+      });
+
+      expect(select().value).toBe('');
+
+      await fillAndCreate();
+
+      expect(requestAt(creates(calls), 0).body).toMatchObject({
+        planItemId: null,
+      });
+    });
+
+    it('sends the day the person chose, and never a reference', async () => {
+      const calls = await renderForm({
+        path: highlightNewPath(BOOK_ID),
+        book: planReply(),
+      });
+
+      await choose('p-3');
+      await fillAndCreate();
+
+      const write = requestAt(creates(calls), 0);
+      expect(write.body).toMatchObject({ planItemId: 'p-3' });
+      expect(bodyKeys(write)).toEqual(['color', 'planItemId', 'quote']);
+    });
+
+    it('sends planItemId: null when the person chooses "no plan day"', async () => {
+      const calls = await renderForm({
+        path: highlightNewPath(BOOK_ID),
+        book: planReply(),
+      });
+
+      await choose('');
+      await fillAndCreate();
+
+      const write = requestAt(creates(calls), 0);
+      expect(bodyKeys(write)).toContain('planItemId');
+      expect(write.body).toMatchObject({ planItemId: null });
+    });
+
+    /**
+     * ⚠️ **DECISÃO I.** O plano não carregou: o select NÃO aparece, a tela
+     * não trava, e o corpo vai SEM a chave — o servidor resolve o dia de
+     * hoje, que é o comportamento de antes da 48a.
+     */
+    it('⚠️ hides the select and sends NO planItemId when the plan fails to load (decision I)', async () => {
+      const calls = await renderForm({
+        path: highlightNewPath(BOOK_ID),
+        book: { status: 500, body: { error: 'Boom' } },
+      });
+
+      expect(screen.queryByLabelText(FIELDS.reference)).toBeNull();
+      expect(readableText()).not.toContain('Boom');
+
+      await fillAndCreate();
+
+      expect(creates(calls)).toHaveLength(1);
+      expect(bodyKeys(requestAt(creates(calls), 0))).toEqual([
+        'color',
+        'quote',
+      ]);
+      expectNoGuilt();
+    });
+
+    it('shows DD/MM · theme of the chosen day in the preview, and follows the select', async () => {
+      await renderForm({ path: highlightNewPath(BOOK_ID), book: planReply() });
+
+      expect(previewText()).toContain('07/10 · Cap. 2');
+
+      await choose('p-3');
+      expect(previewText()).toContain('08/10 · Cap. 3');
+      expect(previewText()).not.toContain('07/10');
+      // A prévia é o terceiro lugar da isenção do dono (2026-10-07).
+      expectNoGuilt();
+
+      await choose('');
+      expect(previewText()).not.toContain('08/10');
+    });
+  });
+
+  describe('correcting', () => {
+    function withDay(planItemId: string | null, reference: string | null) {
+      return {
+        status: 200,
+        body: [aHighlight({ planItemId, reference })],
+      };
+    }
+
+    it('shows the day of the highlight, and sends no patch when it is left alone', async () => {
+      const calls = await renderForm({
+        book: planReply(),
+        list: withDay('p-1', null),
+      });
+
+      // O dia DELE, não o de hoje: a correção não é a criação.
+      expect(select().value).toBe('p-1');
+      expect(optionTexts()[0]).toBe(FIELDS.noPlanDay);
+
+      await pressLabel(pt.pages.highlightForm.save);
+
+      expect(patches(calls)).toHaveLength(0);
+    });
+
+    it('moves the highlight to the day the person chose', async () => {
+      const calls = await renderForm({
+        book: planReply(),
+        list: withDay('p-1', null),
+      });
+
+      await choose('p-3');
+      await pressLabel(pt.pages.highlightForm.save);
+
+      expect(requestAt(patches(calls), 0).body).toEqual({ planItemId: 'p-3' });
+    });
+
+    /**
+     * ⚠️ **MUTANTE 5 DA SPEC.** "Sem dia" na correção é `null` EXPLÍCITO —
+     * omitir a chave seria "não mexa", e o grifo continuaria no dia antigo.
+     */
+    it('⚠️ sends planItemId: null — never an absent key — when the correction picks "no plan day"', async () => {
+      const calls = await renderForm({
+        book: planReply(),
+        list: withDay('p-2', null),
+      });
+
+      await choose('');
+      await pressLabel(pt.pages.highlightForm.save);
+
+      expect(patches(calls)).toHaveLength(1);
+      expect(requestAt(patches(calls), 0).body).toEqual({ planItemId: null });
+    });
+
+    /**
+     * ⚠️ **DECISÃO C.** O grifo antigo, com texto em `reference` e sem dia:
+     * o select está em "Sem dia", salvar sem mexer não manda nada — e o texto
+     * antigo NÃO é limpo (o formulário não manda `reference`, decisão P).
+     */
+    it('keeps the old reference text of a highlight that has no day, and never sends it', async () => {
+      const calls = await renderForm({
+        book: planReply(),
+        list: withDay(null, 'Capítulo antigo'),
+      });
+
+      expect(select().value).toBe('');
+      // Sem dia, a prévia mostra o texto antigo — o que o acervo mostra.
+      expect(previewText()).toContain('Capítulo antigo');
+
+      await typeInto(FIELDS.quote, 'outro trecho');
+      await pressLabel(pt.pages.highlightForm.save);
+
+      expect(requestAt(patches(calls), 0).body).toEqual({
+        quote: 'outro trecho',
+      });
+    });
+
+    it('shows the day in the preview, and not the old text, once a day is chosen', async () => {
+      await renderForm({
+        book: planReply(),
+        list: withDay(null, 'Capítulo antigo'),
+      });
+
+      await choose('p-1');
+
+      expect(previewText()).toContain('06/10 · Cap. 1');
+      expect(previewText()).not.toContain('Capítulo antigo');
+      expectNoGuilt();
+    });
   });
 });

@@ -267,15 +267,59 @@ describe('createHighlightSchema', () => {
     ['id', { id: 'escolhi-o-id' }],
     ['createdAt', { createdAt: '2026-01-01T00:00:00.000Z' }],
     ['updatedAt', { updatedAt: '2026-01-01T00:00:00.000Z' }],
-    // ⚠️ Tarefa 38i — o dia do plano é RESOLVIDO NO SERVIDOR (decisão E),
-    // a partir do `Settings.timezone` da pessoa. Aceitá-lo do cliente deixaria
-    // qualquer um apontar o grifo para o dia que quisesse — a mesma classe do
-    // `userId` acima, e por isso a mesma linha desta tabela.
-    ['planItemId', { planItemId: 'o-dia-que-eu-escolhi' }],
+    // ⚠️ `planItemId` SAIU desta tabela na Tarefa 48a, por decisão do dono:
+    // a pessoa escolhe o dia num select. Até a 38i ele estava aqui ("o dia é
+    // resolvido no servidor"); a guarda que torna o campo seguro agora é a
+    // decisão J — o UseCase confere que o dia é DESTE livro. → o `describe`
+    // abaixo, e o ADR 0004 (emenda de 2026-10-07).
   ])('refuses a body that carries %s', (_label, extra) => {
     expect(
       createHighlightSchema.safeParse({ ...aValidCreate(), ...extra }).success,
     ).toBe(false);
+  });
+
+  /**
+   * ⚠️ Tarefa 48a, decisão G — **três sentidos, e o schema preserva os três**:
+   * ausente (o servidor resolve o dia de hoje), `null` (sem dia) e um id
+   * (aquele dia). A asserção é sobre as CHAVES do objeto parseado: um
+   * `.default(null)` faria "ausente" virar "sem dia", e um `toBeNull()` não
+   * distinguiria os dois.
+   */
+  describe('planItemId — the day the person chose (Tarefa 48a)', () => {
+    it('leaves the key out when the body leaves it out', () => {
+      expect(
+        Object.keys(createHighlightSchema.parse(aValidCreate())),
+      ).not.toContain('planItemId');
+    });
+
+    it('keeps an explicit null, which means "no plan day"', () => {
+      const parsed = createHighlightSchema.parse({
+        ...aValidCreate(),
+        planItemId: null,
+      });
+
+      expect(Object.keys(parsed)).toContain('planItemId');
+      expect(parsed.planItemId).toBeNull();
+    });
+
+    it('accepts the id of a day', () => {
+      expect(
+        createHighlightSchema.parse({ ...aValidCreate(), planItemId: 'p-3' })
+          .planItemId,
+      ).toBe('p-3');
+    });
+
+    it.each([
+      ['an empty string', ''],
+      ['a number', 3],
+    ])('refuses a planItemId that is %s', (_label, value) => {
+      expect(
+        createHighlightSchema.safeParse({
+          ...aValidCreate(),
+          planItemId: value,
+        }).success,
+      ).toBe(false);
+    });
   });
 });
 
@@ -367,12 +411,40 @@ describe('editHighlightSchema', () => {
     ['clubId', { clubId: 'outro-clube' }],
     ['status', { status: 'ARCHIVED' }],
     ['archivedAt', { archivedAt: null }],
-    // ⚠️ Tarefa 38i — e no PATCH ele é proibido por um motivo A MAIS: o dia
-    // do plano é do NASCIMENTO do grifo, como o `createdAt`. Ele nem está no
-    // `HighlightPatch` do port — nenhum `update` o toca.
-    ['planItemId', { planItemId: 'o-dia-que-eu-escolhi' }],
+    // ⚠️ `planItemId` SAIU desta tabela na Tarefa 48a: até a 38i o dia era
+    // "do nascimento, como o `createdAt`" (write-once). O dono reabriu isso —
+    // o dia se corrige e se limpa. → o `describe` abaixo.
   ])('refuses a patch that carries %s', (_label, extra) => {
     expect(editHighlightSchema.safeParse(extra).success).toBe(false);
+  });
+
+  /**
+   * ⚠️ Tarefa 48a, decisão H — a mesma semântica de `page`, `reference` e
+   * `commentDoc`: **ausente não mexe, `null` limpa**, um id troca.
+   */
+  describe('planItemId — moving or clearing the day (Tarefa 48a)', () => {
+    it('leaves the key out of an empty patch', () => {
+      expect(Object.keys(editHighlightSchema.parse({}))).toEqual([]);
+    });
+
+    it('keeps an explicit null, which clears the day', () => {
+      const parsed = editHighlightSchema.parse({ planItemId: null });
+
+      expect(Object.keys(parsed)).toEqual(['planItemId']);
+      expect(parsed.planItemId).toBeNull();
+    });
+
+    it('accepts the id of another day', () => {
+      expect(editHighlightSchema.parse({ planItemId: 'p-4' }).planItemId).toBe(
+        'p-4',
+      );
+    });
+
+    it('refuses an empty string', () => {
+      expect(editHighlightSchema.safeParse({ planItemId: '' }).success).toBe(
+        false,
+      );
+    });
   });
 });
 
@@ -692,8 +764,8 @@ describe('highlightResponseSchema', () => {
       'createdAt',
       'id',
       'page',
-      // ⚠️ Tarefa 38i — SAI na resposta e não entra em input nenhum, como o
-      // `commentText`: é o que o acervo usa para recortar por dia de leitura.
+      // ⚠️ Tarefa 38i — SAI na resposta: é o que o acervo usa para recortar
+      // por dia de leitura. (Desde a 48a ele também ENTRA nos dois corpos.)
       'planItemId',
       'quote',
       'reference',

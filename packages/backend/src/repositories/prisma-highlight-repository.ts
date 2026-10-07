@@ -138,8 +138,8 @@ function toUpsertUpdateData(highlight: Highlight) {
     // Vai no `update` do upsert junto de `clubId`/`bookId`/`userId`, e não com
     // o `createdAt`: o `save` escreve a entidade INTEIRA, e o dia em que o
     // grifo nasceu acompanha a linha que o reenvio da fila offline reescreve.
-    // Quem NÃO pode mexer nele é o `editHighlight` — `planItemId` está fora do
-    // `HighlightPatch`, como o `createdAt`.
+    // Desde a Tarefa 48a o `editHighlight` também mexe nele, pelo
+    // `toUpdateData` abaixo — o dia se corrige (ADR 0004, emenda de 2026-10-07).
     planItemId: highlight.planItemId,
     quote: highlight.quote,
     color: highlight.color,
@@ -165,16 +165,24 @@ function toUpsertUpdateData(highlight: Highlight) {
  * ADR 0007 descreve, e que o §7.1.1 resolveu estreitando o tipo: o fake obedecia
  * ao patch proibido e o repositório o ignorava em silêncio.
  *
- * As NOVE chaves são mapeadas uma a uma, e é a mesma disciplina do
+ * As DEZ chaves são mapeadas uma a uma, e é a mesma disciplina do
  * `HighlightRepositoryFake.update`: o compilador recusa o literal proibido, e a
  * cópia campo a campo recusa o resto (um patch montado por variável atravessa a
  * checagem de propriedade em excesso do TypeScript).
  *
  * E `updatedAt` está no patch porque o dono deste instante é o domínio: o schema
  * nasceu **sem** `@updatedAt`. → ADR 0008.
+ *
+ * ⚠️ **`Unchecked` desde a Tarefa 48a**, por causa do `planItemId`: no tipo
+ * "checked" do Prisma uma FK só se escreve pela relação
+ * (`planItem: { connect } | { disconnect }`), e a escalar crua não existe. O
+ * `toUpsertUpdateData` acima já escreve as FKs como escalares; este passa a
+ * fazer igual, e o `null` vai como `null` — o "Sem dia do plano".
  */
-function toUpdateData(patch: HighlightPatch): Prisma.HighlightUpdateInput {
-  const data: Prisma.HighlightUpdateInput = {};
+function toUpdateData(
+  patch: HighlightPatch,
+): Prisma.HighlightUncheckedUpdateInput {
+  const data: Prisma.HighlightUncheckedUpdateInput = {};
   if (patch.quote !== undefined) data.quote = patch.quote;
   if (patch.color !== undefined) data.color = patch.color;
   if (patch.page !== undefined) data.page = patch.page;
@@ -183,6 +191,7 @@ function toUpdateData(patch: HighlightPatch): Prisma.HighlightUpdateInput {
     data.commentDoc = toCommentInput(patch.commentDoc);
   }
   if (patch.commentText !== undefined) data.commentText = patch.commentText;
+  if (patch.planItemId !== undefined) data.planItemId = patch.planItemId;
   if (patch.status !== undefined) data.status = patch.status;
   if (patch.archivedAt !== undefined) data.archivedAt = patch.archivedAt;
   if (patch.updatedAt !== undefined) data.updatedAt = patch.updatedAt;

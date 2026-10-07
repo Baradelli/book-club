@@ -61,7 +61,7 @@ export class HighlightRepositoryFake implements HighlightRepository {
    * `update(id, { userId })` é recusado pelo compilador, mas um patch montado
    * por variável atravessa, e o spread obedeceria enquanto o `toUpdateData` do
    * Prisma (Tarefa 24) ignoraria em silêncio — a divergência do §7.1 de volta,
-   * na direção que deixa a suíte verde. Aqui a lista das nove chaves do
+   * na direção que deixa a suíte verde. Aqui a lista das dez chaves do
    * `HighlightPatch` é a barreira de runtime, e a única coisa que uma chave a
    * mais no patch encontra é o chão.
    */
@@ -86,6 +86,8 @@ export class HighlightRepositoryFake implements HighlightRepository {
     if (patch.reference !== undefined) next.reference = patch.reference;
     if (patch.commentDoc !== undefined) next.commentDoc = patch.commentDoc;
     if (patch.commentText !== undefined) next.commentText = patch.commentText;
+    // Tarefa 48a (decisão K): `null` grava nulo — é o "Sem dia do plano".
+    if (patch.planItemId !== undefined) next.planItemId = patch.planItemId;
     if (patch.status !== undefined) next.status = patch.status;
     if (patch.archivedAt !== undefined) next.archivedAt = patch.archivedAt;
     if (patch.updatedAt !== undefined) next.updatedAt = patch.updatedAt;

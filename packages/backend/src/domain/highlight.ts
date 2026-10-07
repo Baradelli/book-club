@@ -33,8 +33,8 @@ export interface Highlight {
   bookId: string;
   userId: string; // o AUTOR. Sempre o ator; nunca vem do input.
   /**
-   * O dia do plano em que o grifo nasceu — **opcional**, e é a emenda de
-   * 2026-09-18 ao ADR 0004 (Tarefa 38i).
+   * O dia do plano do grifo — **opcional**, e é a emenda de 2026-09-18 ao ADR
+   * 0004 (Tarefa 38i), com a de 2026-10-07 (Tarefa 48a).
    *
    * ⚠️ **OPCIONAL é o que preserva a decisão central do ADR:** *"o grifo não
    * depende de um dia de leitura"* continua verdade. Grifar num dia que o plano
@@ -49,20 +49,23 @@ export interface Highlight {
    * errar (grifar no sábado o que se leu na sexta); a derivação erraria para
    * sempre, recalculando.
    *
-   * ⚠️ **O "caberia" é literal: essa correção NÃO existe.** O campo é
-   * **write-once no nascimento** — quem o preenche é o `createHighlight`, **na
-   * criação e em silêncio** (decisão C), com o dia de hoje no
-   * `Settings.timezone` da PESSOA, nunca a hora do servidor e nunca vindo do
-   * corpo da requisição (decisões D e E). **Nenhum `update` o toca**: ele está
-   * fora do `HighlightPatch`, como o `createdAt`, e o `editHighlightSchema` o
-   * recusa com 400. A tela de correção é **fatia própria, e ninguém pediu** —
-   * está registrada assim na emenda do ADR 0004 e na spec da Tarefa 38i.
+   * ✅ **Essa correção EXISTE desde a Tarefa 48a** (o dono pediu em
+   * 2026-10-07). Até ali o campo era **write-once no nascimento**: preenchido
+   * pelo `createHighlight` em silêncio, com o dia de hoje, e fora do
+   * `HighlightPatch`. Agora a pessoa ESCOLHE o dia num select ao criar (o
+   * padrão continua sendo hoje, no `Settings.timezone` DELA quando o corpo
+   * não traz a chave) e o TROCA ou LIMPA ao corrigir. O que torna isso seguro
+   * é a decisão J: o dia tem de ser DESTE livro (`assertPlanItemOfBook`),
+   * senão 400. → ADR 0004, emenda de 2026-10-07.
    */
   planItemId: string | null;
   quote: string; // o trecho grifado, digitado à mão (ADR 0004: sem OCR)
   color: HighlightColor; // uma das cinco da paleta fixa de `@clube/shared`
   page: number | null; // inteiro >= 1, ou nada
-  reference: string | null; // texto livre — capítulo, assunto, o que a pessoa quiser
+  // Texto livre — capítulo, assunto. ⚠️ Desde a Tarefa 48a o formulário NÃO o
+  // oferece mais (a "Referência" virou o select do dia): o que já foi gravado
+  // fica, só leitura, e a API continua aceitando o campo (decisões C e P).
+  reference: string | null;
   commentDoc: NoteDoc | null; // ProseMirror JSON, ou nada ainda
   commentText: string; // DERIVADO do commentDoc. '' quando não há. → ADR 0001.
   status: GeneralStatus;

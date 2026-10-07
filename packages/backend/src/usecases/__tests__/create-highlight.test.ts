@@ -977,8 +977,10 @@ describe('CreateHighlight', () => {
     }
 
     /**
-     * ⚠️ Decisão C — **preenchimento automático e silencioso na CRIAÇÃO**, sem
-     * nenhum campo novo na tela: o gesto continua de dois toques.
+     * ⚠️ Decisão C da 38i — **preenchimento automático na CRIAÇÃO.** Desde a
+     * Tarefa 48a ele é o caminho de quando o corpo NÃO traz `planItemId`
+     * (decisão G: "ausente"); a tela passou a mandar o dia escolhido num
+     * select, e este caminho ficou para quem não carregou o plano (decisão I).
      */
     it('is born with the plan day of today, in the timezone of the person', async () => {
       await settings.save(
@@ -1110,36 +1112,146 @@ describe('CreateHighlight', () => {
     });
 
     /**
-     * ⚠️ **REGRA 6 / DECISÃO E — CONTRABANDO, COM O ATOR LEGÍTIMO** (§7.5).
+     * ⚠️ **O DIA ESCOLHIDO (Tarefa 48a, decisões G e J)** — e este bloco
+     * SUBSTITUI o antigo `ignores a planItemId smuggled into the input, for the
+     * legitimate actor` da 38i. Aquele teste pinava a decisão E da 38i ("o dia
+     * NÃO vem do corpo"), que o dono reabriu: a pessoa escolhe o dia num
+     * select. O que era contrabando virou campo — e o que o torna seguro é a
+     * conferência de livro (decisão J), testada logo abaixo.
      *
-     * Testar isto com um ator de fora não provaria nada sobre o campo: a
-     * chamada morreria no corte de tenant, e morreria igual se o contrabando
-     * funcionasse. Aqui o ator é membro, o campo proibido vem junto, e o que se
-     * asserta é **a linha gravada** — a única coisa que muda quando o
-     * contrabando pega.
-     *
-     * ⚠️ E o mutante perigoso não é `input.planItemId` cru: é
-     * `input.planItemId ?? <o resolvido>`, o envenenamento com fallback, que se
-     * comporta normalmente em TODO teste que não manda o campo. O `as unknown
-     * as` é de propósito — é exatamente o que um corpo com chave a mais produz
-     * se algum dia alguém declarar o campo no schema da borda.
+     * Todos com **o ator legítimo** e a **linha gravada** assertada (§7.5): é
+     * a única coisa que muda quando a regra quebra.
      */
-    it('ignores a planItemId smuggled into the input, for the legitimate actor', async () => {
-      await settings.save(
-        aSettings({ userId: MEMBER_ID, timezone: 'America/Sao_Paulo' }),
-      );
-      const smuggled = {
-        ...validInput({ now: NIGHT }),
-        planItemId: idOfDay(BOOK_ID, DAY_IN_UTC),
-      } as unknown as CreateHighlightInput;
+    describe('the day the person chose (Tarefa 48a)', () => {
+      beforeEach(async () => {
+        // Hoje, para ela, É dia de plano (`DAY_IN_SAO_PAULO`). É o que torna
+        // os testes abaixo capazes de separar "o escolhido" de "o de hoje".
+        await settings.save(
+          aSettings({ userId: MEMBER_ID, timezone: 'America/Sao_Paulo' }),
+        );
+      });
 
-      const { highlight } = await useCase.execute(smuggled);
+      it('writes the chosen day instead of today, for the legitimate actor', async () => {
+        const { highlight } = await useCase.execute(
+          validInput({ now: NIGHT, planItemId: idOfDay(BOOK_ID, DAY_IN_UTC) }),
+        );
 
-      // O dia é o de HOJE no fuso dela, não o que o corpo apontou.
-      expect(highlight.planItemId).toBe(idOfDay(BOOK_ID, DAY_IN_SAO_PAULO));
-      expect(required(highlights.saved[0]).planItemId).toBe(
-        idOfDay(BOOK_ID, DAY_IN_SAO_PAULO),
-      );
+        expect(highlight.planItemId).toBe(idOfDay(BOOK_ID, DAY_IN_UTC));
+        expect(required(highlights.saved[0]).planItemId).toBe(
+          idOfDay(BOOK_ID, DAY_IN_UTC),
+        );
+      });
+
+      /**
+       * ⚠️ **MUTANTE 1 DA SPEC — o `??` envenenado.** `input.planItemId ??
+       * <o resolvido>` trata o `null` EXPLÍCITO como ausente e grava o dia de
+       * hoje em quem escolheu "Sem dia do plano". Por isso o instante é um em
+       * que hoje TEM plano: num dia sem plano o mutante gravaria `null` do
+       * mesmo jeito, e o teste ficaria verde com ele.
+       */
+      it('writes null when the person chose no day, even on a day that HAS a plan', async () => {
+        const { highlight } = await useCase.execute(
+          validInput({ now: NIGHT, planItemId: null }),
+        );
+
+        expect(highlight.planItemId).toBeNull();
+        expect(required(highlights.saved[0]).planItemId).toBeNull();
+      });
+
+      /**
+       * Precondição do teste de cima: SEM a chave, no mesmo instante e com o
+       * mesmo `Settings`, o dia é o de hoje. Sem este par, o `null` acima
+       * poderia vir de um fixture em que hoje não tem plano.
+       */
+      it('still resolves today when the key is absent (the third sense)', async () => {
+        const { highlight } = await useCase.execute(validInput({ now: NIGHT }));
+
+        expect(required(highlights.saved[0]).planItemId).toBe(
+          idOfDay(BOOK_ID, DAY_IN_SAO_PAULO),
+        );
+        expect(highlight.planItemId).toBe(idOfDay(BOOK_ID, DAY_IN_SAO_PAULO));
+      });
+
+      /**
+       * Quem escolheu o dia não paga a resolução de hoje (§7.3): nem o
+       * `Settings`, nem a consulta do plano por data.
+       */
+      it('does not resolve today when the person chose', async () => {
+        await useCase.execute(
+          validInput({ now: NIGHT, planItemId: idOfDay(BOOK_ID, DAY_IN_UTC) }),
+        );
+        await useCase.execute(validInput({ now: NIGHT, planItemId: null }));
+
+        expect(settings.byUserIdCalls).toBe(0);
+        expect(planItems.findCalls).toBe(0);
+      });
+
+      /**
+       * ⚠️ **MUTANTE 2 DA SPEC — a conferência de livro (decisão J).** O dia
+       * de outro livro **do mesmo clube** é o caso que pega quem apaga o
+       * `item.bookId === book.id` e deixa só o `byId`: o item EXISTE, e só a
+       * comparação de livro o recusa. O id inexistente sozinho não o pegaria.
+       */
+      it('refuses the day of another book of the same club, and writes nothing', async () => {
+        await books.save(aBook({ id: 'book-irmao', clubId: CLUB_ID }));
+        await planItems.saveMany([
+          aPlanItem({ bookId: 'book-irmao', date: DAY_IN_UTC }),
+        ]);
+
+        await expect(
+          useCase.execute(
+            validInput({
+              now: NIGHT,
+              planItemId: idOfDay('book-irmao', DAY_IN_UTC),
+            }),
+          ),
+        ).rejects.toBeInstanceOf(InvalidHighlightError);
+
+        expect(highlights.saveCalls).toBe(0);
+        expect(events.saveCalls).toBe(0);
+      });
+
+      it('refuses the day of a book of another club', async () => {
+        await expect(
+          useCase.execute(
+            validInput({
+              now: NIGHT,
+              planItemId: idOfDay(OTHER_CLUB_BOOK_ID, DAY_IN_SAO_PAULO),
+            }),
+          ),
+        ).rejects.toBeInstanceOf(InvalidHighlightError);
+
+        expect(highlights.saveCalls).toBe(0);
+      });
+
+      it('refuses a day that does not exist', async () => {
+        await expect(
+          useCase.execute(
+            validInput({ now: NIGHT, planItemId: 'dia-que-nao-existe' }),
+          ),
+        ).rejects.toBeInstanceOf(InvalidHighlightError);
+
+        expect(highlights.saveCalls).toBe(0);
+        expect(events.saveCalls).toBe(0);
+      });
+
+      /**
+       * O corte de tenant continua vindo ANTES: o forasteiro recebe o 404 de
+       * sempre, mesmo mandando um dia que existe no livro.
+       */
+      it('answers the tenant cut first, even with a valid day of the book', async () => {
+        await expect(
+          useCase.execute(
+            validInput({
+              actorUserId: OTHER_CLUB_MEMBER_ID,
+              now: NIGHT,
+              planItemId: idOfDay(BOOK_ID, DAY_IN_UTC),
+            }),
+          ),
+        ).rejects.toBeInstanceOf(NotAMemberError);
+
+        expect(highlights.saveCalls).toBe(0);
+      });
     });
 
     /**

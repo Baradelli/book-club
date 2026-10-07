@@ -187,6 +187,86 @@ export function withoutExemptCounters(text: string): {
 }
 
 /**
+ * ============================================================================
+ * ⚠️ A ISENÇÃO DO RÓTULO DO DIA DO PLANO — DECISÃO DO DONO, 2026-10-07
+ * ============================================================================
+ *
+ * **Tarefa 48a, perguntado diretamente.** O grifo mostra o dia do plano como
+ * `DD/MM · tema` (`planDayLabel`, em `plan-day-label.ts`) no `<select>` da
+ * "Referência", na linha do acervo e na margem de prévia. "07/10" tem a forma
+ * que o `COUNTER_SHAPE` proíbe — para a guarda, é o placar "3/30". O dono
+ * escolheu **manter o formato e isentá-lo**. A alternativa recusada foi
+ * **"7 out · tema"**, que não casaria a guarda.
+ *
+ * ⚠️ **O RISCO ACEITO PELO DONO, por escrito:** um placar disfarçado de data
+ * NA FORMA EXATA (`DD/MM · …`, dia 01–31, mês 01–12), num dos três lugares
+ * marcados, passaria pela varredura.
+ *
+ * **Por que ela NÃO entrou na `COUNTER_EXEMPT_KEYS`:** aquela lista deriva a
+ * frase isenta de uma CHAVE do catálogo, e o rótulo não é chave — ele é
+ * montado em código a partir de dados do clube (a data e o tema). O
+ * mecanismo é o mesmo espírito (isenção NOMEADA, por forma exata, nunca regex
+ * larga, nunca afrouxando o `COUNTER_SHAPE`) com dois cortes a mais:
+ *
+ * 1. **FORMA:** `PLAN_DAY_LABEL_SHAPE` casa o texto INTEIRO do elemento — dois
+ *    dígitos de dia válido, barra, dois de mês válido, `" · "` e um tema. Só
+ *    o PREFIXO `DD/MM · ` sai do texto medido: o tema continua varrido, e um
+ *    "07/10 · 3/30 lidos" é acusado;
+ * 2. **LUGAR, POR ELEMENTO:** o prefixo sai SÓ do primeiro nó de texto do
+ *    PRÓPRIO elemento marcado — nunca da string da tela inteira. Texto sem
+ *    marca continua medido integralmente, mesmo que repita o prefixo: o
+ *    "07/10 · lidos" de um `<p>` ao lado de um rótulo marcado é acusado.
+ *
+ *    ⚠️ **A primeira versão desta isenção fazia o contrário, e a revisão da
+ *    48a provou o furo (MÉDIO):** ela recolhia os prefixos dos elementos
+ *    marcados e os apagava do `readableText()` INTEIRO por `split/join`, e
+ *    um `<p>07/10 · lidos</p>` sem marca passava junto do rótulo. O acusador é
+ *    `still accuses an UNMARKED element that repeats the prefix of a marked
+ *    label`.
+ *
+ *    O mecanismo: o prefixo é tirado do nó de texto no DOM VIVO, o
+ *    `readableText()` é lido, e o nó volta ao valor original num `finally` —
+ *    tudo síncrono, sem render no meio. Se o primeiro nó de texto do elemento
+ *    não começar pelo prefixo (o rótulo partido em vários nós), nada é
+ *    isentado, e a guarda acusa: na dúvida, a direção é a restritiva.
+ *
+ * ⚠️ **E ela NÃO conta como subtração** para a `expectNoGuiltWithPlanPosition()`
+ * — a exclusividade mútua das duas variantes é sobre a POSIÇÃO no plano, e o
+ * rótulo do dia não é posição. Os negativos estão em `anti-guilt-dom.test.ts`
+ * (`the plan-day label is exempt (owner, 2026-10-07)…`).
+ */
+export const PLAN_DAY_LABEL_ATTRIBUTE = 'data-plan-day-label';
+
+export const PLAN_DAY_LABEL_SHAPE =
+  /^(?:0[1-9]|[12]\d|3[01])\/(?:0[1-9]|1[0-2]) · \S/u;
+
+/**
+ * O `readableText()` com o prefixo `DD/MM · ` tirado SÓ de dentro de cada
+ * elemento marcado e de forma exata — POR ELEMENTO (ver o docblock acima).
+ */
+function readableTextOutsidePlanDayPrefixes(): string {
+  const restore: Array<{ node: Text; value: string }> = [];
+  try {
+    for (const element of Array.from(
+      document.querySelectorAll(`[${PLAN_DAY_LABEL_ATTRIBUTE}]`),
+    )) {
+      const own = element.textContent ?? '';
+      if (!PLAN_DAY_LABEL_SHAPE.test(own)) continue;
+      const prefix = own.slice(0, 8);
+      const first = document
+        .createTreeWalker(element, NodeFilter.SHOW_TEXT)
+        .nextNode();
+      if (!(first instanceof Text) || !first.data.startsWith(prefix)) continue;
+      restore.push({ node: first, value: first.data });
+      first.data = ` ${first.data.slice(prefix.length)}`;
+    }
+    return readableText();
+  } finally {
+    for (const { node, value } of restore) node.data = value;
+  }
+}
+
+/**
  * Reexportado: a definição mora no `harness.tsx` (é o que quebra o ciclo com o
  * `adr-0002-dom.ts`), e os arquivos de teste que já o importavam daqui
  * continuam funcionando.
@@ -232,7 +312,11 @@ function scanGuilt(): number {
     do FORMATO. O vocabulário acima e a cor abaixo continuam vendo o texto
     inteiro: a isenção é do `COUNTER_SHAPE`, não um passe livre para a frase.
   */
-  const { text, removed } = withoutExemptCounters(readableText());
+  // A isenção do rótulo do dia (dono, 2026-10-07), POR ELEMENTO — e FORA da
+  // contagem `removed`, que é só da posição no plano.
+  const { text, removed } = withoutExemptCounters(
+    readableTextOutsidePlanDayPrefixes(),
+  );
   expect(text).not.toMatch(COUNTER_SHAPE);
   expect(styleSurface()).not.toMatch(DANGER_STYLE);
   expectNoPrivacyTalk();
@@ -377,8 +461,11 @@ export function expectNoGuiltBesidesFormError(
   for (const term of GUILT_TERMS) {
     expect(spoken).not.toContain(term);
   }
-  /* A mesma isenção das duas funções acima, e só sobre o formato. */
-  expect(withoutExemptCounters(readableText()).text).not.toMatch(COUNTER_SHAPE);
+  /* A mesma isenção das duas funções acima — a da posição e a do rótulo do
+     dia (dono, 2026-10-07) —, e só sobre o formato. */
+  expect(
+    withoutExemptCounters(readableTextOutsidePlanDayPrefixes()).text,
+  ).not.toMatch(COUNTER_SHAPE);
 
   const red = Array.from(document.querySelectorAll('*')).filter(
     (element) =>

@@ -12,11 +12,13 @@ import {
   aDoc,
   aHighlight,
   aMembership,
+  aPlanItem,
   FIXED_ISO,
   required,
 } from '../../test-support/builders';
 import { HighlightRepositoryFake } from '../_fakes/highlight-repository-fake';
 import { MembershipRepositoryFake } from '../_fakes/membership-repository-fake';
+import { ReadingPlanItemRepositoryFake } from '../_fakes/reading-plan-item-repository-fake';
 import { AssertMembership } from '../assert-membership';
 import type { EditHighlightInput } from '../edit-highlight';
 import { EditHighlight } from '../edit-highlight';
@@ -38,12 +40,24 @@ const NO_COMMENT_HIGHLIGHT_ID = 'highlight-sem-comentario-da-maria';
 const YELLOW = '#facc15';
 const GREEN = '#22c55e';
 
+const BOOK_ID = 'book-1';
+/** Um livro IRMÃO, do mesmo clube — o caso que o mutante 2 da 48a precisa. */
+const SIBLING_BOOK_ID = 'book-irmao';
+const DAY_ONE = '2026-10-01';
+const DAY_TWO = '2026-10-02';
+
+/** O id que o `aPlanItem` dá ao dia — a mesma conta do builder. */
+function planItemIdOf(bookId: string, date: string): string {
+  return `plan-${bookId}-${date}`;
+}
+
 /** O `commentText` que uma versão anterior do `docToText` deixou gravado. */
 const LEGACY_COMMENT_TEXT = 'texto derivado por outra versao do docToText';
 
 describe('EditHighlight', () => {
   let memberships: MembershipRepositoryFake;
   let highlights: HighlightRepositoryFake;
+  let planItems: ReadingPlanItemRepositoryFake;
   let useCase: EditHighlight;
 
   /** Fábrica, nunca `const` de `describe` (CONVENCOES-CODIGO §7.7). */
@@ -65,13 +79,28 @@ describe('EditHighlight', () => {
   beforeEach(async () => {
     memberships = new MembershipRepositoryFake();
     highlights = new HighlightRepositoryFake();
-    useCase = new EditHighlight(new AssertMembership(memberships), highlights);
+    planItems = new ReadingPlanItemRepositoryFake();
+    useCase = new EditHighlight(
+      new AssertMembership(memberships),
+      highlights,
+      planItems,
+    );
+
+    // Tarefa 48a — dois dias do plano DESTE livro, e um dia de um livro irmão
+    // do mesmo clube (o que separa "existe" de "é deste livro", decisão J).
+    await planItems.saveMany([
+      aPlanItem({ bookId: BOOK_ID, date: DAY_ONE, order: 0 }),
+      aPlanItem({ bookId: BOOK_ID, date: DAY_TWO, order: 1 }),
+      aPlanItem({ bookId: SIBLING_BOOK_ID, date: DAY_TWO }),
+    ]);
 
     await highlights.save(
       aHighlight({
         id: HIGHLIGHT_ID,
         clubId: CLUB_ID,
+        bookId: BOOK_ID,
         userId: AUTHOR_ID,
+        planItemId: planItemIdOf(BOOK_ID, DAY_ONE),
         quote: 'a coragem de continuar',
         color: YELLOW,
         page: 45,
@@ -319,6 +348,8 @@ describe('EditHighlight', () => {
       expect(stored().quote).toBe('a coragem de continuar');
       expect(stored().page).toBe(45);
       expect(stored().reference).toBe('cap. 3');
+      // Tarefa 48a — o dia do plano também é "ausente não mexe".
+      expect(stored().planItemId).toBe(planItemIdOf(BOOK_ID, DAY_ONE));
     });
 
     // Regra 14 — `null` explícito LIMPA a página.
@@ -539,6 +570,95 @@ describe('EditHighlight', () => {
       expect(stored().commentText).toBe('o comentário original');
       expect(stored().updatedAt).toEqual(new Date(FIXED_ISO));
     });
+  });
+
+  /**
+   * ⚠️ **O DIA DO PLANO SE CORRIGE (Tarefa 48a, decisões D, H e J).** Até a
+   * 38i ele era write-once no nascimento; o dono reabriu: trocar e limpar.
+   * Ausente não mexe (testado no `leaves every absent field alone`), `null`
+   * limpa, um id move — e o id tem de ser de um dia DESTE livro.
+   */
+  describe('the plan day', () => {
+    it('moves the highlight to another day of the same book', async () => {
+      const { highlight } = await useCase.execute(
+        validInput({ planItemId: planItemIdOf(BOOK_ID, DAY_TWO) }),
+      );
+
+      expect(highlight.planItemId).toBe(planItemIdOf(BOOK_ID, DAY_TWO));
+      expect(stored().planItemId).toBe(planItemIdOf(BOOK_ID, DAY_TWO));
+    });
+
+    it('clears the day when the patch says null', async () => {
+      const { highlight } = await useCase.execute(
+        validInput({ planItemId: null }),
+      );
+
+      expect(highlight.planItemId).toBeNull();
+      expect(stored().planItemId).toBeNull();
+      expect(highlights.updateCalls).toBe(1);
+    });
+
+    /**
+     * ⚠️ **MUTANTE 2 DA SPEC, do lado da correção.** O item EXISTE; só a
+     * comparação de livro o recusa.
+     */
+    it('refuses the day of another book of the same club, and writes nothing', async () => {
+      await expect(
+        useCase.execute(
+          validInput({ planItemId: planItemIdOf(SIBLING_BOOK_ID, DAY_TWO) }),
+        ),
+      ).rejects.toBeInstanceOf(InvalidHighlightError);
+
+      expect(highlights.updateCalls).toBe(0);
+      expect(stored().planItemId).toBe(planItemIdOf(BOOK_ID, DAY_ONE));
+    });
+
+    it('refuses a day that does not exist, and writes nothing', async () => {
+      await expect(
+        useCase.execute(validInput({ planItemId: 'dia-que-nao-existe' })),
+      ).rejects.toBeInstanceOf(InvalidHighlightError);
+
+      expect(highlights.updateCalls).toBe(0);
+    });
+
+    /**
+     * O patch inteiro é validado antes de escrever: um dia ruim não deixa a
+     * cor nova gravada.
+     */
+    it('writes none of the other fields when the day is refused', async () => {
+      await expect(
+        useCase.execute(
+          validInput({ color: GREEN, planItemId: 'dia-que-nao-existe' }),
+        ),
+      ).rejects.toBeInstanceOf(InvalidHighlightError);
+
+      expect(stored().color).toBe(YELLOW);
+    });
+
+    /**
+     * Só o autor corrige o dia — e quem não é recebe o erro de sempre, com
+     * um dia VÁLIDO deste livro no corpo (o corpo bom é o que faz o teste
+     * provar a ordem, e não a validação do dia).
+     */
+    it.each([
+      ['a fellow member', OTHER_MEMBER_ID],
+      ['the OWNER of the club', OWNER_ID],
+    ])(
+      'refuses %s, who is not the author, even with a valid day',
+      async (_label, actorUserId) => {
+        await expect(
+          useCase.execute(
+            validInput({
+              actorUserId,
+              planItemId: planItemIdOf(BOOK_ID, DAY_TWO),
+            }),
+          ),
+        ).rejects.toBeInstanceOf(NotTheAuthorError);
+
+        expect(highlights.updateCalls).toBe(0);
+        expect(stored().planItemId).toBe(planItemIdOf(BOOK_ID, DAY_ONE));
+      },
+    );
   });
 
   /**

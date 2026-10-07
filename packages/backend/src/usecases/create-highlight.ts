@@ -13,6 +13,7 @@ import { optionalText } from '../domain/optional-text';
 import { DEFAULT_SETTINGS } from '../domain/settings';
 import type { AssertMembership } from './assert-membership';
 import { bookForActor } from './book-for-actor';
+import { assertPlanItemOfBook } from './plan-item-of-book';
 import type { BookRepository } from './ports/book-repository';
 import type { HighlightRepository } from './ports/highlight-repository';
 import type { ReadingPlanItemRepository } from './ports/reading-plan-item-repository';
@@ -48,12 +49,28 @@ export interface CreateHighlightInput {
    * sem mexer no relógio do processo. Um `now` no CORPO seria 400 pelo
    * `.strict()` do `createHighlightSchema`, como qualquer chave não declarada.
    *
-   * ⚠️ E **não existe `planItemId` aqui**, de propósito: o dia é resolvido no
-   * servidor, como o `userId` e o `clubId` (decisão E / §6.3). Declará-lo seria
-   * abrir a porta ao `input.planItemId ?? <o resolvido>`, o envenenamento com
-   * fallback que se comporta normalmente em todo teste que não manda o campo.
    */
   now?: Date;
+  /**
+   * ⚠️ **O dia do plano que a pessoa escolheu, com TRÊS sentidos** (Tarefa
+   * 48a, decisão G): **ausente** (`undefined`) = o servidor resolve o dia de
+   * hoje no fuso dela, como desde a 38i; **`null`** = "Sem dia do plano";
+   * **um id** = aquele dia, que precisa ser DESTE livro (decisão J,
+   * `assertPlanItemOfBook`).
+   *
+   * Até a 38i este campo NÃO existia, de propósito (decisão E daquela fatia:
+   * o dia era resolvido no servidor, como o `userId`). O dono reabriu isso
+   * em 2026-10-07 — a pessoa escolhe o dia num select —, e o que torna o campo
+   * seguro não é a ausência dele, é a conferência de livro. → ADR 0004,
+   * emenda de 2026-10-07.
+   *
+   * ⚠️ **E o envenenamento que a 38i temia continua sendo o mutante a vigiar,
+   * só que de outra forma:** `input.planItemId ?? <o resolvido>` trata o
+   * `null` EXPLÍCITO como ausente e grava o dia de hoje em quem escolheu "Sem
+   * dia do plano". O código distingue `=== undefined`, e quem acusa é o
+   * `writes null when the person chose no day, even on a day that HAS a plan`.
+   */
+  planItemId?: string | null;
 }
 
 export interface CreateHighlightOutput {
@@ -121,8 +138,11 @@ export class CreateHighlight {
     const now = input.now ?? new Date();
 
     /*
-      ⚠️ **O DIA DO PLANO, resolvido AQUI e nunca recebido do cliente** — a
-      emenda de 2026-09-18 ao ADR 0004 (Tarefa 38i), decisões C, D, E e F.
+      ⚠️ **O DIA DO PLANO** — três caminhos (Tarefa 48a, decisão G). Escolhido
+      pela pessoa (um id): conferido contra ESTE livro (decisão J) e nenhuma
+      leitura de "hoje". `null`: sem dia. **Ausente**: resolvido AQUI, como
+      desde a emenda de 2026-09-18 ao ADR 0004 (Tarefa 38i), decisões C, D e F
+      — o texto abaixo é desse terceiro caminho.
 
       **Duas consultas, uma cada** (§7.3): o fuso da pessoa e o item do plano de
       hoje naquele livro. Nada disto é por grifo de um lote — o `execute` cria
@@ -147,13 +167,16 @@ export class CreateHighlight {
       estado normal entre dois livros e nos dias que o plano pula. Falhar aqui
       impediria de grifar, que é o oposto do que o ADR 0004 protege.
     */
-    const theirs = await this.settings.byUserId(input.actorUserId);
-    const timeZone = theirs?.timezone ?? DEFAULT_SETTINGS.timezone;
-    const today = await this.planItems.find({
-      bookIds: [book.id],
-      date: localDay(now, timeZone),
-    });
-    const planItemId = today[0]?.id ?? null;
+    const planItemId =
+      input.planItemId === undefined
+        ? await this.todayOf(book.id, input.actorUserId, now)
+        : input.planItemId === null
+          ? null
+          : await assertPlanItemOfBook(
+              this.planItems,
+              book.id,
+              input.planItemId,
+            );
 
     const highlight = await this.highlights.save({
       id: randomUUID(),
@@ -204,5 +227,20 @@ export class CreateHighlight {
     });
 
     return { highlight };
+  }
+
+  /** O dia do plano de HOJE, no fuso da pessoa — o caminho "ausente". */
+  private async todayOf(
+    bookId: string,
+    actorUserId: string,
+    now: Date,
+  ): Promise<string | null> {
+    const theirs = await this.settings.byUserId(actorUserId);
+    const timeZone = theirs?.timezone ?? DEFAULT_SETTINGS.timezone;
+    const today = await this.planItems.find({
+      bookIds: [bookId],
+      date: localDay(now, timeZone),
+    });
+    return today[0]?.id ?? null;
   }
 }

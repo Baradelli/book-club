@@ -1,6 +1,7 @@
 import { pt } from '@clube/shared/locales';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { planDayLabel } from '../plan-day-label';
 import {
   COUNTER_SHAPE,
   DANGER_STYLE,
@@ -8,6 +9,8 @@ import {
   expectNoGuiltBesidesFormError,
   expectNoGuiltInHtml,
   expectNoGuiltWithPlanPosition,
+  PLAN_DAY_LABEL_ATTRIBUTE,
+  PLAN_DAY_LABEL_SHAPE,
 } from './anti-guilt-dom';
 import { readableText } from './harness';
 
@@ -367,6 +370,141 @@ describe('⚠️ the plan position is exempt, and the exemption opens no hole', 
     expect(() => expectNoGuiltWithPlanPosition()).toThrow();
 
     document.body.innerHTML = `<p>${POSITION}</p><p>Você está em atrazo</p>`;
+    expect(() => expectNoGuiltWithPlanPosition()).toThrow();
+  });
+});
+
+/**
+ * ⚠️ **A ISENÇÃO DO RÓTULO DO DIA DO PLANO — decisão do DONO, 2026-10-07
+ * (Tarefa 48a), perguntado diretamente.** O `DD/MM · tema` do grifo tem a
+ * forma que o `COUNTER_SHAPE` proíbe ("07/10" parece "3/30"), e o dono
+ * escolheu MANTER o formato e isentá-lo, em vez de "7 out · tema".
+ *
+ * A isenção é estreita nos DOIS eixos, e cada eixo tem caso negativo aqui:
+ *
+ * - **a forma exata**: `DD/MM` com dois dígitos (dia 01–31, mês 01–12),
+ *   seguido de `" · "` e de um tema — e só o PREFIXO `DD/MM · ` sai do texto:
+ *   o tema continua varrido;
+ * - **o lugar**: só o texto de um elemento marcado com
+ *   `data-plan-day-label`, que só o select do formulário, a linha do acervo
+ *   e a prévia põem.
+ *
+ * ⚠️ **O risco aceito pelo dono, por escrito:** um placar disfarçado de data
+ * na forma exata, num desses três lugares, passaria.
+ */
+describe('⚠️ the plan-day label is exempt (owner, 2026-10-07), and the exemption opens no hole', () => {
+  const LABEL = planDayLabel({ date: '2026-10-07', title: 'Cap. 2' });
+
+  function marked(text: string): string {
+    return `<span ${PLAN_DAY_LABEL_ATTRIBUTE}="">${text}</span>`;
+  }
+
+  it('starts from a label the counter guard WOULD refuse, produced by the one owner of the format', () => {
+    expect(LABEL).toBe('07/10 · Cap. 2');
+    expect(LABEL).toMatch(COUNTER_SHAPE);
+    expect(LABEL).toMatch(PLAN_DAY_LABEL_SHAPE);
+  });
+
+  it('lets the marked label through, in an <option> and in a <span>', () => {
+    document.body.innerHTML = `<select><option value="">Sem dia do plano</option><option ${PLAN_DAY_LABEL_ATTRIBUTE}="" value="p-2">${LABEL}</option></select>${marked('01/12 · O fim')}`;
+
+    expect(() => expectNoGuilt()).not.toThrow();
+  });
+
+  /*
+    ⚠️ OS NEGATIVOS OBRIGATÓRIOS. Cada um num elemento MARCADO — o lugar
+    certo —, para que só a FORMA decida. Trocar a regex da isenção por
+    `\d+/\d+` deixa estes vermelhos.
+  */
+  it.each([
+    ['a bare scoreboard', '3/30'],
+    ['a scoreboard with a unit', '3/30 dias'],
+    ['a bare DD/MM with no " · theme"', '07/10'],
+    ['a day without the leading zero', '7/10 · x'],
+    ['a month without the leading zero', '07/1 · x'],
+    ['a day past 31', '32/10 · x'],
+    ['a month past 12', '07/13 · x'],
+    ['day zero', '00/10 · x'],
+  ])('still accuses %s, even inside a marked element', (_label, text) => {
+    document.body.innerHTML = marked(text);
+
+    expect(() => expectNoGuilt()).toThrow();
+  });
+
+  it('still accuses the exact label shape OUTSIDE the three marked places', () => {
+    document.body.innerHTML = `<p>${LABEL}</p>`;
+
+    expect(() => expectNoGuilt()).toThrow();
+  });
+
+  it('still accuses a real counter on the same screen as a marked label', () => {
+    document.body.innerHTML = `${marked(LABEL)}<p>3/30 lidos</p>`;
+
+    expect(() => expectNoGuilt()).toThrow();
+  });
+
+  /*
+    ⚠️ **A ISENÇÃO É POR ELEMENTO, não pela string da tela inteira** (achado
+    MÉDIO da revisão da 48a). A primeira versão recolhia o prefixo dos
+    elementos marcados e o apagava do texto TODO: um \`<p>\` SEM marca com o
+    MESMO prefixo passava junto. Aqui o \`<p>\` sozinho seria acusado — e
+    continua acusado ao lado do rótulo marcado.
+  */
+  it('still accuses an UNMARKED element that repeats the prefix of a marked label', () => {
+    document.body.innerHTML = `${marked(LABEL)}<p>07/10 · lidos</p>`;
+
+    expect(() => expectNoGuilt()).toThrow();
+  });
+
+  /*
+    A isenção tira o prefixo do nó de texto no DOM VIVO, lê, e devolve. Uma
+    varredura que deixasse a tela alterada mudaria o que as asserções
+    seguintes do mesmo teste veem.
+  */
+  it('leaves the DOM exactly as it found it, on success and on failure', () => {
+    document.body.innerHTML = marked(LABEL);
+    expectNoGuilt();
+    expect(document.body.textContent).toBe(LABEL);
+
+    document.body.innerHTML = `${marked(LABEL)}<p>3/30</p>`;
+    expect(() => expectNoGuilt()).toThrow();
+    expect(document.body.textContent).toBe(`${LABEL}3/30`);
+  });
+
+  it('still accuses an UNMARKED element with the same prefix and a guilt word', () => {
+    document.body.innerHTML = `${marked(LABEL)}<p>07/10 · você está atrasado</p>`;
+
+    expect(() => expectNoGuilt()).toThrow();
+  });
+
+  it('still scans the THEME: a counter after the exempt prefix is accused', () => {
+    document.body.innerHTML = marked('07/10 · 3/30 lidos');
+
+    expect(() => expectNoGuilt()).toThrow();
+  });
+
+  it('still scans the vocabulary of a marked label', () => {
+    document.body.innerHTML = marked('07/10 · você está atrasado');
+
+    expect(() => expectNoGuilt()).toThrow();
+  });
+
+  /*
+    A isenção do rótulo NÃO é a posição no plano: ela não conta como
+    subtração da `expectNoGuiltWithPlanPosition()`, e por isso não desfaz a
+    exclusividade mútua das duas variantes.
+  */
+  it('applies the same exemption, and the same negatives, in the form-error variant', () => {
+    document.body.innerHTML = marked(LABEL);
+    expect(() => expectNoGuiltBesidesFormError([])).not.toThrow();
+
+    document.body.innerHTML = marked('3/30');
+    expect(() => expectNoGuiltBesidesFormError([])).toThrow();
+  });
+
+  it('does not count as a plan position for the strict variant', () => {
+    document.body.innerHTML = marked(LABEL);
+
     expect(() => expectNoGuiltWithPlanPosition()).toThrow();
   });
 });

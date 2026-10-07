@@ -14,7 +14,8 @@ import {
   ColorSwatch,
   type HighlightColor,
 } from './highlight-colors';
-import { type Draft, isValidPage } from './highlight-fields';
+import { type Draft, isValidPage, planItemIdOf } from './highlight-fields';
+import { highlightPlaceLabel, type LabelledPlanDay } from './plan-day-label';
 
 export interface HighlightRailProps {
   t: TFunction;
@@ -23,6 +24,14 @@ export interface HighlightRailProps {
   /** Os MESMOS valores que os campos mostram. Nunca uma segunda fonte. */
   draft: Draft;
   color: HighlightColor | null;
+  /** Os dias do plano — é com eles que o dia vira `DD/MM · tema` (48a). */
+  days: readonly LabelledPlanDay[] | null;
+  /**
+   * O texto ANTIGO de `reference` do grifo que se corrige (`null` na
+   * criação). Sem dia, a prévia o mostra — porque é o que o acervo mostra
+   * (decisão F da 48a).
+   */
+  legacyReference: string | null;
 }
 
 /**
@@ -56,8 +65,9 @@ export interface HighlightRailProps {
  * ⚠️ **A PRÉVIA MOSTRA O QUE O FORMULÁRIO TEM COMO TEXTO.** O comentário do
  * grifo fica de fora pela mesma razão que o corpo da anotação avulsa fica: o
  * resumo que o acervo mostra é DERIVADO no backend (ADR 0001), e recalculá-lo
- * aqui criaria um segundo dono da mesma derivação. Trecho, cor, página e
- * referência são texto de campo — esses a prévia espelha tecla a tecla.
+ * aqui criaria um segundo dono da mesma derivação. Trecho, cor, página e o dia
+ * do plano (que substituiu a referência de texto na Tarefa 48a) são campo —
+ * esses a prévia espelha tecla a tecla.
  *
  * ⚠️ **ELA SOME NO CELULAR, e o par está guardado dos dois lados** — o canvas
  * de celular (`NovoGrifo.dc.html`) não desenha prévia nenhuma.
@@ -85,12 +95,18 @@ export interface HighlightRailProps {
  */
 export function HighlightRail({
   color,
+  days,
   draft,
+  legacyReference,
   me,
   t,
 }: HighlightRailProps): ReactNode {
   const page = draft.page.trim();
-  const reference = draft.reference.trim();
+  // A MESMA precedência da linha do acervo, do mesmo dono (decisão F).
+  const place = highlightPlaceLabel(
+    { planItemId: planItemIdOf(draft), reference: legacyReference },
+    days ?? [],
+  );
 
   return (
     <MarginRail className="hidden gap-4 pt-4 min-[1120px]:flex">
@@ -110,7 +126,12 @@ export function HighlightRail({
           {isValidPage(page) ? (
             <span>{t('pages.acervo.item.page', { number: Number(page) })}</span>
           ) : null}
-          {reference === '' ? null : <span>{reference}</span>}
+          {place === null ? null : (
+            // A marca da isenção do dono (2026-10-07) só no DIA do plano.
+            <span data-plan-day-label={place.planDay ? '' : undefined}>
+              {place.text}
+            </span>
+          )}
           <PersonAvatar id={me?.id ?? ''} name={me?.name ?? null} size="sm" />
           <span>{authorLabel(t, true, me?.name ?? null)}</span>
         </div>

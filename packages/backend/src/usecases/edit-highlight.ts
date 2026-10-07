@@ -8,10 +8,12 @@ import {
 import { optionalText } from '../domain/optional-text';
 import type { AssertMembership } from './assert-membership';
 import { highlightForAuthor } from './highlight-for-author';
+import { assertPlanItemOfBook } from './plan-item-of-book';
 import type {
   HighlightPatch,
   HighlightRepository,
 } from './ports/highlight-repository';
+import type { ReadingPlanItemRepository } from './ports/reading-plan-item-repository';
 
 /**
  * `undefined` é ausência ("não mexe neste campo"); `null` explícito em `page`,
@@ -42,6 +44,16 @@ export interface EditHighlightInput {
   reference?: string | null;
   /** Ausente = não mexe. `null` = limpa, e ZERA o `commentText`. */
   commentDoc?: unknown;
+  /**
+   * O dia do plano (Tarefa 48a, decisões D e H). Ausente = não mexe. `null` =
+   * tira o grifo do dia. Um id = move o grifo para aquele dia, que precisa ser
+   * do MESMO livro do grifo (decisão J, `assertPlanItemOfBook`).
+   *
+   * Até a 48a o dia era **write-once no nascimento** (ADR 0004, emenda de
+   * 2026-09-18) e este campo não existia. O dono reabriu isso em 2026-10-07:
+   * quem grifa no sábado o que leu na sexta corrige o dia aqui.
+   */
+  planItemId?: string | null;
 }
 
 export interface EditHighlightOutput {
@@ -61,6 +73,8 @@ export class EditHighlight {
   constructor(
     private readonly assertMembership: AssertMembership,
     private readonly highlights: HighlightRepository,
+    // Tarefa 48a — só para a decisão J: conferir que o dia é deste livro.
+    private readonly planItems: ReadingPlanItemRepository,
   ) {}
 
   async execute(input: EditHighlightInput): Promise<EditHighlightOutput> {
@@ -78,6 +92,19 @@ export class EditHighlight {
     // O patch INTEIRO é validado antes de escrever: um campo ruim não pode
     // deixar os anteriores gravados, nem meia edição.
     const patch = buildPatch(input);
+
+    // O dia escolhido é conferido contra o livro DO GRIFO (decisão J), depois
+    // do corte de autoria e ANTES de qualquer escrita: um dia ruim não deixa
+    // a cor nova gravada. `null` não precisa de conferência — é "sem dia".
+    if (typeof input.planItemId === 'string') {
+      patch.planItemId = await assertPlanItemOfBook(
+        this.planItems,
+        highlight.bookId,
+        input.planItemId,
+      );
+    } else if (input.planItemId === null) {
+      patch.planItemId = null;
+    }
 
     // Nada a fazer não é erro — é o retry de uma fila offline que já coalesceu
     // tudo. E não pode custar um `UPDATE`: o guard acima já rodou, então o patch

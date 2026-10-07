@@ -99,6 +99,54 @@ marca dentro da anotação" lá em cima.
   pediu ainda.** Fica escrito no condicional de propósito: o argumento repetido no
   indicativo mandaria o próximo leitor procurar uma tela que não foi feita.
 
+  > ⚠️ **SUPERADO EM 2026-10-07 (Tarefa 48a) — leia a emenda logo abaixo.** O parágrafo
+  > acima fica como estava, porque registra o que valia de 2026-09-18 a 2026-10-07: o
+  > `planItemId` era write-once no nascimento, preenchido em silêncio e recusado no
+  > corpo. O dono pediu a correção, e ela passou a existir.
+
+## Emenda de 2026-10-07 — o dia do plano se escolhe e se corrige (Tarefa 48a)
+
+**Pedido do dono**, numa sessão de perguntas: *"na referencia deve aparecer um select com
+as opções. Pois a referencia deve ser dos dias, dessa maneira vai ter como saber o que foi
+grifado naquele dia/naquela leitura. Já a pagina pode deixar livre mesmo"*. É exatamente a
+**segunda perna** que a emenda anterior deixou no condicional: grifar no sábado o que se
+leu na sexta, e corrigir o dia.
+
+✅ **A decisão central deste ADR continua inteira:** o `planItemId` segue **opcional** —
+"Sem dia do plano" é uma opção do select, e o grifo sem dia continua existindo.
+
+**O que muda:**
+
+- o campo de texto "Referência" do formulário **vira um `<select>` dos dias do plano** e
+  grava `planItemId`; o rótulo visível continua "Referência";
+- ao **criar**, o select vem no **dia de hoje** (no fuso do navegador, a mesma conta da
+  tela do livro); sem leitura hoje, vem em "Sem dia do plano";
+- ao **corrigir**, o dia se **troca** e se **limpa**. Só o autor corrige, pela regra de
+  sempre;
+- o `planItemId` **entra nos dois corpos**, com três sentidos na criação: **ausente** = o
+  servidor resolve o dia de hoje no `Settings.timezone` da pessoa (o comportamento da
+  emenda anterior, que fica para quem não carregou o plano); **`null`** = sem dia; **um
+  id** = aquele dia. No PATCH, ausente não mexe e `null` limpa;
+- ⚠️ **a guarda é a decisão J da 48a: o dia escolhido tem de ser DESTE livro.** O UseCase
+  confere com `planItems.byId(id)` que o item existe **e** que `item.bookId === book.id`;
+  qualquer outro id — inexistente, de outro livro do mesmo clube ou de outro clube — dá
+  `InvalidHighlightError` (**400**), com a mesma resposta para os três. É essa conferência
+  que responde ao motivo que a emenda anterior dava para recusar o campo no corpo
+  (*"deixaria qualquer um apontar o grifo para o dia que quisesse"*): agora ele só aponta
+  para um dia do próprio livro;
+- o texto antigo de `Highlight.reference` **fica no banco, só leitura**; o formulário deixa
+  de oferecê-lo e de mandá-lo. A linha do acervo e a margem de prévia mostram `DD/MM ·
+  tema` quando há dia, o texto antigo quando não há, e nada sem os dois.
+
+**O que NÃO muda:** nenhuma migration (a coluna e a FK `Restrict` são da 38i, e a guarda
+do `replacePlanItems` continua impedindo tirar do plano um dia que tenha grifo), e o
+`ActivityEvent` do grifo continua gravando `planItemId: null`.
+
+⚠️ **E o envenenamento que a emenda anterior temia continua sendo o mutante a vigiar, com
+outra forma:** `input.planItemId ?? <o resolvido>` trataria o `null` explícito ("Sem dia")
+como ausente e gravaria o dia de hoje. O código distingue `=== undefined`, e há teste que
+manda `null` num dia que **tem** plano e asserta a linha gravada.
+
 ---
 
 ## Consequências

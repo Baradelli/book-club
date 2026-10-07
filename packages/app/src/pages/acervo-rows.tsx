@@ -12,6 +12,7 @@ import {
 import { TEXT_LINK_CLASS } from './chrome';
 import { COLOR_LABEL_KEYS, ColorSwatch } from './highlight-colors';
 import { highlightPath } from './paths';
+import { highlightPlaceLabel, type LabelledPlanDay } from './plan-day-label';
 
 /**
  * REGRA 3 — AUTORIA EM TEXTO, e **uma** decisão para as duas metades.
@@ -113,6 +114,12 @@ export interface HighlightRowProps {
   writerName: string | null;
   /** O livro da ROTA, que é para onde o link de correção aponta. */
   bookId: string;
+  /**
+   * Os dias do plano do livro (Tarefa 48a, decisão F): é com eles que a linha
+   * escreve `DD/MM · tema` no lugar da referência. Vazio quando o plano não
+   * carregou — e aí a linha cai no texto antigo.
+   */
+  days: readonly LabelledPlanDay[];
   onArchive: () => void;
 }
 
@@ -153,6 +160,7 @@ export interface HighlightRowProps {
  */
 export function HighlightRow({
   bookId,
+  days,
   highlight,
   mine,
   onArchive,
@@ -160,6 +168,7 @@ export function HighlightRow({
   writerName,
 }: HighlightRowProps): ReactNode {
   const comment = excerptOf(highlight.commentText, COMMENT_EXCERPT_LENGTH);
+  const place = highlightPlaceLabel(highlight, days);
 
   return (
     <li className="flex">
@@ -191,9 +200,17 @@ export function HighlightRow({
               {t('pages.acervo.item.page', { number: highlight.page })}
             </span>
           ) : null}
-          {highlight.reference !== null ? (
-            <span>{highlight.reference}</span>
-          ) : null}
+          {/*
+            TAREFA 48a, DECISÃO F: o dia do plano (`DD/MM · tema`); sem dia,
+            o texto antigo de `reference`; sem os dois, silêncio — a
+            precedência tem um dono só, que a prévia também usa.
+          */}
+          {place === null ? null : (
+            // A marca da isenção do dono (2026-10-07) só no DIA do plano.
+            <span data-plan-day-label={place.planDay ? '' : undefined}>
+              {place.text}
+            </span>
+          )}
           {/* REGRA 3 — o MESMO `nameOfWriter` da anotação (decisão G). */}
           <PersonAvatar id={highlight.userId} name={writerName} size="sm" />
           <span>{authorLabel(t, mine, writerName)}</span>

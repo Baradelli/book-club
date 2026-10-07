@@ -85,6 +85,18 @@ const pageInBody = z.number().int().min(1).max(HIGHLIGHT_PAGE_MAX);
  * precedente exato do `reference` do `createFreeNoteSchema`: num grifo NOVO não
  * há campo a limpar, então "ausente" e "`null`" significariam a mesma coisa, e
  * uma grafia só é melhor que duas. A distinção que importa está no PATCH.
+ *
+ * ⚠️ **`planItemId` é a EXCEÇÃO, e tem três sentidos** (Tarefa 48a, decisão
+ * G): **ausente** = o servidor resolve o dia de hoje no `Settings.timezone`
+ * da pessoa, como desde a 38i; **`null`** = "Sem dia do plano"; **um id** =
+ * aquele dia. Aqui "ausente" e "`null`" NÃO são a mesma coisa — por isso o
+ * `.nullable().optional()`, e nunca `.default()`.
+ *
+ * Até a 38i este campo era recusado pelo `.strict()` ("o dia é resolvido no
+ * servidor"). O dono reabriu isso: a pessoa escolhe o dia num select. O que
+ * torna o campo seguro não é a borda — é a **decisão J**: o UseCase confere
+ * que o dia é DESTE livro, e qualquer outro id é 400. → ADR 0004, emenda de
+ * 2026-10-07.
  */
 export const createHighlightSchema = z
   .object({
@@ -93,6 +105,7 @@ export const createHighlightSchema = z
     page: pageInBody.optional(),
     reference: z.string().optional(),
     commentDoc: noteDocSchema.optional(),
+    planItemId: z.string().min(1).nullable().optional(),
   })
   .strict();
 
@@ -108,6 +121,10 @@ export const createHighlightSchema = z
  *
  * `quote` e `color` **não** são anuláveis: um grifo sem trecho ou sem cor não é
  * grifo — vazio e cor de fora da paleta são erro, não "limpa".
+ *
+ * `planItemId` segue a MESMA regra (Tarefa 48a, decisão H): ausente não
+ * mexe, `null` tira o grifo do dia, um id o move para aquele dia — que o
+ * `editHighlight` confere ser do MESMO livro do grifo (decisão J).
  */
 export const editHighlightSchema = z
   .object({
@@ -116,6 +133,7 @@ export const editHighlightSchema = z
     page: pageInBody.nullable().optional(),
     reference: z.string().nullable().optional(),
     commentDoc: noteDocSchema.nullable().optional(),
+    planItemId: z.string().min(1).nullable().optional(),
   })
   .strict();
 
@@ -195,14 +213,13 @@ export const highlightResponseSchema = z.object({
   /** O AUTOR. Visível para todo o clube, por decisão: → ADR 0002. */
   userId: z.string(),
   /**
-   * O dia do plano em que o grifo nasceu, ou `null` — a emenda de 2026-09-18 ao
-   * ADR 0004 (Tarefa 38i).
+   * O dia do plano do grifo, ou `null` — a emenda de 2026-09-18 ao ADR 0004
+   * (Tarefa 38i), e a de 2026-10-07 (Tarefa 48a).
    *
-   * **Sai na resposta e NÃO entra em nenhum input**, exatamente como o
-   * `commentText`: é resolvido no servidor, na criação, a partir do
-   * `Settings.timezone` da pessoa (decisões C, D e E). Um `planItemId` no corpo
-   * é **400** pelo `.strict()` dos dois schemas de escrita — quem o manda está
-   * enganado sobre quem manda nele.
+   * Desde a 48a ele **também entra nos dois inputs**: a pessoa escolhe o dia
+   * ao criar e pode trocá-lo ou limpá-lo ao corrigir. Ausente na criação, o
+   * servidor resolve o dia de hoje no `Settings.timezone` da pessoa, como na
+   * 38i. A guarda é a decisão J: o dia tem de ser DESTE livro, senão 400.
    *
    * ⚠️ **`.nullable()` e não `.optional()`**: `null` é o valor normal, não a
    * ausência do campo. Grifo em dia sem plano é o caso que o ADR 0004 protege, e

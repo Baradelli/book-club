@@ -1239,8 +1239,16 @@ export const pt = {
         /* REGRA 14: inteiro a partir de 1, recusado ANTES de enviar — quem
            escreve não deve descobrir isso por um 400. */
         pageInvalid: 'A página precisa ser um número inteiro, de 1 em diante.',
+        /*
+          ⚠️ **TAREFA 48a: o RÓTULO continua "Referência" (decisão A), mas o
+          controle virou o SELECT dos dias do plano.** A dica antiga
+          ("Capítulo ou seção. Pode ficar em branco.") descrevia um campo de
+          texto livre que não existe mais — trocada a frase, mantida a chave.
+        */
         reference: 'Referência',
-        referenceHint: 'Capítulo ou seção. Pode ficar em branco.',
+        referenceHint: 'O dia do plano em que você leu este trecho.',
+        /* A primeira opção do select: grifo sem dia (decisões B e E). */
+        noPlanDay: 'Sem dia do plano',
         comment: 'Seu comentário',
         commentHint:
           'O que você pensou sobre esse trecho. Pode ficar em branco.',

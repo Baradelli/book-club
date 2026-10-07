@@ -3,6 +3,7 @@ import {
   type HighlightResponse,
   highlightResponseSchema,
   highlightsResponseSchema,
+  type PlanItemResponse,
 } from '@clube/shared';
 import { ApiError } from '@clube/shared/client';
 import { Button } from '@clube/ui';
@@ -27,9 +28,11 @@ import {
   HighlightFields,
   LazyComment,
   NO_PROBLEMS,
+  planItemIdOf,
   type Problems,
   problemsOf,
   textOrAbsent,
+  todayDayIdOf,
 } from './highlight-fields';
 import { HighlightRail } from './highlight-rail';
 import { acervoPath } from './paths';
@@ -93,6 +96,27 @@ import { acervoPath } from './paths';
  *
  * ⚠️ E o que saiu está registrado **no arquivo que RECEBEU**, no docblock do
  * `LazyComment` — não só aqui. É a lição da Tarefa 46.
+ *
+ * ⚠️⚠️ **A TAREFA 48a FEZ ESTE ARQUIVO CRESCER, e foi DECISÃO, não descuido:
+ * 407 → 449 (+42), 49 acima do teto de 400.** Pelo contador canônico:
+ *
+ * ```
+ * highlight-form.tsx    407 → 449    (+42)
+ * highlight-fields.tsx  336 → 362    (+26)  o select, `planItemIdOf`, `todayDayIdOf`
+ * highlight-rail.tsx     63 →  75    (+12)
+ * plan-day-label.ts       – →  27    o formato `DD/MM · tema`, dono único
+ * ```
+ *
+ * O que cresceu aqui é o que FALA COM A API, que é a regra de divisão deste
+ * par: a carga do plano na tela de registrar (o `useEffect` da decisão I),
+ * os dias no estado `ready` da correção, e as duas chamadas da margem, que
+ * ganharam duas props e o Prettier passou a quebrar em várias linhas (a
+ * divisão linha a linha não foi medida; só o total). Mandar a carga para o
+ * `highlight-fields.tsx` romperia o "este módulo não conhece a API" dele; um
+ * hook em arquivo próprio tiraria uma dúzia de linhas daqui (estimativa, não
+ * medida) ao custo de um arquivo de um chamador só. **Fica registrado como o
+ * próximo corte, sem fatia dona** — a forma óbvia é tirar daqui as DUAS
+ * telas para arquivos próprios, que é o que o tamanho já pede.
  */
 
 /**
@@ -115,7 +139,12 @@ interface CreateBody {
   quote: string;
   color: HighlightColor;
   page?: number;
-  reference?: string;
+  /**
+   * Tarefa 48a (decisão G): o dia escolhido, ou `null` ("Sem dia do
+   * plano"). AUSENTE só quando o plano não carregou (decisão I) — e aí o
+   * servidor resolve o dia de hoje. Não há mais `reference` (decisão P).
+   */
+  planItemId?: string | null;
   commentDoc?: Record<string, unknown>;
 }
 
@@ -130,7 +159,7 @@ interface PatchBody {
   quote?: string;
   color?: HighlightColor;
   page?: number | null;
-  reference?: string | null;
+  planItemId?: string | null;
   commentDoc?: Record<string, unknown> | null;
 }
 
@@ -139,7 +168,7 @@ interface Confirmed {
   quote: string;
   color: HighlightColor;
   page: number | null;
-  reference: string | null;
+  planItemId: string | null;
   /** JSON, não a árvore: comparação por valor sem percorrer o ProseMirror. */
   comment: string;
 }
@@ -149,7 +178,7 @@ function confirmedOf(highlight: HighlightResponse): Confirmed {
     quote: highlight.quote,
     color: highlight.color,
     page: highlight.page,
-    reference: highlight.reference,
+    planItemId: highlight.planItemId,
     comment: JSON.stringify(highlight.commentDoc),
   };
 }
@@ -157,7 +186,13 @@ function confirmedOf(highlight: HighlightResponse): Confirmed {
 type LoadState =
   | { status: 'loading' }
   /** `mine` decide a tela inteira: formulário × recusa por autoria. */
-  | { status: 'ready'; highlight: HighlightResponse; mine: boolean }
+  | {
+      status: 'ready';
+      highlight: HighlightResponse;
+      mine: boolean;
+      /** Os dias do plano, para o select da "Referência" (Tarefa 48a). */
+      days: readonly PlanItemResponse[];
+    }
   /** O grifo não está no acervo ATIVO deste livro (arquivado, ou id errado). */
   | { status: 'missing' }
   | { status: 'failed'; error: unknown };
@@ -187,8 +222,11 @@ export function HighlightFormPage() {
 /**
  * REGISTRAR — regras 12 a 17 e 19.
  *
- * Nenhuma requisição de carga: não há o que carregar. E nenhuma requisição de
- * escrita antes do botão.
+ * ⚠️ **UMA requisição de carga desde a Tarefa 48a** (até ali, nenhuma): o
+ * `GET /books/:bookId`, pelos dias do plano do select da "Referência". Se
+ * ela falhar, o select não aparece e o corpo vai sem `planItemId` — o
+ * servidor resolve o dia de hoje (decisão I). A tela não trava por causa do
+ * plano. E nenhuma requisição de escrita antes do botão.
  */
 function NewHighlight({ bookId }: { bookId: string }) {
   const { t } = useTranslation();
@@ -202,9 +240,30 @@ function NewHighlight({ bookId }: { bookId: string }) {
   const [problems, setProblems] = useState<Problems>(NO_PROBLEMS);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<unknown>(undefined);
+  /** `null` = o plano não carregou (ainda, ou nunca): sem select. */
+  const [days, setDays] = useState<readonly PlanItemResponse[] | null>(null);
 
   /** O documento vive no ref: devolvê-lo ao editor por prop causaria eco. */
   const docRef = useRef<Record<string, unknown> | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get(`/books/${encodeURIComponent(bookId)}`, bookWithPlanResponseSchema)
+      .then(({ planItems }) => {
+        if (cancelled) return;
+        setDays(planItems);
+        // DECISÃO B: o select nasce no dia de HOJE (ou em "Sem dia").
+        const today = todayDayIdOf(planItems);
+        setDraft((previous) => ({ ...previous, planItemId: today }));
+      })
+      // DECISÃO I: sem plano, sem select — e nenhuma frase de erro, porque
+      // o grifo continua registrável.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [api, bookId]);
 
   function field(key: keyof Draft, value: string): void {
     setDraft((previous) => ({ ...previous, [key]: value }));
@@ -228,9 +287,8 @@ function NewHighlight({ bookId }: { bookId: string }) {
     const body: CreateBody = { quote: draft.quote.trim(), color };
     const page = textOrAbsent(draft.page);
     if (page !== undefined) body.page = Number(page);
-    // REGRA 15: referência em branco é AUSÊNCIA, não string vazia.
-    const reference = textOrAbsent(draft.reference);
-    if (reference !== undefined) body.reference = reference;
+    // TAREFA 48a: o dia vai sempre que o select existe — "Sem dia" é `null`.
+    if (days !== null) body.planItemId = planItemIdOf(draft);
     // REGRA 16: comentário intocado (ou esvaziado) é AUSÊNCIA de chave.
     const comment = commentOf(docRef.current);
     if (comment !== null) body.commentDoc = comment;
@@ -260,12 +318,22 @@ function NewHighlight({ bookId }: { bookId: string }) {
   */
   return (
     <Screen
-      rail={<HighlightRail color={color} draft={draft} me={me} t={t} />}
+      rail={
+        <HighlightRail
+          color={color}
+          days={days}
+          draft={draft}
+          legacyReference={null}
+          me={me}
+          t={t}
+        />
+      }
       rule="none"
       title={t('pages.highlightForm.newTitle')}
     >
       <HighlightFields
         color={color}
+        days={days}
         colorError={
           problems.color
             ? t('pages.highlightForm.fields.colorRequired')
@@ -377,6 +445,7 @@ function ExistingHighlight({
         status: 'ready',
         highlight,
         mine: highlight.userId === myId,
+        days: withPlan.planItems,
       };
     }
 
@@ -429,8 +498,9 @@ function ExistingHighlight({
     const page = pageText === undefined ? null : Number(pageText);
     if (page !== confirmed.page) patch.page = page;
 
-    const reference = textOrAbsent(draft.reference) ?? null;
-    if (reference !== confirmed.reference) patch.reference = reference;
+    // TAREFA 48a: "Sem dia" é `null` EXPLÍCITO — ausente seria "não mexa".
+    const planItemId = planItemIdOf(draft);
+    if (planItemId !== confirmed.planItemId) patch.planItemId = planItemId;
 
     /*
       REGRA 16 — o comentário, nos dois sentidos.
@@ -567,6 +637,7 @@ function ExistingHighlight({
               ? t('pages.highlightForm.fields.colorRequired')
               : undefined
           }
+          days={state.days}
           draft={draft}
           onColor={setColor}
           onField={field}
@@ -619,7 +690,14 @@ function ExistingHighlight({
       */
       rail={
         state.status === 'ready' && state.mine ? (
-          <HighlightRail color={color} draft={draft} me={me} t={t} />
+          <HighlightRail
+            color={color}
+            days={state.days}
+            draft={draft}
+            legacyReference={state.highlight.reference}
+            me={me}
+            t={t}
+          />
         ) : undefined
       }
       rule="none"

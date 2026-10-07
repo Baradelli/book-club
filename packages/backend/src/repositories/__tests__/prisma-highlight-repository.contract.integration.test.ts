@@ -1229,6 +1229,51 @@ describe('PrismaHighlightRepository (contract)', () => {
     });
 
     /**
+     * ⚠️ **MUTANTE 3 DA TAREFA 48a — o PATCH que não grava.** O `update` com
+     * um id troca o dia, e com `null` o limpa — conferido na LINHA do Postgres
+     * por `count`, não só no que o repositório devolve. Sem a linha do
+     * `planItemId` no `toUpdateData`, o Prisma ignoraria a chave e o grifo
+     * continuaria no dia antigo, com 200.
+     */
+    it('updates the plan day to another day, and clears it with null', async () => {
+      const first = await aPlanDay('patch-a', 25, '2026-12-06');
+      const second = await aPlanDay('patch-b', 26, '2026-12-07');
+      const highlight = aHighlightRow('patchdia', { planItemId: first });
+      await repo.save(highlight);
+
+      const moved = await repo.update(highlight.id, { planItemId: second });
+
+      expect(moved.planItemId).toBe(second);
+      await expect(
+        prisma.highlight.count({
+          where: { id: highlight.id, planItemId: second },
+        }),
+      ).resolves.toBe(1);
+
+      const cleared = await repo.update(highlight.id, { planItemId: null });
+
+      expect(cleared.planItemId).toBeNull();
+      await expect(
+        prisma.highlight.count({
+          where: { id: highlight.id, planItemId: null },
+        }),
+      ).resolves.toBe(1);
+    });
+
+    /**
+     * Ausente no patch NÃO mexe no dia — a outra metade da semântica.
+     */
+    it('leaves the plan day alone when the patch does not carry it', async () => {
+      const day = await aPlanDay('patch-c', 27, '2026-12-08');
+      const highlight = aHighlightRow('patchcor', { planItemId: day });
+      await repo.save(highlight);
+
+      const updated = await repo.update(highlight.id, { color: '#22c55e' });
+
+      expect(updated.planItemId).toBe(day);
+    });
+
+    /**
      * ⚠️ **A COLUNA É UMA FK DE VERDADE.** Sem isto, um `planItemId` inventado
      * entraria e o acervo recortaria por um dia que não existe — e o fake, que
      * não tem FK, nunca acusaria (§7.10).

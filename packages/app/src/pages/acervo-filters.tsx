@@ -93,7 +93,8 @@ import {
  * outro, e um teto que vale para um arquivo só é um teto que anda de lado.**
  *
  * Este módulo tem **465** linhas canônicas (165 até a Tarefa 38g, 194 até a
- * 38h, 257 até a 46), e nenhuma delas é estado. A conta por função, medida com
+ * 38h, 257 até a 46; **466** desde a 48a, pela `date` do `PlanDay`), e
+ * nenhuma delas é estado. A conta por função, medida com
  * o mesmo comando:
  *
  * ```
@@ -491,9 +492,15 @@ export function PageRangeFilter({
   );
 }
 
-/** Só o que o `<select>` de leitura precisa do plano: o id e o tema do dia. */
+/**
+ * Só o que o `<select>` de leitura precisa do plano: o id e o tema do dia —
+ * mais a DATA, desde a Tarefa 48a: a linha de grifo escreve `DD/MM · tema`
+ * com estes mesmos dias (`highlightPlaceLabel`, em `plan-day-label.ts`).
+ */
 export interface PlanDay {
   id: string;
+  /** `"YYYY-MM-DD"` — fatiado, nunca lido com `Date` (decisão O da 48a). */
+  date: string;
   title: string;
 }
 
